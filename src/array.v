@@ -181,6 +181,13 @@ Proof.
   eauto.
 Qed.
 
+Lemma wp_bind_unary {A B} (a : A) (b : A → B) (Q : B → Prop) :
+  wp a (λ x, wp (b x) Q) →
+  wp (bind a b) Q.
+Proof.
+  eauto.
+Qed.
+
 Lemma wp_bind_eq {A B} (a : A) (b : A → B) (Q : B → Prop) :
   (∀ x, x = a → wp (b x) Q) →
   wp (bind a b) Q.
