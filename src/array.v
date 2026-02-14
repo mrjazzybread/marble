@@ -9,12 +9,75 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 (* TODO why is of_to_Z an axiom? *)
 
-(* TODO lists / unused *)
+(* TODO lists *)
 Lemma replicate_is_repeat {A} n (x : list A) :
   replicate n x = List.repeat x n.
 Proof.
   revert n. induction n as [| n]; simpl; congruence.
 Qed.
+
+Lemma insert_replicate_0 {A} n (x y : A) :
+  0 < n →
+  <[0:=y]>(replicate n x) = [y] ++ replicate (n-1) x.
+Proof.
+  intros. rewrite insert_replicate_lt by eauto.
+  rewrite app_nil_l. eauto.
+Qed.
+
+Lemma sub_succ (n h : nat) :
+  n - (h + 1) = n - h - 1.
+Proof. lia. Qed.
+
+Lemma sub_diag' (x y : nat) :
+  x ≤ y → x - y = 0.
+Proof. lia. Qed.
+
+Lemma replicate_0 {A} (x : A) :
+  replicate 0 x = [].
+Proof. eauto. Qed.
+
+Global Hint Rewrite
+  Nat.sub_0_l Nat.sub_0_r Nat.sub_diag sub_succ
+  @app_nil_l @app_nil_r
+  @replicate_0
+  @length_nil
+  @length_cons
+  @length_app
+  @length_insert
+  @length_replicate
+: list.
+
+Global Hint Rewrite
+  <- @app_assoc
+: list.
+
+Global Ltac list :=
+  autorewrite with list.
+
+Global Tactic Notation "list" "in" hyp(h) :=
+  autorewrite with list in h.
+
+Global Hint Rewrite
+  sub_diag'
+  using (list; lia)
+: list.
+
+Local Hint Extern 1 (_ < List.length _) => (list; lia) : lia.
+
+Global Hint Rewrite
+  Nat.sub_diag
+  @insert_app_l
+  @insert_app_r_alt
+  @insert_replicate_0
+  using (list; lia)
+: insert.
+
+Global Ltac insert :=
+  autorewrite with insert.
+
+Global Tactic Notation "insert" "in" hyp(h) :=
+  autorewrite with insert in h.
+
 
 (* TODO move *)
 (* [unsigned z] means that [z] lies in the interval of the unsigned
@@ -92,6 +155,14 @@ Global Hint Resolve
 Definition wp {A} (a : A) (Q : A → Prop) :=
   Q a.
 
+Lemma wp_conseq {A} (a : A) (Q Q' : A → Prop) :
+  wp a Q →
+  (∀ x, Q x → Q' x) →
+  wp a Q'.
+Proof.
+  unfold wp. eauto.
+Qed.
+
 Lemma wp_ret {A} (a : A) (Q : A → Prop) :
   Q a ->
   wp a Q.
@@ -117,7 +188,9 @@ Proof.
   eauto.
 Qed.
 
-Global Opaque bind.
+(* TODO this prevents computing inside Rocq:
+  Global Opaque bind.
+ *)
   (* TODO [bind] should be inlined away at extraction *)
 Global Opaque wp.
 
@@ -221,13 +294,13 @@ Proof.
   intros. destructR. eauto.
 Qed.
 
-Lemma make_spec _n n x :
+Lemma wp_make _n n x :
   I _n n →
   n ≤ max_array_length →
   wp (make _n x) (λ a, R a (replicate n x)).
 Proof.
   generalize max_array_length_lt_wB; intro.
-  intros. eapply wp_ret. destructI. introR; rewrite length_replicate.
+  intros. eapply wp_ret. destructI. introR; list.
   { introI.
     assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
     { rewrite leb_spec.
@@ -244,7 +317,7 @@ Proof.
   eauto.
 Qed.
 
-Lemma get_spec _i i a xs :
+Lemma wp_get _i i a xs :
   I _i i →
   R a xs →
   valid i xs →
@@ -255,14 +328,14 @@ Proof.
 Qed.
 (* TODO offer a variant where the conclusion is just an equation? *)
 
-Lemma set_spec _i i a xs x :
+Lemma wp_set _i i a xs x :
   I _i i →
   R a xs →
   valid i xs →
   wp a.[_i <- x] (λ a', R a' (<[i := x]>xs)).
 Proof.
   intros. eapply wp_ret.
-  destructR. repeat destructI. introR; rewrite length_insert.
+  destructR. repeat destructI. introR; list.
   { rewrite length_set. eauto. }
   { eauto. }
   intros j ?.
@@ -282,7 +355,7 @@ Proof.
     { eapply of_Z_inj'; lia. }
 Qed.
 
-Lemma length_spec a xs :
+Lemma wp_length a xs :
   R a xs →
   wp (length a) (λ _i, I _i (List.length xs)).
 Proof.
@@ -291,19 +364,40 @@ Qed.
 
 End PrimSpec.
 
+Global Ltac wp_set a Ha :=
+  eapply wp_conseq; [
+    eapply wp_set; eauto with lia
+  | simpl; intros a Ha; insert in Ha ].
+
 Section ListIteri.
 Context {A S : Type}.
 
-Fixpoint iteri (f : S → int → A → S) (s : S) (i : int) (xs : list A) : S :=
+Fixpoint iteri (f : S → int → A → S) (s : S) (_i : int) (xs : list A) : S :=
   match xs with
   | [] =>
       s
   | x :: xs =>
-      let s := f s i x in
-      iteri f s (succ i) xs
+      let s := f s _i x in
+      iteri f s (succ _i) xs
   end.
 
 End ListIteri.
+
+Lemma wp_iteri {S A} (f : S → int → A → S) s _i xs Q (inv : S → list A → Prop) :
+  let permitted history x := (history ++ [x]) `prefix_of` xs in
+  let complete history := history = xs in
+  inv s [] →
+  ( ∀ s history _i x,
+    I _i (List.length history) →
+    inv s history →
+    permitted history x →
+    wp (f s _i x) (λ s, inv s (history ++ [x]))
+  ) →
+  (∀ s history, complete history → inv s history → Q s) →
+  wp (iteri f s _i xs) Q.
+Proof.
+  (* TODO *)
+Admitted.
 
 Section OfList.
 Context `{Inhabited A}.
@@ -314,7 +408,24 @@ Definition of_list (xs : list A) : array A :=
   iteri set a 0 xs
   )).
 
-Lemma of_list_spec (xs : list A) :
+(* TODO move *)
+Lemma expand_replicate `{Inhabited A} n (x : A) :
+  0 < n →
+  replicate n x = x :: replicate (n-1) x.
+Proof.
+  intros. destruct n as [| n]; [ lia |].
+  rewrite replicate_S. do 2 f_equal. lia.
+Qed.
+
+Ltac apply_prefix_length :=
+  match goal with h: _ `prefix_of` _ |- _ =>
+    generalize h;
+    let h' := fresh h in
+    intro h'; apply prefix_length in h';
+    list in h'
+  end.
+
+Lemma wp_of_list (xs : list A) :
   List.length xs ≤ max_array_length →
   wp (of_list xs) (λ a, R a xs).
 Proof.
@@ -323,13 +434,24 @@ Proof.
   set (P := (λ (a : array A), R a (replicate n inhabitant))).
   (* TODO why do I need to specify [P]? *)
   eapply wp_bind with (P := P); [| intros a Ha ].
-  { Fail eapply make_spec. (* TODO why? *)
-    eapply (@make_spec A H (of_nat n) n (@inhabitant A H)).
+  { Fail eapply wp_make. (* TODO why does this fail? *)
+    eapply (@wp_make A H (of_nat n) n (@inhabitant A H)).
     + eauto with I.
     + rewrite Hn. eauto. }
-  (* TODO *)
   unfold P in Ha.
-Abort.
+  set (inv :=
+    λ (a : array A) (history : list A),
+    let h := List.length history in
+    R a (history ++ replicate (n-h) inhabitant)
+  ).
+  eapply wp_iteri with (inv := inv).
+  (* Initialization. *)
+  { unfold inv. list. eauto. }
+  (* Preservation. *)
+  { intros. apply_prefix_length. wp_set s' Hs'. unfold inv. list. eauto. }
+  (* Conclusion. *)
+  { intros s ? ->. unfold inv. list. eauto. }
+Qed.
 
 End OfList.
 
