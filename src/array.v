@@ -384,27 +384,61 @@ Fixpoint iteri (f : S → int → A → S) (s : S) (_i : int) (xs : list A) : S 
   | [] =>
       s
   | x :: xs =>
-      let s := f s _i x in
-      iteri f s (succ _i) xs
+      bind (f s _i x) (λ s,
+      iteri f s (_i + 1) xs)
   end.
 
 End ListIteri.
 
-Lemma wp_iteri {S A} (f : S → int → A → S) s _i xs Q (inv : S → list A → Prop) :
-  let permitted history x := (history ++ [x]) `prefix_of` xs in
-  let complete history := history = xs in
+Lemma succ_spec _i i :
+  I _i i →
+  I (_i+1) (i+1)%nat.
+Proof.
+Admitted. (* TODO *)
+
+Lemma wp_iteri_ {S A} (f : S → int → A → S) (inv : S → list A → Prop) xs :
+  ∀ future s _i history,
+  I _i (List.length history) →
+  inv s history →
+  history ++ future = xs →
+  ( ∀ s future history _i x,
+    I _i (List.length history) →
+    inv s history →
+    history ++ future = xs →
+    [x] `prefix_of` future →
+    wp (f s _i x) (λ s, inv s (history ++ [x]))
+  ) →
+  wp (iteri f s _i future) (λ s, inv s xs).
+Proof.
+  induction future as [| x future ];
+  intros ??? HI Hinv Hxs Hpreservation;
+  simpl iteri.
+  { list in Hxs. subst history. eapply wp_ret. eauto. }
+  { eapply wp_bind.
+    { eapply Hpreservation; eauto using prefix_cons, prefix_nil. }
+    simpl. intros s' Hs'.
+    eapply IHfuture with (history := history ++ [x]);
+      list; eauto using succ_spec. }
+Qed.
+
+Lemma wp_iteri {S A} (f : S → int → A → S) xs Q (inv : S → list A → Prop) s :
   inv s [] →
   ( ∀ s history _i x,
     I _i (List.length history) →
     inv s history →
-    permitted history x →
+    history ++ [x] `prefix_of` xs →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
   ) →
-  (∀ s history, complete history → inv s history → Q s) →
-  wp (iteri f s _i xs) Q.
+  (∀ s, inv s xs → Q s) →
+  wp (iteri f s 0 xs) Q.
 Proof.
-  (* TODO *)
-Admitted.
+  intros Hinv Hpreservation Hcompletion.
+  eapply wp_conseq.
+  { eapply wp_iteri_; eauto; list.
+    - introI. eauto.
+    - intros. subst. eauto using prefix_app. }
+  { eauto. }
+Qed.
 
 Section OfList.
 Context `{Inhabited A}.
@@ -457,7 +491,7 @@ Proof.
   (* Preservation. *)
   { intros. apply_prefix_length. wp_set s' Hs'. unfold inv. list. eauto. }
   (* Conclusion. *)
-  { intros s ? ->. unfold inv. list. eauto. }
+  { unfold inv. list. eauto. }
 Qed.
 
 End OfList.
