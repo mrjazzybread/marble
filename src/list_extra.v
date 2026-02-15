@@ -6,6 +6,18 @@ Proof.
   revert n. induction n as [| n]; simpl; congruence.
 Qed.
 
+Lemma replicate_0 {A} (x : A) :
+  replicate 0 x = [].
+Proof. eauto. Qed.
+
+Lemma expand_replicate {A} n (x : A) :
+  0 < n →
+  replicate n x = x :: replicate (n-1) x.
+Proof.
+  intros. destruct n as [| n]; [ lia |].
+  rewrite replicate_S. do 2 f_equal. lia.
+Qed.
+
 Lemma insert_replicate_0 {A} n (x y : A) :
   0 < n →
   <[0:=y]>(replicate n x) = [y] ++ replicate (n-1) x.
@@ -21,10 +33,6 @@ Proof. lia. Qed.
 Lemma sub_diag' (x y : nat) :
   x ≤ y → x - y = 0.
 Proof. lia. Qed.
-
-Lemma replicate_0 {A} (x : A) :
-  replicate 0 x = [].
-Proof. eauto. Qed.
 
 Global Hint Rewrite
   Nat.sub_0_l Nat.sub_0_r Nat.sub_diag sub_succ
@@ -55,15 +63,8 @@ Global Hint Rewrite
 Global Hint Extern 1 (_ < List.length _) => (list; lia) : lia.
 
 Global Hint Rewrite
-  Nat.sub_diag
   @insert_app_l
   @insert_app_r_alt
   @insert_replicate_0
   using (list; lia)
-: insert.
-
-Global Ltac insert :=
-  autorewrite with insert.
-
-Global Tactic Notation "insert" "in" hyp(h) :=
-  autorewrite with insert in h.
+: list.

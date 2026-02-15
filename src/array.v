@@ -9,6 +9,7 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From array Require Import list_extra.
 From array Require Import int.
+From array Require Import wp.
 
 Open Scope nat_scope.
 
@@ -18,88 +19,16 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
-(* TODO logic *)
-Definition wp {A} (a : A) (Q : A → Prop) :=
-  Q a.
-
-Lemma wp_conseq {A} (a : A) (Q Q' : A → Prop) :
-  wp a Q →
-  (∀ x, Q x → Q' x) →
-  wp a Q'.
-Proof.
-  unfold wp. eauto.
-Qed.
-
-Lemma wp_ret {A} (a : A) (Q : A → Prop) :
-  Q a ->
-  wp a Q.
-Proof.
-  eauto.
-Qed.
-
-Definition bind {A B} (a : A) (b : A → B) : B :=
-  let x := a in b x.
-
-Lemma wp_bind {A B} (a : A) (b : A → B) (P : A → Prop) (Q : B → Prop) :
-  wp a P →
-  (∀ x, P x → wp (b x) Q) →
-  wp (bind a b) Q.
-Proof.
-  eauto.
-Qed.
-
-Lemma wp_bind_unary {A B} (a : A) (b : A → B) (Q : B → Prop) :
-  wp a (λ x, wp (b x) Q) →
-  wp (bind a b) Q.
-Proof.
-  eauto.
-Qed.
-
-Lemma wp_bind_eq {A B} (a : A) (b : A → B) (Q : B → Prop) :
-  (∀ x, x = a → wp (b x) Q) →
-  wp (bind a b) Q.
-Proof.
-  eauto.
-Qed.
-
-(* TODO this prevents computing inside Rocq:
-  Global Opaque bind.
- *)
-  (* TODO [bind] should be inlined away at extraction *)
-Global Opaque wp.
-
-Definition I (_i : int) (i : nat) :=
-  _i = of_nat i.
-
-Local Ltac introI :=
-  unfold I.
-
-Local Ltac destructI :=
-  match goal with h: I ?_i _ |- _ => unfold I in h; try subst _i end.
-
-Lemma project n :
-  I (of_nat n) n.
-Proof.
-  unfold I. eauto.
-Qed.
-
-Global Hint Resolve
-  project
-: I.
-
-Notation valid i xs :=
+Global Notation valid i xs :=
   (i < List.length xs).
 
 Definition max_array_length : nat :=
   to_nat max_length.
 
 Lemma max_length_spec :
-  I max_length max_array_length.
+  isInt max_length max_array_length.
 Proof.
-  introI. unfold max_array_length.
-  rewrite Z2Nat.id by eauto with int.
-  rewrite of_to_Z.
-  eauto.
+  introIsInt. unfold max_array_length. int. eauto.
 Qed.
 
 Lemma max_length_eq :
@@ -119,8 +48,7 @@ Qed.
 Lemma max_array_length_lt_two_54 :
   (Z.of_nat max_array_length < 2 ^ 54)%Z.
 Proof.
-  unfold max_array_length.
-  rewrite Z2Nat.id by eauto with int.
+  unfold max_array_length. int.
   replace (2 ^ 54)%Z with (φ (lsl (1%uint63) 54)).
   { (* Prove the goal by using machine integers. *)
     rewrite <- ltb_spec. reflexivity. }
@@ -143,7 +71,7 @@ Qed.
 
 Definition R `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
-  I (length a) n ∧
+  isInt (length a) n ∧
   n ≤ max_array_length ∧
   ∀ i, valid i xs → a.[of_nat i] = xs !!! i.
 
@@ -169,21 +97,16 @@ Proof.
 Qed.
 
 Lemma wp_make _n n x :
-  I _n n →
+  isInt _n n →
   n ≤ max_array_length →
   wp (make _n x) (λ a, R a (replicate n x)).
 Proof.
   generalize max_array_length_lt_wB; intro.
-  intros. eapply wp_ret. destructI. introR; list.
-  { introI.
+  intros. eapply wp_ret. destructIsInt. introR; list.
+  { introIsInt.
     assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
-    { rewrite leb_spec.
-      rewrite max_length_spec.
-      do 2 rewrite to_of_Z by lia.
-      lia. }
-    rewrite length_make.
-    rewrite Hbound.
-    eauto. }
+    { rewrite leb_spec, max_length_spec. int. lia. }
+    rewrite length_make, Hbound. eauto. }
   { eauto. }
   intros i ?.
   rewrite get_make.
@@ -192,24 +115,24 @@ Proof.
 Qed.
 
 Lemma wp_get _i i a xs :
-  I _i i →
+  isInt _i i →
   R a xs →
   valid i xs →
   wp a.[_i] (λ x, x = xs !!! i).
 Proof.
   (* This proof is trivial because the definition of [R] relies on [get]. *)
-  intros. destructR. repeat destructI. eapply wp_ret. eauto.
+  intros. destructR. repeat destructIsInt. eapply wp_ret. eauto.
 Qed.
 (* TODO offer a variant where the conclusion is just an equation? *)
 
 Lemma wp_set _i i a xs x :
-  I _i i →
+  isInt _i i →
   R a xs →
   valid i xs →
   wp a.[_i <- x] (λ a', R a' (<[i := x]>xs)).
 Proof.
   intros. eapply wp_ret.
-  destructR. repeat destructI. introR; list.
+  destructR. repeat destructIsInt. introR; list.
   { rewrite length_set. eauto. }
   { eauto. }
   intros j ?.
@@ -221,8 +144,7 @@ Proof.
     { eauto. }
     { rewrite ltb_spec.
       match goal with h: length ?a = _ |- _ => rewrite h end.
-      rewrite !to_of_Z by lia.
-      lia. }
+      int. lia. }
   + rewrite list_lookup_total_insert_ne by eauto.
     rewrite get_set_other.
     { eauto. }
@@ -231,7 +153,7 @@ Qed.
 
 Lemma wp_length a xs :
   R a xs →
-  wp (length a) (λ _i, I _i (List.length xs)).
+  wp (length a) (λ _i, isInt _i (List.length xs)).
 Proof.
   intros. eapply wp_ret. destructR. eauto.
 Qed.
@@ -241,7 +163,7 @@ End PrimSpec.
 Global Ltac wp_set a Ha :=
   eapply wp_conseq; [
     eapply wp_set; eauto with lia
-  | simpl; intros a Ha; insert in Ha ].
+  | simpl; intros a Ha; list in Ha ].
 
 Section ListIteri.
 Context {A S : Type}.
@@ -257,22 +179,13 @@ Fixpoint iteri (f : S → int → A → S) (s : S) (_i : int) (xs : list A) : S 
 
 End ListIteri.
 
-Lemma succ_spec _i i :
-  I _i i →
-  I (_i+1) (i+1)%nat.
-Proof.
-  intros. introI. destructI.
-  change 1%uint63 with (π 1%Z).
-  rewrite add_spec'. f_equal. lia.
-Qed.
-
-Lemma wp_iteri_ {S A} (f : S → int → A → S) (inv : S → list A → Prop) xs :
+Lemma wp_iteri_aux {S A} (f : S → int → A → S) (inv : S → list A → Prop) xs :
   ∀ future s _i history,
-  I _i (List.length history) →
+  isInt _i (List.length history) →
   inv s history →
   history ++ future = xs →
   ( ∀ s future history _i x,
-    I _i (List.length history) →
+    isInt _i (List.length history) →
     inv s history →
     history ++ future = xs →
     [x] `prefix_of` future →
@@ -294,7 +207,7 @@ Qed.
 Lemma wp_iteri {S A} (f : S → int → A → S) xs Q (inv : S → list A → Prop) s :
   inv s [] →
   ( ∀ s history _i x,
-    I _i (List.length history) →
+    isInt _i (List.length history) →
     inv s history →
     history ++ [x] `prefix_of` xs →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
@@ -304,8 +217,8 @@ Lemma wp_iteri {S A} (f : S → int → A → S) xs Q (inv : S → list A → Pr
 Proof.
   intros Hinv Hpreservation Hcompletion.
   eapply wp_conseq.
-  { eapply wp_iteri_; eauto; list.
-    - introI. eauto.
+  { eapply wp_iteri_aux; eauto; list.
+    - introIsInt. eauto.
     - intros. subst. eauto using prefix_app. }
   { eauto. }
 Qed.
@@ -318,15 +231,6 @@ Definition of_list (xs : list A) : array A :=
   bind (make (of_nat n) inhabitant) (λ a,
   iteri set a 0 xs
   )).
-
-(* TODO move *)
-Lemma expand_replicate `{Inhabited A} n (x : A) :
-  0 < n →
-  replicate n x = x :: replicate (n-1) x.
-Proof.
-  intros. destruct n as [| n]; [ lia |].
-  rewrite replicate_S. do 2 f_equal. lia.
-Qed.
 
 Ltac apply_prefix_length :=
   match goal with h: _ `prefix_of` _ |- _ =>
@@ -346,10 +250,9 @@ Proof.
   (* TODO why do I need to specify [P]? *)
   eapply wp_bind with (P := P); [| intros a Ha ].
   { Fail eapply wp_make. (* TODO why does this fail? *)
-    eapply (@wp_make A H (of_nat n) n (@inhabitant A H)).
-    + eauto with I.
-    + rewrite Hn. eauto. }
+    eapply (@wp_make A H (of_nat n) n (@inhabitant A H)); eauto with lia. }
   unfold P in Ha.
+  (* The loop invariant. *)
   set (inv :=
     λ (a : array A) (history : list A),
     let h := List.length history in
@@ -365,5 +268,3 @@ Proof.
 Qed.
 
 End OfList.
-
-Eval compute in (of_list [1;2;3]).

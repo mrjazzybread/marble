@@ -8,8 +8,9 @@ From Stdlib Require Import Uint63.
  *)
 
 Open Scope Z_scope.
-Implicit Types i : int.
-Implicit Types z : Z.
+Implicit Types _i : int.
+Implicit Types  i : nat.
+Implicit Types  z : Z.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -27,9 +28,14 @@ Notation unsigned z :=
 Global Notation "'φ'" := (to_Z).
 Global Notation "'π'" := (of_Z).
 
+Global Hint Rewrite
+  to_Z_0
+  to_Z_1
+: int.
+
 (* Round-trip properties. *)
 
-Goal ∀ i, π (φ i) = i.
+Goal ∀ _i, π (φ _i) = _i.
 Proof. apply of_to_Z. Qed.
 
 Lemma to_of_Z z :
@@ -46,9 +52,21 @@ Proof.
   apply of_Z_spec.
 Qed.
 
+Global Hint Rewrite
+  of_to_Z
+  to_of_Z
+  using lia
+: int.
+
+Global Ltac int :=
+  autorewrite with int.
+
+Global Tactic Notation "int" "in" hyp(h) :=
+  autorewrite with int in h.
+
 (* φ is injective. *)
 
-Goal ∀ i1 i2, φ i1 = φ i2 → i1 = i2.
+Goal ∀ _i1 _i2, φ _i1 = φ _i2 → _i1 = _i2.
 Proof. eapply to_Z_inj. Qed.
 
 (* π, restricted to the interval of the unsigned machine integers,
@@ -77,21 +95,21 @@ Qed.
 
 (* The image of φ is the interval of the unsigned machine integers. *)
 
-Lemma to_Z_ge_0 i :
-  0 ≤ φ i.
+Lemma to_Z_ge_0 _i :
+  0 ≤ φ _i.
 Proof.
-  apply (to_Z_bounded i).
+  apply (to_Z_bounded _i).
 Qed.
 
-Lemma to_Z_lt_wB i :
-  φ i < wB.
+Lemma to_Z_lt_wB _i :
+  φ _i < wB.
 Proof.
-  apply (to_Z_bounded i).
+  apply (to_Z_bounded _i).
 Qed.
 
 Global Hint Resolve
   to_Z_ge_0 to_Z_lt_wB
-: int.
+: lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -107,4 +125,55 @@ Proof.
   rewrite !of_Z_spec.
   (* A property of modulus. *)
   rewrite <- Z.add_mod by eauto. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A relational view of the connection between [int] and [nat]. *)
+
+Definition isInt (_i : int) (i : nat) :=
+  _i = of_nat i.
+
+Ltac introIsInt :=
+  unfold isInt.
+
+Ltac destructIsInt :=
+  match goal with h: isInt ?_i _ |- _ =>
+    unfold isInt in h; try subst _i
+  end.
+
+Lemma introIsInt _i i :
+  _i = of_nat i →
+  isInt _i i.
+Proof.
+  intros. introIsInt. eauto.
+Qed.
+
+Global Hint Resolve
+  introIsInt
+: lia.
+
+Global Hint Rewrite
+  Z2Nat.id
+  using (eauto with lia)
+: int.
+
+(* Addition. *)
+
+Lemma succ_spec _i i :
+  isInt _i i →
+  isInt (_i+1) (i+1)%nat.
+Proof.
+  intros. introIsInt. destructIsInt.
+  change 1%uint63 with (π 1%Z).
+  rewrite add_spec'. f_equal. lia.
+Qed.
+
+Lemma add_spec _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  isInt (_i+_j) (i+j)%nat.
+Proof.
+  intros. introIsInt. repeat destructIsInt.
+  rewrite add_spec'. f_equal. lia.
 Qed.
