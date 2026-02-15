@@ -1,151 +1,18 @@
+(* TODO useful?
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Local Set Universe Polymorphism.
-From stdpp Require Import base list.
-From Stdlib Require Import Utf8.
-From Stdlib Require Import Lia.
-From Stdlib Require Import ZArith.
+ *)
+
+From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-(* TODO why is of_to_Z an axiom? *)
+From array Require Import list_extra.
+From array Require Import int.
 
-(* TODO lists *)
-Lemma replicate_is_repeat {A} n (x : list A) :
-  replicate n x = List.repeat x n.
-Proof.
-  revert n. induction n as [| n]; simpl; congruence.
-Qed.
-
-Lemma insert_replicate_0 {A} n (x y : A) :
-  0 < n →
-  <[0:=y]>(replicate n x) = [y] ++ replicate (n-1) x.
-Proof.
-  intros. rewrite insert_replicate_lt by eauto.
-  rewrite app_nil_l. eauto.
-Qed.
-
-Lemma sub_succ (n h : nat) :
-  n - (h + 1) = n - h - 1.
-Proof. lia. Qed.
-
-Lemma sub_diag' (x y : nat) :
-  x ≤ y → x - y = 0.
-Proof. lia. Qed.
-
-Lemma replicate_0 {A} (x : A) :
-  replicate 0 x = [].
-Proof. eauto. Qed.
-
-Global Hint Rewrite
-  Nat.sub_0_l Nat.sub_0_r Nat.sub_diag sub_succ
-  @app_nil_l @app_nil_r
-  @replicate_0
-  @length_nil
-  @length_cons
-  @length_app
-  @length_insert
-  @length_replicate
-: list.
-
-Global Hint Rewrite
-  <- @app_assoc
-: list.
-
-Global Ltac list :=
-  autorewrite with list.
-
-Global Tactic Notation "list" "in" hyp(h) :=
-  autorewrite with list in h.
-
-Global Hint Rewrite
-  sub_diag'
-  using (list; lia)
-: list.
-
-Local Hint Extern 1 (_ < List.length _) => (list; lia) : lia.
-
-Global Hint Rewrite
-  Nat.sub_diag
-  @insert_app_l
-  @insert_app_r_alt
-  @insert_replicate_0
-  using (list; lia)
-: insert.
-
-Global Ltac insert :=
-  autorewrite with insert.
-
-Global Tactic Notation "insert" "in" hyp(h) :=
-  autorewrite with insert in h.
-
-
-(* TODO move *)
-(* [unsigned z] means that [z] lies in the interval of the unsigned
-   machine integers. *)
-Notation unsigned z :=
-  (0 ≤ z < wB)%Z.
-
-Section Zstuff.
-Open Scope Z_scope.
-Implicit Types z : Z.
-
-Lemma to_of_Z z :
-  unsigned z →
-  to_Z (of_Z z) = z.
-Proof.
-  rewrite of_Z_spec. intros. eauto using Z.mod_small.
-Qed.
-
-Lemma of_Z_inj z1 z2 :
-  unsigned z1 →
-  unsigned z2 →
-  of_Z z1 = of_Z z2 →
-  z1 = z2.
-Proof.
-  intros.
-  rewrite <- (to_of_Z z1) by eauto.
-  rewrite <- (to_of_Z z2) by eauto.
-  congruence.
-Qed.
-
-Lemma of_Z_inj' z1 z2 :
-  unsigned z1 →
-  unsigned z2 →
-  z1 ≠ z2 →
-  of_Z z1 ≠ of_Z z2.
-Proof.
-  intros ? ? Hzz ?. apply Hzz. eauto using of_Z_inj.
-Qed.
-
-End Zstuff.
-
-(* TODO move *)
-Section intstuff.
-Open Scope Z_scope.
-Implicit Types i : int.
-
-Lemma to_Z_ge_0 i :
-  0 ≤ to_Z i.
-Proof.
-  apply (to_Z_bounded i).
-Qed.
-
-Lemma to_Z_lt_wB i :
-  to_Z i < wB.
-Proof.
-  apply (to_Z_bounded i).
-Qed.
-
-End intstuff.
-
-Global Hint Resolve
-  to_Z_ge_0 to_Z_lt_wB
-: int.
+Open Scope nat_scope.
 
 (* Documentation:
-   https://rocq-prover.org/doc/V9.0.0/stdlib/Stdlib.Lists.List.html
-   https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Numbers.Cyclic.Int63.Uint63Axioms.html
-   https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Numbers.Cyclic.Int63.Uint63.html
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.PrimArray.html
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.ArrayAxioms.html
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
@@ -254,12 +121,12 @@ Lemma max_array_length_lt_two_54 :
 Proof.
   unfold max_array_length.
   rewrite Z2Nat.id by eauto with int.
-  replace (2 ^ 54)%Z with (to_Z (lsl (1%uint63) 54)).
+  replace (2 ^ 54)%Z with (φ (lsl (1%uint63) 54)).
   { (* Prove the goal by using machine integers. *)
     rewrite <- ltb_spec. reflexivity. }
   { (* Check that 2^54 is representable. *)
     rewrite lsl_spec, to_Z_1, Z.mul_1_l.
-    change (to_Z 54) with 54%Z.
+    change (φ 54) with 54%Z.
     rewrite Z.mod_small; [ eauto |].
     split; [ lia | apply two_54_lt_wB ]. }
 Qed.
@@ -394,6 +261,9 @@ Lemma succ_spec _i i :
   I _i i →
   I (_i+1) (i+1)%nat.
 Proof.
+  intros. introI. destructI.
+  Check add_spec.
+  Search (_ + _)%uint63.
 Admitted. (* TODO *)
 
 Lemma wp_iteri_ {S A} (f : S → int → A → S) (inv : S → list A → Prop) xs :
