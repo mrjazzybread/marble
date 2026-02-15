@@ -221,35 +221,57 @@ Proof.
   { eauto. }
 Qed.
 
+Section ListLength.
+Context {A : Type}.
+Implicit Types xs : list A.
+
+Fixpoint list_length_aux (_s : int) xs : int :=
+  match xs with [] => _s | _ :: xs => list_length_aux (_s + 1) xs end.
+
+Definition list_length xs : int :=
+  list_length_aux 0 xs.
+
+Lemma wp_list_length_aux xs : ∀ _s s,
+  isInt _s s →
+  wp (list_length_aux _s xs) (λ _i, isInt _i (s + List.length xs)).
+Proof.
+  induction xs as [| x xs ]; simpl; intros.
+  { eapply wp_ret. rewrite Nat.add_0_r. eauto. }
+  { eapply wp_conseq; [ eauto with int |]. simpl.
+    rewrite <- Nat.add_assoc. eauto. }
+Qed.
+
+Lemma wp_list_length xs :
+  wp (list_length xs) (λ _i, isInt _i (List.length xs)).
+Proof.
+  eapply wp_conseq.
+  { eapply wp_list_length_aux. eapply introIsInt'. }
+  { simpl. eauto. }
+Qed.
+
+End ListLength.
+
 Section OfList.
 Context `{Inhabited A}.
 
-(* TODO for efficiency, [of_list] should not use [List.length] *)
-
 Definition of_list (xs : list A) : array A :=
-  ' n ⇜ List.length xs ;
-  ' a ⇜ make (of_nat n) inhabitant ;
+  ' n ⇜ list_length xs ;
+  ' a ⇜ make n inhabitant ;
   iteri set a 0 xs.
-
-Ltac apply_prefix_length :=
-  match goal with h: _ `prefix_of` _ |- _ =>
-    generalize h;
-    let h' := fresh h in
-    intro h'; apply prefix_length in h';
-    list in h'
-  end.
 
 Lemma wp_of_list (xs : list A) :
   List.length xs ≤ max_array_length →
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
-  eapply wp_bind_eq; intros n Hn.
+  eapply wp_bind; [ eapply wp_list_length | simpl ].
+  set (n := List.length xs).
+  intros _n H_n.
   set (P := (λ (a : array A), isArray a (replicate n inhabitant))).
   (* TODO why do I need to specify [P]? *)
   eapply wp_bind with (P := P); [| intros a Ha ].
   { Fail eapply wp_make. (* TODO why does this fail? *)
-    eapply (@wp_make A H (of_nat n) n (@inhabitant A H)); eauto with lia. }
+    eapply (@wp_make A H _n n (@inhabitant A H)); eauto with lia. }
   unfold P in Ha.
   (* The loop invariant. *)
   set (inv :=
@@ -269,7 +291,7 @@ Qed.
 End OfList.
 
 (* TODO
-From Stdlib Require Extraction.
+From Stdlib Require Extraction ExtrOCamlInt63 ExtrOCamlPArray.
 Extraction Inline bind.
 Recursive Extraction of_list.
  *)

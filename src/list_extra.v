@@ -68,3 +68,15 @@ Global Hint Rewrite
   @insert_replicate_0
   using (list; lia)
 : list.
+
+(* The tactic [apply_prefix_length] searches for a hypothesis of the form
+   [xs `prefix_of` ys] and introduces a new fact [length xs ≤ length ys].
+   This new fact is then simplified using the tactic [list]. *)
+
+Global Ltac apply_prefix_length :=
+  match goal with h: _ `prefix_of` _ |- _ =>
+    generalize h;
+    let h' := fresh h in
+    intro h'; apply prefix_length in h';
+    list in h'
+  end.

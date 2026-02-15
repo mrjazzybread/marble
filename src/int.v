@@ -149,13 +149,19 @@ Proof.
   intros. introIsInt. eauto.
 Qed.
 
-Global Hint Resolve
-  introIsInt
-: lia.
-
 Global Hint Rewrite
   Z2Nat.id
   using (eauto with lia)
+: int.
+
+Lemma introIsInt' _i :
+  isInt _i (to_nat _i).
+Proof.
+  introIsInt. int. eauto.
+Qed.
+
+Global Hint Resolve
+  introIsInt
 : int.
 
 (* Addition. *)
@@ -177,3 +183,8 @@ Proof.
   intros. introIsInt. repeat destructIsInt.
   rewrite add_spec'. f_equal. lia.
 Qed.
+
+Global Hint Resolve
+  succ_spec
+  add_spec
+: int.
