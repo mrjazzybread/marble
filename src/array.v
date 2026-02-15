@@ -67,9 +67,7 @@ Proof.
   + eapply two_54_lt_wB.
 Qed.
 
-(* Local Hint Resolve max_array_length_lt_wB : int. *)
-
-Definition R `{Inhabited A} (a : array A) (xs : list A) :=
+Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
   isInt (length a) n ∧
   n ≤ max_array_length ∧
@@ -77,11 +75,11 @@ Definition R `{Inhabited A} (a : array A) (xs : list A) :=
 
 (* TODO prove that R a xs is equivalent to to_list a = xs *)
 
-Local Ltac introR :=
+Local Ltac introIsArray :=
   split; [| split ].
 
-Local Ltac destructR :=
-  match goal with h: R _ _ |- _ => destruct h as (?&?&?) end.
+Local Ltac destructIsArray :=
+  match goal with h: isArray _ _ |- _ => destruct h as (?&?&?) end.
 
 Section PrimSpec.
 Context `{Inhabited A}.
@@ -90,19 +88,19 @@ Implicit Types x : A.
 Implicit Types xs : list A.
 
 Lemma bounded_length a xs :
-  R a xs →
+  isArray a xs →
   List.length xs ≤ max_array_length.
 Proof.
-  intros. destructR. eauto.
+  intros. destructIsArray. eauto.
 Qed.
 
 Lemma wp_make _n n x :
   isInt _n n →
   n ≤ max_array_length →
-  wp (make _n x) (λ a, R a (replicate n x)).
+  wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
   generalize max_array_length_lt_wB; intro.
-  intros. eapply wp_ret. destructIsInt. introR; list.
+  intros. eapply wp_ret. destructIsInt. introIsArray; list.
   { introIsInt.
     assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
     { rewrite leb_spec, max_length_spec. int. lia. }
@@ -116,23 +114,23 @@ Qed.
 
 Lemma wp_get _i i a xs :
   isInt _i i →
-  R a xs →
+  isArray a xs →
   valid i xs →
   wp a.[_i] (λ x, x = xs !!! i).
 Proof.
   (* This proof is trivial because the definition of [R] relies on [get]. *)
-  intros. destructR. repeat destructIsInt. eapply wp_ret. eauto.
+  intros. destructIsArray. repeat destructIsInt. eapply wp_ret. eauto.
 Qed.
 (* TODO offer a variant where the conclusion is just an equation? *)
 
 Lemma wp_set _i i a xs x :
   isInt _i i →
-  R a xs →
+  isArray a xs →
   valid i xs →
-  wp a.[_i <- x] (λ a', R a' (<[i := x]>xs)).
+  wp a.[_i <- x] (λ a', isArray a' (<[i := x]>xs)).
 Proof.
   intros. eapply wp_ret.
-  destructR. repeat destructIsInt. introR; list.
+  destructIsArray. repeat destructIsInt. introIsArray; list.
   { rewrite length_set. eauto. }
   { eauto. }
   intros j ?.
@@ -152,10 +150,10 @@ Proof.
 Qed.
 
 Lemma wp_length a xs :
-  R a xs →
+  isArray a xs →
   wp (length a) (λ _i, isInt _i (List.length xs)).
 Proof.
-  intros. eapply wp_ret. destructR. eauto.
+  intros. eapply wp_ret. destructIsArray. eauto.
 Qed.
 
 End PrimSpec.
@@ -242,11 +240,11 @@ Ltac apply_prefix_length :=
 
 Lemma wp_of_list (xs : list A) :
   List.length xs ≤ max_array_length →
-  wp (of_list xs) (λ a, R a xs).
+  wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
   eapply wp_bind_eq; intros n Hn.
-  set (P := (λ (a : array A), R a (replicate n inhabitant))).
+  set (P := (λ (a : array A), isArray a (replicate n inhabitant))).
   (* TODO why do I need to specify [P]? *)
   eapply wp_bind with (P := P); [| intros a Ha ].
   { Fail eapply wp_make. (* TODO why does this fail? *)
@@ -256,7 +254,7 @@ Proof.
   set (inv :=
     λ (a : array A) (history : list A),
     let h := List.length history in
-    R a (history ++ replicate (n-h) inhabitant)
+    isArray a (history ++ replicate (n-h) inhabitant)
   ).
   eapply wp_iteri with (inv := inv).
   (* Initialization. *)
