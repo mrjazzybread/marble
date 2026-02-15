@@ -7,9 +7,7 @@ Local Set Universe Polymorphism.
 From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From array Require Import list_extra.
-From array Require Import int.
-From array Require Import wp.
+From array Require Import list_extra bool int wp.
 
 Open Scope nat_scope.
 

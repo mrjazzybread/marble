@@ -1,6 +1,7 @@
 From stdpp Require Import numbers.
 From Stdlib Require Import Uint63.
 (* TODO why is [of_to_Z] an axiom? *)
+From array Require Import bool.
 
 (* Documentation:
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Numbers.Cyclic.Int63.Uint63Axioms.html
@@ -111,9 +112,22 @@ Global Hint Resolve
   to_Z_ge_0 to_Z_lt_wB
 : lia.
 
+(* [to_nat] is injective. *)
+
+Lemma to_nat_inj _i1 _i2 :
+  to_nat _i1 = to_nat _i2 →
+  _i1 = _i2.
+Proof.
+  eauto using to_Z_inj, Z2Nat.inj with lia.
+Qed.
+
+Global Hint Resolve
+  to_nat_inj
+: lia.
+
 (* -------------------------------------------------------------------------- *)
 
-(* Addition commutes with projection. *)
+(* Addition in Z commutes with projection. *)
 
 Lemma add_spec' z1 z2 :
   (π z1 + π z2)%uint63 = π (z1 + z2).
@@ -125,6 +139,24 @@ Proof.
   rewrite !of_Z_spec.
   (* A property of modulus. *)
   rewrite <- Z.add_mod by eauto. eauto.
+Qed.
+
+(* Subtraction in Z commutes with projection. *)
+
+Lemma sub_spec' z1 z2 :
+  (π z1 - π z2)%uint63 = π (z1 - z2).
+Proof.
+  eapply to_Z_inj. rewrite sub_spec, !of_Z_spec.
+  rewrite <- Zminus_mod by eauto. eauto.
+Qed.
+
+(* Multiplication in Z commutes with projection. *)
+
+Lemma mul_spec' z1 z2 :
+  (π z1 * π z2)%uint63 = π (z1 * z2).
+Proof.
+  eapply to_Z_inj. rewrite mul_spec, !of_Z_spec.
+  rewrite <- Z.mul_mod by eauto. eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -151,6 +183,7 @@ Qed.
 
 Global Hint Rewrite
   Z2Nat.id
+  Nat2Z.id
   using (eauto with lia)
 : int.
 
@@ -184,7 +217,128 @@ Proof.
   rewrite add_spec'. f_equal. lia.
 Qed.
 
+(* Subtraction. *)
+
+Lemma sub_spec _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  (j < i)%nat →
+  isInt (_i-_j) (i-j)%nat.
+Proof.
+  intros. introIsInt. repeat destructIsInt.
+  rewrite sub_spec'. f_equal. lia.
+Qed.
+
+(* Multiplication. *)
+
+Lemma mul_spec _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  isInt (_i*_j) (i*j)%nat.
+Proof.
+  intros. introIsInt. repeat destructIsInt.
+  rewrite mul_spec'. f_equal. lia.
+Qed.
+
 Global Hint Resolve
   succ_spec
   add_spec
+  sub_spec
+  mul_spec
 : int.
+
+(* The representable natural integers. *)
+
+Definition wBN : nat :=
+  Z.to_nat wB.
+
+Local Notation representable i :=
+  (i < wBN)%nat.
+
+Lemma representable_def i :
+  representable i ↔ unsigned (Z.of_nat i).
+Proof.
+  unfold wBN. lia.
+Qed.
+
+Local Notation proj i :=
+  (i `mod` wBN)%nat.
+
+(* The lemmas that relate [Nat.modulo] and [Z.modulo] are
+   [Nat2Z.inj_mod] and [Z2Nat.inj_mod]. *)
+
+Lemma proj_def i :
+  proj i = to_nat (π (Z.of_nat i)).
+Proof.
+  generalize wB_pos; intro HwB.
+  rewrite of_Z_spec. unfold wBN.
+  rewrite Znat.Z2Nat.inj_mod by lia.
+  int. eauto.
+Qed.
+
+Lemma representable_proj i :
+  representable i →
+  proj i = i.
+Proof.
+  eauto using Nat.mod_small.
+Qed.
+
+Global Hint Resolve
+  representable_proj
+: lia.
+
+(* Equality. *)
+
+Lemma eq_spec _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  isBool (eqb _i _j) (proj i = proj j).
+Proof.
+  intros. unfold isBool. repeat destructIsInt.
+  rewrite !proj_def.
+  rewrite eqb_spec.
+  split; [ congruence | eauto using to_nat_inj ].
+Qed.
+
+Lemma eq_spec' _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  representable i →
+  representable j →
+  isBool (eqb _i _j) (i = j).
+Proof.
+  intros. eapply isBool_conseq; [ eapply eq_spec; eauto |].
+  rewrite !representable_proj by eauto. tauto.
+Qed.
+
+(* Comparison. *)
+
+Global Hint Resolve
+  Z.mod_pos
+: lia.
+
+Lemma ltb_spec _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  isBool (ltb _i _j) (proj i < proj j)%nat.
+Proof.
+  generalize wB_pos; intro HwB.
+  intros. unfold isBool. repeat destructIsInt.
+  rewrite ltb_spec.
+  rewrite !of_Z_spec. unfold wBN.
+  rewrite <- (Nat2Z.id i) at 2.
+  rewrite <- (Nat2Z.id j) at 2.
+  rewrite <- !Z2Nat.inj_mod by eauto with lia.
+  apply Z2Nat.inj_lt; eauto with lia.
+Qed.
+
+Lemma ltb_spec' _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  representable i →
+  representable j →
+  isBool (ltb _i _j) (i < j)%nat.
+Proof.
+  intros. eapply isBool_conseq; [ eapply ltb_spec; eauto |].
+  rewrite !representable_proj by eauto. tauto.
+Qed.
