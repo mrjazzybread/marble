@@ -171,8 +171,8 @@ Fixpoint iteri (f : S → int → A → S) (s : S) (_i : int) (xs : list A) : S 
   | [] =>
       s
   | x :: xs =>
-      bind (f s _i x) (λ s,
-      iteri f s (_i + 1) xs)
+      ' s ⇜ f s _i x ;
+      iteri f s (_i + 1) xs
   end.
 
 End ListIteri.
@@ -224,11 +224,12 @@ Qed.
 Section OfList.
 Context `{Inhabited A}.
 
+(* TODO for efficiency, [of_list] should not use [List.length] *)
+
 Definition of_list (xs : list A) : array A :=
-  bind (List.length xs) (λ n,
-  bind (make (of_nat n) inhabitant) (λ a,
-  iteri set a 0 xs
-  )).
+  ' n ⇜ List.length xs ;
+  ' a ⇜ make (of_nat n) inhabitant ;
+  iteri set a 0 xs.
 
 Ltac apply_prefix_length :=
   match goal with h: _ `prefix_of` _ |- _ =>
@@ -266,3 +267,9 @@ Proof.
 Qed.
 
 End OfList.
+
+(* TODO
+From Stdlib Require Extraction.
+Extraction Inline bind.
+Recursive Extraction of_list.
+ *)
