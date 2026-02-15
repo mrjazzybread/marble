@@ -38,6 +38,13 @@ Lemma to_of_Z z :
 Proof.
   rewrite of_Z_spec. intros. eauto using Z.mod_small.
 Qed.
+(* This is a reformulation of [is_int]. *)
+
+Goal ∀ z,
+  φ (π z) = z `mod` wB.
+Proof.
+  apply of_Z_spec.
+Qed.
 
 (* φ is injective. *)
 
@@ -87,3 +94,17 @@ Global Hint Resolve
 : int.
 
 (* -------------------------------------------------------------------------- *)
+
+(* Addition commutes with projection. *)
+
+Lemma add_spec' z1 z2 :
+  (π z1 + π z2)%uint63 = π (z1 + z2).
+Proof.
+  eapply to_Z_inj.
+  (* Rewrite on the left. *)
+  rewrite add_spec.
+  (* Rewrite three occurrences of [φ . π]. *)
+  rewrite !of_Z_spec.
+  (* A property of modulus. *)
+  rewrite <- Z.add_mod by eauto. eauto.
+Qed.

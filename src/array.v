@@ -262,9 +262,9 @@ Lemma succ_spec _i i :
   I (_i+1) (i+1)%nat.
 Proof.
   intros. introI. destructI.
-  Check add_spec.
-  Search (_ + _)%uint63.
-Admitted. (* TODO *)
+  change 1%uint63 with (π 1%Z).
+  rewrite add_spec'. f_equal. lia.
+Qed.
 
 Lemma wp_iteri_ {S A} (f : S → int → A → S) (inv : S → list A → Prop) xs :
   ∀ future s _i history,
