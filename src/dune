@@ -2,5 +2,5 @@
 (rocq.theory
   (name array)
   (package rocq-array)
-  (theories Stdlib stdpp)
+  (theories Stdlib Equations stdpp)
 )
