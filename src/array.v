@@ -169,7 +169,7 @@ Fixpoint iteri (f : S → int → A → S) (s : S) (_i : int) (xs : list A) : S 
   | [] =>
       s
   | x :: xs =>
-      ' s ⇜ f s _i x ;
+      do s ← f s _i x ;
       iteri f s (_i + 1) xs
   end.
 
@@ -253,8 +253,8 @@ Section OfList.
 Context `{Inhabited A}.
 
 Definition of_list (xs : list A) : array A :=
-  ' n ⇜ list_length xs ;
-  ' a ⇜ make n inhabitant ;
+  do n ← list_length xs ;
+  do a ← make n inhabitant ;
   iteri set a 0 xs.
 
 Lemma wp_of_list (xs : list A) :
@@ -294,7 +294,7 @@ Extraction Inline bind.
  *)
 
 (* TODO:
- + better monadic notation
+ + better monadic notation?
  + better loop notation with @@
  + set up extraction in a clean way
  + test extracting to defensive mutable arrays

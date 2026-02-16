@@ -31,7 +31,7 @@ Definition bind {A B} (a : A) (b : A → B) : B :=
   let x := a in b x.
 
 (* TODO use a nicer notation? *)
-Global Notation "' x ⇜ y ; z" := (bind y (λ x : _, z))
+Global Notation "'do' x ← y ; z" := (bind y (λ x : _, z))
   (at level 20, x pattern, y at level 100, z at level 200).
 
 Lemma wp_bind {A B} (a : A) (b : A → B) (P : A → Prop) (Q : B → Prop) :
