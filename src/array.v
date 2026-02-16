@@ -291,5 +291,11 @@ End OfList.
 (* TODO
 From Stdlib Require Extraction ExtrOCamlInt63 ExtrOCamlPArray.
 Extraction Inline bind.
-Recursive Extraction of_list.
+ *)
+
+(* TODO:
+ + better monadic notation
+ + better loop notation with @@
+ + set up extraction in a clean way
+ + test extracting to defensive mutable arrays
  *)
