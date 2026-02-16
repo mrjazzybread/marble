@@ -199,7 +199,7 @@ Global Hint Resolve
 
 (* Addition. *)
 
-Lemma succ_spec _i i :
+Lemma succ_compat _i i :
   isInt _i i →
   isInt (_i+1) (i+1)%nat.
 Proof.
@@ -208,7 +208,7 @@ Proof.
   rewrite add_spec'. f_equal. lia.
 Qed.
 
-Lemma add_spec _i i _j j :
+Lemma add_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i+_j) (i+j)%nat.
@@ -219,7 +219,7 @@ Qed.
 
 (* Subtraction. *)
 
-Lemma sub_spec _i i _j j :
+Lemma sub_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   (j < i)%nat →
@@ -231,7 +231,7 @@ Qed.
 
 (* Multiplication. *)
 
-Lemma mul_spec _i i _j j :
+Lemma mul_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i*_j) (i*j)%nat.
@@ -241,10 +241,10 @@ Proof.
 Qed.
 
 Global Hint Resolve
-  succ_spec
-  add_spec
-  sub_spec
-  mul_spec
+  succ_compat
+  add_compat
+  sub_compat
+  mul_compat
 : int.
 
 (* The representable natural integers. *)
@@ -289,7 +289,7 @@ Global Hint Resolve
 
 (* Equality. *)
 
-Lemma eq_spec _i i _j j :
+Lemma eq_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   isBool (eqb _i _j) (proj i = proj j).
@@ -300,14 +300,14 @@ Proof.
   split; [ congruence | eauto using to_nat_inj ].
 Qed.
 
-Lemma eq_spec' _i i _j j :
+Lemma eq_compat' _i i _j j :
   isInt _i i →
   isInt _j j →
   representable i →
   representable j →
   isBool (eqb _i _j) (i = j).
 Proof.
-  intros. eapply isBool_conseq; [ eapply eq_spec; eauto |].
+  intros. eapply isBool_conseq; [ eapply eq_compat; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
@@ -317,7 +317,7 @@ Global Hint Resolve
   Z.mod_pos
 : lia.
 
-Lemma ltb_spec _i i _j j :
+Lemma ltb_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   isBool (ltb _i _j) (proj i < proj j)%nat.
@@ -332,13 +332,13 @@ Proof.
   apply Z2Nat.inj_lt; eauto with lia.
 Qed.
 
-Lemma ltb_spec' _i i _j j :
+Lemma ltb_compat' _i i _j j :
   isInt _i i →
   isInt _j j →
   representable i →
   representable j →
   isBool (ltb _i _j) (i < j)%nat.
 Proof.
-  intros. eapply isBool_conseq; [ eapply ltb_spec; eauto |].
+  intros. eapply isBool_conseq; [ eapply ltb_compat; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.

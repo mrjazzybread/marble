@@ -197,7 +197,7 @@ Proof.
     { eapply Hpreservation; eauto using prefix_cons, prefix_nil. }
     simpl. intros s' Hs'.
     eapply IHfuture with (history := history ++ [x]);
-      list; eauto using succ_spec. }
+      list; eauto with int. }
 Qed.
 
 Lemma wp_iteri {S A} (f : S → int → A → S) xs Q (inv : S → list A → Prop) s :
