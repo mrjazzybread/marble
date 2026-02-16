@@ -1,6 +1,8 @@
 From stdpp Require Import numbers.
 From Stdlib Require Import Uint63.
 (* TODO why is [of_to_Z] an axiom? *)
+From Stdlib Require Import Wellfounded.Wellfounded.
+From Equations Require Import Equations.
 From array Require Import bool.
 
 (* Documentation:
@@ -70,6 +72,13 @@ Global Tactic Notation "int" "in" hyp(h) :=
 Goal ∀ _i1 _i2, φ _i1 = φ _i2 → _i1 = _i2.
 Proof. eapply to_Z_inj. Qed.
 
+Lemma to_Z_inj' _i1 _i2 :
+  _i1 ≠ _i2 →
+  φ _i1 ≠ φ _i2.
+Proof.
+  intuition eauto using to_Z_inj.
+Qed.
+
 (* π, restricted to the interval of the unsigned machine integers,
    is injective. *)
 
@@ -91,7 +100,7 @@ Lemma of_Z_inj' z1 z2 :
   z1 ≠ z2 →
   π z1 ≠ π z2.
 Proof.
-  intros ? ? Hzz ?. apply Hzz. eauto using of_Z_inj.
+  intuition eauto using of_Z_inj.
 Qed.
 
 (* The image of φ is the interval of the unsigned machine integers. *)
@@ -289,6 +298,18 @@ Global Hint Resolve
 
 (* Equality. *)
 
+Lemma eqb_spec_negated _i _j :
+  (_i =? _j)%uint63 = false ↔ (_j ≠ _i).
+Proof.
+  generalize (eqb_spec _i _j); intro.
+  destruct ((_i =? _j)%uint63).
+  (* I believe [lia] should work here, but it doesn't. *)
+  + assert (_i = _j) by tauto. subst. split; congruence.
+  + assert (_i ≠ _j).
+    { intro. assert (false = true) by tauto. congruence. }
+    split; congruence.
+Qed.
+
 Lemma eq_compat _i i _j j :
   isInt _i i →
   isInt _j j →
@@ -317,6 +338,13 @@ Global Hint Resolve
   Z.mod_pos
 : lia.
 
+Lemma ltb_spec_negated _i _j :
+  (_i <? _j)%uint63 = false ↔ (φ _j ≤ φ _i)%Z.
+Proof.
+  generalize (ltb_spec _i _j); intro.
+  destruct ((_i <? _j)%uint63); lia.
+Qed.
+
 Lemma ltb_compat _i i _j j :
   isInt _i i →
   isInt _j j →
@@ -342,3 +370,30 @@ Proof.
   intros. eapply isBool_conseq; [ eapply ltb_compat; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Well-foundedness of an ordering on machine integers. *)
+
+Definition ilt _i _j :=
+  φ _i < φ _j.
+
+Lemma ltb_spec' _i _j :
+  ltb _i _j = true ↔ ilt _i _j.
+Proof.
+  unfold ilt. rewrite ltb_spec. tauto.
+Qed.
+
+Lemma ilt_alt_def _i _j :
+  ilt _i _j ↔ 0 ≤ φ _i < φ _j.
+Proof.
+  unfold ilt. split; eauto with lia.
+Qed.
+
+Lemma ilt_wf : well_founded ilt.
+Proof.
+  eapply wf_incl; [| eapply Z.lt_wf_projected with (f := φ) ].
+  intros _i _j. rewrite ilt_alt_def. eauto.
+Qed.
+
+Global Instance Wf_ilt : WellFounded ilt := ilt_wf.
