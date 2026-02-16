@@ -288,24 +288,22 @@ Qed.
 
 End OfList.
 
-(* TODO WIP
+(* TODO WIP *)
+
+Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 Section ToList.
 Context `{Inhabited A}.
 
 Definition to_list (a : array A) : list A :=
   do _n ← length a ;
-  fold_down (λ _i xs,
-    do x ← a.[_i] ;
-    x :: xs
-  ) _n [].
+  down _n [] @@ λ _i xs,
+  do x ← a.[_i] ;
+  x :: xs.
 
 End ToList.
- *)
 
 (* TODO:
- + better monadic notation?
- + better loop notation with @@
  + set up extraction in a clean way
  + test extracting to defensive mutable arrays
  *)

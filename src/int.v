@@ -431,32 +431,34 @@ Qed.
 
 (* A loop, counting down. *)
 
+(* TODO clean up *)
+
 From Equations Require Import Equations.
 From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
 
-Section Fold.
+Section Down.
 Context {S : Type}.
 Implicit Types s : S.
 
 Variable f : int → S → S.
 
-Equations fold_down_aux _i s : S
+Equations down_aux _i s : S
 by wf _i ilt :=
-fold_down_aux _i s with inspect (_i =? 0)%uint63 => {
+down_aux _i s with inspect (_i =? 0)%uint63 => {
 | inspected true :=
     do s ← f _i s ;
     s ;
 | inspected false :=
     do s ← f _i s ;
-    fold_down_aux (_i-1)%uint63 s
+    down_aux (_i-1)%uint63 s
 }.
 Next Obligation.
   eauto using safe_decrement'.
 Qed.
 
 (* TODO alternative direct definition, without Equations *)
-Definition fda : int → S → S.
+Definition down_aux_alt : int → S → S.
 Proof.
   eapply (Fix ilt_wf (λ _, S → S)). intros _i self s.
   destruct (_i =? 0)%uint63 eqn:Heq.
@@ -471,14 +473,14 @@ Proof.
     eauto using safe_decrement'.
 Defined.
 
-Definition fold_down _i s :=
-  if (_i =? 0)%uint63 then s
-  else fold_down_aux (_i-1) s.
+End Down.
 
-End Fold.
+Definition down {S} _i (s : S) f :=
+  if (_i =? 0)%uint63 then s
+  else down_aux f (_i-1) s.
 
 (* TODO
 From Stdlib Require Extraction ExtrOCamlInt63 ExtrOCamlPArray.
 Extraction Inline bind inspect.
-Recursive Extraction fold_down.
+Recursive Extraction down.
  *)
