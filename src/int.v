@@ -79,6 +79,8 @@ Proof.
   intuition eauto using to_Z_inj.
 Qed.
 
+Global Hint Resolve to_Z_inj' : lia.
+
 (* π, restricted to the interval of the unsigned machine integers,
    is injective. *)
 
@@ -102,6 +104,8 @@ Lemma of_Z_inj' z1 z2 :
 Proof.
   intuition eauto using of_Z_inj.
 Qed.
+
+Global Hint Resolve of_Z_inj' : lia.
 
 (* The image of φ is the interval of the unsigned machine integers. *)
 
