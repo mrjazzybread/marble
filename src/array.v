@@ -288,9 +288,19 @@ Qed.
 
 End OfList.
 
-(* TODO
-From Stdlib Require Extraction ExtrOCamlInt63 ExtrOCamlPArray.
-Extraction Inline bind.
+(* TODO WIP
+
+Section ToList.
+Context `{Inhabited A}.
+
+Definition to_list (a : array A) : list A :=
+  do _n ← length a ;
+  fold_down (λ _i xs,
+    do x ← a.[_i] ;
+    x :: xs
+  ) _n [].
+
+End ToList.
  *)
 
 (* TODO:
