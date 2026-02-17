@@ -473,11 +473,60 @@ Proof.
     eauto using safe_decrement'.
 Defined.
 
+Ltac cleanup :=
+  match goal with h: sigmaI _ _ _ = sigmaI _ _ _ |- _ =>
+    clear h
+  end.
+
+Lemma wp_down_aux (inv : int → S → Prop) (Q : S → Prop) :
+  (∀ _i s ,
+    inv _i s →
+    wp (f (_i - 1)%uint63 s) (λ s, inv (_i - 1)%uint63 s)
+  ) →
+  (∀ s, inv 0%uint63 s → Q s) →
+  ∀ _i s ,
+  inv _i s →
+  wp (down_aux (_i - 1)%uint63 s) Q.
+Proof.
+  intros Hstep Hfinish.
+  intros _i s.
+  funelim (down_aux (_i - 1)%uint63 s); cleanup; intros Hinit.
+  (* Case [_i = 0]. *)
+  { rewrite eqb_spec in e.
+    eapply wp_bind; [ eapply Hstep; eauto |].
+    simpl; intros s' ?.
+    eapply wp_ret. rewrite e in H. eauto. }
+  (* Case [_i ≠ 0]. *)
+  { rewrite eqb_spec_negated in e.
+    eapply wp_bind; [ eapply Hstep; eauto |].
+    simpl; intros s' ?.
+    eauto. }
+Qed.
+
 End Down.
 
 Definition down {S} _i (s : S) f :=
   if (_i =? 0)%uint63 then s
   else down_aux f (_i-1) s.
+
+Lemma wp_down {S} (inv : int → S → Prop) (Q : S → Prop) _i s f :
+  inv _i s →
+  (∀ _i s ,
+    inv _i s →
+    wp (f (_i - 1)%uint63 s) (λ s, inv (_i - 1)%uint63 s)
+  ) →
+  (∀ s, inv 0%uint63 s → Q s) →
+  wp (down _i s f) Q.
+Proof.
+  intros Hinit Hstep Hfinish.
+  unfold down.
+  destruct (_i =? 0)%uint63 eqn:e;
+  [ rewrite eqb_spec in e; subst _i | rewrite eqb_spec_negated in e ].
+  (* Case [_i = 0]. *)
+  { eauto using wp_ret. }
+  (* Case [_i ≠ 0]. *)
+  { eauto using wp_down_aux. }
+Qed.
 
 (* TODO
 From Stdlib Require Extraction ExtrOCamlInt63 ExtrOCamlPArray.
