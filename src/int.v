@@ -209,8 +209,22 @@ Proof.
   introIsInt. int. eauto.
 Qed.
 
+Lemma introIsInt0 :
+  isInt 0 0.
+Proof.
+  eapply introIsInt'.
+Qed.
+
+Lemma introIsInt1 :
+  isInt 1 1.
+Proof.
+  eapply introIsInt'.
+Qed.
+
 Global Hint Resolve
   introIsInt
+  introIsInt0
+  introIsInt1
 : int.
 
 (* Addition. *)
@@ -238,7 +252,7 @@ Qed.
 Lemma sub_compat _i i _j j :
   isInt _i i →
   isInt _j j →
-  (j < i)%nat →
+  (j ≤ i)%nat →
   isInt (_i-_j) (i-j)%nat.
 Proof.
   intros. introIsInt. repeat destructIsInt.
@@ -320,7 +334,7 @@ Qed.
 Lemma eq_compat _i i _j j :
   isInt _i i →
   isInt _j j →
-  isBool (eqb _i _j) (proj i = proj j).
+  isBool (_i =? _j)%uint63 (proj i = proj j).
 Proof.
   intros. unfold isBool. repeat destructIsInt.
   rewrite !proj_def.
@@ -333,10 +347,28 @@ Lemma eq_compat' _i i _j j :
   isInt _j j →
   representable i →
   representable j →
-  isBool (eqb _i _j) (i = j).
+  isBool (_i =? _j)%uint63 (i = j).
 Proof.
   intros. eapply isBool_conseq; [ eapply eq_compat; eauto |].
   rewrite !representable_proj by eauto. tauto.
+Qed.
+
+Lemma eq_compat'_0 _i i :
+  isInt _i i →
+  representable i →
+  (_i =? 0)%uint63 = true →
+  (i = 0)%nat.
+Proof.
+  intros. eapply isBool_elim; eauto using eq_compat' with int lia.
+Qed.
+
+Lemma eq_compat'_0_neg _i i :
+  isInt _i i →
+  representable i →
+  (_i =? 0)%uint63 = false →
+  (i ≠ 0)%nat.
+Proof.
+  intros. eapply isBool_elim_neg; eauto using eq_compat' with int lia.
 Qed.
 
 (* Comparison. *)
@@ -437,6 +469,13 @@ From Equations Require Import Equations.
 From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
 
+Open Scope nat_scope.
+
+Hint Resolve
+  eq_compat'_0
+  eq_compat'_0_neg
+: compat.
+
 Section Down.
 Context {S : Type}.
 Implicit Types s : S.
@@ -478,28 +517,36 @@ Ltac cleanup :=
     clear h
   end.
 
-Lemma wp_down_aux (inv : int → S → Prop) (Q : S → Prop) :
-  (∀ _i s ,
-    inv _i s →
-    wp (f (_i - 1)%uint63 s) (λ s, inv (_i - 1)%uint63 s)
+Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) :
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    inv (i + 1) s →
+    wp (f _i s) (λ s, inv i s)
   ) →
-  (∀ s, inv 0%uint63 s → Q s) →
-  ∀ _i s ,
-  inv _i s →
-  wp (down_aux (_i - 1)%uint63 s) Q.
+  (∀ s, inv 0 s → Q s) →
+  ∀ _i i s ,
+  isInt _i i →
+  representable i →
+  inv (i + 1) s →
+  wp (down_aux _i s) Q.
 Proof.
   intros Hstep Hfinish.
-  intros _i s.
-  funelim (down_aux (_i - 1)%uint63 s); cleanup; intros Hinit.
+  intros _i i s.
+  funelim (down_aux _i s); cleanup; intros ? ? Hinit.
   (* Case [_i = 0]. *)
-  { rewrite eqb_spec in e.
+  { assert (i = 0) by eauto with compat. subst i.
     eapply wp_bind; [ eapply Hstep; eauto |].
     simpl; intros s' ?.
-    eapply wp_ret. rewrite e in H. eauto. }
+    eapply wp_ret. eauto. }
   (* Case [_i ≠ 0]. *)
-  { rewrite eqb_spec_negated in e.
+  { assert (i ≠ 0) by eauto with compat.
     eapply wp_bind; [ eapply Hstep; eauto |].
     simpl; intros s' ?.
+    (* TODO clean up *)
+    eapply H. eauto. eauto.
+    eapply sub_compat; eauto with int lia. lia.
+    replace (i - 1 + 1) with i by lia.
     eauto. }
 Qed.
 
@@ -509,23 +556,33 @@ Definition down {S} _i (s : S) f :=
   if (_i =? 0)%uint63 then s
   else down_aux f (_i-1) s.
 
-Lemma wp_down {S} (inv : int → S → Prop) (Q : S → Prop) _i s f :
-  inv _i s →
-  (∀ _i s ,
-    inv _i s →
-    wp (f (_i - 1)%uint63 s) (λ s, inv (_i - 1)%uint63 s)
+Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _i i s f :
+  isInt _i i →
+  representable i →
+  inv i s →
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    inv (i + 1) s →
+    wp (f _i s) (λ s, inv i s)
   ) →
-  (∀ s, inv 0%uint63 s → Q s) →
+  (∀ s, inv 0 s → Q s) →
   wp (down _i s f) Q.
 Proof.
-  intros Hinit Hstep Hfinish.
+  intros ? ? Hinit Hstep Hfinish.
   unfold down.
-  destruct (_i =? 0)%uint63 eqn:e;
-  [ rewrite eqb_spec in e; subst _i | rewrite eqb_spec_negated in e ].
+  destruct (_i =? 0)%uint63 eqn:e.
   (* Case [_i = 0]. *)
-  { eauto using wp_ret. }
+  { assert (i = 0) by eauto with compat. subst i.
+    eauto using wp_ret. }
   (* Case [_i ≠ 0]. *)
-  { eauto using wp_down_aux. }
+  { assert (i ≠ 0) by eauto with compat.
+    (* TODO clean up *)
+    eapply wp_down_aux. eauto. eauto.
+    eapply sub_compat; eauto with int lia.
+    lia.
+    replace (i - 1 + 1) with i by lia.
+    eauto. }
 Qed.
 
 (* TODO
