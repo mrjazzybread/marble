@@ -1,4 +1,4 @@
-From stdpp Require Import numbers.
+From stdpp Require Import numbers well_founded.
 From Stdlib Require Import Uint63.
 (* TODO why is [of_to_Z] an axiom? *)
 From Stdlib Require Import Wellfounded.Wellfounded.
@@ -446,7 +446,10 @@ Proof.
   intros _i _j. rewrite ilt_alt_def. eauto.
 Qed.
 
-Global Instance Wf_ilt : WellFounded ilt := ilt_wf.
+Global Instance Wf_ilt : WellFounded ilt :=
+  wf_guard 32 ilt_wf.
+  (* The use of [wf_guard] is meant to allow computation inside Rocq
+     in spite of the opaque well-foundedness proof [ilt_wf]. *)
 
 (* Safely decrementing an integer, without integer underflow. *)
 

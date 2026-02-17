@@ -342,5 +342,13 @@ Qed.
 
 End ToList.
 
-(* TODO [down_aux] does not compute *)
-Eval compute in to_list (of_list [1;2;3]).
+(* TODO Eval compute is unable to run [down_aux] *)
+Eval    compute in to_list (of_list [1;2;3]).
+Eval vm_compute in to_list (of_list [1;2;3]).
+(* TODO try native_compute *)
+
+(* TODO
+  prove that [isArray a xs] is equivalent to [to_list a = xs]
+  and to [a = of_list xs].
+  prove round-trip properties of [of_list] and [to_list]
+ *)
