@@ -3,7 +3,9 @@ From Stdlib Require Import Uint63.
 (* TODO why is [of_to_Z] an axiom? *)
 From Stdlib Require Import Wellfounded.Wellfounded.
 From Equations Require Import Equations.
-From array Require Import bool wp.
+From Equations.Prop Require Import Logic. (* [inspect] *)
+Notation inspected x := (exist _ x _).
+From array Require Import tactics bool wp.
 
 (* TODO rename this file uint63.v *)
 (* TODO rename [int] to [uint63]  *)
@@ -353,6 +355,9 @@ Proof.
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
+(* TODO do we really want to have to use lemmas
+   of the following forms? *)
+
 Lemma eq_compat'_0 _i i :
   isInt _i i →
   representable i →
@@ -370,6 +375,11 @@ Lemma eq_compat'_0_neg _i i :
 Proof.
   intros. eapply isBool_elim_neg; eauto using eq_compat' with int lia.
 Qed.
+
+Hint Resolve
+  eq_compat'_0
+  eq_compat'_0_neg
+: compat.
 
 (* Comparison. *)
 
@@ -461,26 +471,31 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A loop, counting down. *)
-
-(* TODO clean up *)
-
-From Equations Require Import Equations.
-From Equations.Prop Require Import Logic. (* [inspect] *)
-Notation inspected x := (exist _ x _).
+(* A loop, counting down to zero, using machine integers. *)
 
 Open Scope nat_scope.
-
-Hint Resolve
-  eq_compat'_0
-  eq_compat'_0_neg
-: compat.
 
 Section Down.
 Context {S : Type}.
 Implicit Types s : S.
 
 Variable f : int → S → S.
+
+(* [down_aux _i s] applies the loop body [f] to every machine integer from
+   [_i], included, down to zero, included. A state of type [S] is carried,
+   whose initial value is [s]. *)
+
+(* We are careful to test the condition [_i =? 0] before decrementing [_i].
+   Because we use unsigned integers, we cannot first decrement and then test
+   the condition [_i <? 0]. *)
+
+(* We use Equations to more easily define [down_aux] by well-founded recursion
+   over the loop counter [_i]. The somewhat strange [with] syntax is a way of
+   expressing the test [_i =? 0]. The use of [inspect] and [inspected] is an
+   idiosyncratic way of making the outcome of the test visible at the logical
+   level in the branches. In the second branch, the fact that [_i =? 0] is
+   false is needed in order to prove that [_i-1] is less than [_i], a fact
+   which itself is required by the termination argument. *)
 
 Equations down_aux _i s : S
 by wf _i ilt :=
@@ -496,8 +511,12 @@ Next Obligation.
   eauto using safe_decrement'.
 Qed.
 
-(* TODO alternative direct definition, without Equations *)
-Definition down_aux_alt : int → S → S.
+(* For the record, here is an alternative direct definition of [down_aux],
+   which does not use Equations. At extraction time, this definition produces
+   slightly better-looking OCaml code. However, reasoning about it is more
+   difficult; we lose the fixed point equation and the induction principle
+   produced by Equations, which are used via the tactic [funelim]. *)
+Goal int → S → S.
 Proof.
   eapply (Fix ilt_wf (λ _, S → S)). intros _i self s.
   destruct (_i =? 0)%uint63 eqn:Heq.
@@ -512,10 +531,9 @@ Proof.
     eauto using safe_decrement'.
 Defined.
 
-Ltac cleanup :=
-  match goal with h: sigmaI _ _ _ = sigmaI _ _ _ |- _ =>
-    clear h
-  end.
+(* A specification of [down_aux]. *)
+
+(* For comments, see the specification of [down], further down. *)
 
 Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) :
   (∀ _i i s ,
@@ -544,44 +562,56 @@ Proof.
     eapply wp_bind; [ eapply Hstep; eauto |].
     simpl; intros s' ?.
     (* TODO clean up *)
-    eapply H. eauto. eauto.
-    eapply sub_compat; eauto with int lia. lia.
+    eapply H; eauto with int lia.
     replace (i - 1 + 1) with i by lia.
     eauto. }
 Qed.
 
 End Down.
 
+(* [down _i s f] applies the loop body [f] to every machine integer from [_i],
+   excluded, down to zero, included. A state of type [S] is carried, whose
+   initial value is [s]. *)
+
 Definition down {S} _i (s : S) f :=
   if (_i =? 0)%uint63 then s
   else down_aux f (_i-1) s.
 
-Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _i i s f :
-  isInt _i i →
-  representable i →
-  inv i s →
+(* A specification of [down]. *)
+
+(* The user is allowed to choose a loop invariant [inv i s], where
+   [i] is the current loop index and [s] is the current state. The
+   assertion [inv i s] means that the loop has run down to index [i]
+   included, so the next iteration will concern the index [i-1]. *)
+
+Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n s f :
+  (* If the invariant holds of the start index [n] and start state [s], *)
+  isInt _n n →
+  representable n →
+  inv n s →
+  (* If [s ← f _i s] transforms the invariant [inv (i+1) s] to [inv i s], *)
   (∀ _i i s ,
     isInt _i i →
     representable i →
     inv (i + 1) s →
     wp (f _i s) (λ s, inv i s)
   ) →
+  (* Then, once the loop ends, the invariant holds of the index [0]
+     and final state [s]. *)
   (∀ s, inv 0 s → Q s) →
-  wp (down _i s f) Q.
+  wp (down _n s f) Q.
 Proof.
   intros ? ? Hinit Hstep Hfinish.
   unfold down.
-  destruct (_i =? 0)%uint63 eqn:e.
-  (* Case [_i = 0]. *)
-  { assert (i = 0) by eauto with compat. subst i.
+  destruct (_n =? 0)%uint63 eqn:e.
+  (* Case [_n = 0]. *)
+  { assert (n = 0) by eauto with compat. subst n.
     eauto using wp_ret. }
-  (* Case [_i ≠ 0]. *)
-  { assert (i ≠ 0) by eauto with compat.
+  (* Case [_n ≠ 0]. *)
+  { assert (n ≠ 0) by eauto with compat.
     (* TODO clean up *)
-    eapply wp_down_aux. eauto. eauto.
-    eapply sub_compat; eauto with int lia.
-    lia.
-    replace (i - 1 + 1) with i by lia.
+    eapply wp_down_aux; eauto with int lia.
+    replace (n - 1 + 1) with n by lia.
     eauto. }
 Qed.
 
