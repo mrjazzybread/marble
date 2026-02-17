@@ -77,8 +77,6 @@ Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   n ≤ max_array_length ∧
   ∀ i, valid i xs → a.[of_nat i] = xs !!! i.
 
-(* TODO prove that R a xs is equivalent to to_list a = xs *)
-
 Local Ltac introIsArray :=
   split; [| split ].
 
@@ -125,7 +123,6 @@ Proof.
   (* This proof is trivial because the definition of [R] relies on [get]. *)
   intros. destructIsArray. repeat destructIsInt. eapply wp_ret. eauto.
 Qed.
-(* TODO offer a variant where the conclusion is just an equation? *)
 
 Lemma wp_set _i i a xs x :
   isInt _i i →
@@ -298,10 +295,6 @@ Proof.
 Qed.
 
 End OfList.
-
-(* TODO WIP *)
-
-Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 Section ToList.
 Context `{Inhabited A}.

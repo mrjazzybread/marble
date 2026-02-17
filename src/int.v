@@ -631,3 +631,7 @@ Proof.
       autorewrite with nat;
       eauto using wp_conseq with lia. }
 Qed.
+
+(* [down _n s @@ λ _i s, ...] is a convenient way of writing a loop. *)
+
+Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
