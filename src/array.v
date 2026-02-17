@@ -65,6 +65,12 @@ Proof.
   + eapply two_54_lt_wB.
 Qed.
 
+Lemma representable_max_array_length :
+  representable max_array_length.
+Proof.
+  generalize max_array_length_lt_wB; intro. unfold wBN. lia.
+Qed.
+
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
   isInt (length a) n ∧
@@ -149,9 +155,14 @@ Qed.
 
 Lemma wp_length a xs :
   isArray a xs →
-  wp (length a) (λ _i, isInt _i (List.length xs)).
+  wp (length a) (λ _n,
+    isInt _n (List.length xs) ∧
+    representable (List.length xs)
+  ).
 Proof.
-  intros. eapply wp_ret. destructIsArray. eauto.
+  generalize representable_max_array_length; intro.
+  intros. eapply wp_ret. destructIsArray.
+  intros. split; [eauto | lia].
 Qed.
 
 End PrimSpec.
@@ -294,11 +305,42 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 Section ToList.
 Context `{Inhabited A}.
+Implicit Types a : array A.
+Implicit Types xs : list A.
 
-Definition to_list (a : array A) : list A :=
+Definition to_list a :=
   do _n ← length a ;
   down _n [] @@ λ _i xs,
   do x ← a.[_i] ;
   x :: xs.
 
+Lemma wp_to_list a xs :
+  isArray a xs →
+  wp (to_list a) (λ xs', xs' = xs).
+Proof.
+  intro. unfold to_list.
+  (* TODO why? *)
+  set (P := λ _n,
+    let n := List.length xs in
+    isInt _n n ∧ representable n
+  ).
+  eapply @wp_bind with (P := P).
+  { eapply (@wp_length _ _ a xs). eauto. }
+  unfold P.
+  set (n := List.length xs).
+  intros _n [? ?].
+  (* The loop. *)
+  set (inv := λ i ys, ys = drop i xs).
+  eapply wp_down with (inv := inv); eauto; unfold inv; intros.
+  (* Initialization. *)
+  { unfold n. rewrite drop_all. eauto. }
+  (* Preservation. *)
+  { eapply wp_bind; [ eapply wp_get; eauto with lia | simpl; intros x ? ].
+    eapply wp_ret.
+    subst. rewrite drop_S' by eauto with lia. eauto. }
+Qed.
+
 End ToList.
+
+(* TODO [down_aux] does not compute *)
+Eval compute in to_list (of_list [1;2;3]).
