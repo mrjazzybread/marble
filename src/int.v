@@ -592,7 +592,7 @@ Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n s f :
   (* If [s ← f _i s] transforms the invariant [inv (i+1) s] to [inv i s], *)
   (∀ _i i s ,
     isInt _i i →
-    representable i →
+    i < n → (* this implies [representable i] *)
     inv (i + 1) s →
     wp (f _i s) (λ s, inv i s)
   ) →
@@ -610,9 +610,10 @@ Proof.
   (* Case [_n ≠ 0]. *)
   { assert (n ≠ 0) by eauto with compat.
     (* TODO clean up *)
-    eapply wp_down_aux; eauto with int lia.
-    replace (n - 1 + 1) with n by lia.
-    eauto. }
+    eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
+      intuition eauto with int lia;
+      try replace (n - 1 + 1) with n by lia;
+      eauto using wp_conseq with lia. }
 Qed.
 
 (* TODO
