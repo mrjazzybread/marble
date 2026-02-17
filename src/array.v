@@ -47,12 +47,12 @@ Lemma max_array_length_lt_two_54 :
   (Z.of_nat max_array_length < 2 ^ 54)%Z.
 Proof.
   unfold max_array_length. int.
-  replace (2 ^ 54)%Z with (φ (lsl (1%uint63) 54)).
+  replace (2 ^ 54)%Z with (φ (lsl 1 54))%uint63.
   { (* Prove the goal by using machine integers. *)
     rewrite <- ltb_spec. reflexivity. }
   { (* Check that 2^54 is representable. *)
     rewrite lsl_spec, to_Z_1, Z.mul_1_l.
-    change (φ 54) with 54%Z.
+    change (φ 54)%uint63 with 54%Z.
     rewrite Z.mod_small; [ eauto |].
     split; [ lia | apply two_54_lt_wB ]. }
 Qed.
@@ -302,8 +302,3 @@ Definition to_list (a : array A) : list A :=
   x :: xs.
 
 End ToList.
-
-(* TODO:
- + set up extraction in a clean way
- + test extracting to defensive mutable arrays
- *)

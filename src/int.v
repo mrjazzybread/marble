@@ -7,8 +7,9 @@ From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
 From array Require Import tactics bool wp.
 
-(* TODO rename this file uint63.v *)
-(* TODO rename [int] to [uint63]  *)
+(* This file provides support for working with unsigned primitive integers. *)
+
+(* The type of 63-bit unsigned primitive integers is named [int]. *)
 
 (* Documentation:
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Numbers.Cyclic.Int63.Uint63Axioms.html
@@ -33,8 +34,8 @@ Notation unsigned z :=
 (* [φ : int → Z] is an injection. *)
 (* [π : Z → int] is a projection. *)
 
-Global Notation "'φ'" := (to_Z).
-Global Notation "'π'" := (of_Z).
+Local Notation "'φ'" := (to_Z).
+Local Notation "'π'" := (of_Z).
 
 Global Hint Rewrite
   to_Z_0
@@ -471,9 +472,25 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A loop, counting down to zero, using machine integers. *)
+(* Basic facts about the natural integers. *)
 
 Open Scope nat_scope.
+
+Lemma minus_1_plus_1 i :
+  0 < i →
+  i - 1 + 1 = i.
+Proof.
+  lia.
+Qed.
+
+Global Hint Rewrite
+  minus_1_plus_1
+  using lia
+: nat.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A loop, counting down to zero, using machine integers. *)
 
 Section Down.
 Context {S : Type}.
@@ -554,17 +571,13 @@ Proof.
   funelim (down_aux _i s); cleanup; intros ? ? Hinit.
   (* Case [_i = 0]. *)
   { assert (i = 0) by eauto with compat. subst i.
-    eapply wp_bind; [ eapply Hstep; eauto |].
-    simpl; intros s' ?.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
     eapply wp_ret. eauto. }
   (* Case [_i ≠ 0]. *)
-  { assert (i ≠ 0) by eauto with compat.
-    eapply wp_bind; [ eapply Hstep; eauto |].
-    simpl; intros s' ?.
-    (* TODO clean up *)
-    eapply H; eauto with int lia.
-    replace (i - 1 + 1) with i by lia.
-    eauto. }
+  { rename H into IH.
+    assert (i ≠ 0) by eauto with compat.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ?].
+    eapply IH; eauto with int lia; autorewrite with nat. eauto. }
 Qed.
 
 End Down.
@@ -609,15 +622,9 @@ Proof.
     eauto using wp_ret. }
   (* Case [_n ≠ 0]. *)
   { assert (n ≠ 0) by eauto with compat.
-    (* TODO clean up *)
+    (* We strengthen the loop invariant with [i ≤ n]. *)
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with int lia;
-      try replace (n - 1 + 1) with n by lia;
+      autorewrite with nat;
       eauto using wp_conseq with lia. }
 Qed.
-
-(* TODO
-From Stdlib Require Extraction ExtrOCamlInt63 ExtrOCamlPArray.
-Extraction Inline bind inspect.
-Recursive Extraction down.
- *)
