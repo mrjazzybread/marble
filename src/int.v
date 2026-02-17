@@ -285,7 +285,7 @@ Global Hint Resolve
 Definition wBN : nat :=
   Z.to_nat wB.
 
-Local Notation representable i :=
+Notation representable i :=
   (i < wBN)%nat.
 
 Lemma representable_def i :
