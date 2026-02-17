@@ -1,5 +1,18 @@
 From stdpp Require Import list.
 
+(* A variant of the lemma [drop_S]. *)
+
+Lemma drop_S' `{Inhabited A} (xs : list A) (x : A) (i : nat) :
+  i < List.length xs →
+  x = xs !!! i →
+  x :: drop (i + 1) xs = drop i xs.
+Proof.
+  intros. subst.
+  replace (i + 1) with (S i) by lia.
+  rewrite <- drop_S by eauto using list_lookup_lookup_total_lt with lia.
+  eauto.
+Qed.
+
 Lemma replicate_is_repeat {A} n (x : list A) :
   replicate n x = List.repeat x n.
 Proof.
