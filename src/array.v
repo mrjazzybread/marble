@@ -27,12 +27,6 @@ Proof.
   introIsInt. unfold max_array_length. int. eauto.
 Qed.
 
-Lemma max_length_eq :
-  to_nat max_length = max_array_length.
-Proof.
-  unfold max_array_length. reflexivity.
-Qed.
-
 (* [max_array_length] is equal to [2 ^ 54 - 1]. *)
 
 Lemma two_54_lt_wB :
@@ -69,6 +63,7 @@ Proof.
   generalize max_array_length_lt_wB; intro. unfold wBN. lia.
 Qed.
 
+(* TODO rename this lemma *)
 (* TODO eauto is unable to use this lemma; it diverges *)
 Lemma representable_length n :
   n ≤ max_array_length →
@@ -78,6 +73,30 @@ Proof.
 Qed.
 
 Global Hint Resolve representable_length : lia.
+
+(* TODO move *)
+Lemma of_nat_to_nat _i :
+  of_nat (to_nat _i) = _i.
+Proof.
+  int. eauto.
+Qed.
+
+Lemma leb_length' {A} (a : array A) :
+  to_nat (length a) <= max_array_length.
+Proof.
+  generalize (leb_length _ a); intro H.
+  rewrite leb_spec in H.
+  rewrite max_length_spec in H.
+  unfold max_array_length in *.
+  rewrite of_nat_to_nat in H.
+  lia.
+Qed.
+
+Lemma repr_length {A} (a : array A) :
+  representable (to_nat (length a)).
+Proof.
+  eapply representable_length. eapply leb_length'.
+Qed.
 
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
@@ -171,6 +190,18 @@ Proof.
   intros. destructIsArray. eauto.
 Qed.
 
+Lemma length_make' _n n x :
+  isInt _n n →
+  n <= max_array_length →
+  length (make _n x) = _n.
+Proof.
+  unfold isInt. intros. subst.
+  generalize max_array_length_lt_wB; intro.
+  assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
+  { rewrite leb_spec, max_length_spec. int. lia. }
+  rewrite length_make, Hbound. eauto.
+Qed.
+
 Lemma wp_make _n n x :
   isInt _n n →
   n ≤ max_array_length →
@@ -178,10 +209,7 @@ Lemma wp_make _n n x :
 Proof.
   generalize max_array_length_lt_wB; intro.
   intros. eapply wp_ret. destructIsInt. introIsArray; list.
-  { introIsInt.
-    assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
-    { rewrite leb_spec, max_length_spec. int. lia. }
-    rewrite length_make, Hbound. eauto. }
+  { introIsInt. eauto using length_make' with int. }
   { eauto. }
   intros i ?.
   rewrite get_make.
@@ -408,6 +436,51 @@ Proof.
     subst. rewrite drop_S' by eauto with lia. eauto. }
 Qed.
 
+(* TODO this spec is stronger *)
+Lemma wp_to_list' a :
+  wp (to_list a) (λ xs, isArray a xs).
+Proof.
+  intros. unfold to_list.
+  eapply wp_bind_eq. intros _n ?.
+  set (n := to_nat _n).
+  assert (n <= max_array_length).
+  { subst n _n. simple eapply leb_length'. } (* TODO eapply fails *)
+  assert (representable n).
+  { subst n _n. simple eapply repr_length. } (* TODO eapply fails *)
+  (* The loop. *)
+  set (inv := λ i (ys : list A),
+    List.length ys = n - i ∧
+    ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
+  ).
+  eapply wp_down with (inv := inv); eauto using introIsInt';
+    unfold inv; intros.
+  (* Initialization. *)
+  { split.
+    + rewrite length_nil. lia.
+    + intros. exfalso. lia. }
+  (* Preservation. *)
+  { rename s into ys.
+    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
+    eapply wp_bind_eq. intros x ->.
+    eapply wp_ret.
+    split; [ simpl; lia |].
+    intros j ?.
+    assert (i = j ∨ i < j) as [|] by lia.
+    { subst j. rewrite Nat.sub_diag. simpl. congruence. }
+    { match goal with h: ∀ j : nat, _ |- _ => rewrite h by lia end.
+      rewrite lookup_total_cons_ne_0 by lia. f_equal. lia. }
+  }
+  (* Conclusion. *)
+  { rename s into ys.
+    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
+    rewrite Nat.sub_0_r in Hys.
+    introIsArray.
+    + introIsInt. rewrite Hys. subst n. int. congruence.
+    + rewrite Hys. assumption. (* TODO eauto loops *)
+    + intros j ?. rewrite Hlookup, Nat.sub_0_r by lia. eauto.
+  }
+Qed.
+
 End ToList.
 
 (* TODO Eval compute is unable to run [down_aux] *)
@@ -432,12 +505,6 @@ Proof.
     eapply wp_ret. eauto. }
   symmetry. exact fact.
 Qed.
-
-(* TODO this is in fact a stronger spec of [to_list] *)
-Lemma establish_isArray `{Inhabited A} (a : array A) :
-  isArray a (to_list a).
-Proof.
-Admitted.
 
 (* With some effort, one could prove this lemma,
    but I am not sure that it is worth the trouble.
