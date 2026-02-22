@@ -7,6 +7,10 @@ From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
 From array Require Import tactics bool wp.
 
+Unset Universe Minimization ToSet.
+Generalizable All Variables.
+Set Universe Polymorphism.
+
 (* This file provides support for working with unsigned primitive integers. *)
 
 (* The type of 63-bit unsigned primitive integers is named [int]. *)
@@ -230,6 +234,14 @@ Global Hint Resolve
   introIsInt1
 : int.
 
+Lemma isInt_inj_1 _i1 _i2 i :
+  isInt _i1 i →
+  isInt _i2 i →
+  _i1 = _i2.
+Proof.
+  unfold isInt. congruence.
+Qed.
+
 (* Addition. *)
 
 Lemma succ_compat _i i :
@@ -300,15 +312,6 @@ Local Notation proj i :=
 (* The lemmas that relate [Nat.modulo] and [Z.modulo] are
    [Nat2Z.inj_mod] and [Z2Nat.inj_mod]. *)
 
-Lemma proj_def i :
-  proj i = to_nat (π (Z.of_nat i)).
-Proof.
-  generalize wB_pos; intro HwB.
-  rewrite of_Z_spec. unfold wBN.
-  rewrite Znat.Z2Nat.inj_mod by lia.
-  int. eauto.
-Qed.
-
 Lemma representable_proj i :
   representable i →
   proj i = i.
@@ -319,6 +322,53 @@ Qed.
 Global Hint Resolve
   representable_proj
 : lia.
+
+(* [proj : nat → nat] is essentially the same as [π : Z → int]. *)
+
+Lemma proj_def i :
+  proj i = to_nat (π (Z.of_nat i)).
+Proof.
+  generalize wB_pos; intro HwB.
+  rewrite of_Z_spec. unfold wBN.
+  rewrite Znat.Z2Nat.inj_mod by lia.
+  int. eauto.
+Qed.
+
+(* An alternate definition of [isInt]. *)
+
+Lemma isInt_alt _i i :
+  isInt _i i ↔ to_nat _i = proj i.
+Proof.
+  unfold isInt. rewrite proj_def. split.
+  + congruence.
+  + eauto using to_nat_inj.
+Qed.
+
+(* Yet another characterization of [isInt],
+   restricted to the representable natural integers. *)
+
+Lemma isInt_repr _i i :
+  representable i →
+  isInt _i i ↔ to_nat _i = i.
+Proof.
+  intros. rewrite isInt_alt, representable_proj by eauto. tauto.
+Qed.
+
+(* [isInt], restricted to the representable natural integers,
+   is injective. *)
+
+Lemma isInt_inj_2 _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  _i = _j →
+  representable i →
+  representable j →
+  i = j.
+Proof.
+  intros. rewrite !isInt_repr in * by eauto. congruence.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 (* Equality. *)
 
@@ -381,6 +431,8 @@ Hint Resolve
   eq_compat'_0
   eq_compat'_0_neg
 : compat.
+
+(* -------------------------------------------------------------------------- *)
 
 (* Comparison. *)
 

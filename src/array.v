@@ -1,13 +1,11 @@
-(* TODO useful?
-Unset Universe Minimization ToSet.
-Generalizable All Variables.
-Local Set Universe Polymorphism.
- *)
-
 From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From array Require Import list_extra bool int wp.
+
+Unset Universe Minimization ToSet.
+Generalizable All Variables.
+Set Universe Polymorphism.
 
 Open Scope nat_scope.
 
@@ -71,6 +69,16 @@ Proof.
   generalize max_array_length_lt_wB; intro. unfold wBN. lia.
 Qed.
 
+(* TODO eauto is unable to use this lemma; it diverges *)
+Lemma representable_length n :
+  n ≤ max_array_length →
+  representable n.
+Proof.
+  generalize representable_max_array_length; intro. lia.
+Qed.
+
+Global Hint Resolve representable_length : lia.
+
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
   isInt (length a) n ∧
@@ -82,6 +90,73 @@ Local Ltac introIsArray :=
 
 Local Ltac destructIsArray :=
   match goal with h: isArray _ _ |- _ => destruct h as (?&?&?) end.
+
+(* [isArray a _] is injective. *)
+
+Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
+  isArray a xs → isArray a ys → xs = ys.
+Proof.
+  intros. repeat destructIsArray.
+  assert (List.length xs = List.length ys).
+  (* TODO needs cleanup *)
+  { eapply isInt_inj_2. eauto. eauto. eauto.
+    eapply representable_length. eauto.
+    eapply representable_length. eauto. }
+  eapply list_eq_same_length; eauto; intros.
+  rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
+  do 2 match goal with h: ∀ i : nat, _ |- _ =>
+         rewrite <- h in * by lia; clear h
+       end.
+  congruence.
+Qed.
+
+(* [isArray _ xs] is injective. *)
+
+(* TODO move *)
+Lemma unsigned_of_nat n :
+  representable n →
+  unsigned (Z.of_nat n).
+Proof.
+  unfold wBN. lia.
+Qed.
+
+(* TODO move *)
+Lemma qwd z n :
+  (0 ≤ z)%Z →
+  (z < Z.of_nat n)%Z →
+  (Z.to_nat z < n)%nat.
+Proof.
+  lia.
+Qed.
+
+Hint Resolve qwd : lia.
+
+Lemma isArray_inj_1 `{Inhabited A} a b (xs : list A) :
+  isArray a xs →
+  isArray b xs →
+  default a = default b →
+  a = b.
+Proof.
+  intros. repeat destructIsArray.
+  assert (representable (List.length xs)).
+  { eapply representable_length. eauto. }
+  eapply array_ext.
+  { eauto using isInt_inj_1. }
+  { intros _i Hi.
+    (* This is messier than I would like. *)
+    rewrite ltb_spec in Hi.
+    match goal with h: isInt (length a) _ |- _ =>
+      unfold isInt in h;
+      rewrite h in Hi
+    end.
+    rewrite to_of_Z in Hi by eauto using unsigned_of_nat.
+    assert (Hv: valid (to_nat _i) xs) by eauto with lia.
+    do 2 match goal with h: ∀ i : nat, _ |- _ =>
+           specialize (h _ Hv); int in h; rewrite h; clear h
+         end.
+    reflexivity. }
+  { eauto. }
+Qed.
 
 Section PrimSpec.
 Context `{Inhabited A}.
@@ -340,8 +415,37 @@ Eval    compute in to_list (of_list [1;2;3]).
 Eval vm_compute in to_list (of_list [1;2;3]).
 (* TODO try native_compute *)
 
+Lemma to_list_of_list `{Inhabited A} (xs : list A) :
+  List.length xs ≤ max_array_length →
+  to_list (of_list xs) = xs.
+Proof.
+  intros.
+  assert (fact:
+    wp (
+      do a ← of_list xs ;
+      do ys ← to_list a ;
+      ys
+    ) (λ ys, xs = ys)
+  ).
+  { eapply wp_bind; [ eapply wp_of_list; eauto | simpl; intros a ? ].
+    eapply wp_bind; [ eapply wp_to_list; eauto | simpl; intros ? ->].
+    eapply wp_ret. eauto. }
+  symmetry. exact fact.
+Qed.
+
+(* TODO this is in fact a stronger spec of [to_list] *)
+Lemma establish_isArray `{Inhabited A} (a : array A) :
+  isArray a (to_list a).
+Proof.
+Admitted.
+
+(* With some effort, one could prove this lemma,
+   but I am not sure that it is worth the trouble.
+Lemma of_list_to_list `{Inhabited A} (a : array A) :
+  default a = inhabitant →
+  of_list (to_list a) = a.
+ *)
+
 (* TODO
   prove that [isArray a xs] is equivalent to [to_list a = xs]
-  and to [a = of_list xs].
-  prove round-trip properties of [of_list] and [to_list]
  *)

@@ -1,5 +1,9 @@
 From stdpp Require Import base.
 
+Unset Universe Minimization ToSet.
+Generalizable All Variables.
+Set Universe Polymorphism.
+
 (* TODO comment *)
 
 (* TODO
@@ -21,8 +25,15 @@ Proof.
 Qed.
 
 Lemma wp_ret {A} (a : A) (Q : A → Prop) :
-  Q a ->
+  Q a →
   wp a Q.
+Proof.
+  eauto.
+Qed.
+
+Lemma wp_iff {A} (a : A) (Q : A → Prop) :
+  wp a Q ↔
+  Q a.
 Proof.
   eauto.
 Qed.
