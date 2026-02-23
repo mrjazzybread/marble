@@ -81,11 +81,13 @@ Qed.
 
 Local Hint Resolve leb_length' : representable.
 
-Lemma repr_length {A} (a : array A) :
+Lemma representable_to_nat_length {A} (a : array A) :
   representable (to_nat (length a)).
 Proof.
-  eauto with representable.
+  eauto using leb_length' with representable.
 Qed.
+
+Hint Resolve representable_to_nat_length : representable.
 
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
