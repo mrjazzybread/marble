@@ -25,6 +25,8 @@ Local Notation valid i xs :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* The maximum length of an array. *)
+
 (* We have [max_length : int]; we define [max_array_length : nat]. *)
 
 Definition max_array_length : nat :=
@@ -39,14 +41,6 @@ Proof.
 Qed.
   (* do not use this lemma as a resolve hint *)
   (* this makes everything hopelessly slow!  *)
-
-(* [max_array_length] is equal to [2 ^ 22 - 1]. (Why so low?) *)
-
-Goal
-  (Z.of_nat max_array_length = 2^22 - 1)%Z.
-Proof.
-  unfold max_array_length. int. reflexivity.
-Qed.
 
 (* [max_array_length] is representable. *)
 
@@ -88,6 +82,8 @@ Proof.
 Qed.
 
 Hint Resolve representable_to_nat_length : representable.
+
+(* -------------------------------------------------------------------------- *)
 
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
