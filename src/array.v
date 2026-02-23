@@ -37,6 +37,8 @@ Lemma max_length_spec :
 Proof.
   introIsInt. unfold max_array_length. int. eauto.
 Qed.
+  (* do not use this lemma as a resolve hint *)
+  (* this makes everything hopelessly slow!  *)
 
 (* [max_array_length] is equal to [2 ^ 22 - 1]. (Why so low?) *)
 
@@ -48,7 +50,7 @@ Qed.
 
 (* [max_array_length] is representable. *)
 
-Lemma max_array_length_lt_wB :
+Local Lemma max_array_length_lt_wB :
   (Z.of_nat max_array_length < wB)%Z.
 Proof.
   unfold max_array_length. int. reflexivity.
@@ -66,25 +68,18 @@ Hint Resolve representable_max_array_length : representable.
 Goal ∀ n, n ≤ max_array_length → representable n.
 Proof. eauto with representable. Qed.
 
-(* TODO move *)
-Lemma of_nat_to_nat _i :
-  of_nat (to_nat _i) = _i.
-Proof.
-  int. eauto.
-Qed.
-
-Lemma leb_length' {A} (a : array A) :
+Local Lemma leb_length' {A} (a : array A) :
   to_nat (length a) <= max_array_length.
 Proof.
   generalize (leb_length _ a); intro H.
   rewrite leb_spec in H.
   rewrite max_length_spec in H.
   unfold max_array_length in *.
-  rewrite of_nat_to_nat in H.
+  rewrite of_nat_to_nat in H. (* [int in H] takes 10 seconds *)
   lia.
 Qed.
 
-Hint Resolve leb_length' : representable.
+Local Hint Resolve leb_length' : representable.
 
 Lemma repr_length {A} (a : array A) :
   representable (to_nat (length a)).
@@ -422,10 +417,8 @@ Proof.
   intros. unfold to_list.
   eapply wp_bind_eq. intros _n ?.
   set (n := to_nat _n).
-  assert (n <= max_array_length).
-  { subst n _n. simple eapply leb_length'. } (* TODO eapply fails *)
-  assert (representable n).
-  { subst n _n. simple eapply repr_length. } (* TODO eapply fails *)
+  assert (n ≤ max_array_length) by (subst n _n; eauto with representable).
+  assert (representable n) by eauto with representable.
   (* The loop. *)
   set (inv := λ i (ys : list A),
     List.length ys = n - i ∧
@@ -455,7 +448,7 @@ Proof.
     rewrite Nat.sub_0_r in Hys.
     introIsArray.
     + introIsInt. rewrite Hys. subst n. int. congruence.
-    + rewrite Hys. assumption. (* TODO eauto loops *)
+    + rewrite Hys. assumption.
     + intros j ?. rewrite Hlookup, Nat.sub_0_r by lia. eauto.
   }
 Qed.

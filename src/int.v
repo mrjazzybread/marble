@@ -148,6 +148,22 @@ Global Hint Resolve
   to_nat_inj
 : lia.
 
+(* More round-trip properties involving [nat]. *)
+
+Global Hint Rewrite
+  Z2Nat.id (* ∀ z, 0 ≤ z → Z.of_nat (Z.to_nat z) = z *)
+  Nat2Z.id (* ∀ n, Z.to_nat (Z.of_nat n) = n *)
+  using (eauto with lia)
+: int.
+
+Lemma of_nat_to_nat _i :
+  of_nat (to_nat _i) = _i.
+Proof.
+  int. eauto.
+Qed.
+
+(* For the reverse property, see [to_nat_of_nat] below. *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* Addition in Z commutes with projection. *)
@@ -203,12 +219,6 @@ Lemma introIsInt _i i :
 Proof.
   intros. introIsInt. eauto.
 Qed.
-
-Global Hint Rewrite
-  Z2Nat.id
-  Nat2Z.id
-  using (eauto with lia)
-: int.
 
 Lemma introIsInt' _i :
   isInt _i (to_nat _i).
@@ -389,7 +399,7 @@ Global Hint Resolve
 
 (* Recall that [of_nat : nat → int] is [π . Z.of_nat]. *)
 
-Lemma proj_def i :
+Lemma to_nat_of_nat i :
   to_nat (of_nat i)       = proj i.
 (*to_nat (π (Z.of_nat i)) = proj i *)
 Proof.
@@ -399,12 +409,14 @@ Proof.
   int. eauto.
 Qed.
 
+Hint Rewrite to_nat_of_nat : int.
+
 (* An alternate definition of [isInt]. *)
 
 Lemma isInt_alt _i i :
   isInt _i i ↔ to_nat _i = proj i.
 Proof.
-  unfold isInt. rewrite <- proj_def. split.
+  unfold isInt. rewrite <- to_nat_of_nat. split.
   + congruence.
   + eauto using to_nat_inj.
 Qed.
@@ -455,7 +467,7 @@ Lemma eq_compat _i i _j j :
   isBool (_i =? _j)%uint63 (proj i = proj j).
 Proof.
   intros. unfold isBool. repeat destructIsInt.
-  rewrite <- !proj_def.
+  rewrite <- !to_nat_of_nat.
   rewrite eqb_spec.
   split; [ congruence | eauto using to_nat_inj ].
 Qed.
