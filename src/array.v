@@ -57,19 +57,14 @@ Qed.
 Lemma representable_max_array_length :
   representable max_array_length.
 Proof.
-  generalize max_array_length_lt_wB; intro. unfold wBN. lia.
+  generalize max_array_length_lt_wB; intro.
+  rewrite representable_iff_Z. lia.
 Qed.
 
-(* TODO rename this lemma *)
-(* TODO eauto is unable to use this lemma; it diverges *)
-Lemma representable_length n :
-  n ≤ max_array_length →
-  representable n.
-Proof.
-  generalize representable_max_array_length; intro. lia.
-Qed.
+Hint Resolve representable_max_array_length : representable.
 
-Global Hint Resolve representable_length : lia.
+Goal ∀ n, n ≤ max_array_length → representable n.
+Proof. eauto with representable. Qed.
 
 (* TODO move *)
 Lemma of_nat_to_nat _i :
@@ -89,10 +84,12 @@ Proof.
   lia.
 Qed.
 
+Hint Resolve leb_length' : representable.
+
 Lemma repr_length {A} (a : array A) :
   representable (to_nat (length a)).
 Proof.
-  eapply representable_length. eapply leb_length'.
+  eauto with representable.
 Qed.
 
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
@@ -114,10 +111,7 @@ Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
 Proof.
   intros. repeat destructIsArray.
   assert (List.length xs = List.length ys).
-  (* TODO needs cleanup *)
-  { eapply isInt_inj_2. eauto. eauto. eauto.
-    eapply representable_length. eauto.
-    eapply representable_length. eauto. }
+  { eauto using isInt_inj_2 with representable. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
   do 2 match goal with h: ∀ i : nat, _ |- _ =>
@@ -127,14 +121,6 @@ Proof.
 Qed.
 
 (* [isArray _ xs] is injective. *)
-
-(* TODO move *)
-Lemma unsigned_of_nat n :
-  representable n →
-  unsigned (Z.of_nat n).
-Proof.
-  unfold wBN. lia.
-Qed.
 
 (* TODO move *)
 Lemma qwd z n :
@@ -154,22 +140,18 @@ Lemma isArray_inj_1 `{Inhabited A} a b (xs : list A) :
   a = b.
 Proof.
   intros. repeat destructIsArray.
-  assert (representable (List.length xs)).
-  { eapply representable_length. eauto. }
+  assert (representable (List.length xs)) by eauto with representable.
   eapply array_ext.
   { eauto using isInt_inj_1. }
   { intros _i Hi.
-    (* This is messier than I would like. *)
+    (* This is a bit messier than I would like. *)
     rewrite ltb_spec in Hi.
-    match goal with h: isInt (length a) _ |- _ =>
-      unfold isInt in h;
-      rewrite h in Hi
-    end.
-    rewrite to_of_Z in Hi by eauto using unsigned_of_nat.
+    match goal with h: isInt (length a) _ |- _ => rewrite h in Hi end.
+    int in Hi.
     assert (Hv: valid (to_nat _i) xs) by eauto with lia.
-    do 2 match goal with h: ∀ i : nat, _ |- _ =>
-           specialize (h _ Hv); int in h; rewrite h; clear h
-         end.
+    repeat match goal with h: ∀ i : nat, _ |- _ =>
+      specialize (h _ Hv); int in h; rewrite h; clear h
+    end.
     reflexivity. }
   { eauto. }
 Qed.
@@ -259,7 +241,7 @@ Lemma wp_length a xs :
 Proof.
   generalize representable_max_array_length; intro.
   intros. eapply wp_ret. destructIsArray.
-  intros. split; [eauto | lia].
+  eauto with representable.
 Qed.
 
 End PrimSpec.

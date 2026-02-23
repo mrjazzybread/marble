@@ -297,18 +297,31 @@ Global Hint Resolve
 Definition wBN : nat :=
   Z.to_nat wB.
 
-Definition representable (i : nat) :=
+Definition representable_def (i : nat) :=
   (i < wBN)%nat.
 
-Lemma representable_def i :
+  (* Use [seal] to prevent [eauto] from looking into this definition.
+     Otherwise, it might try to normalize [Z.to_nat wB], which does
+     not terminate. *)
+  Local Definition representable_aux : seal (@representable_def). Proof. by eexists. Qed.
+  Definition representable := representable_aux.(unseal).
+  Local Definition representable_unseal : @representable = @representable_def := representable_aux.(seal_eq).
+
+Lemma representable_iff_nat i :
+  representable i ↔ (i < wBN)%nat.
+Proof.
+  rewrite representable_unseal. unfold representable_def. tauto.
+Qed.
+
+Lemma representable_iff_Z i :
   representable i ↔ unsigned (Z.of_nat i).
 Proof.
-  unfold representable, wBN. lia.
+  rewrite representable_iff_nat. unfold wBN. lia.
 Qed.
 
 (* This tactic should work for every sufficiently small constant. *)
 Ltac representable :=
-  rewrite representable_def; split; [lia | constructor].
+  rewrite representable_iff_Z; split; [lia | constructor].
 
 Goal representable 0.
 Proof. representable. Qed.
@@ -320,14 +333,30 @@ Hint Extern 1 (representable _) => representable : representable.
 
 Lemma representable_down_closed i j :
   representable j →
-  (0 ≤ i)%nat →
   (i ≤ j)%nat →
   representable i.
 Proof.
-  unfold representable. lia.
+  rewrite representable_unseal. unfold representable_def. lia.
 Qed.
 
 Hint Resolve representable_down_closed : representable.
+
+(* If [i] is representable then going [nat → int → Z] is the same as
+   going [nat → Z] directly. *)
+
+Lemma to_Z_of_nat i :
+  representable i →
+  φ%uint63 (of_nat i) = Z.of_nat i.
+Proof.
+  rewrite representable_iff_Z.
+  intros. rewrite to_of_Z by assumption.
+  eauto.
+Qed.
+
+Hint Rewrite
+  to_Z_of_nat
+  using (eauto with representable)
+: int.
 
 Definition proj (i : nat) : nat :=
   (i `mod` wBN)%nat.
@@ -335,11 +364,21 @@ Definition proj (i : nat) : nat :=
 (* The lemmas that relate [Nat.modulo] and [Z.modulo] are
    [Nat2Z.inj_mod] and [Z2Nat.inj_mod]. *)
 
+Lemma representable_iff_proj i :
+  representable i ↔
+  proj i = i.
+Proof.
+  rewrite representable_unseal. unfold representable_def, proj, wBN.
+  generalize wB_pos; intro.
+  rewrite Nat.mod_small_iff by lia.
+  tauto.
+Qed.
+
 Lemma representable_proj i :
   representable i →
   proj i = i.
 Proof.
-  eauto using Nat.mod_small.
+  rewrite representable_iff_proj. eauto.
 Qed.
 
 Global Hint Resolve
@@ -348,11 +387,14 @@ Global Hint Resolve
 
 (* [proj : nat → nat] is essentially the same as [π : Z → int]. *)
 
+(* Recall that [of_nat : nat → int] is [π . Z.of_nat]. *)
+
 Lemma proj_def i :
-  proj i = to_nat (π (Z.of_nat i)).
+  to_nat (of_nat i)       = proj i.
+(*to_nat (π (Z.of_nat i)) = proj i *)
 Proof.
   generalize wB_pos; intro HwB.
-  rewrite of_Z_spec. unfold wBN.
+  rewrite of_Z_spec. unfold proj, wBN.
   rewrite Znat.Z2Nat.inj_mod by lia.
   int. eauto.
 Qed.
@@ -362,7 +404,7 @@ Qed.
 Lemma isInt_alt _i i :
   isInt _i i ↔ to_nat _i = proj i.
 Proof.
-  unfold isInt. rewrite proj_def. split.
+  unfold isInt. rewrite <- proj_def. split.
   + congruence.
   + eauto using to_nat_inj.
 Qed.
@@ -413,7 +455,7 @@ Lemma eq_compat _i i _j j :
   isBool (_i =? _j)%uint63 (proj i = proj j).
 Proof.
   intros. unfold isBool. repeat destructIsInt.
-  rewrite !proj_def.
+  rewrite <- !proj_def.
   rewrite eqb_spec.
   split; [ congruence | eauto using to_nat_inj ].
 Qed.
