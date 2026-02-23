@@ -89,11 +89,24 @@ Hint Resolve representable_to_nat_length : representable.
 
 (* -------------------------------------------------------------------------- *)
 
+(* The proposition [isArray a xs] means that the elements of the array [a]
+   form the list [xs]. *)
+
+(* We will later establish that the proposition [isArray a xs] is equivalent
+   to [to_list a = xs]. One might wonder whether we should define it in this
+   way. My answer is: I don't know, but it is probably useful to have access
+   to both definitions anyway. *)
+
+(* The definition requires the array [a] and the list [xs] to have the same
+   length and to hold the same element at every valid index. *)
+
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := List.length xs in
   isInt (length a) n ∧
   n ≤ max_array_length ∧
   ∀ i, valid i xs → a.[of_nat i] = xs !!! i.
+
+(* Local tactics and lemmas. *)
 
 Local Ltac introIsArray :=
   split; [| split ].
@@ -101,19 +114,27 @@ Local Ltac introIsArray :=
 Local Ltac destructIsArray :=
   match goal with h: isArray _ _ |- _ => destruct h as (?&?&?) end.
 
+Local Lemma isArray_pi3 `{Inhabited A} (a : array A) (xs : list A) :
+  isArray a xs →
+  ∀ i, valid i xs →
+  a.[of_nat i] = xs !!! i.
+Proof.
+  intros. destructIsArray. eauto.
+Qed.
+
+(* TODO avoid using [destructIsArray] except in a very local way *)
+
 (* [isArray a _] is injective. *)
 
 Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
   isArray a xs → isArray a ys → xs = ys.
 Proof.
-  intros. repeat destructIsArray.
+  intros.
   assert (List.length xs = List.length ys).
-  { eauto using isInt_inj_2 with representable. }
+  { repeat destructIsArray. eauto using isInt_inj_2 with representable. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
-  do 2 match goal with h: ∀ i : nat, _ |- _ =>
-         rewrite <- h in * by lia; clear h
-       end.
+  erewrite <- isArray_pi3 in * by eauto with lia.
   congruence.
 Qed.
 
@@ -146,6 +167,7 @@ Proof.
     match goal with h: isInt (length a) _ |- _ => rewrite h in Hi end.
     int in Hi.
     assert (Hv: valid (to_nat _i) xs) by eauto with lia.
+    (* TODO use isArray_pi3 *)
     repeat match goal with h: ∀ i : nat, _ |- _ =>
       specialize (h _ Hv); int in h; rewrite h; clear h
     end.
