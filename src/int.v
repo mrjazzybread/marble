@@ -27,6 +27,20 @@ Implicit Types  z : Z.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Arithmetic lemmas of general interest. *)
+
+Lemma to_nat_lt z n :
+  (0 ≤ z)%Z →
+  (z < Z.of_nat n)%Z →
+  (Z.to_nat z < n)%nat.
+Proof.
+  lia.
+Qed.
+
+Hint Resolve to_nat_lt : lia.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [unsigned z] means that [z] lies in the interval of the unsigned
    machine integers. *)
 

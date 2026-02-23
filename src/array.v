@@ -106,13 +106,36 @@ Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   n ≤ max_array_length ∧
   ∀ i, valid i xs → a.[of_nat i] = xs !!! i.
 
-(* Local tactics and lemmas. *)
+(* These tactics and lemmas help work with [isArray]. *)
 
 Local Ltac introIsArray :=
   split; [| split ].
 
 Local Ltac destructIsArray :=
   match goal with h: isArray _ _ |- _ => destruct h as (?&?&?) end.
+
+Local Lemma isArray_pi1 `{Inhabited A} (a : array A) (xs : list A) :
+  isArray a xs →
+  isInt (length a) (List.length xs).
+Proof.
+  intros. destructIsArray. eauto.
+Qed.
+
+Lemma isArray_bounded_length `{Inhabited A} (a : array A) (xs : list A) :
+  isArray a xs →
+  List.length xs ≤ max_array_length.
+Proof.
+  intros. destructIsArray. eauto.
+Qed.
+
+Lemma isArray_representable `{Inhabited A} (a : array A) (xs : list A) :
+  isArray a xs →
+  representable (List.length xs).
+Proof.
+  intros. destructIsArray. eauto with representable.
+Qed.
+
+Hint Resolve isArray_representable : representable.
 
 Local Lemma isArray_pi3 `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
@@ -122,7 +145,39 @@ Proof.
   intros. destructIsArray. eauto.
 Qed.
 
-(* TODO avoid using [destructIsArray] except in a very local way *)
+Local Lemma isArray_pi3' `{Inhabited A} (a : array A) (xs : list A) :
+  isArray a xs →
+  ∀ _i, valid (to_nat _i) xs →
+  a.[_i] = xs !!! (to_nat _i).
+Proof.
+  intros. erewrite <- isArray_pi3 by eauto. int. eauto.
+Qed.
+
+Local Lemma isArray_valid `{Inhabited A} (a : array A) (xs : list A) _i :
+  isArray a xs →
+  (_i <? length a)%uint63 = true →
+  valid (to_nat _i) xs.
+Proof.
+  intro. rewrite ltb_spec, isArray_pi1 by eauto. int.
+  eauto with lia. (* [to_nat_lt] and [to_Z_ge_0] are exploited *)
+Qed.
+
+(* [isArray _ xs] is injective. *)
+
+Lemma isArray_inj_1 `{Inhabited A} a b (xs : list A) :
+  isArray a xs →
+  isArray b xs →
+  default a = default b →
+  a = b.
+Proof.
+  intros.
+  eapply array_ext.
+  { eauto using isInt_inj_1, isArray_pi1. }
+  { intros _i ?.
+    repeat erewrite isArray_pi3' by eauto using isArray_valid.
+    eauto. }
+  { eauto. }
+Qed.
 
 (* [isArray a _] is injective. *)
 
@@ -131,62 +186,22 @@ Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
 Proof.
   intros.
   assert (List.length xs = List.length ys).
-  { repeat destructIsArray. eauto using isInt_inj_2 with representable. }
+  { eauto 6 using isInt_inj_2, isArray_pi1 with representable. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
   erewrite <- isArray_pi3 in * by eauto with lia.
   congruence.
 Qed.
 
-(* [isArray _ xs] is injective. *)
+(* -------------------------------------------------------------------------- *)
 
-(* TODO move *)
-Lemma qwd z n :
-  (0 ≤ z)%Z →
-  (z < Z.of_nat n)%Z →
-  (Z.to_nat z < n)%nat.
-Proof.
-  lia.
-Qed.
-
-Hint Resolve qwd : lia.
-
-Lemma isArray_inj_1 `{Inhabited A} a b (xs : list A) :
-  isArray a xs →
-  isArray b xs →
-  default a = default b →
-  a = b.
-Proof.
-  intros. repeat destructIsArray.
-  assert (representable (List.length xs)) by eauto with representable.
-  eapply array_ext.
-  { eauto using isInt_inj_1. }
-  { intros _i Hi.
-    (* This is a bit messier than I would like. *)
-    rewrite ltb_spec in Hi.
-    match goal with h: isInt (length a) _ |- _ => rewrite h in Hi end.
-    int in Hi.
-    assert (Hv: valid (to_nat _i) xs) by eauto with lia.
-    (* TODO use isArray_pi3 *)
-    repeat match goal with h: ∀ i : nat, _ |- _ =>
-      specialize (h _ Hv); int in h; rewrite h; clear h
-    end.
-    reflexivity. }
-  { eauto. }
-Qed.
+(* TODO avoid using [destructIsArray] except in a very local way *)
 
 Section PrimSpec.
 Context `{Inhabited A}.
 Implicit Types a : array A.
 Implicit Types x : A.
 Implicit Types xs : list A.
-
-Lemma bounded_length a xs :
-  isArray a xs →
-  List.length xs ≤ max_array_length.
-Proof.
-  intros. destructIsArray. eauto.
-Qed.
 
 Lemma length_make' _n n x :
   isInt _n n →
