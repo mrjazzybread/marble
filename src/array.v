@@ -15,11 +15,22 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
-Global Notation valid i xs :=
+(* -------------------------------------------------------------------------- *)
+
+(* An index [i : nat] is valid with respect to a list [xs] if and only if
+   it is less than the length of the list. *)
+
+Local Notation valid i xs :=
   (i < List.length xs).
+
+(* -------------------------------------------------------------------------- *)
+
+(* We have [max_length : int]; we define [max_array_length : nat]. *)
 
 Definition max_array_length : nat :=
   to_nat max_length.
+
+(* These constants are related by [isInt]. *)
 
 Lemma max_length_spec :
   isInt max_length max_array_length.
@@ -27,34 +38,20 @@ Proof.
   introIsInt. unfold max_array_length. int. eauto.
 Qed.
 
-(* [max_array_length] is equal to [2 ^ 54 - 1]. *)
+(* [max_array_length] is equal to [2 ^ 22 - 1]. (Why so low?) *)
 
-Lemma two_54_lt_wB :
-  (2 ^ 54 < wB)%Z.
+Goal
+  (Z.of_nat max_array_length = 2^22 - 1)%Z.
 Proof.
-  unfold wB, size. change (Z.of_nat 63) with 63%Z. lia.
+  unfold max_array_length. int. reflexivity.
 Qed.
 
-Lemma max_array_length_lt_two_54 :
-  (Z.of_nat max_array_length < 2 ^ 54)%Z.
-Proof.
-  unfold max_array_length. int.
-  replace (2 ^ 54)%Z with (φ (lsl 1 54))%uint63.
-  { (* Prove the goal by using machine integers. *)
-    rewrite <- ltb_spec. reflexivity. }
-  { (* Check that 2^54 is representable. *)
-    rewrite lsl_spec, to_Z_1, Z.mul_1_l.
-    change (φ 54)%uint63 with 54%Z.
-    rewrite Z.mod_small; [ eauto |].
-    split; [ lia | apply two_54_lt_wB ]. }
-Qed.
+(* [max_array_length] is representable. *)
 
 Lemma max_array_length_lt_wB :
   (Z.of_nat max_array_length < wB)%Z.
 Proof.
-  eapply Z.lt_trans.
-  + eapply max_array_length_lt_two_54.
-  + eapply two_54_lt_wB.
+  unfold max_array_length. int. reflexivity.
 Qed.
 
 Lemma representable_max_array_length :
