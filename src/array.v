@@ -44,17 +44,14 @@ Qed.
 
 (* [max_array_length] is representable. *)
 
-Local Lemma max_array_length_lt_wB :
-  (Z.of_nat max_array_length < wB)%Z.
-Proof.
-  unfold max_array_length. int. reflexivity.
-Qed.
-
 Lemma representable_max_array_length :
   representable max_array_length.
 Proof.
-  generalize max_array_length_lt_wB; intro.
-  rewrite representable_iff_Z. lia.
+  rewrite representable_iff_Z. split; [ lia |].
+  (* (Z.of_nat max_array_length < wB)%Z *)
+  unfold max_array_length. int.
+  (* (φ%uint63 max_length < wB)%Z *)
+  reflexivity.
 Qed.
 
 Hint Resolve representable_max_array_length : representable.
@@ -168,7 +165,6 @@ Lemma length_make' _n n x :
   length (make _n x) = _n.
 Proof.
   unfold isInt. intros. subst.
-  generalize max_array_length_lt_wB; intro.
   assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
   { rewrite leb_spec, max_length_spec. int. lia. }
   rewrite length_make, Hbound. eauto.
@@ -179,7 +175,6 @@ Lemma wp_make _n n x :
   n ≤ max_array_length →
   wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
-  generalize max_array_length_lt_wB; intro.
   intros. eapply wp_ret. destructIsInt. introIsArray; list.
   { introIsInt. eauto using length_make' with int. }
   { eauto. }
@@ -210,7 +205,6 @@ Proof.
   { rewrite length_set. eauto. }
   { eauto. }
   intros j ?.
-  generalize max_array_length_lt_wB; intro.
   destruct (decide (i = j)).
   + subst j.
     rewrite list_lookup_total_insert_eq by eauto.
@@ -222,7 +216,7 @@ Proof.
   + rewrite list_lookup_total_insert_ne by eauto.
     rewrite get_set_other.
     { eauto. }
-    { eapply of_Z_inj'; lia. }
+    { eapply of_nat_inj'; eauto with representable. }
 Qed.
 
 Lemma wp_length a xs :
