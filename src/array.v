@@ -56,8 +56,13 @@ Qed.
 
 Hint Resolve representable_max_array_length : representable.
 
+(* Any number that is bounded by [max_array_length] is representable. *)
+
 Goal ∀ n, n ≤ max_array_length → representable n.
 Proof. eauto with representable. Qed.
+
+(* The length of an array, converted to a natural number,
+   is bounded by [max_array_length]. *)
 
 Local Lemma leb_length' {A} (a : array A) :
   to_nat (length a) <= max_array_length.
@@ -68,9 +73,11 @@ Proof.
   unfold max_array_length in *.
   rewrite of_nat_to_nat in H. (* [int in H] takes 10 seconds *)
   lia.
-Qed.
+Qed. (* a bit slow *)
 
 Local Hint Resolve leb_length' : representable.
+
+(* The length of an array is representable. *)
 
 Lemma representable_to_nat_length {A} (a : array A) :
   representable (to_nat (length a)).
