@@ -395,6 +395,26 @@ Global Hint Resolve
   representable_proj
 : lia.
 
+(* [of_nat], restricted to representable numbers, is injective. *)
+
+Lemma of_nat_inj i1 i2 :
+  representable i1 →
+  representable i2 →
+  of_nat i1 = of_nat i2 →
+  i1 = i2.
+Proof.
+  rewrite !representable_iff_Z. eauto using Nat2Z.inj, of_Z_inj.
+Qed.
+
+Lemma of_nat_inj' i1 i2 :
+  representable i1 →
+  representable i2 →
+  i1 ≠ i2 →
+  of_nat i1 ≠ of_nat i2.
+Proof.
+  generalize (of_nat_inj i1 i2). tauto.
+Qed.
+
 (* [proj : nat → nat] is essentially the same as [π : Z → int]. *)
 
 (* Recall that [of_nat : nat → int] is [π . Z.of_nat]. *)
