@@ -297,16 +297,39 @@ Global Hint Resolve
 Definition wBN : nat :=
   Z.to_nat wB.
 
-Notation representable i :=
+Definition representable (i : nat) :=
   (i < wBN)%nat.
 
 Lemma representable_def i :
   representable i ↔ unsigned (Z.of_nat i).
 Proof.
-  unfold wBN. lia.
+  unfold representable, wBN. lia.
 Qed.
 
-Local Notation proj i :=
+(* This tactic should work for every sufficiently small constant. *)
+Ltac representable :=
+  rewrite representable_def; split; [lia | constructor].
+
+Goal representable 0.
+Proof. representable. Qed.
+
+Goal representable 1.
+Proof. representable. Qed.
+
+Hint Extern 1 (representable _) => representable : representable.
+
+Lemma representable_down_closed i j :
+  representable j →
+  (0 ≤ i)%nat →
+  (i ≤ j)%nat →
+  representable i.
+Proof.
+  unfold representable. lia.
+Qed.
+
+Hint Resolve representable_down_closed : representable.
+
+Definition proj (i : nat) : nat :=
   (i `mod` wBN)%nat.
 
 (* The lemmas that relate [Nat.modulo] and [Z.modulo] are
@@ -415,7 +438,8 @@ Lemma eq_compat'_0 _i i :
   (_i =? 0)%uint63 = true →
   (i = 0)%nat.
 Proof.
-  intros. eapply isBool_elim; eauto using eq_compat' with int lia.
+  intros. eapply isBool_elim;
+    eauto using eq_compat' with int representable.
 Qed.
 
 Lemma eq_compat'_0_neg _i i :
@@ -424,7 +448,8 @@ Lemma eq_compat'_0_neg _i i :
   (_i =? 0)%uint63 = false →
   (i ≠ 0)%nat.
 Proof.
-  intros. eapply isBool_elim_neg; eauto using eq_compat' with int lia.
+  intros. eapply isBool_elim_neg;
+    eauto using eq_compat' with int representable.
 Qed.
 
 Hint Resolve
@@ -455,7 +480,7 @@ Proof.
   generalize wB_pos; intro HwB.
   intros. unfold isBool. repeat destructIsInt.
   rewrite ltb_spec.
-  rewrite !of_Z_spec. unfold wBN.
+  rewrite !of_Z_spec. unfold proj, wBN.
   rewrite <- (Nat2Z.id i) at 2.
   rewrite <- (Nat2Z.id j) at 2.
   rewrite <- !Z2Nat.inj_mod by eauto with lia.
@@ -632,7 +657,8 @@ Proof.
   { rename H into IH.
     assert (i ≠ 0) by eauto with compat.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ?].
-    eapply IH; eauto with int lia; autorewrite with nat. eauto. }
+    eapply IH; eauto with int representable lia; autorewrite with nat.
+    eauto. }
 Qed.
 
 End Down.
@@ -681,7 +707,7 @@ Proof.
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with int lia;
       autorewrite with nat;
-      eauto using wp_conseq with lia. }
+      eauto using wp_conseq with representable lia. }
 Qed.
 
 (* [down _n s @@ λ _i s, ...] is a convenient way of writing a loop. *)
