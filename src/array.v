@@ -402,8 +402,8 @@ Lemma wp_to_list a xs :
   isArray a xs →
   wp (to_list a) (λ xs', xs' = xs).
 Proof.
-  (* This proof relies on the lemmas [wp_length] and [wp_get]. It does
-     not need to unfold the definition of [isArray]. *)
+  (* This proof relies on the lemmas [wp_length] and [wp_get].
+     It does not need to unfold the definition of [isArray]. *)
   intro. unfold to_list.
   wp_length _n.
   (* The loop invariant. *)
