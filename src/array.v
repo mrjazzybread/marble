@@ -308,7 +308,21 @@ End PrimSpec.
 
 (* The following tactics help use the above specifications. *)
 
-(* TODO tactics for make, get, length? *)
+(* TODO tactics for make, get? *)
+(* TODO with or without wp_bind? with or without wp_conseq?
+        let or do not let the user name the results? *)
+
+Global Ltac wp_length n :=
+  eapply wp_bind; [
+    eapply wp_length; eauto
+  | simpl; intros n [? ?]
+  ].
+
+Global Ltac wp_get x :=
+  eapply wp_bind; [
+    eapply wp_get; eauto with lia
+  | simpl; intros x ?
+  ].
 
 Global Ltac wp_set a Ha :=
   eapply wp_conseq; [
@@ -317,44 +331,60 @@ Global Ltac wp_set a Ha :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* Converting an array to a list: [to_list]. *)
+
 Section ToList.
 Context `{Inhabited A}.
 Implicit Types a : array A.
 Implicit Types xs : list A.
 
+(* The code. *)
+
 Definition to_list a :=
+  (* Obtain the length [n] of the array. *)
   do _n ← length a ;
+  (* For [i] ranging from [n-1] down to 0,
+     with an accumulator [xs], which is initially empty, *)
   down _n [] @@ λ _i xs,
+  (* Read the [i]-th element of the array [a], *)
   do x ← a.[_i] ;
+  (* and prepend it in front of [xs]. *)
   x :: xs.
+
+(* One public specification of [to_list]. *)
+
+(* This specification is based on the specifications of [length] and [get]
+   that were given above. Because of this, the proposition [isArray a xs]
+   appears in the precondition of [to_list]. A stronger specification is
+   given later on. *)
 
 Lemma wp_to_list a xs :
   isArray a xs →
   wp (to_list a) (λ xs', xs' = xs).
 Proof.
+  (* This proof relies on the lemmas [wp_length] and [wp_get]. It does
+     not need to unfold the definition of [isArray]. *)
   intro. unfold to_list.
-  (* TODO why? *)
-  set (P := λ _n,
-    let n := List.length xs in
-    isInt _n n ∧ representable n
-  ).
-  eapply @wp_bind with (P := P).
-  { eapply (@wp_length _ _ a xs). eauto. }
-  unfold P.
-  set (n := List.length xs).
-  intros _n [? ?].
-  (* The loop. *)
+  wp_length _n.
+  (* The loop invariant. *)
   set (inv := λ i ys, ys = drop i xs).
   eapply wp_down with (inv := inv); eauto; unfold inv; intros.
   (* Initialization. *)
-  { unfold n. rewrite drop_all. eauto. }
+  { rewrite drop_all. eauto. }
   (* Preservation. *)
-  { eapply wp_bind; [ eapply wp_get; eauto with lia | simpl; intros x ? ].
+  { wp_get x.
     eapply wp_ret.
-    subst. rewrite drop_S' by eauto with lia. eauto. }
+    subst. rewrite drop_S' by eauto.
+    eauto. }
 Qed.
 
-(* TODO this spec is stronger *)
+(* A second (stronger) specification of [to_list]. *)
+
+(* This specification is based on the specifications of [length] and [get]
+   that were given above. Because of this, the proposition [isArray a xs]
+   appears in the precondition of [to_list]. A stronger specification is
+   given later on. *)
+
 Lemma wp_to_list' a :
   wp (to_list a) (λ xs, isArray a xs).
 Proof.
