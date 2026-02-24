@@ -286,7 +286,7 @@ Proof.
     rewrite list_lookup_total_insert_eq by eauto.
     rewrite get_set_same.
     { eauto. }
-    { Fail eapply isArray_use_valid. (* TODO why? *)
+    { Fail eapply isArray_use_valid. (* TODO why does this fail? *)
       simple eapply isArray_use_valid; eauto. }
   + rewrite list_lookup_total_insert_ne by eauto.
     rewrite get_set_other by eauto 10 using of_nat_inj' with representable.
@@ -313,26 +313,60 @@ End PrimSpec.
 
 (* The following tactics help use the above specifications. *)
 
-(* TODO tactics for make, get? *)
-(* TODO with or without wp_bind? with or without wp_conseq?
-        let or do not let the user name the results? *)
+(* In each case, we try applying [wp_bind] first; if this does
+   not work then we try applying the operation's specification
+   directly; if this does not work then we use [wp_conseq] first. *)
+
+Global Ltac wp_length_nude :=
+  eapply wp_length; eauto.
+
+Global Ltac wp_length_intros n :=
+  simpl; intros n [? ?].
+
+Global Ltac wp_length_bind n :=
+  eapply wp_bind; [ wp_length_nude | wp_length_intros n ].
 
 Global Ltac wp_length n :=
-  eapply wp_bind; [
-    eapply wp_length; eauto
-  | simpl; intros n [? ?]
+  first [
+    wp_length_bind n
+  | wp_length_nude
+  | eapply wp_conseq; [ wp_length_nude | wp_length_intros n ]
   ].
+
+Global Ltac wp_get_nude :=
+  eapply wp_get; eauto with lia.
+
+Global Ltac wp_get_intros x :=
+  simpl; intros x ?.
+
+Global Ltac wp_get_bind x :=
+  eapply wp_bind; [ wp_get_nude | wp_get_intros x ].
 
 Global Ltac wp_get x :=
-  eapply wp_bind; [
-    eapply wp_get; eauto with lia
-  | simpl; intros x ?
+  first [
+    wp_get_bind x
+  | wp_get_nude
+  | eapply wp_conseq; [ wp_get_nude | wp_get_intros x ]
   ].
 
-Global Ltac wp_set a Ha :=
-  eapply wp_conseq; [
-    eapply wp_set; eauto with lia
-  | simpl; intros a Ha; list in Ha ].
+Global Ltac wp_set_nude :=
+  eapply wp_set; eauto with lia.
+
+Global Ltac wp_set_intros a :=
+  let Ha := fresh in
+  simpl; intros a Ha; list in Ha.
+
+Global Ltac wp_set_bind a :=
+  eapply wp_bind; [ wp_set_nude | wp_set_intros a ].
+
+Global Ltac wp_set a :=
+  first [
+    wp_set_bind a
+  | wp_set_nude
+  | eapply wp_conseq; [ wp_set_nude | wp_set_intros a ]
+  ].
+
+(* TODO still missing [wp_make] *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -383,7 +417,7 @@ Proof.
     eauto. }
 Qed.
 
-(* A second (stronger) specification of [to_list]. *)
+(* A second (stronger) public specification of [to_list]. *)
 
 (* In this specification, the proposition [isArray a xs] appears in the
    postcondition. The precondition is trivial: there is none. *)
@@ -549,7 +583,7 @@ Proof.
     rewrite <- Nat.add_assoc. eauto. }
 Qed.
 
-(* A specification of [list_length]. *)
+(* The public specification of [list_length]. *)
 
 Lemma wp_list_length xs :
   wp (list_length xs) (λ _i, isInt _i (List.length xs)).
@@ -561,44 +595,61 @@ Qed.
 
 End ListLength.
 
+Ltac wp_list_length _n :=
+  eapply wp_bind; [
+    eapply wp_list_length
+  | simpl; intros _n ?
+  ].
+
+(* -------------------------------------------------------------------------- *)
+
+(* Converting a list to an array: [of_list]. *)
+
 Section OfList.
 Context `{Inhabited A}.
+Implicit Types a : array A.
+Implicit Types xs history : list A.
 
-Definition of_list (xs : list A) : array A :=
-  do n ← list_length xs ;
-  do a ← make n inhabitant ;
+(* The code. *)
+
+Definition of_list xs :=
+  (* Compute the length [n] of the list. *)
+  do _n ← list_length xs ;
+  (* Allocate an array of size [n]. *)
+  do a ← make _n inhabitant ;
+  (* Initialize the array by iterating on the list. *)
   list_iteri set a 0 xs.
 
-Lemma wp_of_list (xs : list A) :
+(* The public specification of [of_list]. *)
+
+(* There is no protection against integer overflow in [list_length]
+   or [list_iteri]. Instead, a bound on the length of the list [xs]
+   is imposed as a precondition in this specification. *)
+
+Lemma wp_of_list xs :
   List.length xs ≤ max_array_length →
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
-  eapply wp_bind; [ eapply wp_list_length | simpl ].
-  set (n := List.length xs).
-  intros _n H_n.
-  set (P := (λ (a : array A), isArray a (replicate n inhabitant))).
-  (* TODO why do I need to specify [P]? *)
-  eapply wp_bind with (P := P); [| intros a Ha ].
+  wp_list_length _n.
+  eapply wp_bind.
   { Fail eapply wp_make. (* TODO why does this fail? *)
-    eapply (@wp_make A H _n n (@inhabitant A H)); eauto with lia. }
-  unfold P in Ha.
+    simple eapply wp_make; eauto. }
+  simpl. intros a ?.
   (* The loop invariant. *)
-  set (inv :=
-    λ (a : array A) (history : list A),
+  set (n := List.length xs).
+  set (inv := λ a history,
     let h := List.length history in
     isArray a (history ++ replicate (n-h) inhabitant)
   ).
-  eapply wp_list_iteri with (inv := inv).
-  (* Initialization. *)
-  { unfold inv. list. eauto. }
+  eapply wp_list_iteri with (inv := inv); unfold inv; list; eauto.
   (* Preservation. *)
-  { intros. apply_prefix_length. wp_set s' Hs'. unfold inv. list. eauto. }
-  (* Completion. *)
-  { unfold inv. list. eauto. }
+  { intros. apply_prefix_length. wp_set s'. list. eauto. }
 Qed.
 
 End OfList.
+
+(* -------------------------------------------------------------------------- *)
 
 (* TODO Eval compute is unable to run [down_aux] *)
 Eval    compute in to_list (of_list [1;2;3]).
