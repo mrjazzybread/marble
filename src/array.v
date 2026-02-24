@@ -162,7 +162,8 @@ Proof.
   eauto with lia. (* [to_nat_lt] and [to_Z_ge_0] are exploited *)
 Qed.
 
-(* [isArray _ xs] is injective. *)
+(* [isArray _ xs] is injective, up to the side condition
+   [default a = default b], which is rather painful. *)
 
 Lemma isArray_inj_1 `{Inhabited A} a b (xs : list A) :
   isArray a xs →
@@ -195,7 +196,14 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO avoid using [destructIsArray] except in a very local way *)
+(* The primitive operations on arrays are [make], [get], [set], and [length]. *)
+
+(* We provide specifications for these operations in terms of [isArray]. *)
+
+(* One might believe that these four lemmas are the only places where the
+   definition of [isArray] matters; so that, from there on, everything is
+   built on top of these four operations and their specs. However, we will
+   later argue that it is also desirable to give a direct proof of [to_list]. *)
 
 Section PrimSpec.
 Context `{Inhabited A}.
@@ -203,10 +211,14 @@ Implicit Types a : array A.
 Implicit Types x : A.
 Implicit Types xs : list A.
 
-Lemma length_make' _n n x :
+(* A specialized variant of the axiom [length_make]
+   for the case where the desired length is smaller
+   than [max_array_length]. *)
+
+Local Lemma length_make' _n n x :
   isInt _n n →
   n <= max_array_length →
-  length (make _n x) = _n.
+  isInt (length (make _n x)) n.
 Proof.
   unfold isInt. intros. subst.
   assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
@@ -214,19 +226,22 @@ Proof.
   rewrite length_make, Hbound. eauto.
 Qed.
 
+(* The public specification of [make]. *)
+
 Lemma wp_make _n n x :
   isInt _n n →
   n ≤ max_array_length →
   wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
-  intros. eapply wp_ret. destructIsInt. introIsArray; list.
-  { introIsInt. eauto using length_make' with int. }
-  { eauto. }
+  intros. eapply wp_ret.
+  introIsArray; list; eauto using length_make' with int.
   intros i ?.
   rewrite get_make.
   rewrite lookup_total_replicate_2 by eauto.
   eauto.
 Qed.
+
+(* The public specification of [get]. *)
 
 Lemma wp_get _i i a xs :
   isInt _i i →
@@ -234,9 +249,11 @@ Lemma wp_get _i i a xs :
   valid i xs →
   wp a.[_i] (λ x, x = xs !!! i).
 Proof.
-  (* This proof is trivial because the definition of [R] relies on [get]. *)
+  (* Easy, because the definition of [isArray] relies on [get]. *)
   intros. destructIsArray. repeat destructIsInt. eapply wp_ret. eauto.
 Qed.
+
+(* TODO avoid using [destructIsArray] except in a very local way *)
 
 Lemma wp_set _i i a xs x :
   isInt _i i →
