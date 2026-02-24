@@ -367,6 +367,7 @@ Global Ltac wp_set a :=
   ].
 
 (* TODO still missing [wp_make] *)
+(* TODO can we reduce the boilerplate that is needed for each tactic? *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -651,35 +652,75 @@ End OfList.
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO Eval compute is unable to run [down_aux] *)
-Eval    compute in to_list (of_list [1;2;3]).
-Eval vm_compute in to_list (of_list [1;2;3]).
-(* TODO try native_compute *)
+(* A round-trip property: [to_list . of_list] is the identity. *)
+
+(* This is true only of sufficiently short lists. *)
 
 Lemma to_list_of_list `{Inhabited A} (xs : list A) :
   List.length xs ≤ max_array_length →
   to_list (of_list xs) = xs.
 Proof.
   intros.
-  assert (fact:
+  cut (
     wp (
       do a ← of_list xs ;
       do ys ← to_list a ;
       ys
     ) (λ ys, xs = ys)
-  ).
-  { eapply wp_bind; [ eapply wp_of_list; eauto | simpl; intros a ? ].
-    eapply wp_bind; [ eapply wp_to_list; eauto | simpl; intros ? ->].
-    eapply wp_ret. eauto. }
-  symmetry. exact fact.
+  ); [ eauto |].
+  eapply wp_bind; [ eapply wp_of_list; eauto | simpl; intros a ? ].
+  eapply wp_bind; [ eapply wp_to_list; eauto | simpl; intros ? ->].
+  eapply wp_ret. eauto.
 Qed.
 
-(* With some effort, one could prove this lemma,
-   but I am not sure that it is worth the trouble.
-Lemma of_list_to_list `{Inhabited A} (a : array A) :
-  default a = inhabitant →
-  of_list (to_list a) = a.
- *)
+(* -------------------------------------------------------------------------- *)
+
+(* Some tests of [to_list . of_list]. *)
+
+(* This test shows that [Eval compute] is unable to properly evaluate
+   a call to [down_aux]. I don't know whether this is normal. TODO *)
+(* Eval    compute in to_list (of_list [1;2;3]). *)
+
+(* This test shows that [Eval vm_compute] works as desired. *)
+(* Eval vm_compute in to_list (of_list [1;2;3]). *)
+
+(* This test shows that [Eval native_compute] works as desired. *)
+(* TODO native_compute must be configured at installation time; how? *)
+(* Eval vm_compute in to_list (of_list [1;2;3]). *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* The reverse round-trip property, [of_list . to_list = id], cannot be
+   naively stated using equality of arrays, as follows:
+
+     of_list (to_list a) = a
+
+   Indeed, the two arrays on either side of this equation must contain the
+   same elements, but could have different default elements.
+
+   To work around this problem, one approach would be to add a side
+   condition regarding the default element:
+
+     default a = inhabitant → of_list (to_list a) = a
+
+   This statement should be true, but its proof would be painful, because
+   the proposition [isArray a xs] does not constrain the default element of
+   the array [a]. The specifications of the operations on arrays that we
+   have given are expressed in terms of [isArray], so we have no easy way of
+   recording and maintaing information about the default element. This is a
+   deliberate decision; most of the time, we do not care about the default
+   element, and do not wish to keep track of it.
+
+   Another work-around is to state the round-trip property in terms of a
+   coarser notion of extensional equality on arrays, which compares the
+   elements of the arrays and does not compare their default elements. *)
+
+(* This problem is related with the statement of the lemma [isArray_inj_1],
+   where the side condition [default a = default b] is needed in order to
+   conclude [a = b]. *)
+
+(* For the moment, we do nothing, and hope that we can live without this
+   round-trip property. *)
 
 (* TODO
   prove that [isArray a xs] is equivalent to [to_list a = xs]
