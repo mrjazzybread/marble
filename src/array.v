@@ -2,6 +2,7 @@ From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From array Require Import list_extra bool int wp.
+Implicit Types _i _j _n _s : int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -348,7 +349,7 @@ Definition to_list a :=
   (* Obtain the length [n] of the array. *)
   do _n ← length a ;
   (* For [i] ranging from [n-1] down to 0,
-     with an accumulator [xs], which is initially empty, *)
+     with a running state [xs], which is initially empty, *)
   down _n [] @@ λ _i xs,
   (* Read the [i]-th element of the array [a], *)
   do x ← a.[_i] ;
@@ -399,9 +400,9 @@ Proof.
   assert (isInt _n n) by eauto using introIsInt'.
   assert (n ≤ max_array_length) by (subst n _n; eauto with representable).
   assert (representable n) by eauto with representable.
-  (* The loop invariant: when the loop index is [i] and the accumulator
-     is [xs], the length of [xs] is [n - i] and the elements of [xs] are
-     the elements found at indices [i, n) in the array [a]. *)
+  (* The loop invariant: when the loop index is [i] and the state is [xs],
+     the length of [xs] is [n - i] and the elements of [xs] are the elements
+     found at indices [i, n) in the array [a]. *)
   set (inv := λ i (ys : list A),
     List.length ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
@@ -420,7 +421,7 @@ Proof.
     destruct (decide (i = j)); [ subst j |]; list.
     { eauto. }
     { rewrite Hlookup by lia. f_equal. lia. } }
-  (* Conclusion. *)
+  (* Completion. *)
   { rename s into xs.
     match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
     introIsArray; try rewrite Hxs.
@@ -433,21 +434,36 @@ End ToList.
 
 (* -------------------------------------------------------------------------- *)
 
-Section ListIteri.
-Context {A S : Type}.
+(* [list_iteri] iterates on a list, from left to right,
+   with a running index of type [int]
+   and a running state of type [S]. *)
 
-Fixpoint iteri (f : S → int → A → S) (s : S) (_i : int) (xs : list A) : S :=
+Section ListIteri.
+Context {S A : Type}.
+Implicit Types s : S.
+Implicit Types xs : list A.
+Implicit Types f : S → int → A → S.
+Implicit Types inv : S → list A → Prop.
+
+(* The code. *)
+
+Fixpoint list_iteri f s _i xs :=
   match xs with
   | [] =>
       s
   | x :: xs =>
       do s ← f s _i x ;
-      iteri f s (_i + 1) xs
+      list_iteri f s (_i + 1) xs
   end.
 
-End ListIteri.
+(* An inductive specification. (This is just an auxiliary lemma.) *)
 
-Lemma wp_iteri_aux {S A} (f : S → int → A → S) (inv : S → list A → Prop) xs :
+(* The user-provided loop invariant [inv s history] is parameterized with the
+   current state [s] and the already-visited elements [history]. It does not
+   need to be parameterized with the current index [i], because it is just the
+   length of the list [history]. *)
+
+Local Lemma wp_list_iteri_aux f inv xs :
   ∀ future s _i history,
   isInt _i (List.length history) →
   inv s history →
@@ -459,11 +475,11 @@ Lemma wp_iteri_aux {S A} (f : S → int → A → S) (inv : S → list A → Pro
     [x] `prefix_of` future →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
   ) →
-  wp (iteri f s _i future) (λ s, inv s xs).
+  wp (list_iteri f s _i future) (λ s, inv s xs).
 Proof.
   induction future as [| x future ];
   intros ??? HI Hinv Hxs Hpreservation;
-  simpl iteri.
+  simpl list_iteri.
   { list in Hxs. subst history. eapply wp_ret. eauto. }
   { eapply wp_bind.
     { eapply Hpreservation; eauto using prefix_cons, prefix_nil. }
@@ -472,50 +488,74 @@ Proof.
       list; eauto with int. }
 Qed.
 
-Lemma wp_iteri {S A} (f : S → int → A → S) xs Q (inv : S → list A → Prop) s :
+(* The public specification of [list_iteri]. *)
+
+Lemma wp_list_iteri f xs Q inv s :
+  (* Initialization. The invariant must be true of the initial state [s]
+     and the empty history. *)
   inv s [] →
+  (* Preservation. If the invariant holds of the current state [s] and
+     current history [history], if the index [_i] represents the length
+     of the list [history], and if [x] is the first unvisited element of
+     the list [xs], then the function call [f s _i x] must return a new
+     state [s] such that the invariant holds of the state [s] and of the
+     new history [history ++ [x]]. *)
   ( ∀ s history _i x,
     isInt _i (List.length history) →
     inv s history →
     history ++ [x] `prefix_of` xs →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
   ) →
+  (* Completion. The invariant, applied to the final state [s] and to
+     the complete list [xs], must imply the postcondition [Q]. *)
   (∀ s, inv s xs → Q s) →
-  wp (iteri f s 0 xs) Q.
+  (* Under these three hypotheses, the loop establishes [Q]. *)
+  wp (list_iteri f s 0 xs) Q.
 Proof.
   intros Hinv Hpreservation Hcompletion.
   eapply wp_conseq.
-  { eapply wp_iteri_aux; eauto; list.
-    - introIsInt. eauto.
-    - intros. subst. eauto using prefix_app. }
-  { eauto. }
+  { eapply wp_list_iteri_aux; eauto; list; eauto with int.
+   intros. subst. eauto using prefix_app. }
+  { simpl. eauto. }
 Qed.
+
+End ListIteri.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [list_length] computes the length of a list, as a machine integer. *)
 
 Section ListLength.
 Context {A : Type}.
 Implicit Types xs : list A.
 
-Fixpoint list_length_aux (_s : int) xs : int :=
+(* The code. *)
+
+Fixpoint list_length_aux _s xs : int :=
   match xs with [] => _s | _ :: xs => list_length_aux (_s + 1) xs end.
 
 Definition list_length xs : int :=
   list_length_aux 0 xs.
 
-Lemma wp_list_length_aux xs : ∀ _s s,
+(* A specification of [list_length_aux]. *)
+
+Local Lemma wp_list_length_aux xs : ∀ _s s,
   isInt _s s →
   wp (list_length_aux _s xs) (λ _i, isInt _i (s + List.length xs)).
 Proof.
   induction xs as [| x xs ]; simpl; intros.
-  { eapply wp_ret. rewrite Nat.add_0_r. eauto. }
-  { eapply wp_conseq; [ eauto with int |]. simpl.
+  { eapply wp_ret. list. eauto. }
+  { eapply wp_conseq; [ eauto with int | simpl ].
     rewrite <- Nat.add_assoc. eauto. }
 Qed.
+
+(* A specification of [list_length]. *)
 
 Lemma wp_list_length xs :
   wp (list_length xs) (λ _i, isInt _i (List.length xs)).
 Proof.
   eapply wp_conseq.
-  { eapply wp_list_length_aux. eapply introIsInt'. }
+  { eapply wp_list_length_aux; eauto with int. }
   { simpl. eauto. }
 Qed.
 
@@ -527,7 +567,7 @@ Context `{Inhabited A}.
 Definition of_list (xs : list A) : array A :=
   do n ← list_length xs ;
   do a ← make n inhabitant ;
-  iteri set a 0 xs.
+  list_iteri set a 0 xs.
 
 Lemma wp_of_list (xs : list A) :
   List.length xs ≤ max_array_length →
@@ -549,12 +589,12 @@ Proof.
     let h := List.length history in
     isArray a (history ++ replicate (n-h) inhabitant)
   ).
-  eapply wp_iteri with (inv := inv).
+  eapply wp_list_iteri with (inv := inv).
   (* Initialization. *)
   { unfold inv. list. eauto. }
   (* Preservation. *)
   { intros. apply_prefix_length. wp_set s' Hs'. unfold inv. list. eauto. }
-  (* Conclusion. *)
+  (* Completion. *)
   { unfold inv. list. eauto. }
 Qed.
 

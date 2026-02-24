@@ -73,6 +73,8 @@ Global Tactic Notation "list" "in" hyp(h) :=
   autorewrite with list in h.
 
 Global Hint Rewrite
+  Nat.add_0_l
+  Nat.add_0_r
   Nat.sub_0_r
 : list.
 
