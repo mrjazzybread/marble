@@ -1,5 +1,9 @@
 From Stdlib Require Import Utf8.
 
+Unset Universe Minimization ToSet.
+Generalizable All Variables.
+Set Universe Polymorphism.
+
 Lemma bool_neg b :
   b = false ↔ ¬ (b = true).
 Proof.

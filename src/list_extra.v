@@ -1,5 +1,9 @@
 From stdpp Require Import list.
 
+Unset Universe Minimization ToSet.
+Generalizable All Variables.
+Set Universe Polymorphism.
+
 Lemma lookup_total_cons_eq_0 `{!Inhabited A} (xs : list A) x i :
   i = 0 → (x :: xs) !!! i = x.
 Proof. intros ->. reflexivity. Qed.
