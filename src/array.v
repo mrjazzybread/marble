@@ -317,6 +317,90 @@ Global Ltac wp_set a Ha :=
 
 (* -------------------------------------------------------------------------- *)
 
+Section ToList.
+Context `{Inhabited A}.
+Implicit Types a : array A.
+Implicit Types xs : list A.
+
+Definition to_list a :=
+  do _n ← length a ;
+  down _n [] @@ λ _i xs,
+  do x ← a.[_i] ;
+  x :: xs.
+
+Lemma wp_to_list a xs :
+  isArray a xs →
+  wp (to_list a) (λ xs', xs' = xs).
+Proof.
+  intro. unfold to_list.
+  (* TODO why? *)
+  set (P := λ _n,
+    let n := List.length xs in
+    isInt _n n ∧ representable n
+  ).
+  eapply @wp_bind with (P := P).
+  { eapply (@wp_length _ _ a xs). eauto. }
+  unfold P.
+  set (n := List.length xs).
+  intros _n [? ?].
+  (* The loop. *)
+  set (inv := λ i ys, ys = drop i xs).
+  eapply wp_down with (inv := inv); eauto; unfold inv; intros.
+  (* Initialization. *)
+  { unfold n. rewrite drop_all. eauto. }
+  (* Preservation. *)
+  { eapply wp_bind; [ eapply wp_get; eauto with lia | simpl; intros x ? ].
+    eapply wp_ret.
+    subst. rewrite drop_S' by eauto with lia. eauto. }
+Qed.
+
+(* TODO this spec is stronger *)
+Lemma wp_to_list' a :
+  wp (to_list a) (λ xs, isArray a xs).
+Proof.
+  intros. unfold to_list.
+  eapply wp_bind_eq. intros _n ?.
+  set (n := to_nat _n).
+  assert (n ≤ max_array_length) by (subst n _n; eauto with representable).
+  assert (representable n) by eauto with representable.
+  (* The loop. *)
+  set (inv := λ i (ys : list A),
+    List.length ys = n - i ∧
+    ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
+  ).
+  eapply wp_down with (inv := inv); eauto using introIsInt';
+    unfold inv; intros.
+  (* Initialization. *)
+  { split.
+    + rewrite length_nil. lia.
+    + intros. exfalso. lia. }
+  (* Preservation. *)
+  { rename s into ys.
+    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
+    eapply wp_bind_eq. intros x ->.
+    eapply wp_ret.
+    split; [ simpl; lia |].
+    intros j ?.
+    assert (i = j ∨ i < j) as [|] by lia.
+    { subst j. rewrite Nat.sub_diag. simpl. congruence. }
+    { match goal with h: ∀ j : nat, _ |- _ => rewrite h by lia end.
+      rewrite lookup_total_cons_ne_0 by lia. f_equal. lia. }
+  }
+  (* Conclusion. *)
+  { rename s into ys.
+    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
+    rewrite Nat.sub_0_r in Hys.
+    introIsArray.
+    + introIsInt. rewrite Hys. subst n. int. congruence.
+    + rewrite Hys. assumption.
+    + intros j ?. rewrite Hlookup, Nat.sub_0_r by lia. eauto.
+  }
+Qed.
+
+End ToList.
+
+(* -------------------------------------------------------------------------- *)
+
 Section ListIteri.
 Context {A S : Type}.
 
@@ -443,88 +527,6 @@ Proof.
 Qed.
 
 End OfList.
-
-Section ToList.
-Context `{Inhabited A}.
-Implicit Types a : array A.
-Implicit Types xs : list A.
-
-Definition to_list a :=
-  do _n ← length a ;
-  down _n [] @@ λ _i xs,
-  do x ← a.[_i] ;
-  x :: xs.
-
-Lemma wp_to_list a xs :
-  isArray a xs →
-  wp (to_list a) (λ xs', xs' = xs).
-Proof.
-  intro. unfold to_list.
-  (* TODO why? *)
-  set (P := λ _n,
-    let n := List.length xs in
-    isInt _n n ∧ representable n
-  ).
-  eapply @wp_bind with (P := P).
-  { eapply (@wp_length _ _ a xs). eauto. }
-  unfold P.
-  set (n := List.length xs).
-  intros _n [? ?].
-  (* The loop. *)
-  set (inv := λ i ys, ys = drop i xs).
-  eapply wp_down with (inv := inv); eauto; unfold inv; intros.
-  (* Initialization. *)
-  { unfold n. rewrite drop_all. eauto. }
-  (* Preservation. *)
-  { eapply wp_bind; [ eapply wp_get; eauto with lia | simpl; intros x ? ].
-    eapply wp_ret.
-    subst. rewrite drop_S' by eauto with lia. eauto. }
-Qed.
-
-(* TODO this spec is stronger *)
-Lemma wp_to_list' a :
-  wp (to_list a) (λ xs, isArray a xs).
-Proof.
-  intros. unfold to_list.
-  eapply wp_bind_eq. intros _n ?.
-  set (n := to_nat _n).
-  assert (n ≤ max_array_length) by (subst n _n; eauto with representable).
-  assert (representable n) by eauto with representable.
-  (* The loop. *)
-  set (inv := λ i (ys : list A),
-    List.length ys = n - i ∧
-    ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
-  ).
-  eapply wp_down with (inv := inv); eauto using introIsInt';
-    unfold inv; intros.
-  (* Initialization. *)
-  { split.
-    + rewrite length_nil. lia.
-    + intros. exfalso. lia. }
-  (* Preservation. *)
-  { rename s into ys.
-    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
-    eapply wp_bind_eq. intros x ->.
-    eapply wp_ret.
-    split; [ simpl; lia |].
-    intros j ?.
-    assert (i = j ∨ i < j) as [|] by lia.
-    { subst j. rewrite Nat.sub_diag. simpl. congruence. }
-    { match goal with h: ∀ j : nat, _ |- _ => rewrite h by lia end.
-      rewrite lookup_total_cons_ne_0 by lia. f_equal. lia. }
-  }
-  (* Conclusion. *)
-  { rename s into ys.
-    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
-    rewrite Nat.sub_0_r in Hys.
-    introIsArray.
-    + introIsInt. rewrite Hys. subst n. int. congruence.
-    + rewrite Hys. assumption.
-    + intros j ?. rewrite Hlookup, Nat.sub_0_r by lia. eauto.
-  }
-Qed.
-
-End ToList.
 
 (* TODO Eval compute is unable to run [down_aux] *)
 Eval    compute in to_list (of_list [1;2;3]).
