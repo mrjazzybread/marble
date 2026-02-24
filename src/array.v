@@ -114,7 +114,10 @@ Local Ltac introIsArray :=
 Local Ltac destructIsArray :=
   match goal with h: isArray _ _ |- _ => destruct h as (?&?&?) end.
 
-Local Lemma isArray_pi1 `{Inhabited A} (a : array A) (xs : list A) :
+(* This lemma can be viewed as a specification of [length],
+   viewed as a "pure function", so [wp] is not used. *)
+
+Lemma isArray_length_spec `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
   isInt (length a) (List.length xs).
 Proof.
@@ -153,13 +156,21 @@ Proof.
   intros. erewrite <- isArray_pi3 by eauto. int. eauto.
 Qed.
 
-Local Lemma isArray_valid `{Inhabited A} (a : array A) (xs : list A) _i :
+Local Lemma isArray_show_valid `{Inhabited A} (a : array A) (xs : list A) _i :
   isArray a xs →
   (_i <? length a)%uint63 = true →
   valid (to_nat _i) xs.
 Proof.
-  intro. rewrite ltb_spec, isArray_pi1 by eauto. int.
+  intro. rewrite ltb_spec, isArray_length_spec by eauto. int.
   eauto with lia. (* [to_nat_lt] and [to_Z_ge_0] are exploited *)
+Qed.
+
+Local Lemma isArray_use_valid `{Inhabited A} (a : array A) (xs : list A) i :
+  isArray a xs →
+  valid i xs →
+  (of_nat i <? length a)%uint63 = true.
+Proof.
+  intros. rewrite ltb_spec, isArray_length_spec by eauto. int. lia.
 Qed.
 
 (* [isArray _ xs] is injective, up to the side condition
@@ -173,9 +184,9 @@ Lemma isArray_inj_1 `{Inhabited A} a b (xs : list A) :
 Proof.
   intros.
   eapply array_ext.
-  { eauto using isInt_inj_1, isArray_pi1. }
+  { eauto using isInt_inj_1, isArray_length_spec. }
   { intros _i ?.
-    repeat erewrite isArray_pi3' by eauto using isArray_valid.
+    repeat erewrite isArray_pi3' by eauto using isArray_show_valid.
     eauto. }
   { eauto. }
 Qed.
@@ -187,7 +198,7 @@ Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
 Proof.
   intros.
   assert (List.length xs = List.length ys).
-  { eauto 6 using isInt_inj_2, isArray_pi1 with representable. }
+  { eauto 6 using isInt_inj_2, isArray_length_spec with representable. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
   erewrite <- isArray_pi3 in * by eauto with lia.
@@ -253,7 +264,7 @@ Proof.
   intros. destructIsArray. repeat destructIsInt. eapply wp_ret. eauto.
 Qed.
 
-(* TODO avoid using [destructIsArray] except in a very local way *)
+(* The public specification of [set]. *)
 
 Lemma wp_set _i i a xs x :
   isInt _i i →
@@ -261,24 +272,26 @@ Lemma wp_set _i i a xs x :
   valid i xs →
   wp a.[_i <- x] (λ a', isArray a' (<[i := x]>xs)).
 Proof.
-  intros. eapply wp_ret.
-  destructIsArray. repeat destructIsInt. introIsArray; list.
-  { rewrite length_set. eauto. }
-  { eauto. }
-  intros j ?.
+  intros. eapply wp_ret. introIsArray; list.
+  { rewrite length_set. eauto using isArray_length_spec. }
+  { eauto using isArray_bounded_length. }
+  intros j ?. liftIsIntAndClear.
   destruct (decide (i = j)).
   + subst j.
     rewrite list_lookup_total_insert_eq by eauto.
     rewrite get_set_same.
     { eauto. }
-    { rewrite ltb_spec.
-      match goal with h: length ?a = _ |- _ => rewrite h end.
-      int. lia. }
+    { Fail eapply isArray_use_valid. (* TODO why? *)
+      simple eapply isArray_use_valid; eauto. }
   + rewrite list_lookup_total_insert_ne by eauto.
-    rewrite get_set_other.
-    { eauto. }
-    { eapply of_nat_inj'; eauto with representable. }
+    rewrite get_set_other by eauto 10 using of_nat_inj' with representable.
+    erewrite isArray_pi3 by eauto.
+    eauto.
 Qed.
+
+(* The public specification of [length]. *)
+
+(* See also [isArray_length_spec]. *)
 
 Lemma wp_length a xs :
   isArray a xs →
@@ -287,17 +300,22 @@ Lemma wp_length a xs :
     representable (List.length xs)
   ).
 Proof.
-  generalize representable_max_array_length; intro.
-  intros. eapply wp_ret. destructIsArray.
-  eauto with representable.
+  intros. eapply wp_ret.
+  eauto using isArray_length_spec with representable.
 Qed.
 
 End PrimSpec.
+
+(* The following tactics help use the above specifications. *)
+
+(* TODO tactics for make, get, length? *)
 
 Global Ltac wp_set a Ha :=
   eapply wp_conseq; [
     eapply wp_set; eauto with lia
   | simpl; intros a Ha; list in Ha ].
+
+(* -------------------------------------------------------------------------- *)
 
 Section ListIteri.
 Context {A S : Type}.

@@ -227,6 +227,16 @@ Ltac destructIsInt :=
     unfold isInt in h; try subst _i
   end.
 
+(* [liftIsIntAndClear] looks for a hypothesis [isInt _i i],
+   replaces [_i] with [of_nat i] in the goal, and clears
+   [_i] as well the hypothesis [isInt _i i]. *)
+
+Ltac liftIsIntAndClear :=
+  match goal with
+  h: isInt ?_i ?i |- context[?_i] =>
+    rewrite h; clear _i h
+  end.
+
 Lemma introIsInt _i i :
   _i = of_nat i →
   isInt _i i.
