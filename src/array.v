@@ -465,6 +465,18 @@ Proof.
     + intros j ?. rewrite Hlookup by lia. list. eauto. }
 Qed.
 
+(* [isArray a xs] is equivalent to [to_list a = xs]. *)
+
+Lemma isArray_iff a xs :
+  isArray a xs ↔
+  to_list a = xs.
+Proof.
+  intros.
+  generalize (wp_to_list' a); intro fact.
+  rewrite wp_iff in fact.
+  split; intros; subst; eauto using isArray_inj_2.
+Qed.
+
 End ToList.
 
 (* -------------------------------------------------------------------------- *)
@@ -721,7 +733,3 @@ Qed.
 
 (* For the moment, we do nothing, and hope that we can live without this
    round-trip property. *)
-
-(* TODO
-  prove that [isArray a xs] is equivalent to [to_list a = xs]
- *)
