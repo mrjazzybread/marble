@@ -1,5 +1,9 @@
 From stdpp Require Import list.
 
+Lemma lookup_total_cons_eq_0 `{!Inhabited A} (xs : list A) x i :
+  i = 0 → (x :: xs) !!! i = x.
+Proof. intros ->. reflexivity. Qed.
+
 (* A variant of the lemma [drop_S]. *)
 
 Lemma drop_S' `{Inhabited A} (xs : list A) (x : A) (i : nat) :
@@ -69,11 +73,21 @@ Global Tactic Notation "list" "in" hyp(h) :=
   autorewrite with list in h.
 
 Global Hint Rewrite
+  Nat.sub_0_r
+: list.
+
+Global Hint Rewrite
   sub_diag'
   using (list; lia)
 : list.
 
 Global Hint Extern 1 (_ < List.length _) => (list; lia) : lia.
+
+Global Hint Rewrite
+  @lookup_total_cons_eq_0
+  @lookup_total_cons_ne_0
+  using lia
+: list.
 
 Global Hint Rewrite
   @insert_app_l

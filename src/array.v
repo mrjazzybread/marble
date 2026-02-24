@@ -15,6 +15,10 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
+Local Hint Rewrite
+  Nat.sub_diag
+: list.
+
 (* -------------------------------------------------------------------------- *)
 
 (* An index [i : nat] is valid with respect to a list [xs] if and only if
@@ -380,51 +384,49 @@ Qed.
 
 (* A second (stronger) specification of [to_list]. *)
 
-(* This specification is based on the specifications of [length] and [get]
-   that were given above. Because of this, the proposition [isArray a xs]
-   appears in the precondition of [to_list]. A stronger specification is
-   given later on. *)
+(* In this specification, the proposition [isArray a xs] appears in the
+   postcondition. The precondition is trivial: there is none. *)
 
 Lemma wp_to_list' a :
   wp (to_list a) (λ xs, isArray a xs).
 Proof.
+  (* This proof is based directly on the definition of [isArray a xs].
+     It does not rely on the lemmas [wp_length] and [wp_get]. *)
   intros. unfold to_list.
+  (* Obtain the length of the array. *)
   eapply wp_bind_eq. intros _n ?.
   set (n := to_nat _n).
+  assert (isInt _n n) by eauto using introIsInt'.
   assert (n ≤ max_array_length) by (subst n _n; eauto with representable).
   assert (representable n) by eauto with representable.
-  (* The loop. *)
+  (* The loop invariant: when the loop index is [i] and the accumulator
+     is [xs], the length of [xs] is [n - i] and the elements of [xs] are
+     the elements found at indices [i, n) in the array [a]. *)
   set (inv := λ i (ys : list A),
     List.length ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
   ).
-  eapply wp_down with (inv := inv); eauto using introIsInt';
-    unfold inv; intros.
+  eapply wp_down with (inv := inv); eauto; unfold inv; list; intros.
   (* Initialization. *)
-  { split.
-    + rewrite length_nil. lia.
-    + intros. exfalso. lia. }
+  { split; intros; lia. }
   (* Preservation. *)
-  { rename s into ys.
-    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
+  { rename s into xs.
+    match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
+    liftIsIntAndClear.
     eapply wp_bind_eq. intros x ->.
     eapply wp_ret.
-    split; [ simpl; lia |].
+    list; split; [ lia |].
     intros j ?.
-    assert (i = j ∨ i < j) as [|] by lia.
-    { subst j. rewrite Nat.sub_diag. simpl. congruence. }
-    { match goal with h: ∀ j : nat, _ |- _ => rewrite h by lia end.
-      rewrite lookup_total_cons_ne_0 by lia. f_equal. lia. }
-  }
+    destruct (decide (i = j)); [ subst j |]; list.
+    { eauto. }
+    { rewrite Hlookup by lia. f_equal. lia. } }
   (* Conclusion. *)
-  { rename s into ys.
-    match goal with h: _ ∧ _ |- _ => destruct h as [Hys Hlookup] end.
-    rewrite Nat.sub_0_r in Hys.
-    introIsArray.
-    + introIsInt. rewrite Hys. subst n. int. congruence.
-    + rewrite Hys. assumption.
-    + intros j ?. rewrite Hlookup, Nat.sub_0_r by lia. eauto.
-  }
+  { rename s into xs.
+    match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
+    introIsArray; try rewrite Hxs.
+    + introIsInt. subst n. int. eauto.
+    + eauto.
+    + intros j ?. rewrite Hlookup by lia. list. eauto. }
 Qed.
 
 End ToList.
