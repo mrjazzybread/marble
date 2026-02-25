@@ -872,7 +872,8 @@ Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n s f :
   (* If [s ← f _i s] transforms the invariant [inv (i+1) s] to [inv i s], *)
   (∀ _i i s ,
     isInt _i i →
-    i < n → (* this implies [representable i] *)
+    representable i →
+    i < n →
     inv (i + 1) s →
     wp (f _i s) (λ s, inv i s)
   ) →
@@ -958,8 +959,9 @@ Lemma wp_up (inv : nat → S → Prop) (Q : S → Prop) :
   (* If [s ← f _a s] transforms the invariant [inv a s] to [inv (a+1) s], *)
   (∀ _a a s ,
     isInt _a a →
+    representable a →
+    a < b →
     inv a s →
-    a < b → (* this implies [representable a] *)
     wp (f _a s) (λ s, inv (a + 1) s)
   ) →
   (* Then, once the loop ends, the invariant holds of the index [a]
