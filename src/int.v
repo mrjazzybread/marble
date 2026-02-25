@@ -598,17 +598,25 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Well-foundedness of an ordering on machine integers. *)
+(* Well-foundedness of the orderings on machine integers. *)
+
+(* [ilt] is the ordering [<] on machine integers. *)
+
+(* [igt] is the ordering [>] on machine integers. *)
+
+(* Both orderings are well-founded. *)
 
 Definition ilt _i _j :=
   φ _i < φ _j.
 
+(* TODO unused *)
 Lemma ltb_spec' _i _j :
   ltb _i _j = true ↔ ilt _i _j.
 Proof.
   unfold ilt. rewrite ltb_spec. tauto.
 Qed.
 
+(* TODO unused *)
 Lemma ilt_alt_def _i _j :
   ilt _i _j ↔ 0 ≤ φ _i < φ _j.
 Proof.
@@ -617,8 +625,8 @@ Qed.
 
 Lemma ilt_wf : well_founded ilt.
 Proof.
-  eapply wf_incl; [| eapply Z.lt_wf_projected with (f := φ) ].
-  intros _i _j. rewrite ilt_alt_def. eauto.
+  eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := φ) ].
+  intros _i _j. unfold ilt. eauto with lia.
 Qed.
 
 Global Instance Wf_ilt : WellFounded ilt :=
@@ -633,7 +641,7 @@ Lemma safe_decrement _i :
   (φ (_i - 1) < φ _i)%Z.
 Proof.
   intros.
-  assert (0 ≤ φ _i < wB)%Z by eauto with lia.
+  assert (unsigned (φ _i)) by eauto with lia.
   rewrite sub_spec. change (φ 1) with 1%Z.
   rewrite Z.mod_small by lia.
   lia.
@@ -646,6 +654,50 @@ Proof.
   rewrite eqb_spec_negated. unfold ilt. intros.
   assert (0 ≠ φ _i)%Z. { change 0%Z with (φ 0). eauto with lia. }
   eauto using safe_decrement.
+Qed.
+
+Definition igt _i _j :=
+  φ _j < φ _i.
+
+Lemma igt_alt_def _i _j :
+  igt _i _j ↔ φ _j < φ _i < wB.
+Proof.
+  unfold igt. split; eauto with lia.
+Qed.
+
+Lemma igt_wf : well_founded igt.
+Proof.
+  Check wf_incl.
+  eapply wf_incl;
+    [| eapply Z.lt_wf_projected with (z := 0) (f := λ _i, wB - φ _i) ].
+  intros _i _j. rewrite igt_alt_def. lia.
+Qed.
+
+Global Instance Wf_igt : WellFounded igt :=
+  wf_guard 32 igt_wf.
+  (* The use of [wf_guard] is meant to allow computation inside Rocq
+     in spite of the opaque well-foundedness proof [igt_wf]. *)
+
+(* Safely incrementing an integer, without integer overflow. *)
+
+Lemma safe_increment _i _j :
+  φ _i < φ _j →
+  (φ _i < φ (_i + 1))%Z.
+Proof.
+  intros.
+  assert (unsigned (φ _i)) by eauto with lia.
+  assert (unsigned (φ _j)) by eauto with lia.
+  assert (unsigned (φ _i + 1)) by lia.
+  rewrite add_spec. change (φ 1) with 1%Z.
+  rewrite Z.mod_small by eauto.
+  lia.
+Qed.
+
+Lemma safe_increment' _i _j :
+  (_i <? _j)%uint63 = true →
+  igt (_i + 1) _i.
+Proof.
+  rewrite ltb_spec. unfold igt. eauto using safe_increment.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -747,11 +799,11 @@ Proof.
   intros Hstep Hfinish.
   intros _i i s.
   funelim (down_aux _i s); cleanup; intros ? ? Hinit.
-  (* Case [_i = 0]. *)
+  (* Case [i = 0]. *)
   { assert (i = 0) by eauto with compat. subst i.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
     eapply wp_ret. eauto. }
-  (* Case [_i ≠ 0]. *)
+  (* Case [i ≠ 0]. *)
   { rename H into IH.
     assert (i ≠ 0) by eauto with compat.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ?].
@@ -811,3 +863,92 @@ Qed.
 (* [down _n s @@ λ _i s, ...] is a convenient way of writing a loop. *)
 
 Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
+
+(* -------------------------------------------------------------------------- *)
+
+(* A loop, counting up from [a] to [b], using machine integers. *)
+
+(* Our intervals are semi-open on the right end: [a] is included,
+   [b] is excluded. *)
+
+Section Up.
+Context {S : Type}.
+Implicit Types _a _b : int.
+Implicit Types s : S.
+
+Variable f : int → S → S.
+
+(* [up _a _b s] applies the loop body [f] to every machine integer from
+   [_a], included, up to [_b], excluded. A state of type [S] is carried,
+   whose initial value is [s]. *)
+
+(* We use Equations to more easily define [up] by well-founded recursion
+   over the loop counter [_a]. The somewhat strange [with] syntax is a way
+   of expressing the test [_a <? _b]. The use of [inspect] and [inspected]
+   is an idiosyncratic way of making the outcome of the test visible at
+   the logical level in the branches. In the second branch, the fact that
+   [_a <? _b] is false is needed in order to prove that [_a+1] is less than
+   [_a], a fact which itself is required by the termination argument. *)
+
+Equations up _a _b s : S
+by wf _a igt :=
+up _a _b s with inspect (_a <? _b)%uint63 => {
+| inspected true :=
+    do s ← f _a s ;
+    do s ← up (_a+1)%uint63 _b s ;
+    s ;
+| inspected false :=
+    s
+}.
+Next Obligation.
+  eauto using safe_increment'.
+Qed.
+
+(* A specification of [up]. *)
+
+(* The user is allowed to choose a loop invariant [inv a s], where
+   [a] is the current loop index and [s] is the current state. The
+   assertion [inv a s] means that the loop has run up to index [a]
+   excluded, so the next iteration will concern the index [a]. *)
+
+Lemma wp_up (inv : nat → S → Prop) (Q : S → Prop) :
+  ∀ _a a _b b s ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  (* If the invariant holds of the start index [a] and start state [s], *)
+  inv a s →
+  (* If [s ← f _a s] transforms the invariant [inv a s] to [inv (a+1) s], *)
+  (∀ _a a s ,
+    isInt _a a →
+    inv a s →
+    a < b → (* this implies [representable a] *)
+    wp (f _a s) (λ s, inv (a + 1) s)
+  ) →
+  (* Then, once the loop ends, the invariant holds of the index [a]
+     or [b], whichever is greater, and of the final state [s]. *)
+  (∀ s, inv (a `max` b) s → Q s) →
+  wp (up _a _b s) Q.
+Proof.
+  Local Opaque isInt. (* required to avoid expansion by [funelim] *)
+  do 9 intro. intros Hinit Hpreservation Hcompletion.
+  funelim (up _a _b s); cleanup.
+  (* Case [a < b]. *)
+  { assert (a < b). (* TODO clean up *)
+    { eapply isBool_elim. eapply ltb_compat'; eauto. eauto. }
+    assert (fact: a `max` b = (a + 1) `max` b) by lia.
+    rewrite fact in Hcompletion.
+    eapply wp_bind; [ eapply Hpreservation; eauto | simpl; intros s' ? ].
+    eauto with int representable lia. }
+  (* Case [¬ a < b]. *)
+  { assert (¬ (a < b)). (* TODO clean up *)
+    { eapply isBool_elim_neg. eapply ltb_compat'; eauto. eauto. }
+    assert (fact: a `max` b = a) by lia.
+    rewrite fact in Hcompletion.
+    eapply wp_ret. eauto. }
+Qed.
+
+End Up.
+
+(* [up _a _b s @@ λ _i s, ...] is a convenient way of writing a loop. *)
