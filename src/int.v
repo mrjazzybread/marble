@@ -527,10 +527,13 @@ Proof.
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
-(* TODO do we really want to have to use lemmas
-   of the following forms? *)
+(* The following lemmas come in handy in the definitions of the loops [up]
+   and [down]. These loops are written in a somewhat non-standard style,
+   as they use Equations. This seems to force us to use the [with]
+   construct to express a conditional, and prevents us from beginning
+   with an explicit [bind] to evaluate the Boolean condition. *)
 
-Lemma eq_compat'_0 _i i :
+Local Lemma eq_compat'_0_adhoc _i i :
   isInt _i i →
   representable i →
   (_i =? 0)%uint63 = true →
@@ -540,7 +543,7 @@ Proof.
     eauto using eq_compat' with int representable.
 Qed.
 
-Lemma eq_compat'_0_neg _i i :
+Local Lemma eq_compat'_0_neg_adhoc _i i :
   isInt _i i →
   representable i →
   (_i =? 0)%uint63 = false →
@@ -550,10 +553,10 @@ Proof.
     eauto using eq_compat' with int representable.
 Qed.
 
-Hint Resolve
-  eq_compat'_0
-  eq_compat'_0_neg
-: compat.
+Local Hint Resolve
+  eq_compat'_0_adhoc
+  eq_compat'_0_neg_adhoc
+: adhoc.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -573,7 +576,7 @@ Qed.
 Lemma ltb_compat _i i _j j :
   isInt _i i →
   isInt _j j →
-  isBool (ltb _i _j) (proj i < proj j)%nat.
+  isBool (_i <? _j)%uint63 (proj i < proj j)%nat.
 Proof.
   generalize wB_pos; intro HwB.
   intros. unfold isBool. repeat destructIsInt.
@@ -590,11 +593,44 @@ Lemma ltb_compat' _i i _j j :
   isInt _j j →
   representable i →
   representable j →
-  isBool (ltb _i _j) (i < j)%nat.
+  isBool (_i <? _j)%uint63 (i < j)%nat.
 Proof.
   intros. eapply isBool_conseq; [ eapply ltb_compat; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
+
+(* More ad hoc lemmas. *)
+
+Local Lemma lt_compat'_adhoc _a a _b b :
+  isInt _a a →
+  isInt _b b →
+  representable a →
+  representable b →
+  (_a <? _b)%uint63 = true →
+  (a < b)%nat.
+Proof.
+  intros.
+  eapply isBool_elim; [| eauto ].
+  eapply ltb_compat'; eauto.
+Qed.
+
+Local Lemma lt_compat'_neg_adhoc _a a _b b :
+  isInt _a a →
+  isInt _b b →
+  representable a →
+  representable b →
+  (_a <? _b)%uint63 = false →
+  ¬ (a < b)%nat.
+Proof.
+  intros.
+  eapply isBool_elim_neg; [| eauto ].
+  eapply ltb_compat'; eauto.
+Qed.
+
+Local Hint Resolve
+  lt_compat'_adhoc
+  lt_compat'_neg_adhoc
+: adhoc.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -800,12 +836,12 @@ Proof.
   intros _i i s.
   funelim (down_aux _i s); cleanup; intros ? ? Hinit.
   (* Case [i = 0]. *)
-  { assert (i = 0) by eauto with compat. subst i.
+  { assert (i = 0) by eauto with adhoc. subst i.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
     eapply wp_ret. eauto. }
   (* Case [i ≠ 0]. *)
   { rename H into IH.
-    assert (i ≠ 0) by eauto with compat.
+    assert (i ≠ 0) by eauto with adhoc.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ?].
     eapply IH; eauto with int representable lia; autorewrite with nat.
     eauto. }
@@ -849,10 +885,10 @@ Proof.
   unfold down.
   destruct (_n =? 0)%uint63 eqn:e.
   (* Case [_n = 0]. *)
-  { assert (n = 0) by eauto with compat. subst n.
+  { assert (n = 0) by eauto with adhoc. subst n.
     eauto using wp_ret. }
   (* Case [_n ≠ 0]. *)
-  { assert (n ≠ 0) by eauto with compat.
+  { assert (n ≠ 0) by eauto with adhoc.
     (* We strengthen the loop invariant with [i ≤ n]. *)
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with int lia;
@@ -935,15 +971,13 @@ Proof.
   do 9 intro. intros Hinit Hpreservation Hcompletion.
   funelim (up _a _b s); cleanup.
   (* Case [a < b]. *)
-  { assert (a < b). (* TODO clean up *)
-    { eapply isBool_elim. eapply ltb_compat'; eauto. eauto. }
+  { assert (a < b) by eauto with adhoc.
     assert (fact: a `max` b = (a + 1) `max` b) by lia.
     rewrite fact in Hcompletion.
     eapply wp_bind; [ eapply Hpreservation; eauto | simpl; intros s' ? ].
     eauto with int representable lia. }
   (* Case [¬ a < b]. *)
-  { assert (¬ (a < b)). (* TODO clean up *)
-    { eapply isBool_elim_neg. eapply ltb_compat'; eauto. eauto. }
+  { assert (¬ (a < b)) by eauto with adhoc.
     assert (fact: a `max` b = a) by lia.
     rewrite fact in Hcompletion.
     eapply wp_ret. eauto. }
