@@ -679,7 +679,8 @@ Proof.
       do ys ← to_list a ;
       ys
     ) (λ ys, xs = ys)
-  ); [ eauto |].
+  ).
+  { rewrite wp_iff. eauto. }
   eapply wp_bind; [ eapply wp_of_list; eauto | simpl; intros a ? ].
   eapply wp_bind; [ eapply wp_to_list; eauto | simpl; intros ? ->].
   eapply wp_ret. eauto.
