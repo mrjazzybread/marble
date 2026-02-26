@@ -253,9 +253,7 @@ Proof.
   intros. eapply wp_ret.
   introIsArray; list; eauto using length_make' with int.
   intros i ?.
-  rewrite get_make.
-  rewrite lookup_total_replicate_2 by eauto.
-  eauto.
+  rewrite get_make. list. eauto.
 Qed.
 
 (* The public specification of [get]. *)
@@ -282,15 +280,12 @@ Proof.
   { rewrite length_set. eauto using isArray_length_spec. }
   { eauto with lia. }
   intros j ?. liftIsIntAndClear.
-  destruct (decide (i = j)).
-  + subst j.
-    rewrite list_lookup_total_insert_eq by eauto.
-    rewrite get_set_same.
+  destruct (decide (i = j)); [ subst j |]; list.
+  + rewrite get_set_same.
     { eauto. }
     { Fail eapply isArray_use_valid. (* TODO why does this fail? *)
       simple eapply isArray_use_valid; eauto. }
-  + rewrite list_lookup_total_insert_ne by eauto.
-    rewrite get_set_other by eauto 10 using of_nat_inj' with representable.
+  + rewrite get_set_other by eauto 10 using of_nat_inj' with representable.
     erewrite isArray_pi3 by eauto.
     eauto.
 Qed.
@@ -452,10 +447,8 @@ Proof.
   intro. unfold to_list.
   wp_length _n.
   (* The loop invariant. *)
-  set (inv := λ i ys, ys = drop i xs).
-  eapply wp_down with (inv := inv); eauto; unfold inv; intros.
-  (* Initialization. *)
-  { rewrite drop_all. eauto. }
+  eapply wp_down with (inv := λ i ys, ys = drop i xs);
+    eauto; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
     eapply wp_ret.
@@ -483,11 +476,10 @@ Proof.
   (* The loop invariant: when the loop index is [i] and the state is [xs],
      the length of [xs] is [n - i] and the elements of [xs] are the elements
      found at indices [i, n) in the array [a]. *)
-  set (inv := λ i (ys : list A),
+  eapply wp_down with (inv := λ i (ys : list A),
     List.length ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
-  ).
-  eapply wp_down with (inv := inv); eauto; unfold inv; list; intros.
+  ); eauto; list; intros.
   (* Initialization. *)
   { split; intros; lia. }
   (* Preservation. *)
@@ -809,7 +801,7 @@ Lemma wp_blit a xs _i i b ys _j j _n n :
   valid_seg i (i + n) xs →
   valid_seg j (j + n) ys →
   wp (blit a _i b _j _n) (λ b, isArray b
-    (initial_seg j ys ++ sub i n xs ++ final_seg (j + n) ys)
+    (initial_seg j ys ++ seg i (i + n) xs ++ final_seg (j + n) ys)
   ).
 Proof.
   intros. unfold blit.
@@ -900,8 +892,7 @@ Lemma wp_sub a _i i _n n xs :
   isInt _i i →
   isInt _n n →
   valid_seg i (i + n) xs →
-  wp (sub a _i _n) (λ b, isArray b (list_extra.sub i n xs)).
-  (* TODO name clash on [sub] *)
+  wp (sub a _i _n) (λ b, isArray b (seg i (i + n) xs)).
 Proof.
   intros. unfold sub.
   wp_make b.
