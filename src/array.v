@@ -734,3 +734,22 @@ Qed.
 
 (* For the moment, we do nothing, and hope that we can live without this
    round-trip property. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Copying data from an array to another array: [blit]. *)
+
+Section Blit.
+Context `{Inhabited A}.
+Implicit Types a b : array A.
+Implicit Types xs ys : list A.
+
+(* The code. *)
+
+Definition blit a _i b _j _n :=
+  up _i (_i + _n)%uint63 b @@ λ _i b,
+  do x ← get a _i ;
+  do b ← set b _i x ;
+  b.
+
+End Blit.
