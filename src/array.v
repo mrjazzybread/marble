@@ -447,13 +447,12 @@ Proof.
   intro. unfold to_list.
   wp_length _n.
   (* The loop invariant. *)
-  eapply wp_down with (inv := λ i ys, ys = drop i xs);
+  eapply wp_down with (inv := λ i ys, ys = final_seg i xs);
     eauto; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
-    eapply wp_ret.
-    subst. rewrite drop_S' by eauto.
-    eauto. }
+    eapply wp_ret. subst.
+    rewrite cons_is_append. list. eauto. }
 Qed.
 
 (* A second (stronger) public specification of [to_list]. *)
