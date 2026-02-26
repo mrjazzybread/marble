@@ -911,8 +911,7 @@ Section Up.
 Context {S : Type}.
 Implicit Types _a _b : int.
 Implicit Types s : S.
-
-Variable f : int → S → S.
+Implicit Types f : int → S → S.
 
 (* [up _a _b s] applies the loop body [f] to every machine integer from
    [_a], included, up to [_b], excluded. A state of type [S] is carried,
@@ -926,12 +925,12 @@ Variable f : int → S → S.
    [_a <? _b] is false is needed in order to prove that [_a+1] is less than
    [_a], a fact which itself is required by the termination argument. *)
 
-Equations up _a _b s : S
+Equations up _a _b s f : S
 by wf _a igt :=
-up _a _b s with inspect (_a <? _b)%uint63 => {
+up _a _b s f with inspect (_a <? _b)%uint63 => {
 | inspected true :=
     do s ← f _a s ;
-    do s ← up (_a+1)%uint63 _b s ;
+    do s ← up (_a+1)%uint63 _b s f ;
     s ;
 | inspected false :=
     s
@@ -947,7 +946,7 @@ Qed.
    assertion [inv a s] means that the loop has run up to index [a]
    excluded, so the next iteration will concern the index [a]. *)
 
-Lemma wp_up (inv : nat → S → Prop) (Q : S → Prop) :
+Lemma wp_up f (inv : nat → S → Prop) (Q : S → Prop) :
   ∀ _a a _b b s ,
   isInt _a a →
   representable a →
@@ -966,11 +965,11 @@ Lemma wp_up (inv : nat → S → Prop) (Q : S → Prop) :
   (* Then, once the loop ends, the invariant holds of the index [a]
      or [b], whichever is greater, and of the final state [s]. *)
   (∀ s, inv (a `max` b) s → Q s) →
-  wp (up _a _b s) Q.
+  wp (up _a _b s f) Q.
 Proof.
   Local Opaque isInt. (* required to avoid expansion by [funelim] *)
   do 9 intro. intros Hinit Hpreservation Hcompletion.
-  funelim (up _a _b s); cleanup.
+  funelim (up _a _b s f); cleanup.
   (* Case [a < b]. *)
   { assert (a < b) by eauto with adhoc.
     assert (fact: a `max` b = (a + 1) `max` b) by lia.
