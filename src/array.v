@@ -938,3 +938,62 @@ Proof.
 Qed.
 
 End Append.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Copying a value into an array segment: [fill]. *)
+
+Section Fill.
+Context `{Inhabited A}.
+Implicit Types a b : array A.
+Implicit Types xs ys : list A.
+
+(* The code. *)
+
+Definition fill a _i _n x :=
+  up _i (_i + _n)%uint63 a @@ λ _k a,
+  do a ← set a _k x ;
+  a.
+
+(* The public specification of [fill]. *)
+
+Lemma wp_fill a xs _i i _n n  x :
+  isArray a xs →
+  isInt _i i →
+  isInt _n n →
+  valid_seg i (i + n) xs →
+  wp (fill a _i _n x) (λ a, isArray a
+    (initial_seg i xs ++ replicate n x ++ final_seg (i + n) xs)
+  ).
+Proof.
+  intros. unfold fill.
+  eapply wp_up with (inv := λ k a,
+    isArray a
+      (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
+  );
+  eauto with int representable lia; list; eauto 1.
+  (* Preservation. *)
+  { clear dependent a. intros _k k a. intros.
+    wp_set.
+    wp_ret. isArray. }
+Qed.
+
+End Fill.
+
+Global Ltac wp_fill_nude :=
+  eapply wp_fill; eauto with int lia; (list; lia).
+
+Global Ltac wp_fill_intros a :=
+  wp_set_intros a. (* shortcut *)
+
+Global Ltac wp_fill_bind a :=
+  eapply wp_bind; [ wp_fill_nude | wp_fill_intros a ].
+
+Global Ltac wp_fill :=
+  match goal with |- context[fill _ _ ?a _ _] =>
+    first [
+      wp_fill_bind a
+    | wp_fill_nude
+    | eapply wp_conseq; [ wp_fill_nude | wp_fill_intros a ]
+    ]
+  end.
