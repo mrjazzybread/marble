@@ -693,17 +693,13 @@ Lemma wp_of_list xs :
 Proof.
   intros. unfold of_list.
   wp_list_length _n.
-  eapply wp_bind.
-  { Fail eapply wp_make. (* TODO why does this fail? *)
-    simple eapply wp_make; eauto. }
-  simpl. intros a ?.
+  wp_make a.
   (* The loop invariant. *)
   set (n := List.length xs).
-  set (inv := λ a history,
+  eapply wp_list_iteri with (inv := λ a history,
     let h := List.length history in
     isArray a (history ++ replicate (n-h) inhabitant)
-  ).
-  eapply wp_list_iteri with (inv := inv); unfold inv; list; eauto.
+  ); simpl; list; eauto.
   (* Preservation. *)
   { intros. apply_prefix_length. wp_set s'. list. eauto. }
 Qed.
