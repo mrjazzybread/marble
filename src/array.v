@@ -359,29 +359,26 @@ Global Ltac wp_set_nude :=
   simple eapply wp_set; eauto with int lia.
 
 Global Ltac wp_set_intros a :=
-  let Ha := fresh in
-  simpl; intros a Ha;
-  list in Ha.
+  let a' := fresh a in
+  let Ha' := fresh in
+  simpl; intros a' Ha';
+  list in Ha';
+  (* Forget about the previous array [a] and rename the new array [a']
+     with the name of the previous array. Thus we keep only the latest
+     version at hand in the course of a proof. *)
+  clear dependent a; rename a' into a.
 
 Global Ltac wp_set_bind a :=
-  match goal with
-  |- wp (@bind _ _ (set ?a0 ?i ?x) _) ?Q =>
-    eapply wp_bind; [
-      wp_set_nude
-    | wp_set_intros a;
-      (* Forget about the previous array, and rename the new array
-         using the name of the previous array. Thus we keep only one
-         copy at hand in the course of a proof. *)
-      clear dependent a0; rename a into a0
+  eapply wp_bind; [ wp_set_nude | wp_set_intros a ].
+
+Global Ltac wp_set :=
+  match goal with |- context[set ?a _ _] =>
+    first [
+      wp_set_bind a
+    | wp_set_nude
+    | eapply wp_conseq; [ wp_set_nude | wp_set_intros a ]
     ]
   end.
-
-Global Ltac wp_set a :=
-  first [
-    wp_set_bind a
-  | wp_set_nude
-  | eapply wp_conseq; [ wp_set_nude | wp_set_intros a ]
-  ].
 
 Global Ltac wp_make_nude :=
   simple eapply wp_make; eauto with int lia.
@@ -701,7 +698,7 @@ Proof.
     isArray a (history ++ replicate (n-h) inhabitant)
   ); simpl; list; eauto.
   (* Preservation. *)
-  { intros. apply_prefix_length. wp_set s'. list. eauto. }
+  { intros. apply_prefix_length. wp_set. list. eauto. }
 Qed.
 
 End OfList.
@@ -824,39 +821,29 @@ Proof.
   (* Preservation. *)
   { clear dependent b. intros _k k b. intros.
     wp_get x. subst x.
-    wp_set b'.
+    wp_set.
     wp_ret. isArray. }
 Qed.
 
 End Blit.
 
-(* TODO more boilerplate! *)
-
 Global Ltac wp_blit_nude :=
   eapply wp_blit; eauto with int lia; (list; lia).
 
-Global Ltac wp_blit_intros b :=
-  wp_set_intros b. (* shortcut *)
+Global Ltac wp_blit_intros a :=
+  wp_set_intros a. (* shortcut *)
 
-Global Ltac wp_blit_bind b :=
-  match goal with
-  |- wp (@bind _ _ (blit ?a ?i ?b0 ?j ?n) _) ?Q =>
-    eapply wp_bind; [
-      wp_blit_nude
-    | wp_blit_intros b;
-      (* Forget about the previous array, and rename the new array
-         using the name of the previous array. Thus we keep only one
-         copy at hand in the course of a proof. *)
-      clear dependent b0; rename b into b0
+Global Ltac wp_blit_bind a :=
+  eapply wp_bind; [ wp_blit_nude | wp_blit_intros a ].
+
+Global Ltac wp_blit :=
+  match goal with |- context[blit _ _ ?a _ _] =>
+    first [
+      wp_blit_bind a
+    | wp_blit_nude
+    | eapply wp_conseq; [ wp_blit_nude | wp_blit_intros a ]
     ]
   end.
-
-Global Ltac wp_blit b :=
-  first [
-    wp_blit_bind b
-  | wp_blit_nude
-  | eapply wp_conseq; [ wp_blit_nude | wp_blit_intros b ]
-  ].
 
 (* -------------------------------------------------------------------------- *)
 
@@ -884,7 +871,7 @@ Proof.
   intros. unfold copy.
   wp_length n.
   wp_make b.
-  wp_blit b'. (* TODO avoid naming [b'] for no reason *)
+  wp_blit.
   wp_ret. isArray.
 Qed.
 
@@ -918,7 +905,7 @@ Lemma wp_sub a _i i _n n xs :
 Proof.
   intros. unfold sub.
   wp_make b.
-  wp_blit b'.
+  wp_blit.
   wp_ret. isArray.
 Qed.
 
