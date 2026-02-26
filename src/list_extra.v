@@ -4,6 +4,16 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+Lemma lookup_app' {A} (xs ys : list A) i :
+  (xs ++ ys) !! i =
+    if decide (i < length xs) then xs !! i
+    else ys !! (i - length xs).
+Proof.
+  intros. case_decide.
+  - rewrite lookup_app_l by lia. eauto.
+  - rewrite lookup_app_r by lia. eauto.
+Qed.
+
 Lemma lookup_total_cons_eq_0 `{!Inhabited A} (xs : list A) x i :
   i = 0 → (x :: xs) !!! i = x.
 Proof. intros ->. reflexivity. Qed.
@@ -64,6 +74,8 @@ Global Hint Rewrite
   @length_app
   @length_insert
   @length_replicate
+  @length_take
+  @length_drop
 : list.
 
 Global Hint Rewrite
@@ -102,6 +114,31 @@ Global Hint Rewrite
   using (list; lia)
 : list.
 
+Lemma take_0' {A} n (xs : list A) :
+  n = 0 →
+  take n xs = [].
+Proof.
+  intros. subst. apply take_0.
+Qed.
+
+Lemma drop_0' {A} n (xs : list A) :
+  n = 0 →
+  drop n xs = xs.
+Proof.
+  intros. subst. apply drop_0.
+Qed.
+
+Global Hint Rewrite
+  @take_0'
+  @take_nil
+  @take_ge
+  @drop_0'
+  @drop_ge
+  @lookup_take_lt
+  @lookup_drop
+  using (list; lia)
+: list.
+
 (* The tactic [apply_prefix_length] searches for a hypothesis of the form
    [xs `prefix_of` ys] and introduces a new fact [length xs ≤ length ys].
    This new fact is then simplified using the tactic [list]. *)
@@ -114,6 +151,26 @@ Global Ltac apply_prefix_length :=
     list in h'
   end.
 
+(* TODO should we provide a variant that uses total lookups? *)
+Lemma list_eq_same_length' {A} (xs ys : list A) :
+  length xs = length ys →
+  (∀ i, i < length xs → xs !! i = ys !! i) →
+  xs = ys.
+Proof.
+  intros ? Heq.
+  apply list_eq_same_length with (n := length xs); eauto 1.
+  intros i x y Hi Hxs Hys.
+  cut (xs !! i = ys !! i). { congruence. } clear Hxs Hys.
+  eauto.
+Qed.
+
+(* The tactic [listx i] proves that two lists are equal by checking that
+   they are extensionally equal: same length and same elements.
+   The parameter [i] is the name of the index that is looked up. *)
+
+Global Ltac listx i :=
+  eapply list_eq_same_length'; list; [ eauto with lia | intros i ? ].
+
 (* -------------------------------------------------------------------------- *)
 
 (* List segments. *)
@@ -123,6 +180,141 @@ Global Ltac apply_prefix_length :=
 
 Definition seg {A} i j (xs : list A) : list A :=
   take (j - i) (drop i xs).
+
+(* The following short-hands help recognize an initial segment
+   or a final segment of a list. *)
+
+Global Notation initial_seg i xs :=
+  (seg 0 i xs).
+
+Global Notation final_seg j xs :=
+  (seg j (length xs) xs).
+
+(* [valid_seg i j xs] means that [i] and [j] delimit a valid segment
+   of the list [xs]. *)
+
+Global Notation valid_seg i j xs :=
+  (0 ≤ i ≤ j ≤ length xs).
+
+(* [valid i xs] means that [i] is a valid index into the list [xs].
+   In other words, this index can be used for reading or updating
+   one element; it is the start index of a valid segment of length 1. *)
+
+Global Notation valid i xs :=
+  (i < length xs).
+
+Lemma valid_valid_seg {A} i (xs : list A) :
+  valid i xs ↔ valid_seg i (i+1) xs.
+Proof. lia. Qed.
+
+(* [clip k i j] forces the index [k] into the semi-open interval [i, j). *)
+
+Global Notation clip k i j :=
+  ((k `max` i) `min` j).
+
+(* Interaction of [drop] and [clip]. *)
+
+Lemma drop_clip {A} n (xs : list A) :
+  drop (clip n 0 (length xs)) xs = drop n xs.
+Proof.
+  assert (n ≤ length xs ∨ length xs ≤ n) as [|] by lia.
+  + f_equal. lia.
+  + list. eauto.
+Qed.
+
+(* [take] and [drop] are special cases of [seg]. *)
+
+Lemma take_seg {A} n (xs : list A) : take n xs = initial_seg n xs.
+Proof. unfold seg. list. eauto. Qed.
+
+Lemma drop_seg {A} n (xs : list A) : drop n xs = final_seg n xs.
+Proof. unfold seg. listx j. eauto. Qed.
+
+(* An empty segment and a complete segment can be simplified away. *)
+
+Lemma seg_none {A} i j (xs : list A) : j ≤ i → seg i j xs = [].
+Proof. intros. unfold seg. list. eauto. Qed.
+
+Lemma seg_all {A} i j (xs : list A) : i ≤ 0 → length xs ≤ j → seg i j xs = xs.
+Proof. intros. unfold seg. list. eauto. Qed.
+
+(* In the reverse direction, a list can be viewed as a list segment. *)
+
+Lemma seg_intro {A} (xs : list A) : xs = final_seg 0 xs.
+Proof. rewrite seg_all by lia. eauto. Qed.
+
+(* Any segment is equal to a valid segment. *)
+
+Lemma seg_valid {A} i j (xs : list A) :
+  seg i j xs =
+    let i := clip i 0 (length xs) in
+    let j := clip j i (length xs) in
+    seg i j xs.
+Proof.
+  unfold seg. listx k. rewrite drop_clip. list. eauto.
+Qed.
+
+Goal forall {A} i j (xs : list A),
+  let i := clip i 0 (length xs) in
+  let j := clip j i (length xs) in
+  valid_seg i j xs.
+Proof. lia. Qed.
+
+(* Interaction of [length] and [seg]. *)
+
+Lemma length_seg {A} i j (xs : list A) :
+  length (seg i j xs) = (j `min` length xs) - i.
+Proof. intros. unfold seg. list. lia. Qed.
+
+Lemma length_seg' {A} i j (xs : list A) :
+  valid_seg i j xs →
+  length (seg i j xs) = j - i.
+Proof. intros. rewrite length_seg. lia. Qed.
+
+(* Interaction of [lookup] and [seg]. *)
+
+Lemma lookup_seg {A} i j (xs : list A) k :
+  valid_seg i j xs →
+  0 ≤ k < j - i →
+  seg i j xs !! k = xs !! (i + k).
+Proof. intros. unfold seg. list. eauto. Qed.
+
+(* Interaction of [lookup_total] and [seg]. *)
+
+Lemma lookup_total_seg `{Inhabited A} i j (xs : list A) k :
+  valid_seg i j xs →
+  0 ≤ k < j - i →
+  seg i j xs !!! k = xs !!! (i + k).
+Proof.
+  intros. rewrite !list_lookup_total_alt, lookup_seg by eauto. eauto.
+Qed.
+
+Global Hint Rewrite
+  @length_seg'
+  @lookup_seg
+  @lookup_total_seg
+  @seg_none
+  @seg_all
+  using (list; lia)
+: list.
+
+(* A segment can be split anywhere. *)
+
+Lemma split_seg {A} j (xs : list A) i k :
+  valid_seg i j xs →
+  valid_seg j k xs →
+  seg i k xs = seg i j xs ++ seg j k xs.
+Proof.
+  intros. listx o.
+  rewrite lookup_app'. list. case_decide; list; eauto.
+  f_equal. lia.
+Qed.
+
+(* TODO do we want this? *)
+Global Hint Rewrite
+  <- @split_seg
+  using (list; lia)
+: list.
 
 (* -------------------------------------------------------------------------- *)
 
