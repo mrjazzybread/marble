@@ -564,16 +564,16 @@ Global Ltac split_seg j xs :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* We define [sub i n xs] as the segment of the list [xs] whose start
-   index is [i] and whose length is [n]. *)
+(* We define [sublist i n xs] as the segment of the list [xs]
+   whose start index is [i] and whose length is [n]. *)
 
-Global Notation sub i n xs :=
-  (seg i (i + n) xs).
+Definition sublist {A} i n (xs : list A) :=
+  seg i (i + n) xs.
 
-Lemma sub_take_drop {A} i n (xs : list A) :
-  sub i n xs = take n (drop i xs).
+Lemma sublist_take_drop {A} i n (xs : list A) :
+  sublist i n xs = take n (drop i xs).
 Proof.
-  intros. unfold seg. f_equal. lia.
+  intros. unfold sublist, seg. list. eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
