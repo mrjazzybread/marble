@@ -113,3 +113,32 @@ Global Ltac apply_prefix_length :=
     intro h'; apply prefix_length in h';
     list in h'
   end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* List segments. *)
+
+(* We define [seg i j] as the list segment whose start and end indices
+   are [i] and [j]. As usual, this is a semi-open interval. *)
+
+Definition seg {A} i j (xs : list A) : list A :=
+  take (j - i) (drop i xs).
+
+(* -------------------------------------------------------------------------- *)
+
+(* We define [sub i n xs] as the segment of the list [xs] whose start
+   index is [i] and whose length is [n]. It can be considered as a
+   short-hand for [seg i (i + n) xs] and for [take n (drop i xs)]. *)
+
+Definition sub {A} i n (xs : list A) : list A :=
+  seg i (i + n) xs.
+
+Lemma sub_seg {A} i n (xs : list A) :
+  sub i n xs = seg i (i + n) xs.
+Proof. reflexivity. Qed.
+
+Lemma sub_take_drop {A} i n (xs : list A) :
+  sub i n xs = take n (drop i xs).
+Proof.
+  intros. unfold sub, seg. f_equal. lia.
+Qed.
