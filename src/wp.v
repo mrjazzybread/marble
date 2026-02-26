@@ -69,3 +69,6 @@ Qed.
 
 (* TODO [bind] should be inlined away at extraction *)
 Global Opaque wp.
+
+Global Ltac wp_ret :=
+  eapply wp_ret.
