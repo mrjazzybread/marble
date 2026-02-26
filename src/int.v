@@ -954,13 +954,13 @@ Lemma wp_up f (inv : nat → S → Prop) (Q : S → Prop) :
   representable b →
   (* If the invariant holds of the start index [a] and start state [s], *)
   inv a s →
-  (* If [s ← f _a s] transforms the invariant [inv a s] to [inv (a+1) s], *)
-  (∀ _a a s ,
-    isInt _a a →
-    representable a →
-    a < b →
-    inv a s →
-    wp (f _a s) (λ s, inv (a + 1) s)
+  (* If [s ← f _i s] transforms the invariant [inv i s] to [inv (i+1) s], *)
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    a ≤ i < b →
+    inv i s →
+    wp (f _i s) (λ s, inv (i + 1) s)
   ) →
   (* Then, once the loop ends, the invariant holds of the index [a]
      or [b], whichever is greater, and of the final state [s]. *)
