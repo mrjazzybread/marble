@@ -124,6 +124,8 @@ Proof.
   intros. destructIsArray. eauto.
 Qed.
 
+Global Hint Resolve isArray_bounded_length : lia.
+
 Lemma isArray_representable `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
   representable (List.length xs).
@@ -131,7 +133,7 @@ Proof.
   intros. destructIsArray. eauto with representable.
 Qed.
 
-Hint Resolve isArray_representable : representable.
+Global Hint Resolve isArray_representable : representable.
 
 Local Lemma isArray_pi3 `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
@@ -370,7 +372,22 @@ Global Ltac wp_set a :=
   | eapply wp_conseq; [ wp_set_nude | wp_set_intros a ]
   ].
 
-(* TODO still missing [wp_make] *)
+Global Ltac wp_make_nude :=
+  simple eapply wp_make; eauto with int lia.
+
+Global Ltac wp_make_intros b :=
+  simpl; intros b ?.
+
+Global Ltac wp_make_bind b :=
+  eapply wp_bind; [ wp_make_nude | wp_make_intros b ].
+
+Global Ltac wp_make b :=
+  first [
+    wp_make_bind b
+  | wp_make_nude
+  | eapply wp_conseq; [ wp_make_nude | wp_make_intros b ]
+  ].
+
 (* TODO can we reduce the boilerplate that is needed for each tactic? *)
 
 (* -------------------------------------------------------------------------- *)
@@ -759,8 +776,6 @@ Qed.
 
 (* Copying data from an array to another array: [blit]. *)
 
-(* TODO *)
-
 Section Blit.
 Context `{Inhabited A}.
 Implicit Types a b : array A.
@@ -807,3 +822,63 @@ Proof.
 Qed.
 
 End Blit.
+
+(* TODO more boilerplate! *)
+
+Global Ltac wp_blit_nude :=
+  eapply wp_blit; eauto with int lia; (list; lia).
+
+Global Ltac wp_blit_intros b :=
+  wp_set_intros b. (* shortcut *)
+
+Global Ltac wp_blit_bind b :=
+  match goal with
+  |- wp (@bind _ _ (blit ?a ?i ?b0 ?j ?n) _) ?Q =>
+    eapply wp_bind; [
+      wp_blit_nude
+    | wp_blit_intros b;
+      (* Forget about the previous array, and rename the new array
+         using the name of the previous array. Thus we keep only one
+         copy at hand in the course of a proof. *)
+      clear dependent b0; rename b into b0
+    ]
+  end.
+
+Global Ltac wp_blit b :=
+  first [
+    wp_blit_bind b
+  | wp_blit_nude
+  | eapply wp_conseq; [ wp_blit_nude | wp_blit_intros b ]
+  ].
+
+(* -------------------------------------------------------------------------- *)
+
+(* Creating a fresh copy of an array: [copy]. *)
+
+Section Copy.
+Context `{Inhabited A}.
+Implicit Types a b : array A.
+Implicit Types xs ys : list A.
+
+(* The code. *)
+
+Definition copy a :=
+  do _n ← length a ;
+  do b ← make _n inhabitant ;
+  do b ← blit a 0 b 0 _n ;
+  b.
+
+(* The public specification of [copy]. *)
+
+Lemma wp_copy a xs :
+  isArray a xs →
+  wp (copy a) (λ b, isArray b xs).
+Proof.
+  intros. unfold copy.
+  wp_length n.
+  wp_make b.
+  wp_blit b'.
+  wp_ret. isArray.
+Qed.
+
+End Copy.
