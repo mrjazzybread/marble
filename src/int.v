@@ -703,7 +703,6 @@ Qed.
 
 Lemma igt_wf : well_founded igt.
 Proof.
-  Check wf_incl.
   eapply wf_incl;
     [| eapply Z.lt_wf_projected with (z := 0) (f := λ _i, wB - φ _i) ].
   intros _i _j. rewrite igt_alt_def. lia.
