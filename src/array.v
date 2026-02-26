@@ -124,7 +124,18 @@ Proof.
   intros. destructIsArray. eauto.
 Qed.
 
-Global Hint Resolve isArray_bounded_length : lia.
+Lemma isArray_bounded_length' `{Inhabited A} (a : array A) (xs : list A) :
+  ∀ n,
+  isArray a xs →
+  n ≤ List.length xs →
+  n ≤ max_array_length.
+Proof.
+  intros. destructIsArray. lia.
+Qed.
+
+Global Hint Resolve
+  isArray_bounded_length'
+: lia.
 
 Lemma isArray_representable `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
@@ -269,7 +280,7 @@ Lemma wp_set _i i a xs x :
 Proof.
   intros. eapply wp_ret. introIsArray; list.
   { rewrite length_set. eauto using isArray_length_spec. }
-  { eauto using isArray_bounded_length. }
+  { eauto with lia. }
   intros j ?. liftIsIntAndClear.
   destruct (decide (i = j)).
   + subst j.
@@ -308,7 +319,7 @@ End PrimSpec.
    directly; if this does not work then we use [wp_conseq] first. *)
 
 Global Ltac wp_length_nude :=
-  eapply wp_length; eauto.
+  simple eapply wp_length; eauto.
 
 Global Ltac wp_length_intros n :=
   let Hn := fresh in
@@ -327,7 +338,7 @@ Global Ltac wp_length n :=
   ].
 
 Global Ltac wp_get_nude :=
-  eapply wp_get; eauto with int lia.
+  simple eapply wp_get; eauto with int lia.
 
 Global Ltac wp_get_intros x :=
   let Hx := fresh in
@@ -345,7 +356,7 @@ Global Ltac wp_get x :=
   ].
 
 Global Ltac wp_set_nude :=
-  eapply wp_set; eauto with int lia.
+  simple eapply wp_set; eauto with int lia.
 
 Global Ltac wp_set_intros a :=
   let Ha := fresh in
@@ -877,8 +888,42 @@ Proof.
   intros. unfold copy.
   wp_length n.
   wp_make b.
-  wp_blit b'.
+  wp_blit b'. (* TODO avoid naming [b'] for no reason *)
   wp_ret. isArray.
 Qed.
 
 End Copy.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Extracting a segment of an array: [sub]. *)
+
+Section Sub.
+Context `{Inhabited A}.
+Implicit Types a b : array A.
+Implicit Types xs ys : list A.
+
+(* The code. *)
+
+Definition sub a _i _n :=
+  do b ← make _n inhabitant ;
+  do b ← blit a _i b 0 _n ;
+  b.
+
+(* The public specification of [sub]. *)
+
+Lemma wp_sub a _i i _n n xs :
+  isArray a xs →
+  isInt _i i →
+  isInt _n n →
+  valid_seg i (i + n) xs →
+  wp (sub a _i _n) (λ b, isArray b (list_extra.sub i n xs)).
+  (* TODO name clash on [sub] *)
+Proof.
+  intros. unfold sub.
+  wp_make b.
+  wp_blit b'.
+  wp_ret. isArray.
+Qed.
+
+End Sub.
