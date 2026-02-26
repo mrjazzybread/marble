@@ -313,7 +313,10 @@ Global Ltac wp_length_nude :=
   eapply wp_length; eauto.
 
 Global Ltac wp_length_intros n :=
-  simpl; intros n [? ?].
+  let Hn := fresh in
+  simpl; intros n Hn;
+  list in Hn;
+  destruct Hn as [? ?].
 
 Global Ltac wp_length_bind n :=
   eapply wp_bind; [ wp_length_nude | wp_length_intros n ].
@@ -326,10 +329,12 @@ Global Ltac wp_length n :=
   ].
 
 Global Ltac wp_get_nude :=
-  eapply wp_get; eauto with lia.
+  eapply wp_get; eauto with int lia.
 
 Global Ltac wp_get_intros x :=
-  simpl; intros x ?.
+  let Hx := fresh in
+  simpl; intros x Hx;
+  list in Hx.
 
 Global Ltac wp_get_bind x :=
   eapply wp_bind; [ wp_get_nude | wp_get_intros x ].
@@ -342,14 +347,25 @@ Global Ltac wp_get x :=
   ].
 
 Global Ltac wp_set_nude :=
-  eapply wp_set; eauto with lia.
+  eapply wp_set; eauto with int lia.
 
 Global Ltac wp_set_intros a :=
   let Ha := fresh in
-  simpl; intros a Ha; list in Ha.
+  simpl; intros a Ha;
+  list in Ha.
 
 Global Ltac wp_set_bind a :=
-  eapply wp_bind; [ wp_set_nude | wp_set_intros a ].
+  match goal with
+  |- wp (@bind _ _ (set ?a0 ?i ?x) _) ?Q =>
+    eapply wp_bind; [
+      wp_set_nude
+    | wp_set_intros a;
+      (* Forget about the previous array, and rename the new array
+         using the name of the previous array. Thus we keep only one
+         copy at hand in the course of a proof. *)
+      clear dependent a0; rename a into a0
+    ]
+  end.
 
 Global Ltac wp_set a :=
   first [
@@ -360,6 +376,22 @@ Global Ltac wp_set a :=
 
 (* TODO still missing [wp_make] *)
 (* TODO can we reduce the boilerplate that is needed for each tactic? *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* The tactic [isArray] is applicable when the goal is [isArray a ys]
+   and there is a hypothesis [isArray a xs]. The goal is then reduced
+   to the equation [xs = ys], and this equation is simplified. If the
+   equation is trivial then the goal is solved. *)
+
+Global Ltac isArray :=
+  match goal with
+  | h: isArray ?a ?xs |- isArray ?a ?ys =>
+    cut (xs = ys); [
+      let Heq := fresh in intro Heq; try rewrite <- Heq; exact h
+    | clear h; simplify_list_equality_goal; eauto
+    ]
+  end.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -731,6 +763,8 @@ Qed.
 
 (* Copying data from an array to another array: [blit]. *)
 
+(* TODO *)
+
 Section Blit.
 Context `{Inhabited A}.
 Implicit Types a b : array A.
@@ -738,35 +772,42 @@ Implicit Types xs ys : list A.
 
 (* The code. *)
 
+(* Please note: to obtain the desired performance, the arrays [a] and
+   [b] must be two *independent* arrays; that is, they should not be
+   two persistent arrays that are backed by the same underlying
+   physical array. *)
+
 Definition blit a _i b _j _n :=
-  up _i (_i + _n)%uint63 b @@ λ _i b,
-  do x ← get a _i ;
-  do b ← set b _i x ;
+  up _i (_i + _n)%uint63 b @@ λ _k b,
+  do x ← get a _k ;
+  do b ← set b (_j + (_k - _i))%uint63 x ;
   b.
 
-(* TODO *)
+(* The public specification of [blit]. *)
 
 Lemma wp_blit a xs _i i b ys _j j _n n :
   isArray a xs →
   isInt _i i →
-  representable i →
   isArray b ys →
   isInt _j j →
   isInt _n n →
   valid_seg i (i + n) xs →
+  valid_seg j (j + n) ys →
   wp (blit a _i b _j _n) (λ b, isArray b
-    (initial_seg i ys ++ sub i n xs ++ final_seg (i + n) xs)
+    (initial_seg j ys ++ sub i n xs ++ final_seg (j + n) ys)
   ).
 Proof.
-  unfold sub.
   intros. unfold blit.
-  set (inv := λ k b,
+  eapply wp_up with (inv := λ k b,
     isArray b
-      (initial_seg i ys ++ seg i k xs ++ final_seg k xs)
-  ).
-  eapply wp_up with (inv := inv); eauto with int representable lia;
-  unfold inv.
-  (* Initialization. *)
-Abort.
+      (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
+  );
+  eauto with int representable lia; list; eauto 1.
+  (* Preservation. *)
+  { clear dependent b. intros _k k b. intros.
+    wp_get x. subst x.
+    wp_set b'.
+    wp_ret. isArray. }
+Qed.
 
 End Blit.
