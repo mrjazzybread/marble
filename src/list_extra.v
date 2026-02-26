@@ -93,18 +93,53 @@ Proof.
   rewrite app_nil_l. eauto.
 Qed.
 
+(* The tactics [list] and [list in h] perform simplification
+   (via rewriting) in the goal or in a hypothesis. *)
+
+Global Ltac list :=
+  autorewrite with list.
+
+Global Tactic Notation "list" "in" hyp(h) :=
+  autorewrite with list in h.
+
+(* A number of arithmetic simplification lemmas can be very useful
+   while simplifying expressions that involve lists. *)
+
 Lemma sub_succ (n h : nat) :
   n - (h + 1) = n - h - 1.
 Proof. lia. Qed.
+
+Global Hint Rewrite
+  <- Nat.add_assoc
+: list.
+
+Global Hint Rewrite
+  Nat.add_0_l
+  Nat.add_0_r
+  Nat.sub_0_l
+  Nat.sub_0_r
+  Nat.sub_diag
+  Nat.add_simpl_l Nat.add_simpl_r
+  sub_succ
+: list.
 
 Lemma sub_diag' (x y : nat) :
   x ≤ y → x - y = 0.
 Proof. lia. Qed.
 
+Lemma simpl_sub_add i k delta :
+  i ≤ k →
+  (k - i) + delta = (k + delta) - i.
+Proof. lia. Qed.
+
 Global Hint Rewrite
-  Nat.sub_0_l Nat.sub_0_r
-  Nat.sub_diag sub_succ
-  Nat.add_simpl_l Nat.add_simpl_r
+  Nat.max_l Nat.max_r
+  sub_diag'
+  simpl_sub_add
+  using (list; lia)
+: list.
+
+Global Hint Rewrite
   @app_nil_l @app_nil_r
   @replicate_0
   @length_nil
@@ -121,24 +156,7 @@ Global Hint Rewrite
   <- @app_assoc
 : list.
 
-Global Ltac list :=
-  autorewrite with list.
-
-Global Tactic Notation "list" "in" hyp(h) :=
-  autorewrite with list in h.
-
-Global Hint Rewrite
-  Nat.add_0_l
-  Nat.add_0_r
-  Nat.sub_0_r
-: list.
-
-Global Hint Rewrite
-  sub_diag'
-  using (list; lia)
-: list.
-
-Global Hint Extern 1 (_ < List.length _) => (list; lia) : lia.
+Global Hint Extern 1 (_ < length _) => (list; lia) : lia.
 
 Global Hint Rewrite
   @lookup_total_cons_eq_0
@@ -410,6 +428,8 @@ Qed.
    some opportunities. Manual rewriting using [aac_rewrite <- split_seg]
    may be necessary. *)
 
+(* As a poor man's approach, see [simplify_list_equality_goal] further on. *)
+
 (* TODO do we want this?  *)
 
 Global Hint Rewrite
@@ -520,7 +540,7 @@ Lemma seg_seg {A} i j k l (xs : list A) :
   seg i j (seg k l xs) =
   seg (k + i) (k + j) xs.
 Proof.
-  intros. listx o. list. f_equal. lia.
+  intros. listx o. list. eauto.
 Qed.
 
 Global Hint Rewrite
@@ -555,3 +575,28 @@ Lemma sub_take_drop {A} i n (xs : list A) :
 Proof.
   intros. unfold seg. f_equal. lia.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [simplify_list_equality_goal] simplifies a goal of the form [xs = ys].
+   To compensate for the lack of rewriting modulo associativity, we first
+   identify and eliminate identical terms on the left-hand side and on the
+   right-hand side; then we attempt to fuse adjacent list segments. *)
+
+(* This tactic cannot fail, and does not solve the goal. *)
+
+Lemma simplify_app_l {A} (xs ys zs : list A) :
+  ys = zs → xs ++ ys = xs ++ zs.
+Proof. congruence. Qed.
+
+Lemma simplify_app_r {A} (xs ys zs : list A) :
+  ys = zs → ys ++ xs = zs ++ xs.
+Proof. congruence. Qed.
+
+Global Ltac simplify_list_equality_goal :=
+  list;
+  repeat rewrite app_assoc;
+  repeat eapply simplify_app_r;
+  repeat rewrite <- app_assoc;
+  repeat eapply simplify_app_l;
+  repeat rewrite <- @split_seg by lia.
