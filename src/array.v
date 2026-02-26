@@ -22,14 +22,6 @@ Local Hint Rewrite
 
 (* -------------------------------------------------------------------------- *)
 
-(* An index [i : nat] is valid with respect to a list [xs] if and only if
-   it is less than the length of the list. *)
-
-Local Notation valid i xs :=
-  (i < List.length xs).
-
-(* -------------------------------------------------------------------------- *)
-
 (* The maximum length of an array. *)
 
 (* We have [max_length : int]; we define [max_array_length : nat]. *)
@@ -751,5 +743,30 @@ Definition blit a _i b _j _n :=
   do x ← get a _i ;
   do b ← set b _i x ;
   b.
+
+(* TODO *)
+
+Lemma wp_blit a xs _i i b ys _j j _n n :
+  isArray a xs →
+  isInt _i i →
+  representable i →
+  isArray b ys →
+  isInt _j j →
+  isInt _n n →
+  valid_seg i (i + n) xs →
+  wp (blit a _i b _j _n) (λ b, isArray b
+    (initial_seg i ys ++ sub i n xs ++ final_seg (i + n) xs)
+  ).
+Proof.
+  unfold sub.
+  intros. unfold blit.
+  set (inv := λ k b,
+    isArray b
+      (initial_seg i ys ++ seg i k xs ++ final_seg k xs)
+  ).
+  eapply wp_up with (inv := inv); eauto with int representable lia;
+  unfold inv.
+  (* Initialization. *)
+Abort.
 
 End Blit.
