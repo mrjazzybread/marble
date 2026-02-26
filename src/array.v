@@ -900,3 +900,41 @@ Proof.
 Qed.
 
 End Sub.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Concatenating two arrays: [append]. *)
+
+Section Append.
+Context `{Inhabited A}.
+Implicit Types a b : array A.
+Implicit Types xs ys : list A.
+
+(* The code. *)
+
+Definition append a b :=
+  do _m ← length a ;
+  do _n ← length b ;
+  do c ← make (_m + _n)%uint63 inhabitant ;
+  do c ← blit a 0 c 0 _m ;
+  do c ← blit b 0 c _m _n ;
+  c.
+
+(* The public specification of [append]. *)
+
+Lemma wp_append a xs b ys :
+  isArray a xs →
+  isArray b ys →
+  List.length xs + List.length ys ≤ max_array_length →
+  wp (append a b) (λ c, isArray c (xs ++ ys)).
+Proof.
+  intros. unfold append.
+  wp_length _m.
+  wp_length _n.
+  wp_make c.
+  wp_blit.
+  wp_blit.
+  wp_ret. isArray.
+Qed.
+
+End Append.
