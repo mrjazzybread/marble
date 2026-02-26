@@ -68,17 +68,21 @@ Lemma replicate_0 {A} (x : A) :
   replicate 0 x = [].
 Proof. eauto. Qed.
 
-Lemma expand_replicate {A} n (x : A) :
-  0 < n →
-  replicate n x = x :: replicate (n-1) x.
+Lemma replicate_app_singleton_l {A} n (x : A) :
+  {[x]} ++ replicate n x = replicate (n + 1) x.
 Proof.
-  intros. destruct n as [| n]; [ lia |].
-  rewrite replicate_S. do 2 f_equal. lia.
+  change {[x]} with [x]. simpl. rewrite <- replicate_S. f_equal. lia.
+Qed.
+
+Lemma replicate_app_singleton_r {A} n (x : A) :
+  replicate n x ++ {[x]} = replicate (n + 1) x.
+Proof.
+  change {[x]} with [x]. rewrite <- replicate_S_end. f_equal. lia.
 Qed.
 
 Lemma insert_replicate_0 {A} n (x y : A) :
   0 < n →
-  <[0:=y]>(replicate n x) = [y] ++ replicate (n-1) x.
+  <[0:=y]>(replicate n x) = {[y]} ++ replicate (n-1) x.
 Proof.
   intros. rewrite insert_replicate_lt by eauto.
   rewrite app_nil_l. eauto.
@@ -133,6 +137,8 @@ Global Hint Rewrite
 Global Hint Rewrite
   @app_nil_l @app_nil_r
   @replicate_0
+  @replicate_app_singleton_l
+  @replicate_app_singleton_r
   @length_nil
   @length_cons
   @length_singleton
@@ -590,4 +596,4 @@ Global Ltac simplify_list_equality_goal :=
   repeat eapply simplify_app_r;
   repeat rewrite <- app_assoc;
   repeat eapply simplify_app_l;
-  repeat rewrite <- @split_seg by lia.
+  list.
