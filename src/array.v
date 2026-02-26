@@ -16,10 +16,6 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
-Local Hint Rewrite
-  Nat.sub_diag
-: list.
-
 (* -------------------------------------------------------------------------- *)
 
 (* The maximum length of an array. *)
