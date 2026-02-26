@@ -23,6 +23,10 @@ Qed.
 Global Instance singleton_list {A} : Singleton A (list A) :=
   λ x, [x].
 
+Lemma cons_is_append {A} x (xs : list A) :
+  x :: xs = {[x]} ++ xs.
+Proof. eauto. Qed.
+
 Lemma length_singleton {A} (x : A) : length {[x]} = 1.
 Proof. reflexivity. Qed.
 
@@ -53,19 +57,6 @@ Qed.
 Lemma lookup_total_cons_eq_0 `{!Inhabited A} (xs : list A) x i :
   i = 0 → (x :: xs) !!! i = x.
 Proof. intros ->. reflexivity. Qed.
-
-(* A variant of the lemma [drop_S]. *)
-
-Lemma drop_S' `{Inhabited A} (xs : list A) (x : A) (i : nat) :
-  i < List.length xs →
-  x = xs !!! i →
-  x :: drop (i + 1) xs = drop i xs.
-Proof.
-  intros. subst.
-  replace (i + 1) with (S i) by lia.
-  rewrite <- drop_S by eauto using list_lookup_lookup_total_lt with lia.
-  eauto.
-Qed.
 
 Lemma replicate_is_repeat {A} n (x : list A) :
   replicate n x = List.repeat x n.
