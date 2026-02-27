@@ -915,30 +915,37 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 (* Our intervals are semi-open on the right end: [a] is included,
    [b] is excluded. *)
 
-Section Up.
+Section UpAux.
 Context {S : Type}.
-Implicit Types _a _b : int.
+Implicit Types _a : int.
 Implicit Types s : S.
-Implicit Types f : int → S → S.
 
-(* [up _a _b s f] applies the loop body [f] to every machine integer from
+(* We hoist the loop-invariant parameters out of the loop, because
+   otherwise Equations produces ugly code where these parameters are
+   carried around in a tuple, itself encoded using nested pairs. *)
+
+Variable _b : int.
+Variable f : int → S → S.
+
+(* [up_aux _a s] applies the loop body [f] to every machine integer from
    [_a], included, up to [_b], excluded. A state of type [S] is carried,
    whose initial value is [s]. *)
 
-(* We use Equations to more easily define [up] by well-founded recursion
-   over the loop counter [_a]. The somewhat strange [with] syntax is a way
-   of expressing the test [_a <? _b]. The use of [inspect] and [inspected]
-   is an idiosyncratic way of making the outcome of the test visible at
-   the logical level in the branches. In the second branch, the fact that
-   [_a <? _b] is false is needed in order to prove that [_a+1] is less than
-   [_a], a fact which itself is required by the termination argument. *)
+(* We use Equations to more easily define [up_aux] by well-founded
+   recursion over the loop counter [_a]. The somewhat strange [with]
+   syntax is a way of expressing the test [_a <? _b]. The use of [inspect]
+   and [inspected] is an idiosyncratic way of making the outcome of the
+   test visible at the logical level in the branches. In the second
+   branch, the fact that [_a <? _b] is false is needed in order to prove
+   that [_a+1] is less than [_a], a fact which itself is required by the
+   termination argument. *)
 
-Equations up _a _b s f : S
+Equations up_aux _a s : S
 by wf _a igt :=
-up _a _b s f with inspect (_a <? _b)%uint63 => {
+up_aux _a s with inspect (_a <? _b)%uint63 => {
 | inspected true :=
     do s ← f _a s ;
-    do s ← up (_a+1)%uint63 _b s f ;
+    do s ← up_aux (_a+1)%uint63 s ;
     s ;
 | inspected false :=
     s
@@ -946,6 +953,68 @@ up _a _b s f with inspect (_a <? _b)%uint63 => {
 Next Obligation.
   eauto using safe_increment'.
 Qed.
+
+End UpAux.
+
+Section Up.
+Context {S : Type}.
+Implicit Types _a _b : int.
+Implicit Types s : S.
+Implicit Types f : int → S → S.
+
+(* A specification of [up_aux]. *)
+
+(* The user is allowed to choose a loop invariant [inv a s], where
+   [a] is the current loop index and [s] is the current state. The
+   assertion [inv a s] means that the loop has run up to index [a]
+   excluded, so the next iteration will concern the index [a]. *)
+
+Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
+  ∀ _a a _b b s ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  (* If the invariant holds of the start index [a] and start state [s], *)
+  inv a s →
+  (* If [s ← f _i s] transforms the invariant [inv i s] to [inv (i+1) s], *)
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    a ≤ i < b →
+    inv i s →
+    wp (f _i s) (λ s, inv (i + 1) s)
+  ) →
+  (* Then, once the loop ends, the invariant holds of the index [a]
+     or [b], whichever is greater, and of the final state [s]. *)
+  (∀ s, inv (a `max` b) s → Q s) →
+  wp (up_aux _b f _a s) Q.
+Proof.
+  do 9 intro. intros Hinit Hstep Hfinish.
+  funelim (up_aux _b f _a s); cleanup; clear Heqcall.
+  (* Case [a < b]. *)
+  { assert (a < b) by eauto with adhoc.
+    assert (fact: a `max` b = (a + 1) `max` b) by lia.
+    rewrite fact in Hfinish.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
+    eauto with int representable lia. }
+  (* Case [¬ a < b]. *)
+  { assert (¬ (a < b)) by eauto with adhoc.
+    assert (fact: a `max` b = a) by lia.
+    rewrite fact in Hfinish.
+    eapply wp_ret. eauto. }
+Qed.
+
+(* A definition of [up], with reordered parameters. *)
+
+(* [up _a _b s f] applies the loop body [f] to every machine integer from
+   [_a], included, up to [_b], excluded. A state of type [S] is carried,
+   whose initial value is [s]. *)
+
+(* [up _a _b s @@ λ _i s, ...] is a convenient way of writing a loop. *)
+
+Definition up _a _b s f :=
+  up_aux _b f _a s.
 
 (* A specification of [up]. *)
 
@@ -975,24 +1044,10 @@ Lemma wp_up f (inv : nat → S → Prop) (Q : S → Prop) :
   (∀ s, inv (a `max` b) s → Q s) →
   wp (up _a _b s f) Q.
 Proof.
-  do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (up _a _b s f); cleanup; clear Heqcall.
-  (* Case [a < b]. *)
-  { assert (a < b) by eauto with adhoc.
-    assert (fact: a `max` b = (a + 1) `max` b) by lia.
-    rewrite fact in Hfinish.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
-    eauto with int representable lia. }
-  (* Case [¬ a < b]. *)
-  { assert (¬ (a < b)) by eauto with adhoc.
-    assert (fact: a `max` b = a) by lia.
-    rewrite fact in Hfinish.
-    eapply wp_ret. eauto. }
+  eapply wp_up_aux.
 Qed.
 
 End Up.
-
-(* [up _a _b s @@ λ _i s, ...] is a convenient way of writing a loop. *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1003,13 +1058,19 @@ End Up.
 Global Notation break    := Some.
 Global Notation continue := None.
 
-Section InterruptibleUp.
+Section InterruptibleUpAux.
 Context {S A : Type}.
-Implicit Types _a _b : int.
+Implicit Types _a : int.
 Implicit Types s : S.
-Implicit Types f : int → S → S * option A.
 
-(* [interruptible_up _a _b s f] applies the loop body [f] to every machine
+(* We hoist the loop-invariant parameters out of the loop, because
+   otherwise Equations produces ugly code where these parameters are
+   carried around in a tuple, itself encoded using nested pairs. *)
+
+Variable _b : int.
+Variable f : int → S → S * option A.
+
+(* [interruptible_up_aux _a s] applies the loop body [f] to every machine
    integer from [_a], included, up to [_b], excluded. A state of type [S]
    is carried, whose initial value is [s]. If [f] returns [break x] then
    the loop stops and returns the pair [(s, break x)] where [s] is the
@@ -1023,15 +1084,15 @@ Implicit Types f : int → S → S * option A.
    user provide a function that inspects the current state and
    determines whether the loop should continue or stop. *)
 
-Equations interruptible_up _a _b s f : S * option A
+Equations interruptible_up_aux _a s : S * option A
 by wf _a igt :=
-interruptible_up _a _b s f with inspect (_a <? _b)%uint63 => {
+interruptible_up_aux _a s with inspect (_a <? _b)%uint63 => {
 | inspected true :=
     do so ← f _a s ;
     let '(s, o) := so in
     match o with
     | continue =>
-        interruptible_up (_a+1)%uint63 _b s f
+        interruptible_up_aux (_a+1)%uint63 s
     | break _ =>
         so
     end
@@ -1041,6 +1102,14 @@ interruptible_up _a _b s f with inspect (_a <? _b)%uint63 => {
 Next Obligation.
   eauto using safe_increment'.
 Qed.
+
+End InterruptibleUpAux.
+
+Section InterruptibleUp.
+Context {S A : Type}.
+Implicit Types _a _b : int.
+Implicit Types s : S.
+Implicit Types f : int → S → S * option A.
 
 (* The assertion [finished a b i s o] means that the loop has ended.
 
@@ -1147,6 +1216,54 @@ Qed.
 
 Variable inv : nat → S → option A → Prop.
 
+(* A specification of [interruptible_up_aux]. *)
+
+Lemma wp_interruptible_up_aux f (Q : S * option A → Prop) :
+  ∀ _a a _b b s ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  (* If the invariant initially holds, *)
+  inv a s continue →
+  (* If [f] preserves the invariant, *)
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    a ≤ i < b →
+    inv i s continue →
+    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
+  ) →
+  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
+     the final index, final state, and final outcome. They are related by the
+     assertion [finished a b i s o]. *)
+  (∀ i s o,
+     inv i s o →
+     finished a b i s o →
+     Q (s, o)
+  ) →
+  wp (interruptible_up_aux _b f _a s) Q.
+Proof.
+  unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
+  funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall.
+  (* TODO [funelim] creates an induction hypothesis that contains
+          spurious parameters of type [S * option A] and [option A]. *)
+  assert (dummy: option A). { exact continue. }
+  (* Case [a < b]. *)
+  { assert (a < b) by eauto with adhoc.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
+    + wp_ret. eauto with lia.
+    + eapply H; intuition eauto with int representable lia. }
+  (* Case [¬ a < b]. *)
+  { assert (¬ (a < b)) by eauto with adhoc.
+    eapply wp_ret. eauto with lia. }
+Qed.
+
+(* A definition of [interruptible_up], with reordered parameters. *)
+
+Definition interruptible_up _a _b s f :=
+  interruptible_up_aux _b f _a s.
+
 (* A specification of [interruptible_up]. *)
 
 Lemma wp_interruptible_up f (Q : S * option A → Prop) :
@@ -1175,19 +1292,7 @@ Lemma wp_interruptible_up f (Q : S * option A → Prop) :
   ) →
   wp (interruptible_up _a _b s f) Q.
 Proof.
-  unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (interruptible_up _a _b s f); cleanup; clear Heqcall.
-  (* TODO [funelim] creates an induction hypothesis that contains
-          spurious parameters of type [S * option A] and [option A]. *)
-  assert (dummy: option A). { exact continue. }
-  (* Case [a < b]. *)
-  { assert (a < b) by eauto with adhoc.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
-    + wp_ret. eauto with lia.
-    + eapply H; intuition eauto with int representable lia. }
-  (* Case [¬ a < b]. *)
-  { assert (¬ (a < b)) by eauto with adhoc.
-    eapply wp_ret. eauto with lia. }
+  eapply wp_interruptible_up_aux.
 Qed.
 
 (* A rigid variant of the specification of [interruptible_up],
