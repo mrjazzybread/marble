@@ -1060,14 +1060,12 @@ Proof.
   intros. unfold find_index.
   wp_length _n.
   eapply wp_bind.
+  (* The loop. *)
   { set (inv := λ i (s : unit) (o : option int),
       find_index_inv xs i (i - 1) o
     ).
-    set (Q := λ (so : unit * option int), let '(s, o) := so in
-      exists i, find_index_inv xs (List.length xs) i o
-    ). (* TODO clean up *)
-    eapply wp_interruptible_up with (inv := inv) (Q := Q);
-      eauto with int representable; unfold Q, inv, find_index_inv.
+    eapply wp_interruptible_up_rigid with (inv := inv);
+      eauto with int representable; unfold inv, find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
@@ -1078,16 +1076,16 @@ Proof.
       + wp_ret. subst x. eauto with lia.
       (* Case: [f x = false]. *)
       + wp_ret. subst x. eapply one_step_further; eauto. }
-    (* Completion. *)
-    { intros i s [ _i |].
-      (* Subcase: the loop has ended with [break _i]. *)
-      + eauto.
-      (* Subcase: the loop has ended with [continue]. *)
-      + rewrite finished_leq_iff by lia. intros. unpack.
-        eauto with lia. }
   }
-  (* Take the second projection. *)
-  intros [ s o ]. intros. unpack. wp_ret. eauto.
+  (* The loop is finished. Conclude. *)
+  intros [ s o ].
+  intros (i&?&?). wp_ret. simpl.
+  destruct o as [ _i |].
+  (* Subcase: the loop has ended with [break _i]. *)
+  + eauto.
+  (* Subcase: the loop has ended with [continue]. *)
+  + rewrite finished_leq_iff in * by lia. unpack.
+    unfold find_index_inv. eauto with lia.
 Qed.
 
 End FindIndex.

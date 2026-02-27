@@ -1190,6 +1190,47 @@ Proof.
     eapply wp_ret. eauto with lia. }
 Qed.
 
+(* A rigid variant of the specification of [interruptible_up],
+   without a quantification on [Q]. This is useful when the
+   call site is flexible about the postcondition (i.e., the
+   postcondition is a metavariable). *)
+
+Lemma wp_interruptible_up_rigid f :
+  ∀ _a a _b b s ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  (* If the invariant initially holds, *)
+  inv a s continue →
+  (* If [f] preserves the invariant, *)
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    a ≤ i < b →
+    inv i s continue →
+    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
+  ) →
+  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
+     the final index, final state, and final outcome. They are related by the
+     assertion [finished a b i s o]. *)
+  wp (interruptible_up _a _b s f) (λ so,
+    let '(s, o) := so in
+    exists i,
+    inv i s o ∧
+    finished a b i s o
+  ).
+Proof.
+  intros. eapply wp_conseq.
+  + eapply wp_interruptible_up with (Q := λ so,
+      let '(s, o) := so in
+      exists i,
+      inv i s o ∧
+      finished a b i s o
+    ); eauto. (* This is so verbose... *)
+  + eauto.
+Qed.
+
 End InterruptibleUp.
 
 (* This lemma can help prove that a loop invariant can be extended. *)
