@@ -17,4 +17,6 @@ Ltac unpack :=
   repeat match goal with
   | h: _ ∧ _ |- _ =>
       destruct h
+  | h: ∃ x, _ |- _ =>
+      destruct h
   end.
