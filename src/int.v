@@ -1151,10 +1151,10 @@ Lemma finished_iff' a b i s (o : option A) :
    (
      (* Case [a ≤ b]: *)
        a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
-       (* If we have broken out then the interval is nonempty;
-          if we have not broken out then the loop index has
-          reached the end of the interval. *)
-       match o with break _ => a < b | continue => i = b end
+       (* If we have broken out then at least one element has been examined.
+          If we have not broken out then the loop index has reached the end
+          of the interval. *)
+       match o with break _ => a < i | continue => i = b end
      ∨
        b < a ∧ i = a ∧ o = continue
    ).
@@ -1162,7 +1162,7 @@ Proof.
   cut (
     a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) →
     (i < b → o ≠ continue) ∧ (a = b → o = continue) ↔
-    match o with break _ => a < b | continue => i = b end
+    match o with break _ => a < i | continue => i = b end
   ). { rewrite finished_iff. tauto. }
   intros. unpack.
   destruct o; split; intros; unpack; eauto with lia.
@@ -1182,7 +1182,7 @@ Lemma finished_leq_iff a b i s (o : option A) :
   finished a b i s o ↔
    (
      a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
-     match o with break _ => a < b | continue => i = b end
+     match o with break _ => a < i | continue => i = b end
    ).
 Proof.
   intros. rewrite finished_iff'. split.
