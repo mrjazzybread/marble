@@ -632,6 +632,14 @@ Local Hint Resolve
   lt_compat'_neg_adhoc
 : adhoc.
 
+(* Beyond this point, [isInt] is opaque. *)
+
+(* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
+
+Local Opaque isInt.
+
+(* At the moment, array.v still needs [isInt] to be transparent. TODO *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* Well-foundedness of the orderings on machine integers. *)
@@ -833,7 +841,7 @@ Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) :
 Proof.
   intros Hstep Hfinish.
   intros _i i s.
-  funelim (down_aux _i s); cleanup; intros ? ? Hinit.
+  funelim (down_aux _i s); cleanup; clear Heqcall; intros ? ? Hinit.
   (* Case [i = 0]. *)
   { assert (i = 0) by eauto with adhoc. subst i.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
@@ -913,7 +921,7 @@ Implicit Types _a _b : int.
 Implicit Types s : S.
 Implicit Types f : int → S → S.
 
-(* [up _a _b s] applies the loop body [f] to every machine integer from
+(* [up _a _b s f] applies the loop body [f] to every machine integer from
    [_a], included, up to [_b], excluded. A state of type [S] is carried,
    whose initial value is [s]. *)
 
@@ -967,22 +975,129 @@ Lemma wp_up f (inv : nat → S → Prop) (Q : S → Prop) :
   (∀ s, inv (a `max` b) s → Q s) →
   wp (up _a _b s f) Q.
 Proof.
-  Local Opaque isInt. (* required to avoid expansion by [funelim] *)
-  do 9 intro. intros Hinit Hpreservation Hcompletion.
-  funelim (up _a _b s f); cleanup.
+  do 9 intro. intros Hinit Hstep Hfinish.
+  funelim (up _a _b s f); cleanup; clear Heqcall.
   (* Case [a < b]. *)
   { assert (a < b) by eauto with adhoc.
     assert (fact: a `max` b = (a + 1) `max` b) by lia.
-    rewrite fact in Hcompletion.
-    eapply wp_bind; [ eapply Hpreservation; eauto | simpl; intros s' ? ].
+    rewrite fact in Hfinish.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
     eauto with int representable lia. }
   (* Case [¬ a < b]. *)
   { assert (¬ (a < b)) by eauto with adhoc.
     assert (fact: a `max` b = a) by lia.
-    rewrite fact in Hcompletion.
+    rewrite fact in Hfinish.
     eapply wp_ret. eauto. }
 Qed.
 
 End Up.
 
 (* [up _a _b s @@ λ _i s, ...] is a convenient way of writing a loop. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* A variant of [up], counting up from [a] to [b], with the possibility of
+   interrupting the loop via an early exit: the loop body [f] returns an
+   instruction to either continue or stop (break). *)
+
+Global Notation break    := Some.
+Global Notation continue := None.
+
+Section InterruptibleUp.
+Context {S A : Type}.
+Implicit Types _a _b : int.
+Implicit Types s : S.
+Implicit Types f : int → S → S * option A.
+
+(* [interruptible_up _a _b s f] applies the loop body [f] to every machine
+   integer from [_a], included, up to [_b], excluded. A state of type [S]
+   is carried, whose initial value is [s]. If [f] returns [break x] then
+   the loop stops and returns the pair [(s, break x)] where [s] is the
+   current state. If [f] returns [continue] then the loop continues. If
+   [f] never returns [break _] then the loop runs all the way to the end
+   and returns [(s, continue)] where [s] is the final state. *)
+
+(* Another possible convention for an interruptible loop would be to
+   assume that the loop-carried state contains the continuation flag
+   (i.e., the state typically has type [S * option A]) and to let the
+   user provide a function that inspects the current state and
+   determines whether the loop should continue or stop. *)
+
+Equations interruptible_up _a _b s f : S * option A
+by wf _a igt :=
+interruptible_up _a _b s f with inspect (_a <? _b)%uint63 => {
+| inspected true :=
+    do so ← f _a s ;
+    let '(s, o) := so in
+    match o with
+    | continue =>
+        interruptible_up (_a+1)%uint63 _b s f
+    | break _ =>
+        so
+    end
+| inspected false :=
+    (s, continue)
+}.
+Next Obligation.
+  eauto using safe_increment'.
+Qed.
+
+(* A specification of [interruptible_up]. *)
+
+(* The user is allowed to choose a loop invariant [inv a s o], where [a]
+   is the current loop index, [s] is the current state, and [o] is the
+   current outcome, that is, the outcome of the previous iteration. The
+   assertion [inv a s o] means that the loop has run up to index [a]
+   excluded, so the next iteration will concern the index [a]. *)
+
+Variable inv   : nat → S → option A → Prop.
+
+Lemma wp_interruptible_up f (Q : S * option A → Prop) :
+  ∀ _a a _b b s ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  (* If the invariant initially holds, *)
+  inv a s continue →
+  (* If [f] preserves the invariant, *)
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    a ≤ i < b →
+    inv i s continue →
+    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
+  ) →
+  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
+     the final index, final state, and final outcome. They are related by the
+     following assertion. One of the following two situations holds:
+     - The loop has run at least once, in which case [a < i ≤ b] holds.
+       Furthermore, if the loop has stopped early then [o] is [break _].
+     - The loop has not run at all, in which case [b ≤ a = i] holds.
+       In this case, [o] is [continue]. *)
+  (∀ i s o,
+     inv i s o →
+     (
+       a < i ∧ i ≤ b ∧ (i < b → o ≠ continue) ∨
+       b ≤ a ∧ i = a ∧ o = continue
+     ) →
+     Q (s, o)
+  ) →
+  wp (interruptible_up _a _b s f) Q.
+Proof.
+  do 9 intro. intros Hinit Hstep Hfinish.
+  funelim (interruptible_up _a _b s f); cleanup; clear Heqcall.
+  (* TODO [funelim] creates an induction hypothesis that contains
+          spurious parameters of type [S * option A] and [option A]. *)
+  assert (dummy: option A). { exact continue. }
+  (* Case [a < b]. *)
+  { assert (a < b) by eauto with adhoc.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
+    + wp_ret. eauto with lia.
+    + eapply H; intuition eauto with int representable lia. }
+  (* Case [¬ a < b]. *)
+  { assert (¬ (a < b)) by eauto with adhoc.
+    eapply wp_ret. eauto with lia. }
+Qed.
+
+End InterruptibleUp.
