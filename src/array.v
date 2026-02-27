@@ -1002,18 +1002,12 @@ Global Ltac wp_fill :=
 
 (* Searching for an element in an array: [find_index]. *)
 
-Lemma one_step_further {P : nat → Prop} i :
-  (∀ j, j < i → P j) →
-  P i →
-  ∀ j, j < i + 1 → P j.
-Proof.
-  intros. case (decide (j = i)); intros; try subst; eauto with lia.
-Qed.
-
 Section FindIndex.
 Context `{Inhabited A}.
 Implicit Types a : array A.
 Implicit Types xs : list A.
+
+Variable f : A → bool.
 
 (* The code. *)
 
@@ -1022,7 +1016,7 @@ Implicit Types xs : list A.
 
 (* TODO [find_index] should return just an option *)
 
-Definition find_index (f : A → bool) a :=
+Definition find_index a :=
   do _n ← length a ;
   interruptible_up 0 _n tt @@ λ _i (s : unit),
   do x ← get a _i ;
@@ -1031,40 +1025,33 @@ Definition find_index (f : A → bool) a :=
   else
     (s, continue).
 
-Lemma wp_find_index (f : A → bool) a xs :
+Definition find_index_inv xs n i o :=
+  match o with
+  | None =>
+      ∀ j, j < n → f (xs !!! j) = false
+  | Some _i =>
+      isInt _i i ∧
+      valid i xs ∧
+      f (xs !!! i) = true ∧
+      ∀ j, j < i → f (xs !!! j) = false
+  end.
+
+Lemma wp_find_index a xs :
   isArray a xs →
-  wp (find_index f a) (λ so,
+  wp (find_index a) (λ so,
     let '(_, o) := so in
-    match o with
-    | None =>
-        ∀ j, valid j xs → f (xs !!! j) = false
-    | Some _i =>
-        exists i,
-        isInt _i i ∧
-        valid i xs ∧
-        f (xs !!! i) = true ∧
-        ∀ j, j < i → f (xs !!! j) = false
-    end
+    exists i, find_index_inv xs (List.length xs) i o
   ).
 Proof.
   intros. unfold find_index.
   wp_length _n.
   set (inv := λ i (s : unit) (o : option int),
-    match o with
-    | continue =>
-        ∀ j, j < i → f (xs !!! j) = false
-    | break _i =>
-        let i := i - 1 in (* TODO explain *)
-        isInt _i i ∧
-        valid i xs ∧
-        f (xs !!! i) = true ∧
-        ∀ j, j < i → f (xs !!! j) = false
-    end
+    find_index_inv xs i (i - 1) o
   ).
   eapply wp_interruptible_up with (inv := inv);
-    eauto with int representable; unfold inv.
+    eauto with int representable; unfold inv, find_index_inv.
   (* Initialization. *)
-  { unfold inv. eauto with lia. }
+  { eauto with lia. }
   (* Preservation. *)
   { intros. list.
     wp_get x.

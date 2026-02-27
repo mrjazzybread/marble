@@ -1191,3 +1191,16 @@ Proof.
 Qed.
 
 End InterruptibleUp.
+
+(* This lemma can help prove that a loop invariant can be extended. *)
+
+(* Unfortunately, [eauto] refuses to use it as a hint, and I am also
+   unable to use it via [Hint Extern]. *)
+
+Lemma one_step_further {P : nat → Prop} i :
+  (∀ j, j < i → P j) →
+  P i →
+  ∀ j, j < i + 1 → P j.
+Proof.
+  intros. case (decide (j = i)); intros; try subst; eauto with lia.
+Qed.
