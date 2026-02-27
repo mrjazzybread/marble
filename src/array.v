@@ -1060,10 +1060,13 @@ Proof.
   intros. unfold find_index.
   wp_length _n.
   eapply wp_bind.
-  (* The loop. *)
-  { set (inv := λ i (s : unit) (o : option int),
-      find_index_inv xs i (i - 1) o
-    ).
+  (* The loop invariant is slightly subtle. Instantiating [n := i] means
+     that, when the current outcome [o] is [continue], up to the current
+     index [i] (excluded), no element of the array satisfies [f].
+     Instantiating [i := i - 1] means that, when the current outcome is
+     [break _], up to index [i - 1] (excluded), no element of the array
+     satisfies [f], and at index [i], an element satisfies [f]. *)
+  { set (inv := λ i s o, find_index_inv xs i (i - 1) o).
     eapply wp_interruptible_up_rigid with (inv := inv);
       eauto with int representable; unfold inv, find_index_inv.
     (* Initialization. *)
@@ -1071,11 +1074,11 @@ Proof.
     (* Preservation. *)
     { intros. list.
       wp_get x.
-      destruct (f x) eqn:Heq.
+      destruct (f x) eqn:Heq; wp_ret; subst x.
       (* Case: [f x = true]. *)
-      + wp_ret. subst x. eauto with lia.
+      + eauto with lia.
       (* Case: [f x = false]. *)
-      + wp_ret. subst x. eapply one_step_further; eauto. }
+      + eapply one_step_further; eauto. }
   }
   (* The loop is finished. Conclude. *)
   intros [ s o ].
@@ -1089,3 +1092,15 @@ Proof.
 Qed.
 
 End FindIndex.
+
+(* A test. *)
+
+(* Finding the index of the leftmost multiple of 7 in an array. *)
+
+Local Definition multiple_of_7 (z : Z) : bool :=
+  (z `mod` 7 =? 0)%Z.
+
+Goal
+  find_index multiple_of_7 (of_list [2;3;4;14;12;14])%Z =
+  Some 3%uint63.
+Proof. vm_compute. reflexivity. Qed.
