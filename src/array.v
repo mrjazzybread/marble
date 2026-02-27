@@ -727,11 +727,8 @@ Qed.
 (* Eval    compute in to_list (of_list [1;2;3]). *)
 
 (* This test shows that [Eval vm_compute] works as desired. *)
-(* Eval vm_compute in to_list (of_list [1;2;3]). *)
-
-(* This test shows that [Eval native_compute] works as desired. *)
-(* TODO native_compute must be configured at installation time; how? *)
-(* Eval vm_compute in to_list (of_list [1;2;3]). *)
+Goal to_list (of_list [1;2;3]) = [1;2;3].
+Proof. vm_compute. reflexivity. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
