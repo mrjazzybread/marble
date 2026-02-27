@@ -1042,14 +1042,6 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
-(* The user is allowed to choose a loop invariant [inv a s o], where [a]
-   is the current loop index, [s] is the current state, and [o] is the
-   current outcome, that is, the outcome of the previous iteration. The
-   assertion [inv a s o] means that the loop has run up to index [a]
-   excluded, so the next iteration will concern the index [a]. *)
-
-Variable inv : nat → S → option A → Prop.
-
 (* The assertion [finished a b i s o] means that the loop has ended.
 
    It is defined as a disjunction of the following situations:
@@ -1064,49 +1056,6 @@ Variable inv : nat → S → option A → Prop.
 Definition finished {A} a b i s (o : option A) :=
   a < i ∧ i ≤ b ∧ (i < b → o ≠ continue) ∨
   b ≤ a ∧ i = a ∧ o = continue.
-
-(* A specification of [interruptible_up]. *)
-
-Lemma wp_interruptible_up f (Q : S * option A → Prop) :
-  ∀ _a a _b b s ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
-  (* If the invariant initially holds, *)
-  inv a s continue →
-  (* If [f] preserves the invariant, *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < b →
-    inv i s continue →
-    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
-  ) →
-  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
-     the final index, final state, and final outcome. They are related by the
-     assertion [finished a b i s o]. *)
-  (∀ i s o,
-     inv i s o →
-     finished a b i s o →
-     Q (s, o)
-  ) →
-  wp (interruptible_up _a _b s f) Q.
-Proof.
-  unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (interruptible_up _a _b s f); cleanup; clear Heqcall.
-  (* TODO [funelim] creates an induction hypothesis that contains
-          spurious parameters of type [S * option A] and [option A]. *)
-  assert (dummy: option A). { exact continue. }
-  (* Case [a < b]. *)
-  { assert (a < b) by eauto with adhoc.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
-    + wp_ret. eauto with lia.
-    + eapply H; intuition eauto with int representable lia. }
-  (* Case [¬ a < b]. *)
-  { assert (¬ (a < b)) by eauto with adhoc.
-    eapply wp_ret. eauto with lia. }
-Qed.
 
 (* The assertion [finished a b i s o], as defined above, is somewhat strange,
    as it is a disjunction between the case where at least one iteration has
@@ -1188,6 +1137,57 @@ Proof.
   intros. rewrite finished_iff'. split.
   { intros [|]; [ tauto | lia ]. }
   { tauto. }
+Qed.
+
+(* The user is allowed to choose a loop invariant [inv a s o], where [a]
+   is the current loop index, [s] is the current state, and [o] is the
+   current outcome, that is, the outcome of the previous iteration. The
+   assertion [inv a s o] means that the loop has run up to index [a]
+   excluded, so the next iteration will concern the index [a]. *)
+
+Variable inv : nat → S → option A → Prop.
+
+(* A specification of [interruptible_up]. *)
+
+Lemma wp_interruptible_up f (Q : S * option A → Prop) :
+  ∀ _a a _b b s ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  (* If the invariant initially holds, *)
+  inv a s continue →
+  (* If [f] preserves the invariant, *)
+  (∀ _i i s ,
+    isInt _i i →
+    representable i →
+    a ≤ i < b →
+    inv i s continue →
+    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
+  ) →
+  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
+     the final index, final state, and final outcome. They are related by the
+     assertion [finished a b i s o]. *)
+  (∀ i s o,
+     inv i s o →
+     finished a b i s o →
+     Q (s, o)
+  ) →
+  wp (interruptible_up _a _b s f) Q.
+Proof.
+  unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
+  funelim (interruptible_up _a _b s f); cleanup; clear Heqcall.
+  (* TODO [funelim] creates an induction hypothesis that contains
+          spurious parameters of type [S * option A] and [option A]. *)
+  assert (dummy: option A). { exact continue. }
+  (* Case [a < b]. *)
+  { assert (a < b) by eauto with adhoc.
+    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
+    + wp_ret. eauto with lia.
+    + eapply H; intuition eauto with int representable lia. }
+  (* Case [¬ a < b]. *)
+  { assert (¬ (a < b)) by eauto with adhoc.
+    eapply wp_ret. eauto with lia. }
 Qed.
 
 End InterruptibleUp.
