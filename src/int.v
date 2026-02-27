@@ -1018,34 +1018,12 @@ Definition up _a _b s f :=
 
 (* A specification of [up]. *)
 
-(* The user is allowed to choose a loop invariant [inv a s], where
-   [a] is the current loop index and [s] is the current state. The
-   assertion [inv a s] means that the loop has run up to index [a]
-   excluded, so the next iteration will concern the index [a]. *)
+(* Copying the specification of [up_aux],
+   to obtain a specification of [up],
+   would be useless; they are the same up to the order of parameters. *)
 
-Lemma wp_up f (inv : nat → S → Prop) (Q : S → Prop) :
-  ∀ _a a _b b s ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
-  (* If the invariant holds of the start index [a] and start state [s], *)
-  inv a s →
-  (* If [s ← f _i s] transforms the invariant [inv i s] to [inv (i+1) s], *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < b →
-    inv i s →
-    wp (f _i s) (λ s, inv (i + 1) s)
-  ) →
-  (* Then, once the loop ends, the invariant holds of the index [a]
-     or [b], whichever is greater, and of the final state [s]. *)
-  (∀ s, inv (a `max` b) s → Q s) →
-  wp (up _a _b s f) Q.
-Proof.
-  eapply wp_up_aux.
-Qed.
+Definition wp_up :=
+  wp_up_aux.
 
 End Up.
 
@@ -1264,36 +1242,12 @@ Qed.
 Definition interruptible_up _a _b s f :=
   interruptible_up_aux _b f _a s.
 
-(* A specification of [interruptible_up]. *)
+(* Copying the specification of [interruptible_up_aux],
+   to obtain a specification of [interruptible_up],
+   would be useless; they are the same up to the order of parameters. *)
 
-Lemma wp_interruptible_up f (Q : S * option A → Prop) :
-  ∀ _a a _b b s ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
-  (* If the invariant initially holds, *)
-  inv a s continue →
-  (* If [f] preserves the invariant, *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < b →
-    inv i s continue →
-    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
-  ) →
-  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
-     the final index, final state, and final outcome. They are related by the
-     assertion [finished a b i s o]. *)
-  (∀ i s o,
-     inv i s o →
-     finished a b i s o →
-     Q (s, o)
-  ) →
-  wp (interruptible_up _a _b s f) Q.
-Proof.
-  eapply wp_interruptible_up_aux.
-Qed.
+Definition wp_interruptible_up :=
+  wp_interruptible_up_aux.
 
 (* A rigid variant of the specification of [interruptible_up],
    without a quantification on [Q]. This is useful when the
