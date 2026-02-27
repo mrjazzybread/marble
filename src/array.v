@@ -1006,6 +1006,8 @@ Section FindIndex.
 Context `{Inhabited A}.
 Implicit Types a : array A.
 Implicit Types xs : list A.
+Implicit Types s : unit.
+Implicit Types o : option int.
 
 Variable f : A → bool.
 
@@ -1014,59 +1016,78 @@ Variable f : A → bool.
 (* We use [interruptible_up], which lets us carry a state, even though
    no state is necessary here. We use a state of type [unit]. *)
 
-(* TODO [find_index] should return just an option *)
-
-Definition find_index a :=
+Definition find_index a : option int :=
   do _n ← length a ;
-  interruptible_up 0 _n tt @@ λ _i (s : unit),
-  do x ← get a _i ;
-  if f x then
-    (s, break _i)
-  else
-    (s, continue).
+  do so ← (
+    interruptible_up 0 _n tt @@ λ _i s,
+    do x ← get a _i ;
+    if f x then
+      (s, break _i)
+    else
+      (s, continue)
+  ) ;
+  snd so.
+
+(* The proposition [find_index_inv xs n i o] serves to describe both
+   the postcondition of [find_index] and its loop invariant. Here is
+   its statement: *)
 
 Definition find_index_inv xs n i o :=
   match o with
-  | None =>
+  | continue =>
+      (* If [o] is [continue] then, up to index [n], no element [x]
+         of the list [xs] satisfies the condition [f x = true]. *)
       ∀ j, j < n → f (xs !!! j) = false
-  | Some _i =>
+  | break _i =>
+      (* If [o] is [break _i] then the machine integer [_i] represents
+         the index [i]; this is a valid index into the list [xs]; the
+         element [x] found at this index satisfies [f x = true]; and
+         no earlier element satisfies it. *)
       isInt _i i ∧
       valid i xs ∧
       f (xs !!! i) = true ∧
       ∀ j, j < i → f (xs !!! j) = false
   end.
 
+(* The public specification of [find_index]. *)
+
 Lemma wp_find_index a xs :
   isArray a xs →
-  wp (find_index a) (λ so,
-    let '(_, o) := so in
+  wp (find_index a) (λ o,
     exists i, find_index_inv xs (List.length xs) i o
   ).
 Proof.
   intros. unfold find_index.
   wp_length _n.
-  set (inv := λ i (s : unit) (o : option int),
-    find_index_inv xs i (i - 1) o
-  ).
-  eapply wp_interruptible_up with (inv := inv);
-    eauto with int representable; unfold inv, find_index_inv.
-  (* Initialization. *)
-  { eauto with lia. }
-  (* Preservation. *)
-  { intros. list.
-    wp_get x.
-    destruct (f x) eqn:Heq.
-    (* Case: [f x = true]. *)
-    + wp_ret. subst x. eauto with lia.
-    (* Case: [f x = false]. *)
-    + wp_ret. subst x. eapply one_step_further; eauto. }
-  (* Completion. *)
-  { intros i s [ _i |].
-    (* Subcase: the loop has ended with [break _i]. *)
-    + eauto.
-    (* Subcase: the loop has ended with [continue]. *)
-    + rewrite finished_leq_iff by lia. intros. unpack.
-      eauto with lia. }
+  eapply wp_bind.
+  { set (inv := λ i (s : unit) (o : option int),
+      find_index_inv xs i (i - 1) o
+    ).
+    set (Q := λ (so : unit * option int), let '(s, o) := so in
+      exists i, find_index_inv xs (List.length xs) i o
+    ). (* TODO clean up *)
+    eapply wp_interruptible_up with (inv := inv) (Q := Q);
+      eauto with int representable; unfold Q, inv, find_index_inv.
+    (* Initialization. *)
+    { eauto with lia. }
+    (* Preservation. *)
+    { intros. list.
+      wp_get x.
+      destruct (f x) eqn:Heq.
+      (* Case: [f x = true]. *)
+      + wp_ret. subst x. eauto with lia.
+      (* Case: [f x = false]. *)
+      + wp_ret. subst x. eapply one_step_further; eauto. }
+    (* Completion. *)
+    { intros i s [ _i |].
+      (* Subcase: the loop has ended with [break _i]. *)
+      + eauto.
+      (* Subcase: the loop has ended with [continue]. *)
+      + rewrite finished_leq_iff by lia. intros. unpack.
+        eauto with lia. }
+  }
+  (* Take the second projection. *)
+  intros [ s o ]. intros. unpack. wp_ret. eauto.
 Qed.
 
 End FindIndex.
