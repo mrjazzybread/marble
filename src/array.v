@@ -1101,3 +1101,23 @@ Goal
   find_index multiple_of_7 (of_list [2;3;4;14;12;14])%Z =
   Some 3%uint63.
 Proof. vm_compute. reflexivity. Qed.
+
+Goal
+  find_index multiple_of_7 (of_list [])%Z =
+  None.
+Proof. vm_compute. reflexivity. Qed.
+
+Goal
+  find_index multiple_of_7 (of_list [1;2;3])%Z =
+  None.
+Proof. vm_compute. reflexivity. Qed.
+
+Goal
+  find_index multiple_of_7 (of_list [1;1;1;1;1;1;1;1;1;1;0])%Z =
+  Some 10%uint63.
+Proof. vm_compute. reflexivity. Qed.
+
+Goal
+  find_index multiple_of_7 (of_list [140;1;1;1;1;1;1;1;1;1;0])%Z =
+  Some 0%uint63.
+Proof. vm_compute. reflexivity. Qed.
