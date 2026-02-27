@@ -997,3 +997,89 @@ Global Ltac wp_fill :=
     | eapply wp_conseq; [ wp_fill_nude | wp_fill_intros a ]
     ]
   end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Searching for an element in an array: [find_index]. *)
+
+Lemma one_step_further {P : nat → Prop} i :
+  (∀ j, j < i → P j) →
+  P i →
+  ∀ j, j < i + 1 → P j.
+Proof.
+  intros. case (decide (j = i)); intros; try subst; eauto with lia.
+Qed.
+
+Section FindIndex.
+Context `{Inhabited A}.
+Implicit Types a : array A.
+Implicit Types xs : list A.
+
+(* The code. *)
+
+(* We use [interruptible_up], which lets us carry a state, even though
+   no state is necessary here. We use a state of type [unit]. *)
+
+(* TODO [find_index] should return just an option *)
+
+Definition find_index (f : A → bool) a :=
+  do _n ← length a ;
+  interruptible_up 0 _n tt @@ λ _i (s : unit),
+  do x ← get a _i ;
+  if f x then
+    (s, break _i)
+  else
+    (s, continue).
+
+Lemma wp_find_index (f : A → bool) a xs :
+  isArray a xs →
+  wp (find_index f a) (λ so,
+    let '(_, o) := so in
+    match o with
+    | None =>
+        ∀ j, valid j xs → f (xs !!! j) = false
+    | Some _i =>
+        exists i,
+        isInt _i i ∧
+        valid i xs ∧
+        f (xs !!! i) = true ∧
+        ∀ j, j < i → f (xs !!! j) = false
+    end
+  ).
+Proof.
+  intros. unfold find_index.
+  wp_length _n.
+  set (inv := λ i (s : unit) (o : option int),
+    match o with
+    | continue =>
+        ∀ j, j < i → f (xs !!! j) = false
+    | break _i =>
+        let i := i - 1 in (* TODO explain *)
+        isInt _i i ∧
+        valid i xs ∧
+        f (xs !!! i) = true ∧
+        ∀ j, j < i → f (xs !!! j) = false
+    end
+  ).
+  eapply wp_interruptible_up with (inv := inv);
+    eauto with int representable; unfold inv.
+  (* Initialization. *)
+  { unfold inv. eauto with lia. }
+  (* Preservation. *)
+  { intros. list.
+    wp_get x.
+    destruct (f x) eqn:Heq.
+    (* Case: [f x = true]. *)
+    + wp_ret. subst x. eauto with lia.
+    (* Case: [f x = false]. *)
+    + wp_ret. subst x. eapply one_step_further; eauto. }
+  (* Completion. *)
+  { intros i s [ _i |].
+    (* Subcase: the loop has ended with [break _i]. *)
+    + eauto.
+    (* Subcase: the loop has ended with [continue]. *)
+    + rewrite finished_leq_iff by lia. intros. unpack.
+      eauto with lia. }
+Qed.
+
+End FindIndex.
