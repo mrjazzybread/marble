@@ -1,7 +1,7 @@
 From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From array Require Import list_extra bool int wp.
+From array Require Import tactics list_extra bool int wp.
 Implicit Types _i _j _n _s : int.
 
 Unset Universe Minimization ToSet.
