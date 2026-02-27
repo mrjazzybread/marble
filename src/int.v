@@ -1042,15 +1042,30 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
-(* A specification of [interruptible_up]. *)
-
 (* The user is allowed to choose a loop invariant [inv a s o], where [a]
    is the current loop index, [s] is the current state, and [o] is the
    current outcome, that is, the outcome of the previous iteration. The
    assertion [inv a s o] means that the loop has run up to index [a]
    excluded, so the next iteration will concern the index [a]. *)
 
-Variable inv   : nat → S → option A → Prop.
+Variable inv : nat → S → option A → Prop.
+
+(* The assertion [finished a b i s o] means that the loop has ended.
+
+   It is defined as a disjunction of the following situations:
+
+   - The loop has run at least once. [a < i ≤ b] holds.
+     Furthermore, if the loop has stopped early, which is indicated
+     by the condition [i < b], then [o] must be [break _].
+
+   - The loop has not run at all, in which case [b ≤ a = i] holds.
+     In this case, [i] must be [a] and [o] must be [continue]. *)
+
+Definition finished {A} a b i s (o : option A) :=
+  a < i ∧ i ≤ b ∧ (i < b → o ≠ continue) ∨
+  b ≤ a ∧ i = a ∧ o = continue.
+
+(* A specification of [interruptible_up]. *)
 
 Lemma wp_interruptible_up f (Q : S * option A → Prop) :
   ∀ _a a _b b s ,
@@ -1070,22 +1085,15 @@ Lemma wp_interruptible_up f (Q : S * option A → Prop) :
   ) →
   (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
      the final index, final state, and final outcome. They are related by the
-     following assertion. One of the following two situations holds:
-     - The loop has run at least once, in which case [a < i ≤ b] holds.
-       Furthermore, if the loop has stopped early then [o] is [break _].
-     - The loop has not run at all, in which case [b ≤ a = i] holds.
-       In this case, [o] is [continue]. *)
+     assertion [finished a b i s o]. *)
   (∀ i s o,
      inv i s o →
-     (
-       a < i ∧ i ≤ b ∧ (i < b → o ≠ continue) ∨
-       b ≤ a ∧ i = a ∧ o = continue
-     ) →
+     finished a b i s o →
      Q (s, o)
   ) →
   wp (interruptible_up _a _b s f) Q.
 Proof.
-  do 9 intro. intros Hinit Hstep Hfinish.
+  unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
   funelim (interruptible_up _a _b s f); cleanup; clear Heqcall.
   (* TODO [funelim] creates an induction hypothesis that contains
           spurious parameters of type [S * option A] and [option A]. *)
@@ -1098,6 +1106,88 @@ Proof.
   (* Case [¬ a < b]. *)
   { assert (¬ (a < b)) by eauto with adhoc.
     eapply wp_ret. eauto with lia. }
+Qed.
+
+(* The assertion [finished a b i s o], as defined above, is somewhat strange,
+   as it is a disjunction between the case where at least one iteration has
+   taken place (a < b) and the case where none has taken place (a ≥ b). What
+   seems more natural is a disjunction between the case where the bounds are
+   ordered as expected (a ≤ b) and the case where they are not (a > b).
+   The following lemma provides an alternate characterization of [finished]
+   along these lines. *)
+
+Lemma finished_iff a b i s (o : option A) :
+  finished a b i s o ↔
+   (
+     (* Case [a ≤ b]: *)
+       (* Then [i] lies between [a] and [b], inclusive;
+          [i] is [a] if and only if the interval is empty;
+          if [i] is less than [b] then we must have broken out;
+          if the interval is empty then we cannot have broken out. *)
+       a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
+       (i < b → o ≠ continue) ∧
+       (a = b → o = continue)
+     ∨
+     (* Case [b < a]: *)
+         (* Then [i] must be [a] and we cannot have broken out. *)
+       b < a ∧ i = a ∧ o = continue
+   ).
+Proof.
+  unfold finished. split; intros [|]; unpack; subst.
+  { left. repeat split; eauto with lia. }
+  { case (decide (a = b)); intros; [ subst b |].
+    + left. eauto with lia.
+    + right. eauto with lia. }
+  { case (decide (i = a)); intros; [ subst i |].
+    + right. eauto with lia.
+    + left. eauto with lia. }
+  { eauto with lia. }
+Qed.
+
+(* Here is a different way of expressing the same result. *)
+
+Lemma finished_iff' a b i s (o : option A) :
+  finished a b i s o ↔
+   (
+     (* Case [a ≤ b]: *)
+       a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
+       (* If we have broken out then the interval is nonempty;
+          if we have not broken out then the loop index has
+          reached the end of the interval. *)
+       match o with break _ => a < b | continue => i = b end
+     ∨
+       b < a ∧ i = a ∧ o = continue
+   ).
+Proof.
+  cut (
+    a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) →
+    (i < b → o ≠ continue) ∧ (a = b → o = continue) ↔
+    match o with break _ => a < b | continue => i = b end
+  ). { rewrite finished_iff. tauto. }
+  intros. unpack.
+  destruct o; split; intros; unpack; eauto with lia.
+  { case (decide (a = b)); intros h; [ exfalso | lia ].
+    match goal with H: a = b → _ |- _ => specialize (H h) end.
+    congruence. }
+  { case (decide (i < b)); intros h; [ exfalso | lia ].
+    match goal with H: i < b → _ |- _ => specialize (H h) end.
+    congruence. }
+Qed.
+
+(* This corollary describes just the case where [a ≤ b] is known to hold.
+   It should the most useful corollary in practice. *)
+
+Lemma finished_leq_iff a b i s (o : option A) :
+  a ≤ b →
+  finished a b i s o ↔
+   (
+     a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
+     match o with break _ => a < b | continue => i = b end
+   ).
+Proof.
+  intros. rewrite finished_iff'. split.
+  { intros [|]; [ tauto | lia ]. }
+  { tauto. }
 Qed.
 
 End InterruptibleUp.
