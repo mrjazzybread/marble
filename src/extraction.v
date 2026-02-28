@@ -11,8 +11,5 @@ From array Require Import int.
 Recursive Extraction down.
 
 From Stdlib Require ExtrOCamlPArray.
-From array Require Import array.
-Recursive Extraction of_list blit find_index.
-
-(* TODO test extracting to defensive mutable arrays
-   instead of persistent arrays *)
+From array Require Import array specialization.
+Recursive Extraction of_list blit blit' copy find_index find_index'.
