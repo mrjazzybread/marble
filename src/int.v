@@ -1304,3 +1304,93 @@ Lemma one_step_further {P : nat → Prop} i :
 Proof.
   intros. case (decide (j = i)); intros; try subst; eauto with lia.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A variant of [interruptible_up] that does not carry a state. *)
+
+Section InterruptibleUpUnitAux.
+Context {A : Type}.
+Implicit Types _a : int.
+
+Variable _b : int.
+Variable f : int → option A.
+
+Equations interruptible_up_unit_aux _a : option A
+by wf _a igt :=
+interruptible_up_unit_aux _a with inspect (_a <? _b)%uint63 => {
+| inspected true :=
+    do o ← f _a ;
+    match o with
+    | continue =>
+        interruptible_up_unit_aux (_a+1)%uint63
+    | break _ =>
+        o
+    end
+| inspected false :=
+    continue
+}.
+Next Obligation.
+  eauto using safe_increment'.
+Qed.
+
+End InterruptibleUpUnitAux.
+
+(* Instead of proving a specification of [interruptible_up_unit_aux],
+   we first prove that it is related with [interruptible_up_aux]. *)
+
+(* The relation is [wus], which stands for [with_unit_state]. *)
+
+Definition wus {A} (a : A) (sa' : unit * A) :=
+  a =
+    do sa' ← sa' ;
+    let '(s', a') := sa' in
+    a'.
+
+Lemma interruptible_up_unit_aux_eq {A} _a _b
+  (f : int → option A)
+  (f' : int → unit → unit * option A) :
+  (∀ _i, wus (f _i) (f' _i tt)) →
+  wus
+    (interruptible_up_unit_aux _b f _a)
+    (interruptible_up_aux _b f' _a tt).
+Proof.
+  intros Hf.
+  funelim (interruptible_up_unit_aux _b f _a); cleanup; clear Heqcall;
+  autorewrite with interruptible_up_aux; simpl; rewrite e.
+  (* [funelim] introduces a spurious parameter: *)
+  assert (dummy: option A). { exact continue. }
+  { rewrite Hf. destruct (f' _a ()) as [ [] [|] ]; unfold bind.
+    + unfold wus. eauto.
+    + eauto. }
+  { unfold wus. eauto. }
+Qed.
+
+Section InterruptibleUpUnit.
+Context {A : Type}.
+Implicit Types _a _b : int.
+Implicit Types f : int → option A.
+
+Definition interruptible_up_unit _a _b f :=
+  interruptible_up_unit_aux _b f _a.
+
+End InterruptibleUpUnit.
+
+(* When used with [rewrite], the following lemma allows replacing a call
+   to [interruptible_up_unit] with a call to [interruptible_up]. *)
+
+Lemma interruptible_up_unit_eq {A} _a _b (f : int → option A) :
+  wus
+    (interruptible_up_unit _a _b f)
+    (interruptible_up _a _b tt (λ _i s, do o ← f _i ; (s, o))).
+Proof.
+  intros.
+  unfold interruptible_up_unit, interruptible_up.
+  eapply interruptible_up_unit_aux_eq.
+  unfold wus, bind. eauto.
+Qed.
+
+(* We do not provide a specification of [interruptible_up_unit].
+   Instead, the user is expected to rewrite using the above lemma
+   and to use the specification of [interruptible_up]. This can
+   introduce a little noise in the proof, but seems bearable. *)
