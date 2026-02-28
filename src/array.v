@@ -326,6 +326,7 @@ Global Ltac wp_length_bind n :=
   eapply wp_bind; [ wp_length_nude | wp_length_intros n ].
 
 Global Ltac wp_length n :=
+  repeat rewrite bind_bind;
   first [
     wp_length_bind n
   | wp_length_nude
@@ -344,6 +345,7 @@ Global Ltac wp_get_bind x :=
   eapply wp_bind; [ wp_get_nude | wp_get_intros x ].
 
 Global Ltac wp_get x :=
+  repeat rewrite bind_bind;
   first [
     wp_get_bind x
   | wp_get_nude
@@ -367,6 +369,7 @@ Global Ltac wp_set_bind a :=
   eapply wp_bind; [ wp_set_nude | wp_set_intros a ].
 
 Global Ltac wp_set :=
+  repeat rewrite bind_bind;
   match goal with |- context[set ?a _ _] =>
     first [
       wp_set_bind a
@@ -385,6 +388,7 @@ Global Ltac wp_make_bind b :=
   eapply wp_bind; [ wp_make_nude | wp_make_intros b ].
 
 Global Ltac wp_make b :=
+  repeat rewrite bind_bind;
   first [
     wp_make_bind b
   | wp_make_nude
@@ -825,6 +829,7 @@ Global Ltac wp_blit_bind a :=
   eapply wp_bind; [ wp_blit_nude | wp_blit_intros a ].
 
 Global Ltac wp_blit :=
+  repeat rewrite bind_bind;
   match goal with |- context[blit _ _ ?a _ _] =>
     first [
       wp_blit_bind a
@@ -987,6 +992,7 @@ Global Ltac wp_fill_bind a :=
   eapply wp_bind; [ wp_fill_nude | wp_fill_intros a ].
 
 Global Ltac wp_fill :=
+  repeat rewrite bind_bind;
   match goal with |- context[fill _ _ ?a _ _] =>
     first [
       wp_fill_bind a
@@ -1010,20 +1016,11 @@ Variable f : A → bool.
 
 (* The code. *)
 
-(* We use [interruptible_up], which lets us carry a state, even though
-   no state is necessary here. We use a state of type [unit]. *)
-
 Definition find_index a : option int :=
   do _n ← length a ;
-  do so ← (
-    interruptible_up 0 _n tt @@ λ _i s,
-    do x ← get a _i ;
-    if f x then
-      (s, break _i)
-    else
-      (s, continue)
-  ) ;
-  snd so.
+  interruptible_up_unit 0 _n @@ λ _i,
+  do x ← get a _i ;
+  if f x then break _i else continue.
 
 (* The proposition [find_index_inv xs n i o] serves to describe both
    the postcondition of [find_index] and its loop invariant. Here is
@@ -1056,6 +1053,7 @@ Lemma wp_find_index a xs :
 Proof.
   intros. unfold find_index.
   wp_length _n.
+  rewrite interruptible_up_unit_eq.
   eapply wp_bind.
   (* The loop invariant is slightly subtle. Instantiating [n := i] means
      that, when the current outcome [o] is [continue], up to the current
@@ -1071,7 +1069,9 @@ Proof.
     (* Preservation. *)
     { intros. list.
       wp_get x.
-      destruct (f x) eqn:Heq; wp_ret; subst x.
+      destruct (f x) eqn:Heq;
+      eapply wp_bind_eq; intros ? ->;
+      wp_ret; subst x.
       (* Case: [f x = true]. *)
       + eauto with lia.
       (* Case: [f x = false]. *)
