@@ -41,6 +41,13 @@ Qed.
 Definition bind {A B} (a : A) (b : A → B) : B :=
   let x := a in b x.
 
+Lemma bind_bind {A B C} (e : A) (f : A → B) (g : B → C) :
+  bind (bind e f) g =
+  bind e (λ x, bind (f x) g).
+Proof.
+  reflexivity.
+Qed.
+
 (* TODO use a nicer notation? *)
 Global Notation "'do' x ← y ; z" := (bind y (λ x : _, z))
   (at level 20, x pattern, y at level 100, z at level 200).
