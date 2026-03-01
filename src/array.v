@@ -1,4 +1,5 @@
 From stdpp Require Import numbers list.
+Local Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From array Require Import tactics list_extra bool int wp.
@@ -94,7 +95,7 @@ Hint Resolve representable_to_nat_length : representable.
    length and to hold the same element at every valid index. *)
 
 Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
-  let n := List.length xs in
+  let n := len xs in
   isInt (length a) n ∧
   n ≤ max_array_length ∧
   ∀ i, valid i xs → a.[of_nat i] = xs !!! i.
@@ -112,14 +113,14 @@ Local Ltac destructIsArray :=
 
 Lemma isArray_length_spec `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
-  isInt (length a) (List.length xs).
+  isInt (length a) (len xs).
 Proof.
   intros. destructIsArray. eauto.
 Qed.
 
 Lemma isArray_bounded_length `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
-  List.length xs ≤ max_array_length.
+  len xs ≤ max_array_length.
 Proof.
   intros. destructIsArray. eauto.
 Qed.
@@ -127,7 +128,7 @@ Qed.
 Lemma isArray_bounded_length' `{Inhabited A} (a : array A) (xs : list A) :
   ∀ n,
   isArray a xs →
-  n ≤ List.length xs →
+  n ≤ len xs →
   n ≤ max_array_length.
 Proof.
   intros. destructIsArray. lia.
@@ -139,7 +140,7 @@ Global Hint Resolve
 
 Lemma isArray_representable `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
-  representable (List.length xs).
+  representable (len xs).
 Proof.
   intros. destructIsArray. eauto with representable.
 Qed.
@@ -203,7 +204,7 @@ Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
   isArray a xs → isArray a ys → xs = ys.
 Proof.
   intros.
-  assert (List.length xs = List.length ys).
+  assert (len xs = len ys).
   { eauto 6 using isInt_inj_2, isArray_length_spec with representable. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
@@ -297,8 +298,8 @@ Qed.
 Lemma wp_length a xs :
   isArray a xs →
   wp (length a) (λ _n,
-    isInt _n (List.length xs) ∧
-    representable (List.length xs)
+    isInt _n (len xs) ∧
+    representable (len xs)
   ).
 Proof.
   intros. eapply wp_ret.
@@ -480,7 +481,7 @@ Proof.
      the length of [xs] is [n - i] and the elements of [xs] are the elements
      found at indices [i, n) in the array [a]. *)
   eapply wp_down with (inv := λ i (ys : list A),
-    List.length ys = n - i ∧
+    len ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
   ); eauto; list; intros.
   (* Initialization. *)
@@ -552,11 +553,11 @@ Fixpoint list_iteri f s _i xs :=
 
 Local Lemma wp_list_iteri_aux f inv xs :
   ∀ future s _i history,
-  isInt _i (List.length history) →
+  isInt _i (len history) →
   inv s history →
   history ++ future = xs →
   ( ∀ s future history _i x,
-    isInt _i (List.length history) →
+    isInt _i (len history) →
     inv s history →
     history ++ future = xs →
     [x] `prefix_of` future →
@@ -588,7 +589,7 @@ Lemma wp_list_iteri f xs Q inv s :
      state [s] such that the invariant holds of the state [s] and of the
      new history [history ++ [x]]. *)
   ( ∀ s history _i x,
-    isInt _i (List.length history) →
+    isInt _i (len history) →
     inv s history →
     history ++ [x] `prefix_of` xs →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
@@ -628,7 +629,7 @@ Definition list_length xs : int :=
 
 Local Lemma wp_list_length_aux xs : ∀ _s s,
   isInt _s s →
-  wp (list_length_aux _s xs) (λ _i, isInt _i (s + List.length xs)).
+  wp (list_length_aux _s xs) (λ _i, isInt _i (s + len xs)).
 Proof.
   induction xs as [| x xs ]; simpl; intros.
   { eapply wp_ret. list. eauto. }
@@ -639,7 +640,7 @@ Qed.
 (* The public specification of [list_length]. *)
 
 Lemma wp_list_length xs :
-  wp (list_length xs) (λ _i, isInt _i (List.length xs)).
+  wp (list_length xs) (λ _i, isInt _i (len xs)).
 Proof.
   eapply wp_conseq.
   { eapply wp_list_length_aux; eauto with int. }
@@ -680,16 +681,16 @@ Definition of_list xs :=
    is imposed as a precondition in this specification. *)
 
 Lemma wp_of_list xs :
-  List.length xs ≤ max_array_length →
+  len xs ≤ max_array_length →
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
   wp_list_length _n.
   wp_make a.
   (* The loop invariant. *)
-  set (n := List.length xs).
+  set (n := len xs).
   eapply wp_list_iteri with (inv := λ a history,
-    let h := List.length history in
+    let h := len history in
     isArray a (history ++ replicate (n-h) inhabitant)
   ); simpl; list; eauto.
   (* Preservation. *)
@@ -705,7 +706,7 @@ End OfList.
 (* This is true only of sufficiently short lists. *)
 
 Lemma to_list_of_list `{Inhabited A} (xs : list A) :
-  List.length xs ≤ max_array_length →
+  len xs ≤ max_array_length →
   to_list (of_list xs) = xs.
 Proof.
   intros.
@@ -927,7 +928,7 @@ Definition append a b :=
 Lemma wp_append a xs b ys :
   isArray a xs →
   isArray b ys →
-  List.length xs + List.length ys ≤ max_array_length →
+  len xs + len ys ≤ max_array_length →
   wp (append a b) (λ c, isArray c (xs ++ ys)).
 Proof.
   intros. unfold append.
@@ -1048,7 +1049,7 @@ Definition find_index_inv xs n i o :=
 Lemma wp_find_index a xs :
   isArray a xs →
   wp (find_index a) (λ o,
-    exists i, find_index_inv xs (List.length xs) i o
+    exists i, find_index_inv xs (len xs) i o
   ).
 Proof.
   intros. unfold find_index.
@@ -1199,3 +1200,100 @@ Proof.
 Qed.
 
 End ForAll.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [equal]. *)
+
+Section Equal.
+Context `{Inhabited A}.
+Implicit Types a b : array A.
+Implicit Types xs ys : list A.
+Implicit Types eq : A → A → bool.
+
+(* The code. *)
+
+Definition equal eq a b :=
+  do _m ← length a ;
+  do _n ← length b ;
+  if (_m =? _n)%uint63 then
+    do o ← (
+      interruptible_up_unit 0 _m @@ λ _i ,
+      do x ← get a _i ;
+      do y ← get b _i ;
+      if eq x y then continue else break ()
+    ) ;
+    match o with continue => true | break () => false end
+  else
+    false.
+
+(* The proposition [equal_inv xs n i o] is the loop invariant. *)
+
+Definition equal_inv xs ys i o :=
+  match o with
+  | continue =>
+      (* If [o] is [continue] then, up to index [i], the lists [xs]
+         and [ys] agree. *)
+      ∀ j, j < i → xs !!! j = ys !!! j
+  | break () =>
+      (* If [o] is [break ()] then [i - 1] is a valid index into the list
+         [xs], the two lists agree up to index [i - 1], and they disagree
+         at this index. *)
+      let i := i - 1 in
+      valid i xs ∧
+      xs !!! i ≠ ys !!! i ∧
+      ∀ j, j < i → xs !!! j = ys !!! j
+  end.
+
+(* The public specification of [equal]. *)
+
+(* TODO generalize to a relation other than equality *)
+(* TODO use [isBool] in the postcondition of [equal]? *)
+
+Lemma wp_equal eq a xs b ys :
+  (∀ x y, isBool (eq x y) (x = y)) →
+  isArray a xs →
+  isArray b ys →
+  wp (equal eq a b) (λ o, if o then xs = ys else xs ≠ ys).
+Proof.
+  intro eq_spec. intros. unfold equal.
+  wp_length _m.
+  wp_length _n.
+  (* TODO clean up the use of [isBool] and its lemmas *)
+  assert (Hc: isBool (_m =? _n)%uint63 (len xs = len ys))
+    by eauto using eq_compat'.
+  destruct (_m =? _n)%uint63 eqn:Heq.
+  (* First branch: the lengths of the arrays coincide. *)
+  { apply isBool_elim in Hc; [ clear Heq | eauto ].
+    rewrite interruptible_up_unit_eq, bind_bind.
+    eapply wp_bind.
+    { eapply wp_interruptible_up_rigid
+        with (inv := λ i s o, equal_inv xs ys i o);
+        eauto with int representable; unfold equal_inv; eauto with lia.
+      (* Preservation. *)
+      intros.
+      wp_get x. wp_get y.
+      destruct (eq x y) eqn:Heq;
+      eapply wp_bind_eq; intros ? ->;
+      wp_ret; subst.
+      (* Case: [eq x y] returns [true]. *)
+      { eapply isBool_elim in Heq; [| eauto ].
+        eapply one_step_further; eauto. }
+      (* Case: [eq x y] returns [false]. *)
+      { eapply isBool_elim_neg in Heq; [| eauto ]. list.
+        eauto with lia. }
+    }
+    intros [? [[]|]]; unfold equal_inv; intros (i&?); unpack;
+    unfold bind; wp_ret.
+    (* Case: the loop ends with [break ()]. *)
+    { congruence. }
+    (* Case: the loop ends with [continue]. *)
+    { rewrite finished_leq_iff in * by lia. unpack.
+      listx_total j. eauto with lia. }
+  }
+  (* Second branch: the lengths of the arrays differ. *)
+  { apply isBool_elim_neg in Hc; [ clear Heq | eauto ].
+    wp_ret. congruence. }
+Qed.
+
+End Equal.
