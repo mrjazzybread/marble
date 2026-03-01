@@ -10,6 +10,20 @@ Proof.
   destruct b; split; congruence.
 Qed.
 
+Lemma show_true b :
+  negb b = false →
+  b = true.
+Proof.
+  destruct b; simpl; eauto.
+Qed.
+
+Lemma show_false b :
+  negb b = true →
+  b = false.
+Proof.
+  destruct b; simpl; eauto.
+Qed.
+
 Definition isBool (b : bool) (P : Prop) :=
   b = true ↔ P.
 
