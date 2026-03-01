@@ -1121,3 +1121,42 @@ Goal
   find_index multiple_of_7 (of_list [140;1;1;1;1;1;1;1;1;1;0])%Z =
   Some 0%uint63.
 Proof. vm_compute. reflexivity. Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [exist]. *)
+
+Section Exist.
+Context `{Inhabited A}.
+Implicit Types a : array A.
+Implicit Types xs : list A.
+Implicit Types f : A → bool.
+
+Definition exist f a :=
+  do b ← find_index f a ;
+  match b with
+  | None   => false
+  | Some _ => true
+  end.
+
+(* The public specification of [exist]. *)
+
+Lemma wp_exist f a xs :
+  isArray a xs →
+  wp (exist f a) (λ b,
+    if b then
+      ∃ j, valid j xs ∧ f (xs !!! j) = true
+    else
+      ∀ j, valid j xs → f (xs !!! j) = false
+  ).
+Proof.
+  intros. unfold exist.
+  eapply wp_bind; [ eapply wp_find_index; eauto | simpl; intros [ _i |]];
+  unfold find_index_inv.
+  (* Case: [find_index] returns [Some _i]. *)
+  { intros (i&?). unpack. wp_ret. eauto. }
+  (* Case: [find_index] returns [None]. *)
+  { intros (_&?). wp_ret.  eauto. }
+Qed.
+
+End Exist.
