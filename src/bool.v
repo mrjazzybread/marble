@@ -21,6 +21,20 @@ Proof.
   unfold isBool. tauto.
 Qed.
 
+Lemma isBool_intro P :
+  P →
+  isBool true P.
+Proof.
+  unfold isBool. tauto.
+Qed.
+
+Lemma isBool_intro_neg P :
+  ¬ P →
+  isBool false P.
+Proof.
+  unfold isBool. split; intros; [ congruence | tauto ].
+Qed.
+
 Lemma isBool_elim b P :
   isBool b P →
   b = true →
