@@ -398,8 +398,6 @@ Global Ltac wp_make b :=
   | eapply wp_conseq; [ wp_make_nude | wp_make_intros b ]
   ].
 
-(* TODO can we reduce the boilerplate that is needed for each tactic? *)
-
 (* -------------------------------------------------------------------------- *)
 
 (* The tactic [isArray] is applicable when the goal is [isArray a ys]
@@ -729,11 +727,12 @@ Qed.
 
 (* Some tests of [to_list . of_list]. *)
 
-(* This test shows that [Eval compute] is unable to properly evaluate
-   a call to [down_aux]. I don't know whether this is normal. TODO *)
-(* Eval    compute in to_list (of_list [1;2;3]). *)
+(* This test shows that [compute] is unable to properly evaluate
+   a call to [down_aux]. I don't know whether this is normal. *)
+Goal to_list (of_list [1;2;3]) = [1;2;3].
+Proof. compute. Abort.
 
-(* This test shows that [Eval vm_compute] works as desired. *)
+(* This test shows that [vm_compute] works as desired. *)
 Goal to_list (of_list [1;2;3]) = [1;2;3].
 Proof. vm_compute. reflexivity. Qed.
 
