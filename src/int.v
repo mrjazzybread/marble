@@ -493,18 +493,6 @@ Qed.
 
 (* Equality. *)
 
-Lemma eqb_spec_negated _i _j :
-  (_i =? _j)%uint63 = false ↔ (_j ≠ _i).
-Proof.
-  generalize (eqb_spec _i _j); intro.
-  destruct ((_i =? _j)%uint63).
-  (* I believe [lia] should work here, but it doesn't. *)
-  + assert (_i = _j) by tauto. subst. split; congruence.
-  + assert (_i ≠ _j).
-    { intro. assert (false = true) by tauto. congruence. }
-    split; congruence.
-Qed.
-
 Lemma eq_compat _i i _j j :
   isInt _i i →
   isInt _j j →
@@ -695,7 +683,7 @@ Lemma safe_decrement' _i :
   (_i =? 0)%uint63 = false →
   ilt (_i - 1) _i.
 Proof.
-  rewrite eqb_spec_negated. unfold ilt. intros.
+  rewrite bool_neg, eqb_spec. unfold ilt. intros.
   assert (0 ≠ φ _i)%Z. { change 0%Z with (φ 0). eauto with lia. }
   eauto using safe_decrement.
 Qed.
