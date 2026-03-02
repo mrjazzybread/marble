@@ -1024,6 +1024,17 @@ Definition find_index a : option int :=
   do x ← get a _i ;
   if f x then break _i else continue.
 
+(* Our hypothesis about [f]. *)
+
+(* If no specification of [f] in terms of [isBool] is available, then one
+   can pick [OK := λ x, f x = true] and [notOK := λ x, f x = false]. Then
+   the hypothesis [f_spec] is trivially satisfied. *)
+
+Variable     OK : A → bool.
+Variable  notOK : A → bool.
+Variable f_spec :
+  ∀ x, isBool (f x) (OK x) (notOK x).
+
 (* The proposition [find_index_inv xs n i o] serves to describe both
    the postcondition of [find_index] and its loop invariant. Here is
    its statement: *)
@@ -1033,7 +1044,7 @@ Definition find_index_inv xs n i o :=
   | continue =>
       (* If [o] is [continue] then, up to index [n], no element [x]
          of the list [xs] satisfies the condition [f x = true]. *)
-      ∀ j, j < n → f (xs !!! j) = false
+      ∀ j, j < n → notOK (xs !!! j)
   | break _i =>
       (* If [o] is [break _i] then the machine integer [_i] represents
          the index [i]; this is a valid index into the list [xs]; the
@@ -1041,8 +1052,8 @@ Definition find_index_inv xs n i o :=
          no earlier element satisfies it. *)
       isInt _i i ∧
       valid i xs ∧
-      f (xs !!! i) = true ∧
-      ∀ j, j < i → f (xs !!! j) = false
+      OK (xs !!! i) ∧
+      ∀ j, j < i → notOK (xs !!! j)
   end.
 
 (* The public specification of [find_index]. *)
@@ -1070,19 +1081,16 @@ Proof.
     { eauto with lia. }
     (* Preservation. *)
     { intros. list.
-      wp_get x.
-      rewrite bind_if.
-      destruct (f x) eqn:Heq;
-      wp_bind_eq;
-      wp_ret; subst x.
-      (* Case: [f x = true]. *)
+      wp_get x. subst x.
+      rewrite bind_if. wp_if; wp_bind_eq; wp_ret.
+      (* Case: [OK x]. *)
       + eauto with lia.
-      (* Case: [f x = false]. *)
+      (* Case: [notOK x]. *)
       + eapply one_step_further; eauto. }
   }
   (* The loop is finished. Conclude. *)
   intros [ s o ].
-  intros (i&?&?). wp_ret. simpl.
+  intros (i&?&?). wp_ret.
   destruct o as [ _i |].
   (* Subcase: the loop has ended with [break _i]. *)
   + eauto.
@@ -1133,36 +1141,41 @@ Section Exist.
 Context `{Inhabited A}.
 Implicit Types a : array A.
 Implicit Types xs : list A.
-Implicit Types f : A → bool.
 
-Definition exist f a :=
+Variable f : A → bool.
+
+Definition exist a :=
   do b ← find_index f a ;
   match b with
   | None   => false
   | Some _ => true
   end.
 
+(* Our hypothesis about [f]. (See [find_index].) *)
+
+Variable     OK : A → bool.
+Variable  notOK : A → bool.
+Variable f_spec :
+  ∀ x, isBool (f x) (OK x) (notOK x).
+
 (* The public specification of [exist]. *)
 
-Lemma wp_exist f a xs :
+Lemma wp_exist a xs :
   isArray a xs →
-  wp (exist f a) (λ b,
+  wp (exist a) (λ b,
     isBool b
-      (∃ j, valid j xs ∧ f (xs !!! j) = true)
-      (∀ j, valid j xs → f (xs !!! j) = false)
+      (∃ j, valid j xs ∧ OK (xs !!! j))
+      (∀ j, valid j xs → notOK (xs !!! j))
   ).
 Proof.
   intros. unfold exist.
-  eapply wp_bind; [ eapply wp_find_index; eauto | simpl; intros [ _i |]];
-  unfold find_index_inv.
+  eapply wp_bind; [ eapply wp_find_index; isBool | simpl; intros o ].
+  (* TODO extend [wp_if] to deal with a conditional on an option? *)
+  destruct o as [ _i |]; unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret.
-    (* TODO clean up; use [isBool] *)
-    eapply isBool_intro_true. eauto. }
+  { intros (i&?). unpack. wp_ret. isBool. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret.
-    (* TODO succeeds by chance *)
-    isBool. }
+  { intros (_&?). wp_ret. isBool. }
 Qed.
 
 End Exist.
@@ -1175,38 +1188,43 @@ Section ForAll.
 Context `{Inhabited A}.
 Implicit Types a : array A.
 Implicit Types xs : list A.
-Implicit Types f : A → bool.
 
-Definition for_all f a :=
+Variable f : A → bool.
+
+(* The code. *)
+
+Definition for_all a :=
   do b ← find_index (λ x, negb (f x)) a ;
   match b with
   | None   => true
   | Some _ => false
   end.
 
+(* Our hypothesis about [f]. (See [find_index].) *)
+
+Variable     OK : A → bool.
+Variable  notOK : A → bool.
+Variable f_spec :
+  ∀ x, isBool (f x) (OK x) (notOK x).
+
 (* The public specification of [for_all]. *)
 
-Lemma wp_for_all f a xs :
+Lemma wp_for_all a xs :
   isArray a xs →
-  wp (for_all f a) (λ b,
+  wp (for_all a) (λ b,
     isBool b
-      (∀ j, valid j xs → f (xs !!! j) = true)
-      (∃ j, valid j xs ∧ f (xs !!! j) = false)
+      (∀ j, valid j xs → OK (xs !!! j))
+      (∃ j, valid j xs ∧ notOK (xs !!! j))
   ).
 Proof.
   intros. unfold for_all.
-  eapply wp_bind; [ eapply wp_find_index; eauto | simpl; intros [ _i |]];
-  unfold find_index_inv.
+  eapply wp_bind; [ eapply wp_find_index; isBool | simpl; intros o ].
+  (* TODO extend [wp_if] to deal with a conditional on an option? *)
+  destruct o as [ _i |]; unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret.
-    (* TODO clean up; use [isBool] *)
-    autorewrite with bool in *.
-    eapply isBool_intro_false. eauto. }
+  { intros (i&?). unpack. wp_ret. isBool. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret.
-    (* TODO clean up *)
-    eapply isBool_intro_true. intro j. specialize (H1 j).
-    autorewrite with bool in *. eauto. }
+  { intros (_&?). wp_ret. isBool. }
 Qed.
 
 End ForAll.
@@ -1219,11 +1237,12 @@ Section Equal.
 Context `{Inhabited A}.
 Implicit Types a b : array A.
 Implicit Types xs ys : list A.
-Implicit Types eq : A → A → bool.
+
+Variable eq : A → A → bool.
 
 (* The code. *)
 
-Definition equal eq a b :=
+Definition equal a b :=
   do _m ← length a ;
   do _n ← length b ;
   if (_m =? _n)%uint63 then
@@ -1236,6 +1255,11 @@ Definition equal eq a b :=
     match o with continue => true | break () => false end
   else
     false.
+
+(* Our hypothesis about [equal]. *)
+
+Variable eq_spec :
+  ∀ x y, isBool1 (eq x y) (x = y).
 
 (* The proposition [equal_inv xs n i o] is the loop invariant. *)
 
@@ -1258,15 +1282,13 @@ Definition equal_inv xs ys i o :=
 (* The public specification of [equal]. *)
 
 (* TODO generalize to a relation other than equality *)
-(* TODO use [isBool] in the postcondition of [equal]? *)
 
-Lemma wp_equal eq a xs b ys :
-  (∀ x y, isBool1 (eq x y) (x = y)) →
+Lemma wp_equal a xs b ys :
   isArray a xs →
   isArray b ys →
-  wp (equal eq a b) (λ o, if o then xs = ys else xs ≠ ys).
+  wp (equal a b) (λ o, isBool1 o (xs = ys)).
 Proof.
-  intro eq_spec. intros. unfold equal.
+  intros. unfold equal.
   wp_length _m.
   wp_length _n.
   wp_if.

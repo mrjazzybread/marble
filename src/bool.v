@@ -58,7 +58,8 @@ Proof.
   unfold isBool. destruct b; simpl; tauto.
 Qed.
 
-(* The next three lemmas are currently unused. *)
+(* The following lemmas can prove [isBool b P Q] when [b], [P], [Q] are
+   already determined. *)
 
 Lemma isBool_intro b P :
   (b = true) ↔ P →
@@ -68,14 +69,14 @@ Proof.
   unfold isBool. destruct b; simpl; tauto.
 Qed.
 
-Lemma isBool_intro_true P Q :
+Global Instance isBool_intro_true P Q :
   P →
   isBool true P Q.
 Proof.
   unfold isBool. tauto.
 Qed.
 
-Lemma isBool_intro_false P Q :
+Global Instance isBool_intro_false P Q :
   Q →
   isBool false P Q.
 Proof.

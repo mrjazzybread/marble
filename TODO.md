@@ -11,10 +11,6 @@
 * `find_index_inv` and `equal_inv` could be instances of `isOption`.
   Develop `isOption`, extend `wp_if` to handle it.
 
-* In `find_index`, `exist`, `for_all`, `equal`,
-  the user-provided function `f`
-  should perhaps receive a spec involving `reflects`.
-
 * Tactics:
   + decrease the amount of boilerplate required by `wp` tactics
   + automate the search for a specification
