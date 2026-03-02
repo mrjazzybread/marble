@@ -497,12 +497,12 @@ Qed.
    equality test on the machine integers [_i] and [_j] tests the condition
    [proj i = proj j]. *)
 
-Lemma reflects_eqb_proj _i i _j j :
+Lemma isBool_eqb_proj _i i _j j :
   isInt _i i →
   isInt _j j →
-  reflects1 (_i =? _j)%uint63 (proj i = proj j).
+  isBool1 (_i =? _j)%uint63 (proj i = proj j).
 Proof.
-  intros. eapply reflects_intro. rewrite eqb_spec.
+  intros. eapply isBool_intro. rewrite eqb_spec.
   repeat destructIsInt.
   rewrite <- !to_nat_of_nat.
   split; [ congruence | eauto using to_nat_inj ].
@@ -511,14 +511,14 @@ Qed.
 (* If the natural integers [i] and [j] are representable then an equality
    test on the machine integers [_i] and [_j] tests the condition [i = j]. *)
 
-Global Instance reflects_eqb _i i _j j :
+Global Instance isBool_eqb _i i _j j :
   isInt _i i →
   isInt _j j →
   representable i →
   representable j →
-  reflects1 (_i =? _j)%uint63 (i = j).
+  isBool1 (_i =? _j)%uint63 (i = j).
 Proof.
-  intros. eapply reflects1_conseq; [ eapply reflects_eqb_proj; eauto |].
+  intros. eapply isBool1_conseq; [ eapply isBool_eqb_proj; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
@@ -533,13 +533,13 @@ Global Hint Resolve
 (* In the absence of hypotheses about the natural integers [i] and [j],
    the test [_i <?_j] tests the condition [proj i < proj j]. *)
 
-Lemma reflects_ltb_proj _i i _j j :
+Lemma isBool_ltb_proj _i i _j j :
   isInt _i i →
   isInt _j j →
-  reflects1 (_i <? _j)%uint63 (proj i < proj j)%nat.
+  isBool1 (_i <? _j)%uint63 (proj i < proj j)%nat.
 Proof.
   generalize wB_pos; intro HwB. intros.
-  eapply reflects_intro; rewrite ltb_spec.
+  eapply isBool_intro; rewrite ltb_spec.
   repeat destructIsInt.
   rewrite !of_Z_spec. unfold proj, wBN.
   rewrite <- (Nat2Z.id i) at 2.
@@ -551,14 +551,14 @@ Qed.
 (* If the natural integers [i] and [j] are representable then
    the test [_i <?_j] tests the condition [i < j]. *)
 
-Global Instance reflects_ltb _i i _j j :
+Global Instance isBool_ltb _i i _j j :
   isInt _i i →
   isInt _j j →
   representable i →
   representable j →
-  reflects1 (_i <? _j)%uint63 (i < j)%nat.
+  isBool1 (_i <? _j)%uint63 (i < j)%nat.
 Proof.
-  intros. eapply reflects1_conseq; [ eapply reflects_ltb_proj; eauto |].
+  intros. eapply isBool1_conseq; [ eapply isBool_ltb_proj; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
@@ -571,7 +571,7 @@ Local Opaque isInt.
 (* At the moment, array.v still needs [isInt] to be transparent. TODO *)
 
 (* TODO dirty *)
-Global Ltac reflects ::=
+Global Ltac isBool ::=
   eauto with int representable typeclass_instances.
 
 (* -------------------------------------------------------------------------- *)
@@ -776,7 +776,7 @@ Proof.
   intros Hstep Hfinish.
   intros _i i s.
   funelim (down_aux _i s); cleanup; clear Heqcall; intros ? ? Hinit;
-  reflects_magic.
+  isBool_magic.
   (* Case [i = 0]. *)
   { subst i.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
@@ -825,7 +825,7 @@ Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n s f :
 Proof.
   intros ? ? Hinit Hstep Hfinish.
   unfold down.
-  destruct (_n =? 0)%uint63 eqn:?; reflects_magic.
+  destruct (_n =? 0)%uint63 eqn:?; isBool_magic.
   (* Case [_n = 0]. *)
   { subst n. wp_ret. eauto. }
   (* Case [_n ≠ 0]. *)
@@ -923,7 +923,7 @@ Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
   wp (up_aux _b f _a s) Q.
 Proof.
   do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (up_aux _b f _a s); cleanup; clear Heqcall; reflects_magic.
+  funelim (up_aux _b f _a s); cleanup; clear Heqcall; isBool_magic.
   (* Case [a < b]. *)
   { assert (fact: a `max` b = (a + 1) `max` b) by lia.
     rewrite fact in Hfinish.
@@ -1154,7 +1154,7 @@ Lemma wp_interruptible_up_aux f (Q : S * option A → Prop) :
 Proof.
   unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
   funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall;
-  reflects_magic.
+  isBool_magic.
   (* TODO [funelim] creates an induction hypothesis that contains
           spurious parameters of type [S * option A] and [option A]. *)
   assert (dummy: option A). { exact continue. }

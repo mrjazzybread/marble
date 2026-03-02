@@ -96,13 +96,13 @@ Global Ltac wp_ret :=
   eapply wp_ret.
 
 Lemma wp_if {A} (b : bool) (e1 e2 : A) (Q : A → Prop) {P1 P2 : Prop} :
-  reflects b P1 P2 →
+  isBool b P1 P2 →
   (P1 → wp e1 Q) →
   (P2 → wp e2 Q) →
   wp (if b then e1 else e2) Q.
 Proof.
-  unfold reflects. intros. destruct b; eauto.
+  unfold isBool. intros. destruct b; eauto.
 Qed.
 
 Global Ltac wp_if :=
-  eapply wp_if; [ reflects | intros | intros ].
+  eapply wp_if; [ isBool | intros | intros ].

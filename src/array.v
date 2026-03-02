@@ -1147,7 +1147,7 @@ Definition exist f a :=
 Lemma wp_exist f a xs :
   isArray a xs →
   wp (exist f a) (λ b,
-    reflects b
+    isBool b
       (∃ j, valid j xs ∧ f (xs !!! j) = true)
       (∀ j, valid j xs → f (xs !!! j) = false)
   ).
@@ -1156,9 +1156,13 @@ Proof.
   eapply wp_bind; [ eapply wp_find_index; eauto | simpl; intros [ _i |]];
   unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. reflects. }
+  { intros (i&?). unpack. wp_ret.
+    (* TODO clean up; use [isBool] *)
+    eapply isBool_intro_true. eauto. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret. reflects. }
+  { intros (_&?). wp_ret.
+    (* TODO succeeds by chance *)
+    isBool. }
 Qed.
 
 End Exist.
@@ -1185,7 +1189,7 @@ Definition for_all f a :=
 Lemma wp_for_all f a xs :
   isArray a xs →
   wp (for_all f a) (λ b,
-    reflects b
+    isBool b
       (∀ j, valid j xs → f (xs !!! j) = true)
       (∃ j, valid j xs ∧ f (xs !!! j) = false)
   ).
@@ -1195,12 +1199,13 @@ Proof.
   unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
   { intros (i&?). unpack. wp_ret.
-    autorewrite with bool in *. (* TODO avoid this *)
-    reflects. }
+    (* TODO clean up; use [isBool] *)
+    autorewrite with bool in *.
+    eapply isBool_intro_false. eauto. }
   (* Case: [find_index] returns [None]. *)
   { intros (_&?). wp_ret.
     (* TODO clean up *)
-    eapply reflects_intro_true. intro j. specialize (H1 j).
+    eapply isBool_intro_true. intro j. specialize (H1 j).
     autorewrite with bool in *. eauto. }
 Qed.
 
@@ -1256,7 +1261,7 @@ Definition equal_inv xs ys i o :=
 (* TODO use [isBool] in the postcondition of [equal]? *)
 
 Lemma wp_equal eq a xs b ys :
-  (∀ x y, reflects1 (eq x y) (x = y)) →
+  (∀ x y, isBool1 (eq x y) (x = y)) →
   isArray a xs →
   isArray b ys →
   wp (equal eq a b) (λ o, if o then xs = ys else xs ≠ ys).

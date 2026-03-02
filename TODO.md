@@ -2,8 +2,18 @@
 
 ## Short term
 
-* Get rid of `isBool`, or improve it with two propositions.
-  Automate it.
+* Maybe `isInt` and `representable` should be type classes
+  so we can use type class search instead
+  of `eauto with int representable`.
+
+* Seal `isBool` and other similar assertions.
+
+* `find_index_inv` and `equal_inv` could be instances of `isOption`.
+  Develop `isOption`, extend `wp_if` to handle it.
+
+* In `find_index`, `exist`, `for_all`, `equal`,
+  the user-provided function `f`
+  should perhaps receive a spec involving `reflects`.
 
 * Tactics:
   + decrease the amount of boilerplate required by `wp` tactics
