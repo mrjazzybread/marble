@@ -493,25 +493,32 @@ Qed.
 
 (* Equality. *)
 
-Lemma eq_compat _i i _j j :
+(* In the absence of hypotheses about the natural integers [i] and [j], an
+   equality test on the machine integers [_i] and [_j] tests the condition
+   [proj i = proj j]. *)
+
+Lemma reflects_eqb_proj _i i _j j :
   isInt _i i →
   isInt _j j →
-  isBool (_i =? _j)%uint63 (proj i = proj j).
+  reflects1 (_i =? _j)%uint63 (proj i = proj j).
 Proof.
-  intros. unfold isBool. repeat destructIsInt.
+  intros. eapply reflects_intro. rewrite eqb_spec.
+  repeat destructIsInt.
   rewrite <- !to_nat_of_nat.
-  rewrite eqb_spec.
   split; [ congruence | eauto using to_nat_inj ].
 Qed.
 
-Lemma eq_compat' _i i _j j :
+(* If the natural integers [i] and [j] are representable then an equality
+   test on the machine integers [_i] and [_j] tests the condition [i = j]. *)
+
+Global Instance reflects_eqb _i i _j j :
   isInt _i i →
   isInt _j j →
   representable i →
   representable j →
-  isBool (_i =? _j)%uint63 (i = j).
+  reflects1 (_i =? _j)%uint63 (i = j).
 Proof.
-  intros. eapply isBool_conseq; [ eapply eq_compat; eauto |].
+  intros. eapply reflects1_conseq; [ eapply reflects_eqb_proj; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
@@ -521,14 +528,16 @@ Qed.
    construct to express a conditional, and prevents us from beginning
    with an explicit [bind] to evaluate the Boolean condition. *)
 
+(* TODO double-check whether these lemmas are needed *)
+
 Local Lemma eq_compat'_0_adhoc _i i :
   isInt _i i →
   representable i →
   (_i =? 0)%uint63 = true →
   (i = 0)%nat.
 Proof.
-  intros. eapply isBool_elim;
-    eauto using eq_compat' with int representable.
+  intros. eapply reflects_elim_true;
+  eauto with int representable typeclass_instances.
 Qed.
 
 Local Lemma eq_compat'_0_neg_adhoc _i i :
@@ -537,8 +546,8 @@ Local Lemma eq_compat'_0_neg_adhoc _i i :
   (_i =? 0)%uint63 = false →
   (i ≠ 0)%nat.
 Proof.
-  intros. eapply isBool_elim_neg;
-    eauto using eq_compat' with int representable.
+  intros. eapply reflects_elim_false;
+  eauto with int representable typeclass_instances.
 Qed.
 
 Local Hint Resolve
@@ -554,21 +563,17 @@ Global Hint Resolve
   Z.mod_pos
 : lia.
 
-Lemma ltb_spec_negated _i _j :
-  (_i <? _j)%uint63 = false ↔ (φ _j ≤ φ _i)%Z.
-Proof.
-  generalize (ltb_spec _i _j); intro.
-  destruct ((_i <? _j)%uint63); lia.
-Qed.
+(* In the absence of hypotheses about the natural integers [i] and [j],
+   the test [_i <?_j] tests the condition [proj i < proj j]. *)
 
-Lemma ltb_compat _i i _j j :
+Lemma reflects_ltb_proj _i i _j j :
   isInt _i i →
   isInt _j j →
-  isBool (_i <? _j)%uint63 (proj i < proj j)%nat.
+  reflects1 (_i <? _j)%uint63 (proj i < proj j)%nat.
 Proof.
-  generalize wB_pos; intro HwB.
-  intros. unfold isBool. repeat destructIsInt.
-  rewrite ltb_spec.
+  generalize wB_pos; intro HwB. intros.
+  eapply reflects_intro; rewrite ltb_spec.
+  repeat destructIsInt.
   rewrite !of_Z_spec. unfold proj, wBN.
   rewrite <- (Nat2Z.id i) at 2.
   rewrite <- (Nat2Z.id j) at 2.
@@ -576,18 +581,22 @@ Proof.
   apply Z2Nat.inj_lt; eauto with lia.
 Qed.
 
-Lemma ltb_compat' _i i _j j :
+(* If the natural integers [i] and [j] are representable then
+   the test [_i <?_j] tests the condition [i < j]. *)
+
+Global Instance reflects_ltb _i i _j j :
   isInt _i i →
   isInt _j j →
   representable i →
   representable j →
-  isBool (_i <? _j)%uint63 (i < j)%nat.
+  reflects1 (_i <? _j)%uint63 (i < j)%nat.
 Proof.
-  intros. eapply isBool_conseq; [ eapply ltb_compat; eauto |].
+  intros. eapply reflects1_conseq; [ eapply reflects_ltb_proj; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
 (* More ad hoc lemmas. *)
+(* TODO double-check *)
 
 Local Lemma lt_compat'_adhoc _a a _b b :
   isInt _a a →
@@ -597,9 +606,7 @@ Local Lemma lt_compat'_adhoc _a a _b b :
   (_a <? _b)%uint63 = true →
   (a < b)%nat.
 Proof.
-  intros.
-  eapply isBool_elim; [| eauto ].
-  eapply ltb_compat'; eauto.
+  intros. eapply reflects_elim_true; eauto using reflects_ltb.
 Qed.
 
 Local Lemma lt_compat'_neg_adhoc _a a _b b :
@@ -610,9 +617,7 @@ Local Lemma lt_compat'_neg_adhoc _a a _b b :
   (_a <? _b)%uint63 = false →
   ¬ (a < b)%nat.
 Proof.
-  intros.
-  eapply isBool_elim_neg; [| eauto ].
-  eapply ltb_compat'; eauto.
+  intros. eapply reflects_elim_false; eauto using reflects_ltb.
 Qed.
 
 Local Hint Resolve

@@ -1,4 +1,5 @@
 From stdpp Require Import base.
+From array Require Import bool.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -48,6 +49,17 @@ Proof.
   reflexivity.
 Qed.
 
+(* The lemma [bind_if] duplicates the continuation [k]. In situations
+   where [k] is very small, this can be convenient; it removes the need
+   to provide a specification of the join point. *)
+
+Lemma bind_if {A B} (c : bool) (e1 e2 : A) (k : A → B) :
+  bind (if c then e1 else e2) k =
+  if c then bind e1 k else bind e2 k.
+Proof.
+  destruct c; reflexivity.
+Qed.
+
 (* TODO use a nicer notation? *)
 Global Notation "'do' x ← y ; z" := (bind y (λ x : _, z))
   (at level 20, x pattern, y at level 100, z at level 200).
@@ -74,8 +86,26 @@ Proof.
   eauto.
 Qed.
 
+Global Ltac wp_bind_eq :=
+  eapply wp_bind_eq; intros ? ->.
+
 (* TODO [bind] should be inlined away at extraction *)
 Global Opaque wp.
 
 Global Ltac wp_ret :=
   eapply wp_ret.
+
+Lemma wp_if {A} (b : bool) (e1 e2 : A) (Q : A → Prop) {P1 P2 : Prop} :
+  reflects b P1 P2 →
+  (P1 → wp e1 Q) →
+  (P2 → wp e2 Q) →
+  wp (if b then e1 else e2) Q.
+Proof.
+  unfold reflects. intros. destruct b; eauto.
+Qed.
+
+Global Ltac reflects :=
+  eauto with int representable typeclass_instances.
+
+Global Ltac wp_if :=
+  eapply wp_if; [ reflects | intros | intros ].

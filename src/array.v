@@ -490,7 +490,7 @@ Proof.
   { rename s into xs.
     match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
     liftIsIntAndClear.
-    eapply wp_bind_eq. intros x ->.
+    wp_bind_eq.
     eapply wp_ret.
     list; split; [ lia |].
     intros j ?.
@@ -1071,8 +1071,9 @@ Proof.
     (* Preservation. *)
     { intros. list.
       wp_get x.
+      rewrite bind_if.
       destruct (f x) eqn:Heq;
-      eapply wp_bind_eq; intros ? ->;
+      wp_bind_eq;
       wp_ret; subst x.
       (* Case: [f x = true]. *)
       + eauto with lia.
@@ -1146,19 +1147,18 @@ Definition exist f a :=
 Lemma wp_exist f a xs :
   isArray a xs →
   wp (exist f a) (λ b,
-    if b then
-      ∃ j, valid j xs ∧ f (xs !!! j) = true
-    else
-      ∀ j, valid j xs → f (xs !!! j) = false
+    reflects b
+      (∃ j, valid j xs ∧ f (xs !!! j) = true)
+      (∀ j, valid j xs → f (xs !!! j) = false)
   ).
 Proof.
   intros. unfold exist.
   eapply wp_bind; [ eapply wp_find_index; eauto | simpl; intros [ _i |]];
   unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. eauto. }
+  { intros (i&?). unpack. wp_ret. reflects. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret.  eauto. }
+  { intros (_&?). wp_ret. reflects. }
 Qed.
 
 End Exist.
@@ -1185,19 +1185,23 @@ Definition for_all f a :=
 Lemma wp_for_all f a xs :
   isArray a xs →
   wp (for_all f a) (λ b,
-    if b then
-      ∀ j, valid j xs → f (xs !!! j) = true
-    else
-      ∃ j, valid j xs ∧ f (xs !!! j) = false
+    reflects b
+      (∀ j, valid j xs → f (xs !!! j) = true)
+      (∃ j, valid j xs ∧ f (xs !!! j) = false)
   ).
 Proof.
   intros. unfold for_all.
   eapply wp_bind; [ eapply wp_find_index; eauto | simpl; intros [ _i |]];
   unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. eauto using show_false. }
+  { intros (i&?). unpack. wp_ret.
+    autorewrite with bool in *. (* TODO avoid this *)
+    reflects. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret. eauto using show_true. }
+  { intros (_&?). wp_ret.
+    (* TODO clean up *)
+    eapply reflects_intro_true. intro j. specialize (H1 j).
+    autorewrite with bool in *. eauto. }
 Qed.
 
 End ForAll.
@@ -1252,7 +1256,7 @@ Definition equal_inv xs ys i o :=
 (* TODO use [isBool] in the postcondition of [equal]? *)
 
 Lemma wp_equal eq a xs b ys :
-  (∀ x y, isBool (eq x y) (x = y)) →
+  (∀ x y, reflects1 (eq x y) (x = y)) →
   isArray a xs →
   isArray b ys →
   wp (equal eq a b) (λ o, if o then xs = ys else xs ≠ ys).
@@ -1260,13 +1264,9 @@ Proof.
   intro eq_spec. intros. unfold equal.
   wp_length _m.
   wp_length _n.
-  (* TODO clean up the use of [isBool] and its lemmas *)
-  assert (Hc: isBool (_m =? _n)%uint63 (len xs = len ys))
-    by eauto using eq_compat'.
-  destruct (_m =? _n)%uint63 eqn:Heq.
+  wp_if.
   (* First branch: the lengths of the arrays coincide. *)
-  { apply isBool_elim in Hc; [ clear Heq | eauto ].
-    rewrite interruptible_up_unit_eq, bind_bind.
+  { rewrite interruptible_up_unit_eq, bind_bind.
     eapply wp_bind.
     { eapply wp_interruptible_up_rigid
         with (inv := λ i s o, equal_inv xs ys i o);
@@ -1274,15 +1274,11 @@ Proof.
       (* Preservation. *)
       intros.
       wp_get x. wp_get y.
-      destruct (eq x y) eqn:Heq;
-      eapply wp_bind_eq; intros ? ->;
-      wp_ret; subst.
+      rewrite bind_if. wp_if; wp_bind_eq; wp_ret; subst.
       (* Case: [eq x y] returns [true]. *)
-      { eapply isBool_elim in Heq; [| eauto ].
-        eapply one_step_further; eauto. }
+      { eapply one_step_further; eauto. }
       (* Case: [eq x y] returns [false]. *)
-      { eapply isBool_elim_neg in Heq; [| eauto ]. list.
-        eauto with lia. }
+      { list. eauto with lia. }
     }
     intros [? [[]|]]; unfold equal_inv; intros (i&?); unpack;
     unfold bind; wp_ret.
@@ -1293,8 +1289,7 @@ Proof.
       listx_total j. eauto with lia. }
   }
   (* Second branch: the lengths of the arrays differ. *)
-  { apply isBool_elim_neg in Hc; [ clear Heq | eauto ].
-    wp_ret. congruence. }
+  { wp_ret. congruence. }
 Qed.
 
 End Equal.

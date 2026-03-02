@@ -9,10 +9,18 @@ Set Universe Polymorphism.
    the other is [is_true], a function of type [bool → Prop].
    On a related topic, stdpp offers [decide : {P} + {¬P}]. *)
 
-Definition reflects (b : bool) (P Q : Prop) : Prop :=
+Class reflects (b : bool) (P Q : Prop) : Prop :=
+  build_reflects :
   if b then P else Q.
+Global Hint Mode reflects ! - - : typeclass_instances.
+  (* Instantiate the parameter [b] only if its head is already known,
+     that is, not a metavariable. The other two parameters are outputs. *)
 
-Lemma reflects_andb b1 P1 Q1 b2 P2 Q2 :
+(* TODO rename *)
+Global Notation reflects1 b P :=
+  (reflects b P (¬P)).
+
+Global Instance reflects_andb b1 P1 Q1 b2 P2 Q2 :
   reflects b1 P1 Q1 →
   reflects b2 P2 Q2 →
   reflects (andb b1 b2) (P1 ∧ P2) (Q1 ∨ Q2).
@@ -20,7 +28,7 @@ Proof.
   unfold reflects. destruct b1, b2; simpl; tauto.
 Qed.
 
-Lemma reflects_orb b1 P1 Q1 b2 P2 Q2 :
+Global Instance reflects_orb b1 P1 Q1 b2 P2 Q2 :
   reflects b1 P1 Q1 →
   reflects b2 P2 Q2 →
   reflects (orb b1 b2) (P1 ∨ P2) (Q1 ∧ Q2).
@@ -28,7 +36,7 @@ Proof.
   unfold reflects. destruct b1, b2; simpl; tauto.
 Qed.
 
-Lemma reflects_negb b P Q :
+Global Instance reflects_negb b P Q :
   reflects b P Q →
   reflects (negb b) Q P.
 Proof.
@@ -43,44 +51,53 @@ Proof.
   unfold reflects. destruct b; simpl; tauto.
 Qed.
 
-Lemma reflects_intro_true P Q :
+Global Instance reflects_intro_true P Q :
   P →
   reflects true P Q.
 Proof.
   unfold reflects. tauto.
 Qed.
 
-Lemma reflects_intro_false P Q :
+Global Instance reflects_intro_false P Q :
   Q →
   reflects false P Q.
 Proof.
   unfold reflects. tauto.
 Qed.
 
+(* TODO remove? *)
 Lemma reflects_elim_true b P Q :
-  reflects b P Q →
   b = true →
+  reflects b P Q →
   P.
 Proof.
   unfold reflects. intros. subst. tauto.
 Qed.
 
 Lemma reflects_elim_false b P Q :
-  reflects b P Q →
   b = false →
+  reflects b P Q →
   Q.
 Proof.
   unfold reflects. intros. subst. tauto.
 Qed.
 
-Lemma prove_bool_is_false b :
-  b ≠ true →
-  b = false.
+Lemma reflects_conseq b P P' Q Q' :
+  reflects b P Q →
+  (P ↔ P') →
+  (Q ↔ Q') →
+  reflects b P' Q'.
 Proof.
-  destruct b; congruence.
+  unfold reflects. destruct b; tauto.
 Qed.
 
-(* TODO here *)
+Lemma reflects1_conseq b P P' :
+  reflects1 b P →
+  (P ↔ P') →
+  reflects1 b P'.
+Proof.
+  unfold reflects. destruct b; tauto.
+Qed.
 
 Lemma bool_neg b :
   b = false ↔ b ≠ true.
@@ -88,58 +105,25 @@ Proof.
   destruct b; split; congruence.
 Qed.
 
-Lemma show_true b :
-  negb b = false →
+Lemma negb_eq_false b :
+  negb b = false ↔
   b = true.
 Proof.
-  destruct b; simpl; eauto.
+  assert (false ≠ true) by congruence.
+  assert (true ≠ false) by congruence.
+  destruct b; simpl; tauto.
 Qed.
 
-Lemma show_false b :
-  negb b = true →
+Lemma negb_eq_true b :
+  negb b = true ↔
   b = false.
 Proof.
-  destruct b; simpl; eauto.
+  assert (false ≠ true) by congruence.
+  assert (true ≠ false) by congruence.
+  destruct b; simpl; tauto.
 Qed.
 
-Definition isBool (b : bool) (P : Prop) :=
-  b = true ↔ P.
-
-Lemma isBool_conseq b P P' :
-  isBool b P →
-  (P ↔ P') →
-  isBool b P'.
-Proof.
-  unfold isBool. tauto.
-Qed.
-
-Lemma isBool_intro P :
-  P →
-  isBool true P.
-Proof.
-  unfold isBool. tauto.
-Qed.
-
-Lemma isBool_intro_neg P :
-  ¬ P →
-  isBool false P.
-Proof.
-  unfold isBool. split; intros; [ congruence | tauto ].
-Qed.
-
-Lemma isBool_elim b P :
-  isBool b P →
-  b = true →
-  P.
-Proof.
-  unfold isBool. tauto.
-Qed.
-
-Lemma isBool_elim_neg b P :
-  isBool b P →
-  b = false →
-  ¬ P.
-Proof.
-  generalize (bool_neg b).
-  unfold isBool. tauto.
-Qed.
+Global Hint Rewrite
+  negb_eq_false
+  negb_eq_true
+: bool.
