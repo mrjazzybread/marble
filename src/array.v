@@ -284,7 +284,9 @@ Proof.
   destruct (decide (i = j)); [ subst j |]; list.
   + rewrite get_set_same.
     { eauto. }
-    { Fail eapply isArray_use_valid. (* TODO why does this fail? *)
+    { (* In Rocq 9.1, [eapply fails], but [simple eapply succeeds]. *)
+      (* https://github.com/rocq-prover/rocq/issues/21674 *)
+      Fail eapply isArray_use_valid.
       simple eapply isArray_use_valid; eauto. }
   + rewrite get_set_other by eauto 10 using of_nat_inj' with representable.
     erewrite isArray_pi3 by eauto.
