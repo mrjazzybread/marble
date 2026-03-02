@@ -104,8 +104,5 @@ Proof.
   unfold reflects. intros. destruct b; eauto.
 Qed.
 
-Global Ltac reflects :=
-  eauto with int representable typeclass_instances.
-
 Global Ltac wp_if :=
   eapply wp_if; [ reflects | intros | intros ].

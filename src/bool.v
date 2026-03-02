@@ -99,6 +99,38 @@ Proof.
   unfold reflects. destruct b; tauto.
 Qed.
 
+(* The tactic [reflects] attempts to prove a goal of the form
+   [reflects b ?P ?Q] using type class search. *)
+
+Ltac reflects :=
+  eauto with typeclass_instances.
+
+(* The tactic [reflects_magic] looks for a hypothesis of the form [?b = true]
+   or [?b = false] and transforms it into a hypothesis of the form [P] or [Q]
+   provided type class search finds a fact of the form [reflects b P Q]. *)
+
+Ltac reflects_magic :=
+  match goal with
+  | h: ?b = true |- _ =>
+      let P := fresh in
+      evar (P : Prop);
+      assert (P); [
+        eapply (@reflects_elim_true b); [ exact h | reflects ]
+      | clear h; subst P
+      ]
+  | h: ?b = false |- _ =>
+      let P := fresh in
+      evar (P : Prop);
+      assert (P); [
+        eapply (@reflects_elim_false b); [ exact h | reflects ]
+      | clear h; subst P
+      ]
+  end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A few basic facts about Booleans. *)
+
 Lemma bool_neg b :
   b = false ↔ b ≠ true.
 Proof.

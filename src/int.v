@@ -522,39 +522,6 @@ Proof.
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
-(* The following lemmas come in handy in the definitions of the loops [up]
-   and [down]. These loops are written in a somewhat non-standard style,
-   as they use Equations. This seems to force us to use the [with]
-   construct to express a conditional, and prevents us from beginning
-   with an explicit [bind] to evaluate the Boolean condition. *)
-
-(* TODO double-check whether these lemmas are needed *)
-
-Local Lemma eq_compat'_0_adhoc _i i :
-  isInt _i i →
-  representable i →
-  (_i =? 0)%uint63 = true →
-  (i = 0)%nat.
-Proof.
-  intros. eapply reflects_elim_true;
-  eauto with int representable typeclass_instances.
-Qed.
-
-Local Lemma eq_compat'_0_neg_adhoc _i i :
-  isInt _i i →
-  representable i →
-  (_i =? 0)%uint63 = false →
-  (i ≠ 0)%nat.
-Proof.
-  intros. eapply reflects_elim_false;
-  eauto with int representable typeclass_instances.
-Qed.
-
-Local Hint Resolve
-  eq_compat'_0_adhoc
-  eq_compat'_0_neg_adhoc
-: adhoc.
-
 (* -------------------------------------------------------------------------- *)
 
 (* Comparison. *)
@@ -595,36 +562,6 @@ Proof.
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
-(* More ad hoc lemmas. *)
-(* TODO double-check *)
-
-Local Lemma lt_compat'_adhoc _a a _b b :
-  isInt _a a →
-  isInt _b b →
-  representable a →
-  representable b →
-  (_a <? _b)%uint63 = true →
-  (a < b)%nat.
-Proof.
-  intros. eapply reflects_elim_true; eauto using reflects_ltb.
-Qed.
-
-Local Lemma lt_compat'_neg_adhoc _a a _b b :
-  isInt _a a →
-  isInt _b b →
-  representable a →
-  representable b →
-  (_a <? _b)%uint63 = false →
-  ¬ (a < b)%nat.
-Proof.
-  intros. eapply reflects_elim_false; eauto using reflects_ltb.
-Qed.
-
-Local Hint Resolve
-  lt_compat'_adhoc
-  lt_compat'_neg_adhoc
-: adhoc.
-
 (* Beyond this point, [isInt] is opaque. *)
 
 (* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
@@ -632,6 +569,10 @@ Local Hint Resolve
 Local Opaque isInt.
 
 (* At the moment, array.v still needs [isInt] to be transparent. TODO *)
+
+(* TODO dirty *)
+Global Ltac reflects ::=
+  eauto with int representable typeclass_instances.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -834,14 +775,14 @@ Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) :
 Proof.
   intros Hstep Hfinish.
   intros _i i s.
-  funelim (down_aux _i s); cleanup; clear Heqcall; intros ? ? Hinit.
+  funelim (down_aux _i s); cleanup; clear Heqcall; intros ? ? Hinit;
+  reflects_magic.
   (* Case [i = 0]. *)
-  { assert (i = 0) by eauto with adhoc. subst i.
+  { subst i.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
-    eapply wp_ret. eauto. }
+    wp_ret. eauto. }
   (* Case [i ≠ 0]. *)
   { rename H into IH.
-    assert (i ≠ 0) by eauto with adhoc.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ?].
     eapply IH; eauto with int representable lia; autorewrite with nat.
     eauto. }
@@ -884,13 +825,11 @@ Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n s f :
 Proof.
   intros ? ? Hinit Hstep Hfinish.
   unfold down.
-  destruct (_n =? 0)%uint63 eqn:e.
+  destruct (_n =? 0)%uint63 eqn:?; reflects_magic.
   (* Case [_n = 0]. *)
-  { assert (n = 0) by eauto with adhoc. subst n.
-    eauto using wp_ret. }
+  { subst n. wp_ret. eauto. }
   (* Case [_n ≠ 0]. *)
-  { assert (n ≠ 0) by eauto with adhoc.
-    (* We strengthen the loop invariant with [i ≤ n]. *)
+  { (* We strengthen the loop invariant with [i ≤ n]. *)
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with int lia;
       autorewrite with nat;
@@ -984,18 +923,16 @@ Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
   wp (up_aux _b f _a s) Q.
 Proof.
   do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (up_aux _b f _a s); cleanup; clear Heqcall.
+  funelim (up_aux _b f _a s); cleanup; clear Heqcall; reflects_magic.
   (* Case [a < b]. *)
-  { assert (a < b) by eauto with adhoc.
-    assert (fact: a `max` b = (a + 1) `max` b) by lia.
+  { assert (fact: a `max` b = (a + 1) `max` b) by lia.
     rewrite fact in Hfinish.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
     eauto with int representable lia. }
   (* Case [¬ a < b]. *)
-  { assert (¬ (a < b)) by eauto with adhoc.
-    assert (fact: a `max` b = a) by lia.
+  { assert (fact: a `max` b = a) by lia.
     rewrite fact in Hfinish.
-    eapply wp_ret. eauto. }
+    wp_ret. eauto. }
 Qed.
 
 (* A definition of [up], with reordered parameters. *)
@@ -1216,18 +1153,17 @@ Lemma wp_interruptible_up_aux f (Q : S * option A → Prop) :
   wp (interruptible_up_aux _b f _a s) Q.
 Proof.
   unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall.
+  funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall;
+  reflects_magic.
   (* TODO [funelim] creates an induction hypothesis that contains
           spurious parameters of type [S * option A] and [option A]. *)
   assert (dummy: option A). { exact continue. }
   (* Case [a < b]. *)
-  { assert (a < b) by eauto with adhoc.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
+  { eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
     + wp_ret. eauto with lia.
     + eapply H; intuition eauto with int representable lia. }
   (* Case [¬ a < b]. *)
-  { assert (¬ (a < b)) by eauto with adhoc.
-    eapply wp_ret. eauto with lia. }
+  { wp_ret. eauto with lia. }
 Qed.
 
 (* A definition of [interruptible_up], with reordered parameters. *)
