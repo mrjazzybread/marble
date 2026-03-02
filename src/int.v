@@ -572,7 +572,7 @@ Local Opaque isInt.
 
 (* TODO dirty *)
 Global Ltac isBool ::=
-  eauto with int representable typeclass_instances.
+  eauto with int representable typeclass_instances lia.
 
 (* -------------------------------------------------------------------------- *)
 

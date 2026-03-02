@@ -597,3 +597,57 @@ Global Ltac simplify_list_equality_goal :=
   repeat rewrite <- app_assoc;
   repeat eapply simplify_app_l;
   list.
+
+(* -------------------------------------------------------------------------- *)
+
+Lemma Forall2_lookup_total `{Inhabited A} P (xs ys : list A) :
+  Forall2 P xs ys ↔
+    length xs = length ys ∧
+    ∀ i, i < length xs → P (xs !!! i) (ys !!! i).
+Proof.
+  split.
+  + revert xs ys. induction 1; simpl.
+    - eauto with lia.
+    - destruct IHForall2.
+      split; [ eauto with lia | intros i ? ].
+      case (decide (i = 0)); intros; [| replace i with ((i - 1) + 1) by lia ];
+      list; eauto with lia.
+  + revert xs ys. induction xs as [| x xs]; intros ys Hyp;
+    destruct ys as [| y ys ]; list in Hyp; try lia.
+    - constructor.
+    - destruct Hyp as [ ? Hyp ].
+      constructor.
+      * specialize (Hyp 0). list in Hyp. eauto with lia.
+      * eapply IHxs. split; [ lia |]. intros i ?.
+        specialize (Hyp (S i)). list in Hyp. eauto with lia.
+Qed.
+
+(* The following instances allow the tactic [isBool] to exploit
+   the previous result to establish [isBool _ (Forall2 _ _ _)]. *)
+
+From array Require Import bool.
+
+Global Instance isBool1_true_Forall2 `{Inhabited A} P (xs ys : list A) :
+  length xs = length ys →
+  (∀ i, valid i xs → P (xs !!! i) (ys !!! i)) →
+  isBool1 true (Forall2 P xs ys).
+Proof.
+  intros. eapply isBool_intro_true. rewrite Forall2_lookup_total. firstorder.
+Qed.
+
+Global Instance isBool1_false_Forall2_witness `{Inhabited A} P (xs ys : list A) :
+  ∀ i,
+  valid i xs →
+  valid i ys →
+  ¬ P (xs !!! i) (ys !!! i) →
+  isBool1 false (Forall2 P xs ys).
+Proof.
+  intros. eapply isBool_intro_false. rewrite Forall2_lookup_total. firstorder.
+Qed.
+
+Global Instance isBool1_false_Forall2_lengths `{Inhabited A} P (xs ys : list A) :
+  length xs ≠ length ys →
+  isBool1 false (Forall2 P xs ys).
+Proof.
+  intros. eapply isBool_intro_false. rewrite Forall2_lookup_total. firstorder.
+Qed.

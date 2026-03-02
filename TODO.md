@@ -26,6 +26,12 @@
   + `sort`
   + `fold_left`, `fold_left2`?
 
+* When a function `f` has result type `bool`,
+  we sometimes write its specification directly
+  under the form `isBool1 (f x) (...)`
+  and sometimes use the judgement `wp`.
+  Does this lack of uniformity create a problem?
+
 # OCaml Extraction
 
 * Set up extraction to use defensive, non-persistent arrays.

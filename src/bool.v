@@ -31,7 +31,7 @@ Global Notation isBool1 b P :=
    [isBool b ?P ?Q] using type class search. *)
 
 Global Ltac isBool :=
-  eauto with typeclass_instances.
+  eauto with typeclass_instances lia.
 
 (* The next three lemmas construct [P] and [Q] by examination of [b]. *)
 
@@ -83,7 +83,7 @@ Proof.
   unfold isBool. tauto.
 Qed.
 
-(* These two lemmas are currently unused. *)
+(* Consequence rules. *)
 
 Lemma isBool_conseq b P P' Q Q' :
   isBool b P Q →

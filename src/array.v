@@ -1256,10 +1256,14 @@ Definition equal a b :=
   else
     false.
 
-(* Our hypothesis about [equal]. *)
+(* Our hypothesis about [eq]. *)
+
+Variable EQ : A → A → Prop.
+
+Local Infix "≡" := EQ (at level 70, no associativity).
 
 Variable eq_spec :
-  ∀ x y, isBool1 (eq x y) (x = y).
+  ∀ x y, isBool1 (eq x y) (x ≡ y).
 
 (* The proposition [equal_inv xs n i o] is the loop invariant. *)
 
@@ -1268,25 +1272,25 @@ Definition equal_inv xs ys i o :=
   | continue =>
       (* If [o] is [continue] then, up to index [i], the lists [xs]
          and [ys] agree. *)
-      ∀ j, j < i → xs !!! j = ys !!! j
+      ∀ j, j < i → xs !!! j ≡ ys !!! j
   | break () =>
       (* If [o] is [break ()] then [i - 1] is a valid index into the list
          [xs], the two lists agree up to index [i - 1], and they disagree
          at this index. *)
       let i := i - 1 in
       valid i xs ∧
-      xs !!! i ≠ ys !!! i ∧
-      ∀ j, j < i → xs !!! j = ys !!! j
+      ¬ xs !!! i ≡ ys !!! i ∧
+      ∀ j, j < i → xs !!! j ≡ ys !!! j
   end.
 
 (* The public specification of [equal]. *)
 
-(* TODO generalize to a relation other than equality *)
-
 Lemma wp_equal a xs b ys :
   isArray a xs →
   isArray b ys →
-  wp (equal a b) (λ o, isBool1 o (xs = ys)).
+  wp (equal a b) (λ o,
+      isBool1 o (Forall2 EQ xs ys)
+  ).
 Proof.
   intros. unfold equal.
   wp_length _m.
@@ -1310,13 +1314,31 @@ Proof.
     intros [? [[]|]]; unfold equal_inv; intros (i&?); unpack;
     unfold bind; wp_ret.
     (* Case: the loop ends with [break ()]. *)
-    { congruence. }
+    { isBool. }
     (* Case: the loop ends with [continue]. *)
     { rewrite finished_leq_iff in * by lia. unpack.
-      listx_total j. eauto with lia. }
+      isBool. }
   }
   (* Second branch: the lengths of the arrays differ. *)
-  { wp_ret. congruence. }
+  { wp_ret. isBool. }
 Qed.
 
 End Equal.
+
+(* As a special case, we recover a simpler specification of [equal]
+   in the case where the relation [≡] is equality. *)
+
+Lemma wp_equal_equality `{Inhabited A}
+  (eq : A → A → bool)
+  (eq_spec : ∀ x y, isBool1 (eq x y) (x = y))
+  a xs b ys :
+  isArray a xs →
+  isArray b ys →
+  wp (equal eq a b) (λ o, isBool1 o (xs = ys)).
+Proof.
+  intros.
+  eapply wp_conseq; [ eapply wp_equal; eauto | simpl ].
+  intros o Ho. eapply isBool1_conseq; [ eauto |].
+  (* [Forall2 (@eq A)] is the same as [@eq (list A)]. *)
+  symmetry. eapply list_eq_Forall2.
+Qed.
