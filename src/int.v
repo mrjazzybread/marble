@@ -606,20 +606,6 @@ Global Ltac isBool ::=
 Definition ilt _i _j :=
   φ _i < φ _j.
 
-(* TODO unused *)
-Lemma ltb_spec' _i _j :
-  ltb _i _j = true ↔ ilt _i _j.
-Proof.
-  unfold ilt. rewrite ltb_spec. tauto.
-Qed.
-
-(* TODO unused *)
-Lemma ilt_alt_def _i _j :
-  ilt _i _j ↔ 0 ≤ φ _i < φ _j.
-Proof.
-  unfold ilt. split; eauto with lia.
-Qed.
-
 Lemma ilt_wf : well_founded ilt.
 Proof.
   eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := φ) ].
