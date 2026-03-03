@@ -416,6 +416,8 @@ Global Ltac isArray :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* Converting an array segment to a list: [segment_to_list]. *)
+
 (* Converting an array to a list: [to_list]. *)
 
 Section ToList.
@@ -425,34 +427,43 @@ Implicit Types xs : list A.
 
 (* The code. *)
 
-Definition to_list a :=
-  (* Obtain the length [n] of the array. *)
-  do _n ← length a ;
-  (* For [i] ranging from [n-1] down to 0,
-     with a running state [xs], which is initially empty, *)
-  down _n 0 [] @@ λ _i xs,
-  (* Read the [i]-th element of the array [a], *)
-  do x ← a.[_i] ;
+Definition segment_to_list a _i _k :=
+  (* For [_j] ranging from [_k] down to [_i],
+     with running state [xs], initially empty, *)
+  down _k _i [] @@ λ _j xs,
+  (* Read the [_j]-th element of the array [a], *)
+  do x ← a.[_j] ;
   (* and prepend it in front of [xs]. *)
   x :: xs.
 
-(* One public specification of [to_list]. *)
+Definition to_list a :=
+  (* Obtain the length [n] of the array. *)
+  do _n ← length a ;
+  (* Convert all of the array to a list. *)
+  segment_to_list a 0 _n.
+
+(* A specification of [segment_to_list],
+   and a first specification of [to_list]. *)
 
 (* This specification is based on the specifications of [length] and [get]
    that were given above. Because of this, the proposition [isArray a xs]
-   appears in the precondition of [to_list]. A stronger specification is
-   given later on. *)
+   appears in the precondition of [to_list]. A stronger specification of
+   [to_list] is given later on. *)
 
-Lemma wp_to_list a xs :
+Lemma wp_segment_to_list a xs _i i _k k :
   isArray a xs →
-  wp (to_list a) (λ xs', xs' = xs).
+  isInt _i i →
+  representable i →
+  isInt _k k →
+  representable k →
+  valid_seg i k xs →
+  wp (segment_to_list a _i _k) (λ xs', xs' = seg i k xs).
 Proof.
   (* This proof relies on the lemmas [wp_length] and [wp_get].
      It does not need to unfold the definition of [isArray]. *)
-  intro. unfold to_list.
-  wp_length _n.
+  intros. unfold segment_to_list.
   (* The loop invariant. *)
-  eapply wp_down with (inv := λ i ys, ys = final_seg i xs);
+  eapply wp_down with (inv := λ j ys, ys = seg j k xs);
     eauto with int representable lia; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
@@ -460,10 +471,28 @@ Proof.
     rewrite cons_is_append. list. eauto. }
 Qed.
 
-(* A second (stronger) public specification of [to_list]. *)
+Lemma wp_to_list a xs :
+  isArray a xs →
+  wp (to_list a) (λ xs', xs' = xs).
+Proof.
+  intro. unfold to_list.
+  wp_length _n.
+  eapply wp_conseq;
+  [ eauto using wp_segment_to_list with int representable lia | simpl ].
+  intros. subst. list. eauto.
+Qed.
+
+(* A second (stronger) specification of [to_list]. *)
 
 (* In this specification, the proposition [isArray a xs] appears in the
    postcondition. The precondition is trivial: there is none. *)
+
+(* It is not clear whether a specification of [segment_to_list] in this
+   style can be given. The proposition [isArray a _] in the postcondition
+   would then be able to describe just a segment of the array. Therefore
+   an existential quantification would be required to describe the two
+   unknown segments of the array. That would be strange and perhaps not
+   very useful. *)
 
 Lemma wp_to_list' a :
   wp (to_list a) (λ xs, isArray a xs).
