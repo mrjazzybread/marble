@@ -2,9 +2,17 @@
 
 ## Short term
 
+* In anticipation of vectors, many operations on arrays should also
+  work on a segment of a larger array.
+  + `segment_to_list`
+  + `segment_find_index`
+  + `segment_exist`
+  + `segment_for_all`
+  + `segment_for_all`
+
 * Maybe `isInt` and `representable` should be type classes
   so we can use type class search instead
-  of `eauto with int representable`.
+  of `eauto with int representable lia`.
 
 * Seal `isBool` and other similar assertions.
 
@@ -17,7 +25,11 @@
   + every (user) function that modifies an array should be
     accompanied by a tactic that performs clear-and-rename
 
-* Missing functions:
+* Missing functions on integers:
+  + `interruptible_down`
+  + `interruptible_down_unit`
+
+* Missing functions on arrays:
   + `init` on lists and arrays
   + `map`
   + `equal`
@@ -31,6 +43,8 @@
   under the form `isBool1 (f x) (...)`
   and sometimes use the judgement `wp`.
   Does this lack of uniformity create a problem?
+
+* More lemmas should be marked `Local`.
 
 # OCaml Extraction
 
