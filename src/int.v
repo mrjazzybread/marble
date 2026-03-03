@@ -581,6 +581,38 @@ Proof.
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
+(* In the absence of hypotheses about the natural integers [i] and [j],
+   the test [_i ≤?_j] tests the condition [proj i ≤ proj j]. *)
+
+Lemma isBool_leb_proj _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  isBool1 (_i ≤? _j)%uint63 (proj i ≤ proj j)%nat.
+Proof.
+  generalize wB_pos; intro HwB. intros.
+  eapply isBool_intro; rewrite leb_spec.
+  repeat destructIsInt.
+  rewrite !of_Z_spec. unfold proj, wBN.
+  rewrite <- (Nat2Z.id i) at 2.
+  rewrite <- (Nat2Z.id j) at 2.
+  rewrite <- !Z2Nat.inj_mod by eauto with lia.
+  apply Z2Nat.inj_le; eauto with lia.
+Qed.
+
+(* If the natural integers [i] and [j] are representable then
+   the test [_i ≤?_j] tests the condition [i ≤ j]. *)
+
+Global Instance isBool_leb _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  representable i →
+  representable j →
+  isBool1 (_i ≤? _j)%uint63 (i ≤ j)%nat.
+Proof.
+  intros. eapply isBool1_conseq; [ eapply isBool_leb_proj; eauto |].
+  rewrite !representable_proj by eauto. tauto.
+Qed.
+
 (* Beyond this point, [isInt] is opaque. *)
 
 (* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
