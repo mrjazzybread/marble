@@ -4,7 +4,6 @@
 
 * In anticipation of vectors, many operations on arrays should also
   work on a segment of a larger array.
-  + `segment_to_list`
   + `segment_find_index`
   + `segment_exist`
   + `segment_for_all`
@@ -58,7 +57,8 @@
 
 * Can the extracted code be improved?
   + Specialization of higher-order functions (e.g., loops)
-  + Inlining
+  + Inline all small functions
+  + Inline (not necessarily small) functions where useful
   + Elimination of useless parameters (e.g., loop-carried state of type `unit`)
   Attempting to derive an improved version by using `Derive`
   and metavariables seems extremely difficult. Exercise:
