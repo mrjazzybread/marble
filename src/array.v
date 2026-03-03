@@ -3,7 +3,7 @@ Local Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From array Require Import tactics list_extra bool int wp.
-Implicit Types _i _j _n _s : int.
+Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -648,17 +648,17 @@ Implicit Types xs : list A.
 
 (* The code. *)
 
-Fixpoint list_length_aux _s xs : int :=
-  match xs with [] => _s | _ :: xs => list_length_aux (_s + 1) xs end.
+Fixpoint list_length_aux _n xs : int :=
+  match xs with [] => _n | _ :: xs => list_length_aux (_n + 1) xs end.
 
 Definition list_length xs : int :=
   list_length_aux 0 xs.
 
 (* A specification of [list_length_aux]. *)
 
-Local Lemma wp_list_length_aux xs : ∀ _s s,
-  isInt _s s →
-  wp (list_length_aux _s xs) (λ _i, isInt _i (s + len xs)).
+Local Lemma wp_list_length_aux xs : ∀ _n n,
+  isInt _n n →
+  wp (list_length_aux _n xs) (λ _i, isInt _i (n + len xs)).
 Proof.
   induction xs as [| x xs ]; simpl; intros.
   { eapply wp_ret. list. eauto. }
