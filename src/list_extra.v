@@ -550,6 +550,8 @@ Global Hint Rewrite
 
 (* The tactic [split_seg j xs] splits a list [xs] or a list segment
    [seg i k xs] at index [j]. *)
+(* TODO this may not work / will not work if there are multiple
+        occurrences of [xs] in the goal *)
 
 Global Ltac split_seg j xs :=
   first [
