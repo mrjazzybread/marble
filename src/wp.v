@@ -115,3 +115,10 @@ Global Ltac check_flex_post :=
   |- wp _ ?Q =>
     is_evar Q
   end.
+
+(* TODO not useful? *)
+Global Ltac wp_let :=
+  match goal with
+  |- wp (let x := ?e in _) ?Q =>
+    set (x := e)
+  end.
