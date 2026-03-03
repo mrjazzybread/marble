@@ -430,7 +430,7 @@ Definition to_list a :=
   do _n ← length a ;
   (* For [i] ranging from [n-1] down to 0,
      with a running state [xs], which is initially empty, *)
-  down _n [] @@ λ _i xs,
+  down _n 0 [] @@ λ _i xs,
   (* Read the [i]-th element of the array [a], *)
   do x ← a.[_i] ;
   (* and prepend it in front of [xs]. *)
@@ -453,7 +453,7 @@ Proof.
   wp_length _n.
   (* The loop invariant. *)
   eapply wp_down with (inv := λ i ys, ys = final_seg i xs);
-    eauto; list; intros; eauto.
+    eauto with int representable lia; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
     eapply wp_ret. subst.
@@ -483,7 +483,7 @@ Proof.
   eapply wp_down with (inv := λ i (ys : list A),
     len ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
-  ); eauto; list; intros.
+  ); eauto with int representable lia; list; intros.
   (* Initialization. *)
   { split; intros; lia. }
   (* Preservation. *)

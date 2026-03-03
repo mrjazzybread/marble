@@ -27,7 +27,7 @@ Implicit Types  z : Z.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Arithmetic lemmas of general interest. *)
+(* Arithmetic lemmas of general interest (in Z). *)
 
 Lemma to_nat_lt z n :
   (0 ≤ z)%Z →
@@ -601,7 +601,13 @@ Global Ltac isBool ::=
 
 (* [igt] is the ordering [>] on machine integers. *)
 
-(* Both orderings are well-founded. *)
+(* [rilt _a] is the ordering [<] on machine integers, relative to the
+   integer [_a]. In this ordering, [_a] is the least element, and the
+   remaining machine integers are ordered above it, in a cyclic manner.
+   This ordering lets us prove that a loop that counts down towards [_a]
+   must end, without assuming [_a ≤ i]. There, underflow is helpful! *)
+
+(* All three orderings are well-founded. *)
 
 Definition ilt _i _j :=
   φ _i < φ _j.
@@ -617,27 +623,19 @@ Global Instance Wf_ilt : WellFounded ilt :=
   (* The use of [wf_guard] is meant to allow computation inside Rocq
      in spite of the opaque well-foundedness proof [ilt_wf]. *)
 
-(* Safely decrementing an integer, without integer underflow. *)
+Definition rilt _a _i _j :=
+  ilt (_i - _a) (_j - _a).
 
-Lemma safe_decrement _i :
-  0%Z ≠ φ _i →
-  (φ (_i - 1) < φ _i)%Z.
+Lemma rilt_wf _a : well_founded (rilt _a).
 Proof.
-  intros.
-  assert (unsigned (φ _i)) by eauto with lia.
-  rewrite sub_spec. change (φ 1) with 1%Z.
-  rewrite Z.mod_small by lia.
-  lia.
+  eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := λ _i, φ (_i - _a)) ].
+  intros _i _j. unfold rilt, ilt. eauto with lia.
 Qed.
 
-Lemma safe_decrement' _i :
-  (_i =? 0)%uint63 = false →
-  ilt (_i - 1) _i.
-Proof.
-  rewrite bool_neg, eqb_spec. unfold ilt. intros.
-  assert (0 ≠ φ _i)%Z. { change 0%Z with (φ 0). eauto with lia. }
-  eauto using safe_decrement.
-Qed.
+Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
+  wf_guard 32 (rilt_wf _a).
+  (* The use of [wf_guard] is meant to allow computation inside Rocq
+     in spite of the opaque well-foundedness proof [ilt_wf]. *)
 
 Definition igt _i _j :=
   φ _j < φ _i.
@@ -660,7 +658,19 @@ Global Instance Wf_igt : WellFounded igt :=
   (* The use of [wf_guard] is meant to allow computation inside Rocq
      in spite of the opaque well-foundedness proof [igt_wf]. *)
 
-(* Safely incrementing an integer, without integer overflow. *)
+(* -------------------------------------------------------------------------- *)
+
+(* By taking advantage of the above well-founded orderings, we are able to
+   prove that a loop, counting up or counting down, must terminate. *)
+
+(* Because we use semi-open intervals, which are closed at the bottom end
+   and open at the top end, the code and the termination argument are
+   asymmetric. When counting down, we use an equality test [_i =? _a].
+   When counting up, we use a strict ordering test [_i <? _n]. *)
+
+(* Incrementation is easier to reason about, so let's begin with it. *)
+
+(* Safely incrementing a machine integer, without integer overflow. *)
 
 Lemma safe_increment _i _j :
   φ _i < φ _j →
@@ -682,53 +692,137 @@ Proof.
   rewrite ltb_spec. unfold igt. eauto using safe_increment.
 Qed.
 
-(* -------------------------------------------------------------------------- *)
+(* Safely decrementing a machine integer, without integer underflow. *)
 
-(* Basic facts about the natural integers. *)
+(* The following two lemmas are correct but inconvenient, as they require
+   the hypothesis [⋅φ _a ≤ φ _i], which should not be needed, because
+   (thanks to underflow!) termination is guaranteed even without it.
+   We keep these lemmas for the record, but they are unused. *)
 
-Open Scope nat_scope.
-
-Lemma minus_1_plus_1 i :
-  0 < i →
-  i - 1 + 1 = i.
+Local Lemma safe_decrement _a _i :
+  φ _a ≤ φ _i →
+  _i ≠ _a →
+  (φ (_i - 1) < φ _i)%Z.
 Proof.
+  intros.
+  assert (unsigned (φ _a)) by eauto with lia.
+  assert (unsigned (φ _i)) by eauto with lia.
+  assert (φ _i ≠ φ _a) by eauto with lia.
+  assert (unsigned (φ _i - 1)) by lia.
+  rewrite sub_spec. change (φ 1) with 1%Z.
+  rewrite Z.mod_small by eauto.
   lia.
 Qed.
 
+Local Lemma safe_decrement' _i _a :
+  (_i =? _a)%uint63 = false →
+  φ _a ≤ φ _i →
+  ilt (_i - 1) _i.
+Proof.
+  rewrite bool_neg, eqb_spec.
+  unfold ilt. eauto using safe_decrement.
+Qed.
+
+(* The following two lemmas remove the hypothesis [φ _a ≤ φ _i],
+   but they are specialized to the case where [_a] is 0. *)
+
+Local Lemma safe_decrement_absolute _i :
+  0%Z ≠ φ _i →
+  (φ (_i - 1) < φ _i)%Z.
+Proof.
+  intros.
+  assert (unsigned (φ _i)) by eauto with lia.
+  rewrite sub_spec. change (φ 1) with 1%Z.
+  rewrite Z.mod_small by lia.
+  lia.
+Qed.
+
+Local Lemma safe_decrement_absolute' _i :
+  (_i =? 0)%uint63 = false →
+  ilt (_i - 1) _i.
+Proof.
+  rewrite bool_neg, eqb_spec. unfold ilt. intros.
+  assert (0 ≠ φ _i)%Z. { change 0%Z with (φ 0). eauto with lia. }
+  eauto using safe_decrement_absolute.
+Qed.
+
+(* The following two lemmas remove the hypothesis [φ _a ≤ φ _i] and they
+   accept an arbitrary choice of [_a]. The relative ordering [rilt _a] is
+   used instead of the absolute ordering [ilt]. *)
+
+Lemma safe_decrement_relative _a _i :
+  _i ≠ _a →
+  (φ (_i - _a - 1) < φ (_i - _a))%Z.
+Proof.
+  intros. eapply safe_decrement_absolute.
+  rewrite sub_spec.
+  symmetry.
+  rewrite <- Z.cong_iff_0.
+  assert (unsigned (φ _a)) by eauto with lia.
+  assert (unsigned (φ _i)) by eauto with lia.
+  rewrite !Z.mod_small by lia.
+  eauto with lia. (* ouf *)
+Qed.
+
+Lemma safe_decrement_relative' _i _a :
+  (_i =? _a)%uint63 = false →
+  rilt _a (_i - 1) _i.
+Proof.
+  rewrite bool_neg, eqb_spec.
+  unfold rilt, ilt.
+  rewrite add_sub_comm.
+  eauto using safe_decrement_relative.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Arithmetic lemmas of general interest (in nat). *)
+
+Open Scope nat_scope.
+
 Global Hint Rewrite
-  minus_1_plus_1
+  Nat.sub_add
   using lia
 : nat.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A loop, counting down to zero, using machine integers. *)
+(* A loop, counting down, using machine integers. *)
 
 Section Down.
 Context {S : Type}.
 Implicit Types s : S.
 
+Variable _a : int.
 Variable f : int → S → S.
 
 (* [down_aux _i s] applies the loop body [f] to every machine integer from
-   [_i], included, down to zero, included. A state of type [S] is carried,
+   [_i], included, down to [_a], included. A state of type [S] is carried,
    whose initial value is [s]. *)
 
-(* We are careful to test the condition [_i =? 0] before decrementing [_i].
-   Because we use unsigned integers, we cannot first decrement and then test
-   the condition [_i <? 0]. *)
+(* We are careful to test the condition [_i =? _a] before decrementing [_i].
+   Because our semi-open intervals are closed at the bottom end, we cannot
+   first decrement and then test the condition [_i <? _a]. If [_a] is zero
+   then this would underflow. *)
 
 (* We use Equations to more easily define [down_aux] by well-founded recursion
    over the loop counter [_i]. The somewhat strange [with] syntax is a way of
-   expressing the test [_i =? 0]. The use of [inspect] and [inspected] is an
+   expressing the test [_i =? _a]. The use of [inspect] and [inspected] is an
    idiosyncratic way of making the outcome of the test visible at the logical
-   level in the branches. In the second branch, the fact that [_i =? 0] is
+   level in the branches. In the second branch, the fact that [_i =? _a] is
    false is needed in order to prove that [_i-1] is less than [_i], a fact
    which itself is required by the termination argument. *)
 
+(* It is worth noting that the termination argument does not need the
+   hypothesis [φ _a ≤ φ _i]. Even in the absence of this hypothesis,
+   termination is guaranteed, thanks to underflow. This said, later on,
+   when we give a specification of [down_aux], we assume [a ≤ i]. It would
+   be unnatural and inconvenient to propose a specification that allows
+   underflow to take place. *)
+
 Equations down_aux _i s : S
-by wf _i ilt :=
-down_aux _i s with inspect (_i =? 0)%uint63 => {
+by wf _i (rilt _a) :=
+down_aux _i s with inspect (_i =? _a)%uint63 => {
 | inspected true :=
     do s ← f _i s ;
     s ;
@@ -737,7 +831,7 @@ down_aux _i s with inspect (_i =? 0)%uint63 => {
     down_aux (_i-1)%uint63 s
 }.
 Next Obligation.
-  eauto using safe_decrement'.
+  eauto using safe_decrement_relative'.
 Qed.
 
 (* For the record, here is an alternative direct definition of [down_aux],
@@ -747,8 +841,8 @@ Qed.
    produced by Equations, which are used via the tactic [funelim]. *)
 Goal int → S → S.
 Proof.
-  eapply (Fix ilt_wf (λ _, S → S)). intros _i self s.
-  destruct (_i =? 0)%uint63 eqn:Heq.
+  eapply (Fix (rilt_wf _a) (λ _, S → S)). intros _i self s.
+  destruct (_i =? _a)%uint63 eqn:Heq.
   + refine (
       do s ← f _i s ;
       s
@@ -757,51 +851,52 @@ Proof.
       do s ← f _i s ;
       self (_i-1)%uint63 _ s
     ).
-    eauto using safe_decrement'.
+    eauto using safe_decrement_relative'.
 Defined.
 
 (* A specification of [down_aux]. *)
 
 (* For comments, see the specification of [down], further down. *)
 
-Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) :
+Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) a _i i s :
+  isInt _a a →
+  representable a →
   (∀ _i i s ,
     isInt _i i →
     representable i →
+    a ≤ i →
     inv (i + 1) s →
     wp (f _i s) (λ s, inv i s)
   ) →
-  (∀ s, inv 0 s → Q s) →
-  ∀ _i i s ,
+  (∀ s, inv a s → Q s) →
   isInt _i i →
   representable i →
+  a ≤ i →
   inv (i + 1) s →
   wp (down_aux _i s) Q.
 Proof.
-  intros Hstep Hfinish.
-  intros _i i s.
-  funelim (down_aux _i s); cleanup; clear Heqcall; intros ? ? Hinit;
-  isBool_magic.
-  (* Case [i = 0]. *)
+  intros.
+  funelim (down_aux _i s); cleanup; clear Heqcall; intros; isBool_magic.
+  (* Case [i = a]. *)
   { subst i.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
+    eapply wp_bind; [ eauto | simpl; intros s' ? ].
     wp_ret. eauto. }
-  (* Case [i ≠ 0]. *)
+  (* Case [i ≠ a]. *)
   { rename H into IH.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ?].
+    eapply wp_bind; [ eauto | simpl; intros s' ?].
     eapply IH; eauto with int representable lia; autorewrite with nat.
     eauto. }
 Qed.
 
 End Down.
 
-(* [down _i s f] applies the loop body [f] to every machine integer from [_i],
-   excluded, down to zero, included. A state of type [S] is carried, whose
+(* [down _i _a s f] applies the loop body [f] to every machine integer from [_i],
+   excluded, down to [_a], included. A state of type [S] is carried, whose
    initial value is [s]. *)
 
-Definition down {S} _i (s : S) f :=
-  if (_i =? 0)%uint63 then s
-  else down_aux f (_i-1) s.
+Definition down {S} _i _a (s : S) f :=
+  if (_i =? _a)%uint63 then s
+  else down_aux _a f (_i-1) s.
 
 (* A specification of [down]. *)
 
@@ -810,30 +905,36 @@ Definition down {S} _i (s : S) f :=
    assertion [inv i s] means that the loop has run down to index [i]
    included, so the next iteration will concern the index [i-1]. *)
 
-Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n s f :
-  (* If the invariant holds of the start index [n] and start state [s], *)
+(* This specification requires [a ≤ n]: that is, the start index [n] must
+   be greater than or equal to the end index [a]. This hypothesis is
+   natural: it is required to guarantee that no underflow takes place. *)
+
+Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n _a a s f :
   isInt _n n →
   representable n →
+  isInt _a a →
+  representable a →
+  a ≤ n →
+  (* If the invariant holds of the start index [n] and start state [s], *)
   inv n s →
   (* If [s ← f _i s] transforms the invariant [inv (i+1) s] to [inv i s], *)
   (∀ _i i s ,
     isInt _i i →
     representable i →
-    i < n →
+    a ≤ i < n →
     inv (i + 1) s →
     wp (f _i s) (λ s, inv i s)
   ) →
-  (* Then, once the loop ends, the invariant holds of the index [0]
+  (* Then, once the loop ends, the invariant holds of the index [a]
      and final state [s]. *)
-  (∀ s, inv 0 s → Q s) →
-  wp (down _n s f) Q.
+  (∀ s, inv a s → Q s) →
+  wp (down _n _a s f) Q.
 Proof.
-  intros ? ? Hinit Hstep Hfinish.
-  unfold down.
-  destruct (_n =? 0)%uint63 eqn:?; isBool_magic.
-  (* Case [_n = 0]. *)
+  intros. unfold down.
+  wp_if.
+  (* Case [n = a]. *)
   { subst n. wp_ret. eauto. }
-  (* Case [_n ≠ 0]. *)
+  (* Case [n ≠ a]. *)
   { (* We strengthen the loop invariant with [i ≤ n]. *)
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with int lia;
@@ -1160,8 +1261,8 @@ Proof.
   unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
   funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall;
   isBool_magic.
-  (* TODO [funelim] creates an induction hypothesis that contains
-          spurious parameters of type [S * option A] and [option A]. *)
+  (* [funelim] creates an induction hypothesis that contains
+     spurious parameters of type [S * option A] and [option A]. *)
   assert (dummy: option A). { exact continue. }
   (* Case [a < b]. *)
   { eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
