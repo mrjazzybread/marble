@@ -347,6 +347,9 @@ Global Ltac wp_get_intros x :=
 Global Ltac wp_get_bind x :=
   eapply wp_bind; [ wp_get_nude | wp_get_intros x ].
 
+(* TODO trying [wp_get_nude] first and [wp_conseq] second may not be
+        the correct choice. Test whether the postcondition is an evar
+        and if so, apply [wp_get_nude], otherwise apply [wp_conseq]. *)
 Global Ltac wp_get x :=
   repeat rewrite bind_bind;
   first [
