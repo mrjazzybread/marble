@@ -129,4 +129,67 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* TODO *)
+Variable really_ensure_capacity : vector A → int → array A.
+
+Lemma wp_really_ensure_capacity v xs _n' n' :
+  isInt _n' n' →
+  representable n' →
+  n' ≤ max_array_length →
+  wp (really_ensure_capacity v _n') (λ a ,
+    ∃ unoccupied,
+    isArray a (xs ++ unoccupied) ∧
+    n' ≤ len xs + len unoccupied
+  ).
+Proof.
+Admitted.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Pushing an element onto the end of a vector: [push]. *)
+
+Definition push v x : vector A :=
+  let (_n, a) := v in
+  (* Ensure that sufficient space exists. *)
+  let _n' := (_n + 1)%uint63 in
+  do capacity ← length a ;
+  do a ← (
+    if (_n' ≤? capacity)%uint63 then a
+    else really_ensure_capacity v _n'
+  ) ;
+  (* A free slot now exists. *)
+  do a ← a.[_n <- x] ;
+  (_n', a).
+
+Lemma wp_push v xs x :
+  isVector v xs →
+  len xs + 1 ≤ max_array_length →
+  wp (push v x) (λ v, isVector v (xs ++ {[x]})).
+Proof.
+  intros. cbv delta [ push ]. destructIsVector _n a.
+  wp_length capacity.
+  (* We are looking at the [if] construct. At the join point,
+     at least one free slot exists in the array. *)
+  eapply wp_bind with (P := λ a,
+    ∃ unoccupied',
+    isArray a (xs ++ unoccupied') ∧
+    len xs + 1 ≤ len xs + len unoccupied'
+      (* equivalent to: 0 < len unoccupied' *)
+  ).
+  { wp_if.
+    (* Case: there is still room. *)
+    + wp_ret. eauto with lia.
+    (* Case: the array must be grown. *)
+    + eauto using wp_really_ensure_capacity with int representable. }
+  clear dependent a unoccupied. intros a (unoccupied & ? & ?).
+  (* Write; return. *)
+  wp_set. wp_ret.
+  introIsVectorWithWitness (final_seg 1 unoccupied).
+  + eauto with int.
+  + isArray.
+    rewrite (seg_intro unoccupied) at 1. list. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 End Operations.
