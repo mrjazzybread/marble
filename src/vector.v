@@ -30,10 +30,10 @@ Definition isVector `{Inhabited A} (v : vector A) (xs : list A) :=
 (* These tactics and lemmas help work with [isVector]. *)
 
 Local Ltac introIsVector :=
-  unfold isVector; unfold vectorInv; eexists; split.
+  unfold isVector; unfold vectorInv; eexists; list; split.
 
 Local Ltac introIsVectorWithWitness u :=
-  unfold isVector; unfold vectorInv; exists u; split.
+  unfold isVector; unfold vectorInv; exists u; list; split.
 
 Local Ltac destructIsVector _n a :=
   match goal with h: isVector ?v _ |- _ =>
@@ -69,14 +69,49 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Popping an element off the right end of a nonempty vector: [pop]. *)
+(* Random access: [get] and [set]. *)
+
+Definition get v _i : A :=
+  let (_n, a) := v in
+  a.[_i].
+
+Lemma wp_get v xs _i i :
+  isInt _i i →
+  isVector v xs →
+  valid i xs →
+  wp (get v _i) (λ x, x = xs !!! i).
+Proof.
+  intros. unfold get. destructIsVector _n a.
+  (* TODO a situation where [wp_get] should use [wp_conseq] *)
+  eapply wp_conseq; [ wp_get_nude | simpl; intros x Hx; list in Hx ].
+  eauto.
+Qed.
+
+Definition set v _i x : vector A :=
+  let (_n, a) := v in
+  do a ← a.[_i <- x] ;
+  (_n, a).
+
+Lemma wp_set v xs _i i x :
+  isInt _i i →
+  isVector v xs →
+  valid i xs →
+  wp (set v _i x) (λ v', isVector v' (<[i := x]>xs)).
+Proof.
+  intros. unfold set. destructIsVector _n a.
+  wp_set. wp_ret. introIsVector; eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Popping an element off the end of a nonempty vector: [pop]. *)
 
 (* The newly emptied slot is not overwritten with a default value. *)
 
 Definition pop v : A * vector A :=
   let (_n, a) := v in
   let _i := (_n - 1)%uint63 in
-  do x ← get a _i ;
+  do x ← a.[_i] ;
   (x, (_i, a)).
 
 Lemma wp_pop v xs :
@@ -92,7 +127,7 @@ Proof.
   wp_get x.
   wp_ret. split; [ eauto |].
   introIsVectorWithWitness ({[x]} ++ unoccupied).
-  + list. eauto with int.
+  + eauto with int.
   + subst x. isArray.
 Qed.
 
