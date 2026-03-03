@@ -214,6 +214,25 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Some properties of machine integer arithmetic. *)
+
+Lemma add_sub_conv _i _a _b :
+  (_i - _a - _b = _i - (_a + _b))%uint63.
+Proof.
+  eapply to_Z_inj.
+  rewrite !sub_spec, !add_spec.
+  rewrite Zminus_mod_idemp_l, Zminus_mod_idemp_r.
+  f_equal. lia.
+Qed.
+
+Lemma add_sub_comm _i _a _b :
+  (_i - _a - _b = _i - _b - _a)%uint63.
+Proof.
+  rewrite add_sub_conv, add_comm, add_sub_conv. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A relational view of the connection between [int] and [nat]. *)
 
 Definition isInt (_i : int) (i : nat) :=
