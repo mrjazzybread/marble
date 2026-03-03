@@ -314,9 +314,11 @@ End PrimSpec.
 
 (* In each case, we try applying [wp_bind] first; if this does
    not work then we try applying the operation's specification
-   directly; if this does not work then we use [wp_conseq] first. *)
+   directly, while checking that the postcondition is flexible;
+   if this does not work then we use [wp_conseq] first. *)
 
 Global Ltac wp_length_nude :=
+  check_flex_post;
   simple eapply wp_length; eauto.
 
 Global Ltac wp_length_intros n :=
@@ -337,6 +339,7 @@ Global Ltac wp_length n :=
   ].
 
 Global Ltac wp_get_nude :=
+  check_flex_post;
   simple eapply wp_get; eauto with int lia.
 
 Global Ltac wp_get_intros x :=
@@ -347,9 +350,6 @@ Global Ltac wp_get_intros x :=
 Global Ltac wp_get_bind x :=
   eapply wp_bind; [ wp_get_nude | wp_get_intros x ].
 
-(* TODO trying [wp_get_nude] first and [wp_conseq] second may not be
-        the correct choice. Test whether the postcondition is an evar
-        and if so, apply [wp_get_nude], otherwise apply [wp_conseq]. *)
 Global Ltac wp_get x :=
   repeat rewrite bind_bind;
   first [
@@ -359,6 +359,7 @@ Global Ltac wp_get x :=
   ].
 
 Global Ltac wp_set_nude :=
+  check_flex_post;
   simple eapply wp_set; eauto with int lia.
 
 Global Ltac wp_set_intros a :=
@@ -385,6 +386,7 @@ Global Ltac wp_set :=
   end.
 
 Global Ltac wp_make_nude :=
+  check_flex_post;
   simple eapply wp_make; eauto with int lia.
 
 Global Ltac wp_make_intros b :=
@@ -854,6 +856,7 @@ Qed.
 End Blit.
 
 Global Ltac wp_blit_nude :=
+  check_flex_post;
   eapply wp_blit; eauto with int lia; (list; lia).
 
 Global Ltac wp_blit_intros a :=
@@ -1017,6 +1020,7 @@ Qed.
 End Fill.
 
 Global Ltac wp_fill_nude :=
+  check_flex_post;
   eapply wp_fill; eauto with int lia; (list; lia).
 
 Global Ltac wp_fill_intros a :=

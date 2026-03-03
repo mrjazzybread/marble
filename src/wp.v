@@ -106,3 +106,12 @@ Qed.
 
 Global Ltac wp_if :=
   eapply wp_if; [ isBool | intros | intros ].
+
+(* [check_flex_post] checks that the current postcondition is flexible
+   (i.e., a metavariable), and fails if that is not the case. *)
+
+Global Ltac check_flex_post :=
+  match goal with
+  |- wp _ ?Q =>
+    is_evar Q
+  end.

@@ -81,10 +81,7 @@ Lemma wp_get v xs _i i :
   valid i xs →
   wp (get v _i) (λ x, x = xs !!! i).
 Proof.
-  intros. unfold get. destructIsVector _n a.
-  (* TODO a situation where [wp_get] should use [wp_conseq] *)
-  eapply wp_conseq; [ wp_get_nude | simpl; intros x Hx; list in Hx ].
-  eauto.
+  intros. unfold get. destructIsVector _n a. wp_get x. eauto.
 Qed.
 
 Definition set v _i x : vector A :=
@@ -124,8 +121,7 @@ Lemma wp_pop v xs :
   ).
 Proof.
   intros. unfold pop. destructIsVector _n a.
-  wp_get x.
-  wp_ret. split; [ eauto |].
+  wp_get x. wp_ret. split; [ eauto |].
   introIsVectorWithWitness ({[x]} ++ unoccupied).
   + eauto with int.
   + subst x. isArray.
