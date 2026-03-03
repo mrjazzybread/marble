@@ -158,6 +158,8 @@ Global Hint Extern 1 (_ < length _) => (list; lia) : lia.
 Global Hint Rewrite
   @lookup_total_cons_eq_0
   @lookup_total_cons_ne_0
+  @lookup_total_app_l
+  @lookup_total_app_r
   @list_lookup_insert_eq'
   @list_lookup_total_insert_eq'
   @list_lookup_insert_ne
