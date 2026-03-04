@@ -353,17 +353,23 @@ Definition wBN : nat :=
 Definition representable_def (i : nat) :=
   (i < wBN)%nat.
 
-  (* Use [seal] to prevent [eauto] from looking into this definition.
-     Otherwise, it might try to normalize [Z.to_nat wB], which does
-     not terminate. *)
-  Local Definition representable_aux : seal (@representable_def). Proof. by eexists. Qed.
-  Definition representable := representable_aux.(unseal).
-  Local Definition representable_unseal : @representable = @representable_def := representable_aux.(seal_eq).
+   (* Use [seal] to prevent [eauto] from looking into this definition.
+      Otherwise, it might try to normalize [Z.to_nat wB], which does
+      not terminate. *)
+   Local Definition representable_aux : seal (@representable_def). Proof. by eexists. Qed.
+
+Class representable (i : nat) :=
+  build_representable : representable_aux.(unseal) i.
+
+Global Hint Mode representable ! : typeclass_instances.
 
 Lemma representable_iff_nat i :
   representable i ↔ (i < wBN)%nat.
 Proof.
-  rewrite representable_unseal. unfold representable_def. tauto.
+  unfold representable.
+  rewrite representable_aux.(seal_eq).
+  unfold representable_def.
+  tauto.
 Qed.
 
 Lemma representable_iff_Z i :
@@ -374,7 +380,10 @@ Qed.
 
 (* This tactic should work for every sufficiently small constant. *)
 Ltac representable :=
-  rewrite representable_iff_Z; split; [lia | constructor].
+  rewrite representable_iff_Z; split; [lia | reflexivity].
+    (* [lia] proves [0 ≤ k] where [k] is a known constant. *)
+    (* [reflexivity] proves [k < wB] because [<] on Z is computable
+       and reduces to an equality. *)
 
 Goal representable 0.
 Proof. representable. Qed.
@@ -384,20 +393,18 @@ Proof. representable. Qed.
 
 Global Hint Extern 1 (representable _) =>
   representable
-: representable.
+: typeclass_instances.
 
-Lemma representable_down_closed i j :
+Global Instance representable_down_closed i j :
   representable j →
   (i ≤ j)%nat →
   representable i.
 Proof.
-  rewrite representable_unseal. unfold representable_def. lia.
+  rewrite !representable_iff_nat. lia.
 Qed.
-
-Hint Resolve representable_down_closed : representable.
-  (* This hint may cause divergence if [i ≤ j] is solved
-     by picking [j := i]. But it seems difficult to live
-     without it. *)
+  (* This instance might cause divergence if [i ≤ j] is solved by
+     picking [j := i]. But it seems difficult to live without it. *)
+  (* TODO *)
 
 (* If [i] is representable then going [nat → int → Z] is the same as
    going [nat → Z] directly. *)
@@ -413,7 +420,7 @@ Qed.
 
 Hint Rewrite
   to_Z_of_nat
-  using (eauto with representable)
+  using (eauto with typeclass_instances lia)
 : int.
 
 Definition proj (i : nat) : nat :=
@@ -426,7 +433,7 @@ Lemma representable_iff_proj i :
   representable i ↔
   proj i = i.
 Proof.
-  rewrite representable_unseal. unfold representable_def, proj, wBN.
+  rewrite representable_iff_nat. unfold proj, wBN.
   generalize wB_pos; intro.
   rewrite Nat.mod_small_iff by lia.
   tauto.
@@ -628,7 +635,7 @@ Local Opaque isInt.
 
 (* TODO dirty *)
 Global Ltac isBool ::=
-  eauto with int representable typeclass_instances lia.
+  eauto with int typeclass_instances lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -711,7 +718,7 @@ Global Hint Resolve
 
 (* If [i] and [j] are representable, then so is [i / j]. *)
 
-Lemma div_representable i j :
+Global Instance div_representable i j :
   representable i →
   representable j →
   j ≠ 0%nat →
@@ -719,10 +726,8 @@ Lemma div_representable i j :
 Proof.
   intros.
   assert (i `div` j ≤ i)%nat by eauto using div_decreasing.
-  eauto with representable.
+  eauto with typeclass_instances.
 Qed.
-
-Global Hint Resolve div_representable : representable.
 
 (* Division of representable integers works. *)
 
@@ -735,7 +740,7 @@ Lemma div_compat _i i _j j :
   isInt (_i/_j) (i/j)%nat.
 Proof.
   intros.
-  rewrite isInt_repr by eauto with representable.
+  rewrite isInt_repr by eauto with typeclass_instances.
   rewrite div_spec.
   rewrite isInt_repr in * by eauto. subst i j.
   rewrite Z2Nat.inj_div by eauto with lia.
@@ -1035,7 +1040,7 @@ Proof.
   (* Case [i ≠ a]. *)
   { rename H into IH.
     eapply wp_bind; [ eauto | simpl; intros s' ?].
-    eapply IH; eauto with int representable lia; autorewrite with nat.
+    eapply IH; eauto with int lia typeclass_instances; autorewrite with nat.
     eauto. }
 Qed.
 
@@ -1090,7 +1095,7 @@ Proof.
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with int lia;
       autorewrite with nat;
-      eauto using wp_conseq with representable lia. }
+      eauto using wp_conseq with typeclass_instances lia. }
 Qed.
 
 (* [down _n s @@ λ _i s, ...] is a convenient way of writing a loop. *)
@@ -1185,7 +1190,7 @@ Proof.
   { assert (fact: a `max` b = (a + 1) `max` b) by lia.
     rewrite fact in Hfinish.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
-    eauto with int representable lia. }
+    eauto with int typeclass_instances lia. }
   (* Case [¬ a < b]. *)
   { assert (fact: a `max` b = a) by lia.
     rewrite fact in Hfinish.
@@ -1418,7 +1423,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
     + wp_ret. eauto with lia.
-    + eapply H; intuition eauto with int representable lia. }
+    + eapply H; intuition eauto with int typeclass_instances lia. }
   (* Case [¬ a < b]. *)
   { wp_ret. eauto with lia. }
 Qed.

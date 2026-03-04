@@ -241,7 +241,7 @@ Proof.
     { assert (c `div` 2 ≤ c) by eauto with lia.
       rewrite representable_iff_nat in *. lia. }
     (* Now conclude. *)
-     wp_if; wp_ret; eauto 7 with int lia representable.
+     wp_if; wp_ret; eauto 7 with int lia typeclass_instances.
   }
   intros _k (c'&?&?&?).
   wp_ret.
@@ -253,9 +253,9 @@ Proof.
   eexists. split.
   { eapply isInt_min.
     + eauto using max_length_spec.
-    + eauto with int representable.
-    + eauto with representable.
-    + eauto using max_representable with representable. }
+    + eauto with int typeclass_instances.
+    + eauto with typeclass_instances.
+    + eauto using max_representable with typeclass_instances. }
   { lia. }
 Qed.
 
@@ -319,7 +319,7 @@ Proof.
     (* Case: there is still room. *)
     + wp_ret. eauto with lia.
     (* Case: the array must be grown. *)
-    + eauto using wp_really_ensure_capacity with int representable. }
+    + eauto using wp_really_ensure_capacity with int typeclass_instances. }
   clear dependent a unoccupied. intros a (unoccupied & ? & ?).
   (* Write; return. *)
   wp_set. wp_ret.

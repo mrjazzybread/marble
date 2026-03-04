@@ -38,7 +38,7 @@ Qed.
 
 (* [max_array_length] is representable. *)
 
-Lemma representable_max_array_length :
+Global Instance representable_max_array_length :
   representable max_array_length.
 Proof.
   rewrite representable_iff_Z. split; [ lia |].
@@ -47,8 +47,6 @@ Proof.
   (* (φ%uint63 max_length < wB)%Z *)
   reflexivity.
 Qed.
-
-Hint Resolve representable_max_array_length : representable.
 
 (* [2 * max_array_length] is still representable. *)
 
@@ -83,8 +81,13 @@ Qed.
 
 (* Any number that is bounded by [max_array_length] is representable. *)
 
-Goal ∀ n, n ≤ max_array_length → representable n.
-Proof. eauto with representable. Qed.
+Global Instance representable_le_max_array_length n :
+  n ≤ max_array_length → representable n.
+Proof.
+  intros.
+  eapply representable_down_closed; [| eauto ].
+  eapply representable_max_array_length.
+Qed.
 
 (* The length of an array, converted to a natural number,
    is bounded by [max_array_length]. *)
@@ -100,17 +103,14 @@ Proof.
   lia.
 Qed. (* a bit slow *)
 
-Local Hint Resolve leb_length' : representable.
-
 (* The length of an array is representable. *)
 
 Lemma representable_to_nat_length {A} (a : array A) :
   representable (to_nat (length a)).
 Proof.
-  eauto using leb_length' with representable.
+  eapply representable_down_closed; [| eapply leb_length' ].
+  eauto with typeclass_instances.
 Qed.
-
-Hint Resolve representable_to_nat_length : representable.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -169,14 +169,12 @@ Global Hint Resolve
   isArray_bounded_length'
 : lia.
 
-Lemma isArray_representable `{Inhabited A} (a : array A) (xs : list A) :
+Global Instance isArray_representable `{Inhabited A} (a : array A) xs :
   isArray a xs →
   representable (len xs).
 Proof.
-  intros. destructIsArray. eauto with representable.
+  intros. destructIsArray. eauto with typeclass_instances.
 Qed.
-
-Global Hint Resolve isArray_representable : representable.
 
 Local Lemma isArray_pi3 `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
@@ -236,7 +234,7 @@ Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
 Proof.
   intros.
   assert (len xs = len ys).
-  { eauto 6 using isInt_inj_2, isArray_length_spec with representable. }
+  { eauto 6 using isInt_inj_2, isArray_length_spec with typeclass_instances. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
   erewrite <- isArray_pi3 in * by eauto with lia.
@@ -313,13 +311,9 @@ Proof.
   { eauto with lia. }
   intros j ?. liftIsIntAndClear.
   destruct (decide (i = j)); [ subst j |]; list.
-  + rewrite get_set_same.
-    { eauto. }
-    { (* In Rocq 9.1, [eapply fails], but [simple eapply succeeds]. *)
-      (* https://github.com/rocq-prover/rocq/issues/21674 *)
-      Fail eapply isArray_use_valid.
-      simple eapply isArray_use_valid; eauto. }
-  + rewrite get_set_other by eauto 10 using of_nat_inj' with representable.
+  + rewrite get_set_same by eauto using isArray_use_valid.
+    eauto.
+  + rewrite get_set_other by eauto 10 using of_nat_inj' with typeclass_instances lia.
     erewrite isArray_pi3 by eauto.
     eauto.
 Qed.
@@ -336,7 +330,7 @@ Lemma wp_length a xs :
   ).
 Proof.
   intros. eapply wp_ret.
-  eauto using isArray_length_spec with representable.
+  eauto using isArray_length_spec with typeclass_instances.
 Qed.
 
 End PrimSpec.
@@ -500,7 +494,7 @@ Proof.
   intros. unfold segment_to_list.
   (* The loop invariant. *)
   eapply wp_down with (inv := λ j ys, ys = seg j k xs);
-    eauto with int representable lia; list; intros; eauto.
+    eauto with int typeclass_instances lia; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
     eapply wp_ret. subst.
@@ -514,7 +508,7 @@ Proof.
   intro. unfold to_list.
   wp_length _n.
   eapply wp_conseq;
-  [ eauto using wp_segment_to_list with int representable lia | simpl ].
+  [ eauto using wp_segment_to_list with int typeclass_instances lia | simpl ].
   intros. subst. list. eauto.
 Qed.
 
@@ -540,15 +534,16 @@ Proof.
   eapply wp_bind_eq. intros _n ?.
   set (n := to_nat _n).
   assert (isInt _n n) by eauto using introIsInt'.
-  assert (n ≤ max_array_length) by (subst n _n; eauto with representable).
-  assert (representable n) by eauto with representable.
+  assert (n ≤ max_array_length).
+  { subst n _n. simple eapply leb_length'. }
+  assert (representable n) by eauto with typeclass_instances.
   (* The loop invariant: when the loop index is [i] and the state is [xs],
      the length of [xs] is [n - i] and the elements of [xs] are the elements
      found at indices [i, n) in the array [a]. *)
   eapply wp_down with (inv := λ i (ys : list A),
     len ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
-  ); eauto with int representable lia; list; intros.
+  ); eauto with int typeclass_instances lia; list; intros.
   (* Initialization. *)
   { split; intros; lia. }
   (* Preservation. *)
@@ -876,7 +871,7 @@ Proof.
     isArray b
       (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   );
-  eauto with int representable lia; list; eauto 1.
+  eauto with int typeclass_instances lia; list; eauto 1.
   (* Preservation. *)
   { clear dependent b. intros _k k b. intros.
     wp_get x. subst x.
@@ -1041,7 +1036,7 @@ Proof.
     isArray a
       (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   );
-  eauto with int representable lia; list; eauto 1.
+  eauto with int typeclass_instances lia; list; eauto 1.
   (* Preservation. *)
   { clear dependent a. intros _k k a. intros.
     wp_set.
@@ -1143,7 +1138,7 @@ Proof.
      satisfies [f], and at index [i], an element satisfies [f]. *)
   { set (inv := λ i s o, find_index_inv xs i (i - 1) o).
     eapply wp_interruptible_up_rigid with (inv := inv);
-      eauto with int representable; unfold inv, find_index_inv.
+      eauto with int typeclass_instances; unfold inv, find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
@@ -1368,7 +1363,7 @@ Proof.
     eapply wp_bind.
     { eapply wp_interruptible_up_rigid
         with (inv := λ i s o, equal_inv xs ys i o);
-        eauto with int representable; unfold equal_inv; eauto with lia.
+        eauto with int typeclass_instances; unfold equal_inv; eauto with lia.
       (* Preservation. *)
       intros.
       wp_get x. wp_get y.
