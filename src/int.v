@@ -632,6 +632,120 @@ Global Ltac isBool ::=
 
 (* -------------------------------------------------------------------------- *)
 
+(* The operations [_min] and [_max] on machine integers. *)
+
+Definition _min _m _n : int :=
+  if (_m ≤? _n)%uint63 then _m else _n.
+
+Definition _max _m _n : int :=
+  if (_m ≤? _n)%uint63 then _n else _m.
+
+Lemma isInt_min _m m _n n :
+  isInt _m m →
+  isInt _n n →
+  representable m →
+  representable n →
+  isInt (_min _m _n) (m `min` n).
+Proof.
+  intros. unfold _min.
+  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic.
+  + rewrite Nat.min_l by lia. eauto.
+  + rewrite Nat.min_r by lia. eauto.
+Qed.
+
+Lemma isInt_max _m m _n n :
+  isInt _m m →
+  representable m →
+  isInt _n n →
+  representable n →
+  isInt (_max _m _n) (m `max` n).
+Proof.
+  intros. unfold _max.
+  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic.
+  + rewrite Nat.max_r by lia. eauto.
+  + rewrite Nat.max_l by lia. eauto.
+Qed.
+
+Global Hint Resolve isInt_min isInt_max : int.
+
+Lemma min_representable m n :
+  representable m ∨ representable n →
+  representable (m `min` n).
+Proof.
+  rewrite !representable_iff_nat. lia.
+Qed.
+
+Lemma max_representable m n :
+  representable m →
+  representable n →
+  representable (m `max` n).
+Proof.
+  rewrite !representable_iff_nat. lia.
+Qed.
+
+(* The above two lemmas apparently cannot be added as hints;
+   this causes divergence in array.v. I don't know why. TODO *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Division of machine integers. *)
+
+(* In the natural integers, [i * j] is at least [i]. *)
+
+Lemma mul_increasing i j :
+  (j ≠ 0 → i ≤ j * i)%nat.
+Proof. nia. Qed.
+
+(* In the natural integers, [i / j] is at most [i]. *)
+
+Lemma div_decreasing i j :
+  (j ≠ 0 → i `div` j ≤ i)%nat.
+Proof.
+  intros. apply Nat.Div0.div_le_upper_bound. nia.
+Qed.
+
+Global Hint Resolve
+  mul_increasing
+  div_decreasing
+: lia.
+
+(* If [i] and [j] are representable, then so is [i / j]. *)
+
+Lemma div_representable i j :
+  representable i →
+  representable j →
+  j ≠ 0%nat →
+  representable (i / j).
+Proof.
+  intros.
+  assert (i `div` j ≤ i)%nat by eauto using div_decreasing.
+  eauto with representable.
+Qed.
+
+Global Hint Resolve div_representable : representable.
+
+(* Division of representable integers works. *)
+
+Lemma div_compat _i i _j j :
+  isInt _i i →
+  representable i →
+  isInt _j j →
+  representable j →
+  j ≠ 0%nat →
+  isInt (_i/_j) (i/j)%nat.
+Proof.
+  intros.
+  rewrite isInt_repr by eauto with representable.
+  rewrite div_spec.
+  rewrite isInt_repr in * by eauto. subst i j.
+  rewrite Z2Nat.inj_div by eauto with lia.
+  eauto.
+Qed.
+
+Global Hint Resolve div_compat : int.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Well-foundedness of the orderings on machine integers. *)
 
 (* [ilt] is the ordering [<] on machine integers. *)
