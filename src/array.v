@@ -354,7 +354,7 @@ Global Ltac wp_length_nude :=
 
 Global Ltac wp_length_intros n :=
   let Hn := fresh in
-  simpl; intros n Hn;
+  cbv beta; intros n Hn;
   list in Hn;
   destruct Hn as [? ?].
 
@@ -375,7 +375,7 @@ Global Ltac wp_get_nude :=
 
 Global Ltac wp_get_intros x :=
   let Hx := fresh in
-  simpl; intros x Hx;
+  cbv beta; intros x Hx;
   list in Hx.
 
 Global Ltac wp_get_bind x :=
@@ -396,7 +396,7 @@ Global Ltac wp_set_nude :=
 Global Ltac wp_set_intros a :=
   let a' := fresh a in
   let Ha' := fresh in
-  simpl; intros a' Ha';
+  cbv beta; intros a' Ha';
   list in Ha';
   (* Forget about the previous array [a] and rename the new array [a']
      with the name of the previous array. Thus we keep only the latest
@@ -421,7 +421,7 @@ Global Ltac wp_make_nude :=
   simple eapply wp_make; eauto with int lia.
 
 Global Ltac wp_make_intros b :=
-  simpl; intros b ?.
+  cbv beta; intros b ?.
 
 Global Ltac wp_make_bind b :=
   eapply wp_bind; [ wp_make_nude | wp_make_intros b ].
@@ -888,7 +888,7 @@ End Blit.
 
 Global Ltac wp_blit_nude :=
   check_flex_post;
-  eapply wp_blit; eauto with int lia; (list; lia).
+  eapply wp_blit; eauto with int lia; (list; try lia).
 
 Global Ltac wp_blit_intros a :=
   wp_set_intros a. (* shortcut *)
