@@ -50,6 +50,37 @@ Qed.
 
 Hint Resolve representable_max_array_length : representable.
 
+(* [2 * max_array_length] is still representable. *)
+
+Lemma representable_twice_max_array_length :
+  representable (2 * max_array_length).
+Proof.
+  (* This proof should work for larger constants as well. *)
+  unfold max_array_length.
+  assert (∀ x : Z, 0 ≤ x → 0 ≤ 2 * x)%Z by lia.
+  rewrite representable_iff_Z.
+  change 2 with (Z.to_nat 2).
+  rewrite <- Z2Nat.inj_mul by eauto with lia.
+  int.
+  (* The goal is now an inequality in Z. *)
+  (* To my surprise, computation in Z solves this goal. *)
+  compute. split; congruence.
+Qed.
+
+(* [max_array_length] is not ridiculously small. *)
+
+Lemma max_array_length_is_large :
+  1024 < max_array_length.
+Proof.
+  (* This proof will work for any constant that really is less
+     than [max_array_length]. *)
+  unfold max_array_length.
+  change 1024 with (to_nat 1024).
+  rewrite <- Z2Nat.inj_lt by eauto with lia.
+  rewrite <- ltb_spec.
+  reflexivity.
+Qed.
+
 (* Any number that is bounded by [max_array_length] is representable. *)
 
 Goal ∀ n, n ≤ max_array_length → representable n.
