@@ -382,7 +382,9 @@ Proof. representable. Qed.
 Goal representable 1.
 Proof. representable. Qed.
 
-Hint Extern 1 (representable _) => representable : representable.
+Global Hint Extern 1 (representable _) =>
+  representable
+: representable.
 
 Lemma representable_down_closed i j :
   representable j →
@@ -393,6 +395,9 @@ Proof.
 Qed.
 
 Hint Resolve representable_down_closed : representable.
+  (* This hint may cause divergence if [i ≤ j] is solved
+     by picking [j := i]. But it seems difficult to live
+     without it. *)
 
 (* If [i] is representable then going [nat → int → Z] is the same as
    going [nat → Z] directly. *)
