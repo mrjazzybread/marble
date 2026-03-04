@@ -38,7 +38,7 @@ Qed.
 
 (* [max_array_length] is representable. *)
 
-Global Instance representable_max_array_length :
+Lemma representable_max_array_length :
   representable max_array_length.
 Proof.
   rewrite representable_iff_Z. split; [ lia |].
@@ -47,6 +47,8 @@ Proof.
   (* (φ%uint63 max_length < wB)%Z *)
   reflexivity.
 Qed.
+  (* We do not make this lemma an Instance because the more powerful
+     lemma [representable_le_max_array_length] follows. *)
 
 (* [2 * max_array_length] is still representable. *)
 
@@ -84,9 +86,12 @@ Qed.
 Global Instance representable_le_max_array_length n :
   n ≤ max_array_length → representable n.
 Proof.
-  intros.
-  eapply representable_down_closed; [| eauto ].
-  eapply representable_max_array_length.
+  eauto using representable_max_array_length with typeclass_instances.
+  (* [eauto with typeclass_instances] would be unable to solve this goal,
+     even if we made [representable_max_array_length] an Instance, because
+     that would require guessing [?i := max_array_length] in a subgoal of
+     the form [representable ?i]. We have used [Hint Mode] to forbid such
+     guessing. *)
 Qed.
 
 (* The length of an array, converted to a natural number,
@@ -105,7 +110,7 @@ Qed. (* a bit slow *)
 
 (* The length of an array is representable. *)
 
-Lemma representable_to_nat_length {A} (a : array A) :
+Local Lemma representable_to_nat_length {A} (a : array A) :
   representable (to_nat (length a)).
 Proof.
   eapply representable_down_closed; [| eapply leb_length' ].
