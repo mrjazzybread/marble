@@ -402,9 +402,9 @@ Global Instance representable_down_closed i j :
 Proof.
   rewrite !representable_iff_nat. lia.
 Qed.
-  (* This instance might cause divergence if [i ≤ j] is solved by
-     picking [j := i]. But it seems difficult to live without it. *)
-  (* TODO *)
+  (* I believe that this instance does not cause divergence because
+     it requires solving [representable ?j] first and checking [i ≤ j]
+     afterwards. It cannot pick [j := i] and enter a loop. *)
 
 (* If [i] is representable then going [nat → int → Z] is the same as
    going [nat → Z] directly. *)
@@ -675,23 +675,20 @@ Qed.
 
 Global Hint Resolve isInt_min isInt_max : int.
 
-Lemma min_representable m n :
+Global Instance min_representable m n :
   representable m ∨ representable n →
   representable (m `min` n).
 Proof.
   rewrite !representable_iff_nat. lia.
 Qed.
 
-Lemma max_representable m n :
+Global Instance max_representable m n :
   representable m →
   representable n →
   representable (m `max` n).
 Proof.
   rewrite !representable_iff_nat. lia.
 Qed.
-
-(* The above two lemmas apparently cannot be added as hints;
-   this causes divergence in array.v. I don't know why. TODO *)
 
 (* -------------------------------------------------------------------------- *)
 

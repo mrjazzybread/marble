@@ -249,13 +249,13 @@ Proof.
   assert (isInt 8 8) by eauto with int. (* TODO *)
   (* (* Now conclude. *) *)
   (* This proof is not as concise as I would like.
-     [eauto] with hints does not work as expected. *)
+     TODO once [isInt] is a type class, clean up? *)
   eexists. split.
   { eapply isInt_min.
     + eauto using max_length_spec.
     + eauto with int typeclass_instances.
     + eauto with typeclass_instances.
-    + eauto using max_representable with typeclass_instances. }
+    + eauto with typeclass_instances. }
   { lia. }
 Qed.
 
