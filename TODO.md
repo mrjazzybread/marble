@@ -2,16 +2,16 @@
 
 ## Short term
 
+* `isInt` should be a type class
+  so we stop using `eauto with int`
+  and we stop instantiating evars in stupid ways.
+
 * In anticipation of vectors, many operations on arrays should also
   work on a segment of a larger array.
   + `segment_find_index`
   + `segment_exist`
   + `segment_for_all`
   + `segment_for_all`
-
-* Maybe `isInt` and `representable` should be type classes
-  so we can use type class search instead
-  of `eauto with int representable lia`.
 
 * Seal `isBool` and other similar assertions.
 
