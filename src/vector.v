@@ -70,6 +70,14 @@ Local Ltac destructIsVectorCap :=
     destruct h as (u&?&?&?)
   end.
 
+Local Ltac destructAndKeepIsVectorCap :=
+  match goal with h: isVectorCap ?v _ _ |- _ =>
+    destructVector v;
+    let u := fresh "unoccupied" in
+    generalize h;
+    intros (u&?&?&?)
+  end.
+
 (* -------------------------------------------------------------------------- *)
 
 Section Operations.
@@ -168,8 +176,8 @@ Qed.
 
 (* In [grow v _c], [_c] is the desired capacity of the new array. *)
 
-(* [grow] is an internal function. It returns just the new array,
-   not a vector. The logical length of the vector is unchanged. *)
+(* [grow] returns just the new array, not a vector.
+   The logical length of the vector is unchanged. *)
 
 Local Definition grow v _c : array A :=
   let '(_n, a) := v in
@@ -194,39 +202,29 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO WIP here *)
-
-Definition capacity v : int :=
-  let '(_, a) := v in
-  length a.
+(* [next_capacity _c] returns a new capacity that is at most equal to
+   [max_array_length] and (in practice) at least as great as [_c], but
+   this fact is not used in the proof.  *)
 
 Local Definition next_capacity _c : int :=
-  do _k ← (
+  (* If the current capacity [_c] is small, multiply it by 2;
+     otherwise multiply it by 3/2.  *)
+  do _c ← (
     if (_c ≤? 512)%uint63 then (_c * 2)%uint63
     else (_c + _c / 2)%uint63
   ) ;
-  _min max_length (_max 8%uint63 _k).
-
-(* TODO *
-Hint Extern 1 (isInt _ _) =>
-  match goal with
-  | |- isInt ?_i ?i =>
-    is_evar _i
-  | |- isInt ?_i ?i =>
-    eapply introIsInt'
-  end;
-  fail "evar"
-: int.
- *)
+  (* Clip it, so that it is at least 8 and at most [max_array_length]. *)
+  _min max_length (_max 8%uint63 _c).
 
 Lemma isInt_next_capacity _c c :
   isInt _c c →
   c ≤ max_array_length →
   wp (next_capacity _c) (λ _c', ∃ c',
-    isInt _c' c' ∧ c ≤ c' ∧ c' ≤ max_array_length
+    isInt _c' c' ∧ c ≤ c' ≤ max_array_length
   ).
 Proof.
   intros. unfold next_capacity.
+  (* First, reason about the [if] construct. *)
   eapply wp_bind with (P := λ _c', ∃ c',
     isInt _c' c' ∧ c ≤ c' ∧ representable c').
   {
@@ -243,7 +241,7 @@ Proof.
     (* Now conclude. *)
      wp_if; wp_ret; eauto 7 with int lia typeclass_instances.
   }
-  intros _k (c'&?&?&?).
+  intros _c' (c'&?&?&?).
   wp_ret.
   (* Another remark. *)
   assert (isInt 8 8) by eauto with int. (* TODO *)
@@ -259,25 +257,49 @@ Proof.
   { lia. }
 Qed.
 
-(* TODO *)
-(* _r : request *)
-(* _c : capacity *)
-Definition really_ensure_capacity v _r : array A :=
+(* -------------------------------------------------------------------------- *)
+
+(* TODO WIP here *)
+
+(* TODO *
+Hint Extern 1 (isInt _ _) =>
+  match goal with
+  | |- isInt ?_i ?i =>
+    is_evar _i
+  | |- isInt ?_i ?i =>
+    eapply introIsInt'
+  end;
+  fail "evar"
+: int.
+ *)
+
+(* [capacity v] returns the current capacity of the vector [v]. *)
+
+Local Definition capacity v : int :=
+  let '(_, a) := v in
+  length a.
+
+(* [really_ensure_capacity v _n'] ensures that the capacity of
+   the vector [v] is at least [_n']. It returns a new array. *)
+
+Definition really_ensure_capacity v _n' : array A :=
+  (* Get the current capacity [_c] of the vector. *)
   do _c ← capacity v ;
-  do _c' ← (
-    if (_r ≤? _c)%uint63 then _c
-    else _max (next_capacity _c) _r
-  ) ;
+  (* We assume that [_n'] is greater than [_c], so [grow] must be called.
+     The new capacity is computed based on the current capacity, and is
+     adjusted so as to be at least [_n']. *)
+  do _c' ← _max (next_capacity _c) _n' ;
   grow v _c'.
 
-Lemma wp_really_ensure_capacity v xs _n' n' :
+Lemma wp_really_ensure_capacity _n a xs c _n' n' :
+  isVectorCap (_n, a) xs c →
   isInt _n' n' →
   representable n' →
-  n' ≤ max_array_length →
-  wp (really_ensure_capacity v _n') (λ a ,
-    ∃ unoccupied,
-    isArray a (xs ++ unoccupied) ∧
-    n' ≤ len xs + len unoccupied
+  c < n' ≤ max_array_length →
+  wp (really_ensure_capacity (_n, a) _n') (λ a ,
+    ∃ c' ,
+    isVectorCap (_n, a) xs c' ∧
+    n' ≤ c'
   ).
 Proof.
 Admitted.
@@ -305,22 +327,25 @@ Lemma wp_push v xs x :
   wp (push v x) (λ v, isVector v (xs ++ {[x]})).
 Proof.
   intros. unfold push.
-  destructIsVector. destructIsVectorCap.
+  destructIsVector. destructAndKeepIsVectorCap.
   wp_length _c.
   (* We are looking at the [if] construct. At the join point,
-     at least one free slot exists in the array. *)
+     at least one free slot exists in the array. Indeed, the
+     new capacity [c'] is at least [len xs + 1]. *)
   eapply wp_bind with (P := λ a,
-    ∃ unoccupied',
-    isArray a (xs ++ unoccupied') ∧
-    len xs + 1 ≤ len xs + len unoccupied'
-      (* equivalent to: 0 < len unoccupied' *)
+    ∃ c' ,
+    isVectorCap (_n, a) xs c' ∧
+    len xs + 1 ≤ c'
   ).
   { wp_if.
     (* Case: there is still room. *)
     + wp_ret. eauto with lia.
     (* Case: the array must be grown. *)
-    + eauto using wp_really_ensure_capacity with int typeclass_instances. }
-  clear dependent a unoccupied. intros a (unoccupied & ? & ?).
+    + eauto using wp_really_ensure_capacity with int typeclass_instances lia.
+  }
+  clear dependent a unoccupied. (* TODO automate *)
+  intros a (c' & ? & ?).
+  destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.
   introIsVector.
