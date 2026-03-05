@@ -125,7 +125,7 @@ Local Lemma representable_to_nat_length {A} (a : array A) :
   representable (to_nat (length a)).
 Proof.
   eapply representable_down_closed; [| eapply leb_length' ].
-  eauto with typeclass_instances.
+  tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -189,7 +189,7 @@ Global Instance isArray_representable `{Inhabited A} (a : array A) xs :
   isArray a xs →
   representable (len xs).
 Proof.
-  intros. destructIsArray. eauto with typeclass_instances.
+  intros. destructIsArray. tc.
 Qed.
 
 Local Lemma isArray_pi3 `{Inhabited A} (a : array A) (xs : list A) :
@@ -433,7 +433,7 @@ Proof.
   intros. unfold segment_to_list.
   (* The loop invariant. *)
   eapply wp_down with (inv := λ j ys, ys = seg j k xs);
-    eauto with typeclass_instances lia; list; intros; eauto.
+    tc; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
     wp_ret. subst.
@@ -474,14 +474,14 @@ Proof.
   assert (isInt _n n) by eauto using introIsInt.
   assert (n ≤ max_array_length).
   { subst n _n. simple eapply leb_length'. }
-  assert (representable n) by eauto with typeclass_instances.
+  assert (representable n) by tc.
   (* The loop invariant: when the loop index is [i] and the state is [xs],
      the length of [xs] is [n - i] and the elements of [xs] are the elements
      found at indices [i, n) in the array [a]. *)
   eapply wp_down with (inv := λ i (ys : list A),
     len ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
-  ); eauto with typeclass_instances lia; list; intros.
+  ); tc; list; intros.
   (* Initialization. *)
   { split; intros; lia. }
   (* Preservation. *)
@@ -572,7 +572,7 @@ Proof.
   { wp_op Hpreservation s'.
     { eauto using prefix_cons, prefix_nil. }
     eapply IHfuture with (history := history ++ [x]);
-      list; eauto with typeclass_instances. }
+      list; tc. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -803,7 +803,7 @@ Proof.
     isArray b
       (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   );
-  eauto with typeclass_instances lia; list; eauto 1.
+  tc; list; eauto 1.
   (* Preservation. *)
   { clear dependent b. intros _k k b. intros.
     wp_get x. subst x.
@@ -953,7 +953,7 @@ Proof.
     isArray a
       (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   );
-  eauto with typeclass_instances lia; list; eauto 1.
+  tc; list; eauto 1.
   (* Preservation. *)
   { clear dependent a. intros _k k a. intros.
     wp_set.
@@ -1040,7 +1040,7 @@ Proof.
      satisfies [f], and at index [i], an element satisfies [f]. *)
   { set (inv := λ i s o, find_index_inv xs i (i - 1) o).
     eapply wp_interruptible_up_rigid with (inv := inv);
-      eauto with typeclass_instances; unfold inv, find_index_inv.
+      tc; unfold inv, find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
@@ -1267,7 +1267,7 @@ Proof.
     eapply wp_bind.
     { eapply wp_interruptible_up_rigid
         with (inv := λ i s o, equal_inv xs ys i o);
-        eauto with typeclass_instances; unfold equal_inv; eauto with lia.
+        tc; unfold equal_inv; eauto with lia.
       (* Preservation. *)
       intros.
       wp_get x. wp_get y.

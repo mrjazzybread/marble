@@ -9,8 +9,18 @@ Set Universe Polymorphism.
 
 (* We use [lia] as a helper for arithmetic side conditions. *)
 
+(* [intuition eauto] can eliminate disjunctions, which is sometimes
+   handy. However, it tends to destructure the goal even when it is
+   unable to solve it, which is inconvenient. Hence we wrap it with
+   [try solve]. Furthermore, in some cases, [intuition eauto] fails
+   whereas [eauto] succeeds. Therefore [intuition eauto] should not
+   be the default tactic. *)
+
 Ltac tc :=
   eauto with typeclass_instances lia.
+
+Ltac itc :=
+  try solve [ intuition eauto with typeclass_instances lia ].
 
 (* [cleanup] removes an equality hypothesis that is produced by
    [funelim] and that is usually unneeded. *)

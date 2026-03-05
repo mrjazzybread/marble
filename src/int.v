@@ -425,7 +425,7 @@ Qed.
 
 Hint Rewrite
   to_Z_of_nat
-  using (eauto with typeclass_instances lia)
+  using tc
 : int.
 
 Definition proj (i : nat) : nat :=
@@ -715,7 +715,7 @@ Global Instance div_representable i j :
 Proof.
   intros.
   assert (i `div` j ≤ i)%nat by eauto using div_decreasing.
-  eauto with typeclass_instances.
+  tc.
 Qed.
 
 (* Division of representable integers works. *)
@@ -729,7 +729,7 @@ Global Instance div_compat _i i _j j :
   isInt (_i/_j) (i/j)%nat.
 Proof.
   intros.
-  rewrite isInt_repr by eauto with typeclass_instances.
+  rewrite isInt_repr by tc.
   rewrite div_spec.
   rewrite isInt_repr in * by eauto. subst i j.
   rewrite Z2Nat.inj_div by eauto with lia.
@@ -1082,7 +1082,8 @@ Proof.
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
       intuition eauto with lia;
       autorewrite with nat;
-      eauto using wp_conseq with typeclass_instances lia. }
+      tc.
+    eauto using wp_conseq with lia. }
 Qed.
 
 (* [down _n s @@ λ _i s, ...] is a convenient way of writing a loop. *)
@@ -1177,7 +1178,7 @@ Proof.
   { assert (fact: a `max` b = (a + 1) `max` b) by lia.
     rewrite fact in Hfinish.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
-    eauto with typeclass_instances lia. }
+    tc. }
   (* Case [¬ a < b]. *)
   { assert (fact: a `max` b = a) by lia.
     rewrite fact in Hfinish.
@@ -1410,7 +1411,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
     + wp_ret. eauto with lia.
-    + eapply H; intuition eauto with typeclass_instances lia. }
+    + eapply H; itc. }
   (* Case [¬ a < b]. *)
   { wp_ret. eauto with lia. }
 Qed.

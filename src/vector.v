@@ -115,7 +115,7 @@ Lemma wp_create :
   wp (create ()) (λ v, isVector v []).
 Proof.
   unfold create. wp_make a. wp_ret.
-  introIsVector. introIsVectorCap; eauto with typeclass_instances.
+  introIsVector. introIsVectorCap; tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -179,7 +179,7 @@ Proof.
   destructIsVector. destructIsVectorCap.
   wp_get x. wp_ret. split; [ eauto |].
   introIsVector.
-  introIsVectorCapWithWitness ({[x]} ++ unoccupied); eauto with typeclass_instances.
+  introIsVectorCapWithWitness ({[x]} ++ unoccupied); tc.
   subst x. isArray.
 Qed.
 
@@ -253,14 +253,14 @@ Proof.
     { assert (c `div` 2 ≤ c) by eauto with lia.
       rewrite representable_iff_nat in *. lia. }
     (* Now conclude. *)
-     wp_if; wp_ret; eauto 7 with lia typeclass_instances.
+     wp_if; wp_ret; eexists; split; tc.
   }
   wp_intros _c'.
   wp_ret.
   (* Another remark. *)
   assert (isInt 8 8) by eauto using introIsInt. (* TODO *)
-  (* (* Now conclude. *) *)
-  eauto 7 with lia typeclass_instances.
+  (* Now conclude. *)
+  eexists; split; tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -340,8 +340,7 @@ Proof.
   (* Write; return. *)
   wp_set. wp_ret.
   introIsVector.
-  introIsVectorCapWithWitness (final_seg 1 unoccupied);
-    eauto with typeclass_instances.
+  introIsVectorCapWithWitness (final_seg 1 unoccupied); tc.
   isArray.
   rewrite (seg_intro unoccupied) at 1. list. eauto.
 Qed.
