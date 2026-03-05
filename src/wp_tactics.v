@@ -40,7 +40,7 @@ Global Ltac wp_op_nude lemma :=
   (* One round of [eauto], followed by a round of rewriting
      and a second round of [eauto]. Not very elegant, but
      this seems effective, so good enough for now. *)
-  eauto with lia typeclass_instances;
+  tc;
   list;
   eauto with lia.
 
