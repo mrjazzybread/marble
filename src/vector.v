@@ -349,8 +349,8 @@ Proof.
     (* Case: the array must be grown. *)
     + eauto using wp_really_ensure_capacity with int typeclass_instances lia.
   }
-  clear dependent a unoccupied. (* TODO automate *)
-  intros a (c' & ? & ?).
+  clear dependent unoccupied. (* A bit ad hoc. *)
+  wp_intros_overwrite a.
   destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.

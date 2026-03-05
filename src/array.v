@@ -342,6 +342,34 @@ End PrimSpec.
 
 (* The following tactics help use the above specifications. *)
 
+(* [wp_intros x] introduces [x] and a hypothesis [Hx] and simplifies this
+   hypothesis. It is typically used in the second subgoal of [wp_bind] and
+   [wp_conseq]. *)
+
+Global Ltac wp_intros x :=
+  (* Eliminate a beta redex, if there is one. *)
+  cbv beta;
+  let Hx := fresh in
+  intros x Hx;
+  (* Simplify expressions that involve lists. *)
+  list in Hx;
+  (* Decompose existential quantifiers and conjunctions. *)
+  unpack in Hx.
+
+(* [wp_intros x] first invokes [wp_intros x'], where [x'] is fresh,
+   then forgets everything about [x] and renames [x'] into [x]. It
+   should (must) be used when [x'] represents a new array that has
+   been obtained by updating the array [x], or more generally,
+   a new mutable data structure that has been obtained by updating
+   the data structure [x]. This helps keep the goal readable and
+   ensures mutable data structures are used linearly. *)
+
+Global Ltac wp_intros_overwrite x :=
+  let x' := fresh in
+  wp_intros x';
+  clear dependent x;
+  rename x' into x.
+
 (* In each case, we try applying [wp_bind] first; if this does
    not work then we try applying the operation's specification
    directly, while checking that the postcondition is flexible;
@@ -351,59 +379,38 @@ Global Ltac wp_length_nude :=
   check_flex_post;
   simple eapply wp_length; eauto.
 
-Global Ltac wp_length_intros n :=
-  let Hn := fresh in
-  cbv beta; intros n Hn;
-  list in Hn;
-  destruct Hn as [? ?].
-
 Global Ltac wp_length_bind n :=
-  eapply wp_bind; [ wp_length_nude | wp_length_intros n ].
+  eapply wp_bind; [ wp_length_nude | wp_intros n ].
 
 Global Ltac wp_length n :=
   repeat rewrite bind_bind;
   first [
     wp_length_bind n
   | wp_length_nude
-  | eapply wp_conseq; [ wp_length_nude | wp_length_intros n ]
+  | eapply wp_conseq; [ wp_length_nude | wp_intros n ]
   ].
 
 Global Ltac wp_get_nude :=
   check_flex_post;
   simple eapply wp_get; eauto with int lia.
 
-Global Ltac wp_get_intros x :=
-  let Hx := fresh in
-  cbv beta; intros x Hx;
-  list in Hx.
-
 Global Ltac wp_get_bind x :=
-  eapply wp_bind; [ wp_get_nude | wp_get_intros x ].
+  eapply wp_bind; [ wp_get_nude | wp_intros x ].
 
 Global Ltac wp_get x :=
   repeat rewrite bind_bind;
   first [
     wp_get_bind x
   | wp_get_nude
-  | eapply wp_conseq; [ wp_get_nude | wp_get_intros x ]
+  | eapply wp_conseq; [ wp_get_nude | wp_intros x ]
   ].
 
 Global Ltac wp_set_nude :=
   check_flex_post;
   simple eapply wp_set; eauto with int lia.
 
-Global Ltac wp_set_intros a :=
-  let a' := fresh a in
-  let Ha' := fresh in
-  cbv beta; intros a' Ha';
-  list in Ha';
-  (* Forget about the previous array [a] and rename the new array [a']
-     with the name of the previous array. Thus we keep only the latest
-     version at hand in the course of a proof. *)
-  clear dependent a; rename a' into a.
-
 Global Ltac wp_set_bind a :=
-  eapply wp_bind; [ wp_set_nude | wp_set_intros a ].
+  eapply wp_bind; [ wp_set_nude | wp_intros_overwrite a ].
 
 Global Ltac wp_set :=
   repeat rewrite bind_bind;
@@ -411,7 +418,7 @@ Global Ltac wp_set :=
     first [
       wp_set_bind a
     | wp_set_nude
-    | eapply wp_conseq; [ wp_set_nude | wp_set_intros a ]
+    | eapply wp_conseq; [ wp_set_nude | wp_intros_overwrite a ]
     ]
   end.
 
@@ -419,18 +426,15 @@ Global Ltac wp_make_nude :=
   check_flex_post;
   simple eapply wp_make; eauto with int lia.
 
-Global Ltac wp_make_intros b :=
-  cbv beta; intros b ?.
-
 Global Ltac wp_make_bind b :=
-  eapply wp_bind; [ wp_make_nude | wp_make_intros b ].
+  eapply wp_bind; [ wp_make_nude | wp_intros b ].
 
 Global Ltac wp_make b :=
   repeat rewrite bind_bind;
   first [
     wp_make_bind b
   | wp_make_nude
-  | eapply wp_conseq; [ wp_make_nude | wp_make_intros b ]
+  | eapply wp_conseq; [ wp_make_nude | wp_intros b ]
   ].
 
 (* -------------------------------------------------------------------------- *)
@@ -890,11 +894,8 @@ Global Ltac wp_blit_nude :=
   check_flex_post;
   eapply wp_blit; eauto with int lia; (list; try lia).
 
-Global Ltac wp_blit_intros a :=
-  wp_set_intros a. (* shortcut *)
-
 Global Ltac wp_blit_bind a :=
-  eapply wp_bind; [ wp_blit_nude | wp_blit_intros a ].
+  eapply wp_bind; [ wp_blit_nude | wp_intros_overwrite a ].
 
 Global Ltac wp_blit :=
   repeat rewrite bind_bind;
@@ -902,7 +903,7 @@ Global Ltac wp_blit :=
     first [
       wp_blit_bind a
     | wp_blit_nude
-    | eapply wp_conseq; [ wp_blit_nude | wp_blit_intros a ]
+    | eapply wp_conseq; [ wp_blit_nude | wp_intros_overwrite a ]
     ]
   end.
 
@@ -1054,11 +1055,8 @@ Global Ltac wp_fill_nude :=
   check_flex_post;
   eapply wp_fill; eauto with int lia; (list; lia).
 
-Global Ltac wp_fill_intros a :=
-  wp_set_intros a. (* shortcut *)
-
 Global Ltac wp_fill_bind a :=
-  eapply wp_bind; [ wp_fill_nude | wp_fill_intros a ].
+  eapply wp_bind; [ wp_fill_nude | wp_intros_overwrite a ].
 
 Global Ltac wp_fill :=
   repeat rewrite bind_bind;
@@ -1066,7 +1064,7 @@ Global Ltac wp_fill :=
     first [
       wp_fill_bind a
     | wp_fill_nude
-    | eapply wp_conseq; [ wp_fill_nude | wp_fill_intros a ]
+    | eapply wp_conseq; [ wp_fill_nude | wp_intros_overwrite a ]
     ]
   end.
 
