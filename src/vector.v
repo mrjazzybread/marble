@@ -2,7 +2,7 @@ From stdpp Require Import numbers list.
 Local Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From array Require Import tactics list_extra bool int wp array.
+From array Require Import tactics list_extra bool int wp wp_tactics array.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -340,8 +340,8 @@ Proof.
     (* Case: there is still room. *)
     + wp_ret. eauto with lia.
     (* Case: the array must be grown. *)
-    + eauto using wp_really_ensure_capacity with int typeclass_instances lia.
-  }
+    + wp_op_overwrite wp_really_ensure_capacity a.
+      eauto. }
   clear dependent unoccupied. (* A bit ad hoc. *)
   wp_intros_overwrite a.
   destructIsVectorCap.

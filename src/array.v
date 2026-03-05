@@ -2,7 +2,7 @@ From stdpp Require Import numbers list.
 Local Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From array Require Import tactics list_extra bool int wp.
+From array Require Import tactics list_extra bool int wp wp_tactics.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -285,7 +285,7 @@ Lemma wp_make _n n x :
   n ≤ max_array_length →
   wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
-  intros. eapply wp_ret.
+  intros. wp_ret.
   introIsArray; list; eauto using length_make' with int.
   intros i ?.
   rewrite get_make. list. eauto.
@@ -300,7 +300,7 @@ Lemma wp_get _i i a xs :
   wp a.[_i] (λ x, x = xs !!! i).
 Proof.
   (* Easy, because the definition of [isArray] relies on [get]. *)
-  intros. destructIsArray. repeat destructIsInt. eapply wp_ret. eauto.
+  intros. destructIsArray. repeat destructIsInt. wp_ret. eauto.
 Qed.
 
 (* The public specification of [set]. *)
@@ -311,7 +311,7 @@ Lemma wp_set _i i a xs x :
   valid i xs →
   wp a.[_i <- x] (λ a', isArray a' (<[i := x]>xs)).
 Proof.
-  intros. eapply wp_ret. introIsArray; list.
+  intros. wp_ret. introIsArray; list.
   { rewrite length_set. eauto using isArray_length_spec. }
   { eauto with lia. }
   intros j ?. liftIsIntAndClear.
@@ -334,70 +334,13 @@ Lemma wp_length a xs :
     representable (len xs)
   ).
 Proof.
-  intros. eapply wp_ret.
+  intros. wp_ret.
   eauto using isArray_length_spec with typeclass_instances.
 Qed.
 
 End PrimSpec.
 
 (* The following tactics help use the above specifications. *)
-
-(* [wp_intros x] introduces [x] and a hypothesis [Hx] and simplifies this
-   hypothesis. It is typically used in the second subgoal of [wp_bind] and
-   [wp_conseq]. *)
-
-Global Ltac wp_intros x :=
-  (* Eliminate a beta redex, if there is one. *)
-  cbv beta;
-  let Hx := fresh in
-  intros x Hx;
-  (* Simplify expressions that involve lists. *)
-  list in Hx;
-  (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx.
-
-(* [wp_intros x] first invokes [wp_intros x'], where [x'] is fresh,
-   then forgets everything about [x] and renames [x'] into [x]. It
-   should (must) be used when [x'] represents a new array that has
-   been obtained by updating the array [x], or more generally,
-   a new mutable data structure that has been obtained by updating
-   the data structure [x]. This helps keep the goal readable and
-   ensures mutable data structures are used linearly. *)
-
-Global Ltac wp_intros_overwrite x :=
-  let x' := fresh in
-  wp_intros x';
-  clear dependent x;
-  rename x' into x.
-
-(* In each case, we try applying [wp_bind] first; if this does
-   not work then we try applying the operation's specification
-   directly, while checking that the postcondition is flexible;
-   if this does not work then we use [wp_conseq] first. *)
-
-Global Ltac wp_op_nude lemma :=
-  (* Check that the postcondition in the goal is flexible. *)
-  check_flex_post;
-  (* Apply the reasoning rule for this operation. *)
-  simple eapply lemma;
-    (* Attempt to solve the preconditions: *)
-    eauto with int lia typeclass_instances.
-
-Global Ltac wp_op lemma x :=
-  repeat rewrite bind_bind;
-  first [
-    eapply wp_bind; [ wp_op_nude lemma | wp_intros x ]
-  | wp_op_nude lemma
-  | eapply wp_conseq; [ wp_op_nude lemma | wp_intros x ]
-  ].
-
-Global Ltac wp_op_overwrite lemma x :=
-  repeat rewrite bind_bind;
-  first [
-    eapply wp_bind; [ wp_op_nude lemma | wp_intros_overwrite x ]
-  | wp_op_nude lemma
-  | eapply wp_conseq; [ wp_op_nude lemma | wp_intros_overwrite x ]
-  ].
 
 Global Ltac wp_length n :=
   wp_op wp_length n.
@@ -482,7 +425,7 @@ Proof.
     eauto with int typeclass_instances lia; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
-    eapply wp_ret. subst.
+    wp_ret. subst.
     rewrite cons_is_append. list. eauto. }
 Qed.
 
@@ -492,9 +435,8 @@ Lemma wp_to_list a xs :
 Proof.
   intro. unfold to_list.
   wp_length _n.
-  eapply wp_conseq;
-  [ eauto using wp_segment_to_list with int typeclass_instances lia | simpl ].
-  intros. subst. list. eauto.
+  wp_op wp_segment_to_list xs'.
+  eauto.
 Qed.
 
 (* A second (stronger) specification of [to_list]. *)
@@ -536,7 +478,7 @@ Proof.
     match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
     liftIsIntAndClear.
     wp_bind_eq.
-    eapply wp_ret.
+    wp_ret.
     list; split; [ lia |].
     intros j ?.
     destruct (decide (i = j)); [ subst j |]; list.
@@ -597,13 +539,15 @@ Fixpoint list_iteri f s _i xs :=
    length of the list [history]. *)
 
 Local Lemma wp_list_iteri_aux f inv xs :
-  ∀ future s _i history,
-  isInt _i (len history) →
+  ∀ future s _i i history,
+  isInt _i i →
   inv s history →
+  i = len history →
   history ++ future = xs →
-  ( ∀ s future history _i x,
-    isInt _i (len history) →
+  ( ∀ s future history _i i x,
+    isInt _i i →
     inv s history →
+    i = len history →
     history ++ future = xs →
     [x] `prefix_of` future →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
@@ -611,12 +555,11 @@ Local Lemma wp_list_iteri_aux f inv xs :
   wp (list_iteri f s _i future) (λ s, inv s xs).
 Proof.
   induction future as [| x future ];
-  intros ??? HI Hinv Hxs Hpreservation;
+  intros ???? HI ? Hinv Hxs Hpreservation;
   simpl list_iteri.
-  { list in Hxs. subst history. eapply wp_ret. eauto. }
-  { eapply wp_bind.
-    { eapply Hpreservation; eauto using prefix_cons, prefix_nil. }
-    simpl. intros s' Hs'.
+  { list in Hxs. subst history. wp_ret. eauto. }
+  { wp_op Hpreservation s'.
+    { eauto using prefix_cons, prefix_nil. }
     eapply IHfuture with (history := history ++ [x]);
       list; eauto with int. }
 Qed.
@@ -633,9 +576,10 @@ Lemma wp_list_iteri f xs Q inv s :
      the list [xs], then the function call [f s _i x] must return a new
      state [s] such that the invariant holds of the state [s] and of the
      new history [history ++ [x]]. *)
-  ( ∀ s history _i x,
-    isInt _i (len history) →
+  ( ∀ s history _i i x,
+    isInt _i i →
     inv s history →
+    i = len history →
     history ++ [x] `prefix_of` xs →
     wp (f s _i x) (λ s, inv s (history ++ [x]))
   ) →
@@ -646,10 +590,8 @@ Lemma wp_list_iteri f xs Q inv s :
   wp (list_iteri f s 0 xs) Q.
 Proof.
   intros Hinv Hpreservation Hcompletion.
-  eapply wp_conseq.
-  { eapply wp_list_iteri_aux; eauto; list; eauto with int.
-   intros. subst. eauto using prefix_app. }
-  { simpl. eauto. }
+  wp_op wp_list_iteri_aux s'; eauto.
+  list. intros. subst. eauto using prefix_app.
 Qed.
 
 End ListIteri.
@@ -677,9 +619,9 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
   wp (list_length_aux _n xs) (λ _i, isInt _i (n + len xs)).
 Proof.
   induction xs as [| x xs ]; simpl; intros.
-  { eapply wp_ret. list. eauto. }
-  { eapply wp_conseq; [ eauto with int | simpl ].
-    rewrite <- Nat.add_assoc. eauto. }
+  { wp_ret. list. eauto. }
+  { wp_op IHxs _n'.
+    eauto. }
 Qed.
 
 (* The public specification of [list_length]. *)
@@ -687,18 +629,12 @@ Qed.
 Lemma wp_list_length xs :
   wp (list_length xs) (λ _i, isInt _i (len xs)).
 Proof.
-  eapply wp_conseq.
-  { eapply wp_list_length_aux; eauto with int. }
-  { simpl. eauto. }
+  unfold list_length.
+  wp_op wp_list_length_aux _i.
+  eauto.
 Qed.
 
 End ListLength.
-
-Ltac wp_list_length _n :=
-  eapply wp_bind; [
-    eapply wp_list_length
-  | simpl; intros _n ?
-  ].
 
 (* -------------------------------------------------------------------------- *)
 
@@ -730,7 +666,7 @@ Lemma wp_of_list xs :
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
-  wp_list_length _n.
+  wp_op @wp_list_length _n.
   wp_make a.
   (* The loop invariant. *)
   set (n := len xs).
@@ -763,9 +699,9 @@ Proof.
     ) (λ ys, xs = ys)
   ).
   { rewrite wp_iff. eauto. }
-  eapply wp_bind; [ eapply wp_of_list; eauto | simpl; intros a ? ].
-  eapply wp_bind; [ eapply wp_to_list; eauto | simpl; intros ? ->].
-  eapply wp_ret. eauto.
+  wp_op @wp_of_list a.
+  wp_op @wp_to_list ys.
+  wp_ret. eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -866,21 +802,9 @@ Qed.
 
 End Blit.
 
-Global Ltac wp_blit_nude :=
-  check_flex_post;
-  eapply wp_blit; eauto with int lia; (list; try lia).
-
-Global Ltac wp_blit_bind a :=
-  eapply wp_bind; [ wp_blit_nude | wp_intros_overwrite a ].
-
 Global Ltac wp_blit :=
-  repeat rewrite bind_bind;
-  match goal with |- context[blit _ _ ?a _ _] =>
-    first [
-      wp_blit_bind a
-    | wp_blit_nude
-    | eapply wp_conseq; [ wp_blit_nude | wp_intros_overwrite a ]
-    ]
+  match goal with |- context[blit _ _ ?b _ _] =>
+    wp_op_overwrite wp_blit b
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -1027,21 +951,9 @@ Qed.
 
 End Fill.
 
-Global Ltac wp_fill_nude :=
-  check_flex_post;
-  eapply wp_fill; eauto with int lia; (list; lia).
-
-Global Ltac wp_fill_bind a :=
-  eapply wp_bind; [ wp_fill_nude | wp_intros_overwrite a ].
-
 Global Ltac wp_fill :=
-  repeat rewrite bind_bind;
-  match goal with |- context[fill _ _ ?a _ _] =>
-    first [
-      wp_fill_bind a
-    | wp_fill_nude
-    | eapply wp_conseq; [ wp_fill_nude | wp_intros_overwrite a ]
-    ]
+  match goal with |- context[fill ?a _ _ _] =>
+    wp_op_overwrite wp_fill a
   end.
 
 (* -------------------------------------------------------------------------- *)
