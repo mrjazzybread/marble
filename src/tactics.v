@@ -20,3 +20,19 @@ Ltac unpack :=
   | h: ∃ x, _ |- _ =>
       destruct h
   end.
+
+(* [unpack_in] destructs conjunctions in the hypothesis [h]. *)
+Ltac unpack_in h :=
+  match type of h with
+  | _ ∧ _ =>
+      destruct h as [ ? h ];
+      unpack_in h
+  | ∃ x, _ =>
+      destruct h as [ ? h ];
+      unpack_in h
+  | _ =>
+      idtac
+  end.
+
+Global Tactic Notation "unpack" "in" hyp(h) :=
+  unpack_in h.
