@@ -375,35 +375,27 @@ Global Ltac wp_intros_overwrite x :=
    directly, while checking that the postcondition is flexible;
    if this does not work then we use [wp_conseq] first. *)
 
-Global Ltac wp_length_nude :=
+Global Ltac wp_op_nude lemma :=
+  (* Check that the postcondition in the goal is flexible. *)
   check_flex_post;
-  simple eapply wp_length; eauto.
+  (* Apply the reasoning rule for this operation. *)
+  simple eapply lemma;
+    (* Attempt to solve the preconditions: *)
+    eauto with int lia typeclass_instances.
 
-Global Ltac wp_length_bind n :=
-  eapply wp_bind; [ wp_length_nude | wp_intros n ].
+Global Ltac wp_op lemma x :=
+  repeat rewrite bind_bind;
+  first [
+    eapply wp_bind; [ wp_op_nude lemma | wp_intros x ]
+  | wp_op_nude lemma
+  | eapply wp_conseq; [ wp_op_nude lemma | wp_intros x ]
+  ].
 
 Global Ltac wp_length n :=
-  repeat rewrite bind_bind;
-  first [
-    wp_length_bind n
-  | wp_length_nude
-  | eapply wp_conseq; [ wp_length_nude | wp_intros n ]
-  ].
-
-Global Ltac wp_get_nude :=
-  check_flex_post;
-  simple eapply wp_get; eauto with int lia.
-
-Global Ltac wp_get_bind x :=
-  eapply wp_bind; [ wp_get_nude | wp_intros x ].
+  wp_op wp_length n.
 
 Global Ltac wp_get x :=
-  repeat rewrite bind_bind;
-  first [
-    wp_get_bind x
-  | wp_get_nude
-  | eapply wp_conseq; [ wp_get_nude | wp_intros x ]
-  ].
+  wp_op wp_get x.
 
 Global Ltac wp_set_nude :=
   check_flex_post;
@@ -422,20 +414,8 @@ Global Ltac wp_set :=
     ]
   end.
 
-Global Ltac wp_make_nude :=
-  check_flex_post;
-  simple eapply wp_make; eauto with int lia.
-
-Global Ltac wp_make_bind b :=
-  eapply wp_bind; [ wp_make_nude | wp_intros b ].
-
-Global Ltac wp_make b :=
-  repeat rewrite bind_bind;
-  first [
-    wp_make_bind b
-  | wp_make_nude
-  | eapply wp_conseq; [ wp_make_nude | wp_intros b ]
-  ].
+Global Ltac wp_make a :=
+  wp_op wp_make a.
 
 (* -------------------------------------------------------------------------- *)
 
