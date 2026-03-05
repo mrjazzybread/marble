@@ -23,18 +23,29 @@ Open Scope nat_scope.
 
 (* We have [max_length : int]; we define [max_array_length : nat]. *)
 
-Definition max_array_length : nat :=
+Definition max_array_length_def : nat :=
   to_nat max_length.
+
+  (* Without sealing, making [max_length_spec] an instance slows down
+     [eauto with typeclass_instances] in an unbearable way. *)
+
+  Local Definition max_array_length_aux : seal (@max_array_length_def).
+  Proof. by eexists. Qed.
+  Definition max_array_length := max_array_length_aux.(unseal).
+  Local Definition max_array_length_unseal :
+    @max_array_length = @max_array_length_def := max_array_length_aux.(seal_eq).
+
+  Local Ltac max_array_length_def :=
+    rewrite max_array_length_unseal;
+    unfold max_array_length_def.
 
 (* These constants are related by [isInt]. *)
 
-Lemma max_length_spec :
+Global Instance max_length_spec :
   isInt max_length max_array_length.
 Proof.
-  introIsInt. unfold max_array_length. int. eauto.
+  introIsInt. max_array_length_def. int. eauto.
 Qed.
-  (* do not use this lemma as a resolve hint *)
-  (* this makes everything hopelessly slow!  *)
 
 (* [max_array_length] is representable. *)
 
@@ -43,7 +54,7 @@ Lemma representable_max_array_length :
 Proof.
   rewrite representable_iff_Z. split; [ lia |].
   (* (Z.of_nat max_array_length < wB)%Z *)
-  unfold max_array_length. int.
+  max_array_length_def. int.
   (* (φ%uint63 max_length < wB)%Z *)
   reflexivity.
 Qed.
@@ -56,7 +67,7 @@ Lemma representable_twice_max_array_length :
   representable (2 * max_array_length).
 Proof.
   (* This proof should work for larger constants as well. *)
-  unfold max_array_length.
+  max_array_length_def.
   assert (∀ x : Z, 0 ≤ x → 0 ≤ 2 * x)%Z by lia.
   rewrite representable_iff_Z.
   change 2 with (Z.to_nat 2).
@@ -74,7 +85,7 @@ Lemma max_array_length_is_large :
 Proof.
   (* This proof will work for any constant that really is less
      than [max_array_length]. *)
-  unfold max_array_length.
+  max_array_length_def.
   change 1024 with (to_nat 1024).
   rewrite <- Z2Nat.inj_lt by eauto with lia.
   rewrite <- ltb_spec.
@@ -100,13 +111,13 @@ Qed.
 Local Lemma leb_length' {A} (a : array A) :
   to_nat (length a) <= max_array_length.
 Proof.
-  generalize (leb_length _ a); intro H.
-  rewrite leb_spec in H.
-  rewrite max_length_spec in H.
-  unfold max_array_length in *.
-  rewrite of_nat_to_nat in H. (* [int in H] takes 10 seconds *)
+  generalize (leb_length _ a).
+  rewrite leb_spec.
+  rewrite max_length_spec. (* rewriting through [isInt] *)
+  max_array_length_def.
+  rewrite of_nat_to_nat. (* [int] takes 10 seconds *)
   lia.
-Qed. (* a bit slow *)
+Qed.
 
 (* The length of an array is representable. *)
 
@@ -286,7 +297,7 @@ Lemma wp_make _n n x :
   wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
   intros. wp_ret.
-  introIsArray; list; eauto using length_make' with int.
+  introIsArray; list; eauto using length_make'.
   intros i ?.
   rewrite get_make. list. eauto.
 Qed.
@@ -422,7 +433,7 @@ Proof.
   intros. unfold segment_to_list.
   (* The loop invariant. *)
   eapply wp_down with (inv := λ j ys, ys = seg j k xs);
-    eauto with int typeclass_instances lia; list; intros; eauto.
+    eauto with typeclass_instances lia; list; intros; eauto.
   (* Preservation. *)
   { wp_get x.
     wp_ret. subst.
@@ -470,7 +481,7 @@ Proof.
   eapply wp_down with (inv := λ i (ys : list A),
     len ys = n - i ∧
     ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
-  ); eauto with int typeclass_instances lia; list; intros.
+  ); eauto with typeclass_instances lia; list; intros.
   (* Initialization. *)
   { split; intros; lia. }
   (* Preservation. *)
@@ -561,7 +572,7 @@ Proof.
   { wp_op Hpreservation s'.
     { eauto using prefix_cons, prefix_nil. }
     eapply IHfuture with (history := history ++ [x]);
-      list; eauto with int. }
+      list; eauto with typeclass_instances. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -792,7 +803,7 @@ Proof.
     isArray b
       (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   );
-  eauto with int typeclass_instances lia; list; eauto 1.
+  eauto with typeclass_instances lia; list; eauto 1.
   (* Preservation. *)
   { clear dependent b. intros _k k b. intros.
     wp_get x. subst x.
@@ -942,7 +953,7 @@ Proof.
     isArray a
       (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   );
-  eauto with int typeclass_instances lia; list; eauto 1.
+  eauto with typeclass_instances lia; list; eauto 1.
   (* Preservation. *)
   { clear dependent a. intros _k k a. intros.
     wp_set.
@@ -1029,7 +1040,7 @@ Proof.
      satisfies [f], and at index [i], an element satisfies [f]. *)
   { set (inv := λ i s o, find_index_inv xs i (i - 1) o).
     eapply wp_interruptible_up_rigid with (inv := inv);
-      eauto with int typeclass_instances; unfold inv, find_index_inv.
+      eauto with typeclass_instances; unfold inv, find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
@@ -1254,7 +1265,7 @@ Proof.
     eapply wp_bind.
     { eapply wp_interruptible_up_rigid
         with (inv := λ i s o, equal_inv xs ys i o);
-        eauto with int typeclass_instances; unfold equal_inv; eauto with lia.
+        eauto with typeclass_instances; unfold equal_inv; eauto with lia.
       (* Preservation. *)
       intros.
       wp_get x. wp_get y.

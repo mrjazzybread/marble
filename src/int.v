@@ -235,8 +235,14 @@ Qed.
 
 (* A relational view of the connection between [int] and [nat]. *)
 
-Definition isInt (_i : int) (i : nat) :=
-  _i = of_nat i.
+Class isInt (_i : int) (i : nat) :=
+  build_isInt : _i = of_nat i.
+
+Global Hint Mode isInt ! - : typeclass_instances.
+  (* Instantiate the first parameter only if its head is already known,
+     that is, not a metavariable. We often encounter goals of the form
+     [isInt (_i + _j) ?k], so we cannot require the second parameter to
+     also be already known. *)
 
 Lemma isInt_def _i i :
   isInt _i i ↔ _i = of_nat i.
@@ -268,12 +274,10 @@ Ltac liftIsIntAndClear :=
     rewrite h; clear _i h
   end.
 
-Lemma introIsInt _i i :
-  _i = of_nat i →
-  isInt _i i.
-Proof.
-  intros. introIsInt. eauto.
-Qed.
+(* Making the following lemma an Instance would be very useful when we
+   have a goal such as [isInt 12 12] where both parameters are known.
+   However, when we have a goal such as [isInt (_i + _j) ?k], it is
+   counter-productive. *)
 
 Lemma introIsInt' _i :
   isInt _i (to_nat _i).
@@ -281,23 +285,24 @@ Proof.
   introIsInt. int. eauto.
 Qed.
 
-Lemma introIsInt0 :
+Goal isInt 12 12.
+Proof.
+  eauto with typeclass_instances. (* does not work, for now; TODO *)
+  eauto using introIsInt'.
+Qed.
+
+(* TODO special cases while waiting for the general case *)
+Global Instance isInt0 :
   isInt 0 0.
 Proof.
-  eapply introIsInt'.
+  eauto using introIsInt'.
 Qed.
 
-Lemma introIsInt1 :
+Global Instance isInt1 :
   isInt 1 1.
 Proof.
-  eapply introIsInt'.
+  eauto using introIsInt'.
 Qed.
-
-Global Hint Resolve
-  introIsInt
-  introIsInt0
-  introIsInt1
-: int.
 
 Lemma isInt_inj_1 _i1 _i2 i :
   isInt _i1 i →
@@ -309,16 +314,7 @@ Qed.
 
 (* Addition. *)
 
-Lemma succ_compat _i i :
-  isInt _i i →
-  isInt (_i+1) (i+1)%nat.
-Proof.
-  intros. introIsInt. destructIsInt.
-  change 1%uint63 with (π 1%Z).
-  rewrite add_spec'. f_equal. lia.
-Qed.
-
-Lemma add_compat _i i _j j :
+Global Instance add_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i+_j) (i+j)%nat.
@@ -329,7 +325,7 @@ Qed.
 
 (* Subtraction. *)
 
-Lemma sub_compat _i i _j j :
+Global Instance sub_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   (j ≤ i)%nat →
@@ -341,7 +337,7 @@ Qed.
 
 (* Multiplication. *)
 
-Lemma mul_compat _i i _j j :
+Global Instance mul_compat _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i*_j) (i*j)%nat.
@@ -349,13 +345,6 @@ Proof.
   intros. introIsInt. repeat destructIsInt.
   rewrite mul_spec'. f_equal. lia.
 Qed.
-
-Global Hint Resolve
-  succ_compat
-  add_compat
-  sub_compat
-  mul_compat
-: int.
 
 (* The representable natural integers. *)
 
@@ -638,10 +627,6 @@ Proof.
   rewrite !representable_proj by eauto. tauto.
 Qed.
 
-(* TODO dirty *)
-Global Ltac isBool ::=
-  eauto with int typeclass_instances lia.
-
 (* -------------------------------------------------------------------------- *)
 
 (* The operations [_min] and [_max] on machine integers. *)
@@ -652,7 +637,7 @@ Definition _min _m _n : int :=
 Definition _max _m _n : int :=
   if (_m ≤? _n)%uint63 then _n else _m.
 
-Lemma isInt_min _m m _n n :
+Global Instance isInt_min _m m _n n :
   isInt _m m →
   isInt _n n →
   representable m →
@@ -665,7 +650,7 @@ Proof.
   + rewrite Nat.min_r by lia. eauto.
 Qed.
 
-Lemma isInt_max _m m _n n :
+Global Instance isInt_max _m m _n n :
   isInt _m m →
   representable m →
   isInt _n n →
@@ -677,8 +662,6 @@ Proof.
   + rewrite Nat.max_r by lia. eauto.
   + rewrite Nat.max_l by lia. eauto.
 Qed.
-
-Global Hint Resolve isInt_min isInt_max : int.
 
 Global Instance min_representable m n :
   representable m ∨ representable n →
@@ -733,7 +716,7 @@ Qed.
 
 (* Division of representable integers works. *)
 
-Lemma div_compat _i i _j j :
+Global Instance div_compat _i i _j j :
   isInt _i i →
   representable i →
   isInt _j j →
@@ -748,8 +731,6 @@ Proof.
   rewrite Z2Nat.inj_div by eauto with lia.
   eauto.
 Qed.
-
-Global Hint Resolve div_compat : int.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1042,7 +1023,7 @@ Proof.
   (* Case [i ≠ a]. *)
   { rename H into IH.
     eapply wp_bind; [ eauto | simpl; intros s' ?].
-    eapply IH; eauto with int lia typeclass_instances; autorewrite with nat.
+    eapply IH; eauto with lia typeclass_instances; autorewrite with nat.
     eauto. }
 Qed.
 
@@ -1095,7 +1076,7 @@ Proof.
   (* Case [n ≠ a]. *)
   { (* We strengthen the loop invariant with [i ≤ n]. *)
     eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
-      intuition eauto with int lia;
+      intuition eauto with lia;
       autorewrite with nat;
       eauto using wp_conseq with typeclass_instances lia. }
 Qed.
@@ -1192,7 +1173,7 @@ Proof.
   { assert (fact: a `max` b = (a + 1) `max` b) by lia.
     rewrite fact in Hfinish.
     eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
-    eauto with int typeclass_instances lia. }
+    eauto with typeclass_instances lia. }
   (* Case [¬ a < b]. *)
   { assert (fact: a `max` b = a) by lia.
     rewrite fact in Hfinish.
@@ -1425,7 +1406,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
     + wp_ret. eauto with lia.
-    + eapply H; intuition eauto with int typeclass_instances lia. }
+    + eapply H; intuition eauto with typeclass_instances lia. }
   (* Case [¬ a < b]. *)
   { wp_ret. eauto with lia. }
 Qed.

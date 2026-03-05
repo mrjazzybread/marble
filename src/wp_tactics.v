@@ -40,9 +40,9 @@ Global Ltac wp_op_nude lemma :=
   (* One round of [eauto], followed by a round of rewriting
      and a second round of [eauto]. Not very elegant, but
      this seems effective, so good enough for now. *)
-  eauto with int lia typeclass_instances;
+  eauto with lia typeclass_instances;
   list;
-  eauto with int lia.
+  eauto with lia.
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under

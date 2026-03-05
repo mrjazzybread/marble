@@ -115,7 +115,7 @@ Lemma wp_create :
   wp (create ()) (λ v, isVector v []).
 Proof.
   unfold create. wp_make a. wp_ret.
-  introIsVector. introIsVectorCap; eauto with int.
+  introIsVector. introIsVectorCap; eauto with typeclass_instances.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -179,7 +179,7 @@ Proof.
   destructIsVector. destructIsVectorCap.
   wp_get x. wp_ret. split; [ eauto |].
   introIsVector.
-  introIsVectorCapWithWitness ({[x]} ++ unoccupied); eauto with int.
+  introIsVectorCapWithWitness ({[x]} ++ unoccupied); eauto with typeclass_instances.
   subst x. isArray.
 Qed.
 
@@ -210,7 +210,7 @@ Proof.
   intros. unfold grow.
   destructIsVector. destructIsVectorCap.
   wp_make b. wp_blit. wp_ret.
-  introIsVectorCap; eauto with int.
+  introIsVectorCap; eauto.
   list. lia.
 Qed.
 
@@ -243,8 +243,8 @@ Proof.
     isInt _c' c' ∧ (* c ≤ c' ∧ *) representable c').
   {
     (* Lots of preliminary remarks about machine integers. *)
-    assert (isInt 2 2) by eauto with int. (* TODO *)
-    assert (isInt 512 512) by eauto with int. (* TODO *)
+    assert (isInt 2 2) by eauto using introIsInt'. (* TODO *)
+    assert (isInt 512 512) by eauto using introIsInt'. (* TODO *)
 
     generalize representable_twice_max_array_length; intro.
     assert (representable (c * 2)).
@@ -253,22 +253,14 @@ Proof.
     { assert (c `div` 2 ≤ c) by eauto with lia.
       rewrite representable_iff_nat in *. lia. }
     (* Now conclude. *)
-     wp_if; wp_ret; eauto 7 with int lia typeclass_instances.
+     wp_if; wp_ret; eauto 7 with lia typeclass_instances.
   }
-  intros _c' (c'&?). unpack.
+  wp_intros _c'.
   wp_ret.
   (* Another remark. *)
-  assert (isInt 8 8) by eauto with int. (* TODO *)
+  assert (isInt 8 8) by eauto using introIsInt'. (* TODO *)
   (* (* Now conclude. *) *)
-  (* This proof is not as concise as I would like.
-     TODO once [isInt] is a type class, clean up? *)
-  eexists. split.
-  { eapply isInt_min.
-    + eauto using max_length_spec.
-    + eauto with int typeclass_instances.
-    + eauto with typeclass_instances.
-    + eauto with typeclass_instances. }
-  { lia. }
+  eauto 7 with lia typeclass_instances.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -348,7 +340,8 @@ Proof.
   (* Write; return. *)
   wp_set. wp_ret.
   introIsVector.
-  introIsVectorCapWithWitness (final_seg 1 unoccupied); eauto with int.
+  introIsVectorCapWithWitness (final_seg 1 unoccupied);
+    eauto with typeclass_instances.
   isArray.
   rewrite (seg_intro unoccupied) at 1. list. eauto.
 Qed.
