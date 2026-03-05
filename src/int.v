@@ -276,10 +276,14 @@ Ltac liftIsIntAndClear :=
 
 (* Making the following lemma an Instance would be very useful when we
    have a goal such as [isInt 12 12] where both parameters are known.
-   However, when we have a goal such as [isInt (_i + _j) ?k], it is
-   counter-productive. *)
+   However, when we have a goal such as [isInt (_i + 12) ?k],
+   [introIsInt] is a bad choice; we want [add_compat] to be used in
+   this case. Unfortunately, assigning a high cost to [introIsInt]
+   cannot help: if [a] is the cost of [add_compat] and [c] is the cost
+   of [introIsInt], we would need to have [a + c ≤ c], which is
+   impossible. *)
 
-Lemma introIsInt' _i :
+Lemma introIsInt _i :
   isInt _i (to_nat _i).
 Proof.
   introIsInt. int. eauto.
@@ -287,21 +291,21 @@ Qed.
 
 Goal isInt 12 12.
 Proof.
-  eauto with typeclass_instances. (* does not work, for now; TODO *)
-  eauto using introIsInt'.
+  tc. (* does not work, for now; TODO *)
+  eauto using introIsInt.
 Qed.
 
 (* TODO special cases while waiting for the general case *)
 Global Instance isInt0 :
   isInt 0 0.
 Proof.
-  eauto using introIsInt'.
+  eauto using introIsInt.
 Qed.
 
 Global Instance isInt1 :
   isInt 1 1.
 Proof.
-  eauto using introIsInt'.
+  eauto using introIsInt.
 Qed.
 
 Lemma isInt_inj_1 _i1 _i2 i :
@@ -1023,7 +1027,7 @@ Proof.
   (* Case [i ≠ a]. *)
   { rename H into IH.
     eapply wp_bind; [ eauto | simpl; intros s' ?].
-    eapply IH; eauto with lia typeclass_instances; autorewrite with nat.
+    eapply IH; tc; autorewrite with nat.
     eauto. }
 Qed.
 

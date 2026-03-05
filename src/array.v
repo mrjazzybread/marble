@@ -471,7 +471,7 @@ Proof.
   (* Obtain the length of the array. *)
   eapply wp_bind_eq. intros _n ?.
   set (n := to_nat _n).
-  assert (isInt _n n) by eauto using introIsInt'.
+  assert (isInt _n n) by eauto using introIsInt.
   assert (n ≤ max_array_length).
   { subst n _n. simple eapply leb_length'. }
   assert (representable n) by eauto with typeclass_instances.

@@ -243,8 +243,8 @@ Proof.
     isInt _c' c' ∧ (* c ≤ c' ∧ *) representable c').
   {
     (* Lots of preliminary remarks about machine integers. *)
-    assert (isInt 2 2) by eauto using introIsInt'. (* TODO *)
-    assert (isInt 512 512) by eauto using introIsInt'. (* TODO *)
+    assert (isInt 2 2) by eauto using introIsInt. (* TODO *)
+    assert (isInt 512 512) by eauto using introIsInt. (* TODO *)
 
     generalize representable_twice_max_array_length; intro.
     assert (representable (c * 2)).
@@ -258,7 +258,7 @@ Proof.
   wp_intros _c'.
   wp_ret.
   (* Another remark. *)
-  assert (isInt 8 8) by eauto using introIsInt'. (* TODO *)
+  assert (isInt 8 8) by eauto using introIsInt. (* TODO *)
   (* (* Now conclude. *) *)
   eauto 7 with lia typeclass_instances.
 Qed.
