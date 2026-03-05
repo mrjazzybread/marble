@@ -391,27 +391,23 @@ Global Ltac wp_op lemma x :=
   | eapply wp_conseq; [ wp_op_nude lemma | wp_intros x ]
   ].
 
+Global Ltac wp_op_overwrite lemma x :=
+  repeat rewrite bind_bind;
+  first [
+    eapply wp_bind; [ wp_op_nude lemma | wp_intros_overwrite x ]
+  | wp_op_nude lemma
+  | eapply wp_conseq; [ wp_op_nude lemma | wp_intros_overwrite x ]
+  ].
+
 Global Ltac wp_length n :=
   wp_op wp_length n.
 
 Global Ltac wp_get x :=
   wp_op wp_get x.
 
-Global Ltac wp_set_nude :=
-  check_flex_post;
-  simple eapply wp_set; eauto with int lia.
-
-Global Ltac wp_set_bind a :=
-  eapply wp_bind; [ wp_set_nude | wp_intros_overwrite a ].
-
 Global Ltac wp_set :=
-  repeat rewrite bind_bind;
   match goal with |- context[set ?a _ _] =>
-    first [
-      wp_set_bind a
-    | wp_set_nude
-    | eapply wp_conseq; [ wp_set_nude | wp_intros_overwrite a ]
-    ]
+    wp_op_overwrite wp_set a
   end.
 
 Global Ltac wp_make a :=
