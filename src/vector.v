@@ -28,6 +28,12 @@ Definition isVectorCap `{Inhabited A} (v : vector A) (xs : list A) c :=
   isArray a (xs ++ unoccupied) ∧
   len xs + len unoccupied = c.
 
+(* The proposition [isVectorCapLe v xs c] means that [v] is a vector whose
+   logical content is [xs] and whose capacity is at least [c]. *)
+
+Notation isVectorCapLe v xs c :=
+  (∃ c', isVectorCap v xs c' ∧ c ≤ c').
+
 (* The proposition [isVector v xs] means that [v] is a vector whose
    logical content is [xs]. *)
 
@@ -85,6 +91,14 @@ Context `{Inhabited A}.
 Implicit Types v : vector A.
 Implicit Types xs : list A.
 Implicit Types a b : array A.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [capacity v] returns the current capacity of the vector [v]. *)
+
+Local Definition capacity v : int :=
+  let '(_, a) := v in
+  length a.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -216,17 +230,17 @@ Local Definition next_capacity _c : int :=
   (* Clip it, so that it is at least 8 and at most [max_array_length]. *)
   _min max_length (_max 8%uint63 _c).
 
-Lemma isInt_next_capacity _c c :
+Lemma wp_next_capacity _c c :
   isInt _c c →
   c ≤ max_array_length →
   wp (next_capacity _c) (λ _c', ∃ c',
-    isInt _c' c' ∧ c ≤ c' ≤ max_array_length
+    isInt _c' c' ∧ (* c ≤ *) c' ≤ max_array_length
   ).
 Proof.
   intros. unfold next_capacity.
   (* First, reason about the [if] construct. *)
   eapply wp_bind with (P := λ _c', ∃ c',
-    isInt _c' c' ∧ c ≤ c' ∧ representable c').
+    isInt _c' c' ∧ (* c ≤ c' ∧ *) representable c').
   {
     (* Lots of preliminary remarks about machine integers. *)
     assert (isInt 2 2) by eauto with int. (* TODO *)
@@ -241,7 +255,7 @@ Proof.
     (* Now conclude. *)
      wp_if; wp_ret; eauto 7 with int lia typeclass_instances.
   }
-  intros _c' (c'&?&?&?).
+  intros _c' (c'&?). unpack.
   wp_ret.
   (* Another remark. *)
   assert (isInt 8 8) by eauto with int. (* TODO *)
@@ -259,26 +273,6 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO WIP here *)
-
-(* TODO *
-Hint Extern 1 (isInt _ _) =>
-  match goal with
-  | |- isInt ?_i ?i =>
-    is_evar _i
-  | |- isInt ?_i ?i =>
-    eapply introIsInt'
-  end;
-  fail "evar"
-: int.
- *)
-
-(* [capacity v] returns the current capacity of the vector [v]. *)
-
-Local Definition capacity v : int :=
-  let '(_, a) := v in
-  length a.
-
 (* [really_ensure_capacity v _n'] ensures that the capacity of
    the vector [v] is at least [_n']. It returns a new array. *)
 
@@ -288,7 +282,8 @@ Definition really_ensure_capacity v _n' : array A :=
   (* We assume that [_n'] is greater than [_c], so [grow] must be called.
      The new capacity is computed based on the current capacity, and is
      adjusted so as to be at least [_n']. *)
-  do _c' ← _max (next_capacity _c) _n' ;
+  do _c' ← next_capacity _c ;
+  do _c' ← _max _c' _n' ;
   grow v _c'.
 
 Lemma wp_really_ensure_capacity _n a xs c _n' n' :
@@ -297,12 +292,25 @@ Lemma wp_really_ensure_capacity _n a xs c _n' n' :
   representable n' →
   c < n' ≤ max_array_length →
   wp (really_ensure_capacity (_n, a) _n') (λ a ,
-    ∃ c' ,
-    isVectorCap (_n, a) xs c' ∧
-    n' ≤ c'
+    isVectorCapLe (_n, a) xs n'
   ).
 Proof.
-Admitted.
+  intros. unfold really_ensure_capacity, capacity.
+  assert (isVector (_n, a) xs). { introIsVector. eauto. }
+  destructIsVectorCap.
+  wp_length _c.
+  (* TODO define tactic for [wp_next_capacity]? *)
+  eapply wp_bind.
+  { eapply wp_next_capacity; eauto with lia. }
+  cbv beta. intros _c' (c'&?). unpack.
+  wp_bind_eq.
+  (* TODO define tactic for [wp_grow]? *)
+  eapply wp_conseq.
+  { eapply wp_grow; eauto with int typeclass_instances lia. }
+  cbv beta. clear dependent a. intros a ?.
+  (* Conclude. *)
+  eauto with lia.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -333,9 +341,7 @@ Proof.
      at least one free slot exists in the array. Indeed, the
      new capacity [c'] is at least [len xs + 1]. *)
   eapply wp_bind with (P := λ a,
-    ∃ c' ,
-    isVectorCap (_n, a) xs c' ∧
-    len xs + 1 ≤ c'
+    isVectorCapLe (_n, a) xs (len xs + 1)
   ).
   { wp_if.
     (* Case: there is still room. *)
