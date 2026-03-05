@@ -707,14 +707,16 @@ Global Hint Resolve
 
 (* If [i] and [j] are representable, then so is [i / j]. *)
 
-Global Instance div_representable i j :
+(* No need to make this an instance, as it is already solved
+   thanks to [div_decreasing]. *)
+
+Local Lemma div_representable i j :
   representable i →
   representable j →
   j ≠ 0%nat →
   representable (i / j).
 Proof.
-  intros.
-  assert (i `div` j ≤ i)%nat by eauto using div_decreasing.
+  (* assert (i `div` j ≤ i)%nat by eauto using div_decreasing. *)
   tc.
 Qed.
 
