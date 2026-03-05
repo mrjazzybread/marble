@@ -5,6 +5,13 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+(* [tc] is a short name for type class search. *)
+
+(* We use [lia] as a helper for arithmetic side conditions. *)
+
+Ltac tc :=
+  eauto with typeclass_instances lia.
+
 (* [cleanup] removes an equality hypothesis that is produced by
    [funelim] and that is usually unneeded. *)
 Ltac cleanup :=

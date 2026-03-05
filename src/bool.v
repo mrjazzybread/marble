@@ -1,4 +1,5 @@
 From Stdlib Require Import Utf8.
+From array Require Import tactics.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -26,12 +27,6 @@ Global Hint Mode isBool ! - - : typeclass_instances.
 
 Global Notation isBool1 b P :=
   (isBool b P (¬P)).
-
-(* The tactic [isBool] attempts to prove a goal of the form
-   [isBool b ?P ?Q] using type class search. *)
-
-Global Ltac isBool :=
-  eauto with typeclass_instances lia.
 
 (* The next three lemmas construct [P] and [Q] by examination of [b]. *)
 
@@ -130,14 +125,14 @@ Global Ltac isBool_magic :=
       let P := fresh in
       evar (P : Prop);
       assert (P); [
-        eapply (@isBool_elim_true b); [ exact h | isBool ]
+        eapply (@isBool_elim_true b); [ exact h | tc ]
       | clear h; subst P
       ]
   | h: ?b = false |- _ =>
       let P := fresh in
       evar (P : Prop);
       assert (P); [
-        eapply (@isBool_elim_false b); [ exact h | isBool ]
+        eapply (@isBool_elim_false b); [ exact h | tc ]
       | clear h; subst P
       ]
   end.

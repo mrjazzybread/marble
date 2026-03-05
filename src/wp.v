@@ -1,5 +1,5 @@
 From stdpp Require Import base.
-From array Require Import bool.
+From array Require Import tactics bool.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -105,7 +105,7 @@ Proof.
 Qed.
 
 Global Ltac wp_if :=
-  eapply wp_if; [ isBool | intros | intros ].
+  eapply wp_if; [ tc | intros | intros ].
 
 (* [check_flex_post] checks that the current postcondition is flexible
    (i.e., a metavariable), and fails if that is not the case. *)

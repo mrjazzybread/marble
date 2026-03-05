@@ -1133,13 +1133,14 @@ Lemma wp_exist a xs :
   ).
 Proof.
   intros. unfold exist.
-  eapply wp_bind; [ eapply wp_find_index; isBool | simpl; intros o ].
+  (* TODO use   wp_op @wp_find_index o *)
+  eapply wp_bind; [ eapply wp_find_index; tc | simpl; intros o ].
   (* TODO extend [wp_if] to deal with a conditional on an option? *)
   destruct o as [ _i |]; unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. isBool. }
+  { intros (i&?). unpack. wp_ret. tc. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret. isBool. }
+  { intros (_&?). wp_ret. tc. }
 Qed.
 
 End Exist.
@@ -1182,13 +1183,14 @@ Lemma wp_for_all a xs :
   ).
 Proof.
   intros. unfold for_all.
-  eapply wp_bind; [ eapply wp_find_index; isBool | simpl; intros o ].
+  (* TODO *)
+  eapply wp_bind; [ eapply wp_find_index; tc | simpl; intros o ].
   (* TODO extend [wp_if] to deal with a conditional on an option? *)
   destruct o as [ _i |]; unfold find_index_inv.
   (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. isBool. }
+  { intros (i&?). unpack. wp_ret. tc. }
   (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret. isBool. }
+  { intros (_&?). wp_ret. tc. }
 Qed.
 
 End ForAll.
@@ -1278,13 +1280,13 @@ Proof.
     intros [? [[]|]]; unfold equal_inv; intros (i&?); unpack;
     unfold bind; wp_ret.
     (* Case: the loop ends with [break ()]. *)
-    { isBool. }
+    { tc. }
     (* Case: the loop ends with [continue]. *)
     { rewrite finished_leq_iff in * by lia. unpack.
-      isBool. }
+      tc. }
   }
   (* Second branch: the lengths of the arrays differ. *)
-  { wp_ret. isBool. }
+  { wp_ret. tc. }
 Qed.
 
 End Equal.
