@@ -299,16 +299,9 @@ Proof.
   assert (isVector (_n, a) xs). { introIsVector. eauto. }
   destructIsVectorCap.
   wp_length _c.
-  (* TODO define tactic for [wp_next_capacity]? *)
-  eapply wp_bind.
-  { eapply wp_next_capacity; eauto with lia. }
-  cbv beta. intros _c' (c'&?). unpack.
+  wp_op wp_next_capacity _c'.
   wp_bind_eq.
-  (* TODO define tactic for [wp_grow]? *)
-  eapply wp_conseq.
-  { eapply wp_grow; eauto with int typeclass_instances lia. }
-  cbv beta. clear dependent a. intros a ?.
-  (* Conclude. *)
+  wp_op_overwrite wp_grow a.
   eauto with lia.
 Qed.
 
