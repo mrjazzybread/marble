@@ -16,6 +16,9 @@ Set Universe Polymorphism.
    whereas [eauto] succeeds. Therefore [intuition eauto] should not
    be the default tactic. *)
 
+(* TODO why does [typeclasses eauto] fail in situations where [eauto]
+   succeeds? *)
+
 Ltac tc :=
   eauto with typeclass_instances lia.
 
