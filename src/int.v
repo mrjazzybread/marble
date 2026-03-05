@@ -238,13 +238,25 @@ Qed.
 Definition isInt (_i : int) (i : nat) :=
   _i = of_nat i.
 
+Lemma isInt_def _i i :
+  isInt _i i ↔ _i = of_nat i.
+Proof.
+  tauto.
+Qed.
+
 Ltac introIsInt :=
-  unfold isInt.
+  rewrite isInt_def.
 
 Ltac destructIsInt :=
   match goal with h: isInt ?_i _ |- _ =>
-    unfold isInt in h; try subst _i
+    rewrite isInt_def in h; try subst _i
   end.
+
+(* Beyond this point, [isInt] is opaque. *)
+
+(* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
+
+Global Opaque isInt.
 
 (* [liftIsIntAndClear] looks for a hypothesis [isInt _i i],
    replaces [_i] with [of_nat i] in the goal, and clears
@@ -292,7 +304,7 @@ Lemma isInt_inj_1 _i1 _i2 i :
   isInt _i2 i →
   _i1 = _i2.
 Proof.
-  unfold isInt. congruence.
+  intros. repeat destructIsInt. congruence.
 Qed.
 
 (* Addition. *)
@@ -491,7 +503,8 @@ Hint Rewrite to_nat_of_nat : int.
 Lemma isInt_alt _i i :
   isInt _i i ↔ to_nat _i = proj i.
 Proof.
-  unfold isInt. rewrite <- to_nat_of_nat. split.
+  rewrite isInt_def.
+  rewrite <- to_nat_of_nat. split.
   + congruence.
   + eauto using to_nat_inj.
 Qed.
@@ -624,14 +637,6 @@ Proof.
   intros. eapply isBool1_conseq; [ eapply isBool_leb_proj; eauto |].
   rewrite !representable_proj by eauto. tauto.
 Qed.
-
-(* Beyond this point, [isInt] is opaque. *)
-
-(* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
-
-Local Opaque isInt.
-
-(* At the moment, array.v still needs [isInt] to be transparent. TODO *)
 
 (* TODO dirty *)
 Global Ltac isBool ::=

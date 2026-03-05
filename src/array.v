@@ -272,7 +272,7 @@ Local Lemma length_make' _n n x :
   n <= max_array_length →
   isInt (length (make _n x)) n.
 Proof.
-  unfold isInt. intros. subst.
+  rewrite !isInt_def. intros. subst.
   assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
   { rewrite leb_spec, max_length_spec. int. lia. }
   rewrite length_make, Hbound. eauto.
