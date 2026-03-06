@@ -1298,3 +1298,96 @@ Proof.
   (* [Forall2 (@eq A)] is the same as [@eq (list A)]. *)
   symmetry. eapply list_eq_Forall2.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [segment_iteri] and [iteri]. *)
+
+(* An iteration function on an array is not super useful, as the user
+   can just as well use [up] or [down] directly. However, this is a
+   good exercise in preparation for defining iteration functions on
+   vectors, hash tables, or other containers.  *)
+
+(* Although we name this function [iteri], it carries a state, so it
+   is of course a fold. *)
+
+Section Iteri.
+Context {S : Type}.
+Implicit Types s : S.
+Context `{Inhabited A}.
+Implicit Types a : array A.
+Implicit Types xs : list A.
+Implicit Types f : int → A → S → S.
+
+(* The code. *)
+
+Definition segment_iteri a _i _k s f : S :=
+  up _i _k s @@ λ _j s ,
+  do x ← get a _j ;
+  do s ← f _j x s ;
+  s.
+
+Definition iteri a s f :=
+  do _n ← length a ;
+  segment_iteri a 0 _n s f.
+
+(* The public specification of [segment_iteri]. *)
+
+Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop)
+  a xs _i i _k k s f :
+  isArray a xs →
+  isInt _i i →
+  isInt _k k →
+  valid_seg i k xs →
+  (* If the invariant holds of the start index [i] and start state [s], *)
+  inv i s →
+  (* If [s ← f _j a.[_j] s] transforms [inv j s] to [inv (j+1) s], *)
+  (∀ _j j x s ,
+    isInt _j j →
+    representable j → (* should be redundant with the next line *)
+    i ≤ j < k →
+    x = xs !!! j →
+    inv j s →
+    wp (f _j x s) (λ s, inv (j + 1) s)
+  ) →
+  (* Then, once the loop ends, [inv k s] holds. *)
+  (∀ s, inv k s → Q s) →
+  wp (segment_iteri a _i _k s f) Q.
+Proof.
+  intros ???? Hinit Hstep Hfinish.
+  unfold segment_iteri.
+  eapply wp_up with (inv := inv); tc; clear dependent s.
+  (* The loop body. *)
+  { intros _j j s. intros.
+    wp_get x. wp_op Hstep s'. wp_ret. eauto. }
+  (* The loop exit. *)
+  { intros s'. list. eauto. }
+Qed.
+
+(* The public specification of [iteri]. *)
+
+Lemma wp_iteri (inv : nat → S → Prop) (Q : S → Prop)
+  a xs s f :
+  isArray a xs →
+  (* If the invariant holds of the start index [0] and start state [s], *)
+  inv 0 s →
+  (* If [s ← f _j a.[_j] s] transforms [inv j s] to [inv (j+1) s], *)
+  (∀ _j j x s ,
+    isInt _j j →
+    representable j → (* should be redundant with the next line *)
+    j < len xs →
+    x = xs !!! j →
+    inv j s →
+    wp (f _j x s) (λ s, inv (j + 1) s)
+  ) →
+  (* Then, once the loop ends, [inv (len xs) s] holds. *)
+  (∀ s, inv (len xs) s → Q s) →
+  wp (iteri a s f) Q.
+Proof.
+  intros. unfold iteri.
+  wp_length _n.
+  wp_op wp_segment_iteri s'.
+  eauto.
+Qed.
+
+End Iteri.
