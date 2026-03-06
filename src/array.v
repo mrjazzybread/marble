@@ -1133,14 +1133,9 @@ Lemma wp_exist a xs :
   ).
 Proof.
   intros. unfold exist.
-  (* TODO use   wp_op @wp_find_index o *)
-  eapply wp_bind; [ eapply wp_find_index; tc | simpl; intros o ].
-  (* TODO extend [wp_if] to deal with a conditional on an option? *)
-  destruct o as [ _i |]; unfold find_index_inv.
-  (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. tc. }
-  (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret. tc. }
+  wp_op @wp_find_index o.
+  destruct o as [ _i |]; unfold find_index_inv in *; unpack;
+  wp_ret; tc.
 Qed.
 
 End Exist.
@@ -1183,14 +1178,9 @@ Lemma wp_for_all a xs :
   ).
 Proof.
   intros. unfold for_all.
-  (* TODO *)
-  eapply wp_bind; [ eapply wp_find_index; tc | simpl; intros o ].
-  (* TODO extend [wp_if] to deal with a conditional on an option? *)
-  destruct o as [ _i |]; unfold find_index_inv.
-  (* Case: [find_index] returns [Some _i]. *)
-  { intros (i&?). unpack. wp_ret. tc. }
-  (* Case: [find_index] returns [None]. *)
-  { intros (_&?). wp_ret. tc. }
+  wp_op @wp_find_index o.
+  destruct o as [ _i |]; unfold find_index_inv in *; unpack;
+  wp_ret; tc.
 Qed.
 
 End ForAll.
