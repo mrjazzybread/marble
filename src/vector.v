@@ -347,4 +347,84 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* [segment_iteri] and [iteri]. *)
+
+Section Iteri.
+Context {S : Type}.
+Implicit Types s : S.
+Implicit Types f : int → A → S → S.
+
+(* The code. *)
+
+Definition segment_iteri v _i _k s f : S :=
+  let (_n, a) := v in
+  array.segment_iteri a _i _k s f.
+
+Definition iteri v s f :=
+  let (_n, a) := v in
+  array.segment_iteri a 0 _n s f.
+
+(* The public specification of [segment_iteri]. *)
+
+Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop)
+  v xs _i i _k k s f :
+  isVector v xs →
+  isInt _i i →
+  isInt _k k →
+  valid_seg i k xs →
+  (* If the invariant holds of the start index [i] and start state [s], *)
+  inv i s →
+  (* If [s ← f _j v.[_j] s] transforms [inv j s] to [inv (j+1) s], *)
+  (∀ _j j x s ,
+    isInt _j j →
+    representable j → (* should be redundant with the next line *)
+    i ≤ j < k →
+    x = xs !!! j →
+    inv j s →
+    wp (f _j x s) (λ s, inv (j + 1) s)
+  ) →
+  (* Then, once the loop ends, [inv k s] holds. *)
+  (∀ s, inv k s → Q s) →
+  wp (segment_iteri v _i _k s f) Q.
+Proof.
+  intros ???? Hinit Hstep Hfinish.
+  unfold segment_iteri. destructIsVector. destructIsVectorCap.
+  eapply array.wp_segment_iteri with (inv := inv);
+    tc; list; eauto with lia; clear dependent s.
+  (* The loop body. *)
+  { intros _j j x s. intros. subst. list. tc. }
+Qed.
+
+(* The public specification of [iteri]. *)
+
+Lemma wp_iteri (inv : nat → S → Prop) (Q : S → Prop)
+  v xs s f :
+  isVector v xs →
+  (* If the invariant holds of the start index [0] and start state [s], *)
+  inv 0 s →
+  (* If [s ← f _j v.[_j] s] transforms [inv j s] to [inv (j+1) s], *)
+  (∀ _j j x s ,
+    isInt _j j →
+    representable j → (* should be redundant with the next line *)
+    j < len xs →
+    x = xs !!! j →
+    inv j s →
+    wp (f _j x s) (λ s, inv (j + 1) s)
+  ) →
+  (* Then, once the loop ends, [inv (len xs) s] holds. *)
+  (∀ s, inv (len xs) s → Q s) →
+  wp (iteri v s f) Q.
+Proof.
+  intros.
+  unfold iteri. destructIsVector. destructIsVectorCap.
+  eapply array.wp_segment_iteri with (inv := inv);
+    tc; list; eauto with lia; clear dependent s.
+  (* The loop body. *)
+  { intros _j j x s. intros. subst. list. tc. }
+Qed.
+
+End Iteri.
+
+(* -------------------------------------------------------------------------- *)
+
 End Operations.
