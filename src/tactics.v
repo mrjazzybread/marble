@@ -5,7 +5,18 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+(* [pack] introduces conjunctions in the goal. *)
+Ltac pack :=
+  repeat match goal with
+  | |- _ ∧ _ =>
+      split
+  | |- ∃ x, _ =>
+      eexists
+  end.
+
 (* [tc] is a short name for type class search. *)
+
+(* We use [pack] to help introduce conjunctions in the goal. *)
 
 (* We use [lia] as a helper for arithmetic side conditions. *)
 
@@ -20,6 +31,7 @@ Set Universe Polymorphism.
    succeeds? *)
 
 Ltac tc :=
+  pack;
   eauto with typeclass_instances lia.
 
 Ltac itc :=
