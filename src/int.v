@@ -21,7 +21,7 @@ Set Universe Polymorphism.
  *)
 
 Open Scope Z_scope.
-Implicit Types _i : int.
+Implicit Types _i _j _k : int.
 Implicit Types  i : nat.
 Implicit Types  z : Z.
 
@@ -932,48 +932,134 @@ Global Hint Rewrite
 
 (* -------------------------------------------------------------------------- *)
 
+(* A generic specification for a loop over a segment of the integers,
+   counting down. *)
+
+Section Down.
+
+(* The type of the loop-carried state. *)
+Context {S : Type}.
+
+(* The user is allowed to choose a loop invariant [inv i s], where
+   [i] is the current loop index and [s] is the current state. The
+   assertion [inv j s] means that the loop has run down to index [j]
+   included, so the next iteration will concern the index [j-1]. *)
+Variable inv : nat → S → Prop.
+
+(* The postcondition of the loop. *)
+Variable Q : S → Prop.
+
+(* The body of the loop is abstracted as a [wp] judgement. The proposition
+   [body _j j s Q'] means that the loop body, with current index [_j] and
+   current state [s], establishes the postcondition [Q']. *)
+Variable body : int → nat → S → (S → Prop) → Prop.
+
+Section IterDown.
+
+(* The loop is abstracted as a [wp] judgement. The proposition [loop s Q]
+   means that the loop, applied to the initial state [s], establishes the
+   postcondition [Q]. *)
+Variable loop : S → (S → Prop) → Prop.
+
+Definition ITER_DOWN i k :=
+  ∀ s,
+  (* If the invariant holds of the start index [k] and start state [s], *)
+  inv k s →
+  (* If one loop iteration transforms [inv (j+1) s] to [inv j s'], *)
+  (∀ _j j s ,
+    isInt _j j →
+    representable j →
+    i ≤ j < k →
+    inv (j + 1) s →
+    body _j j s (λ s, inv j s)
+  ) →
+  (* Then, once the loop ends, the invariant holds of the index [i]
+     and of the final state [s]. *)
+  (∀ s, inv i s → Q s) →
+  loop s Q.
+
+End IterDown.
+
+Section SegmentIterDown.
+
+(* In this variant, the loop indices [_i] and [_k] are passed as two
+   explicit arguments to the loop. *)
+
+(* The loop is abstracted as a [wp] judgement. [loop _k _i s Q] means that
+   the loop, applied to the extremum indices [_k] and [_i] and to the
+   initial state [s], establishes the postcondition [Q]. *)
+Variable loop : int → int → S → (S → Prop) → Prop.
+
+(* The precondition [P i k] typically expresses the fact that [i] and [k]
+   represent a valid segment with respect to a certain data structure. *)
+Variable P : nat → nat → Prop.
+
+Definition SEGMENT_ITER_DOWN :=
+  ∀ _i i _k k,
+  isInt _i i →
+  isInt _k k →
+  P i k →
+  @ITER_DOWN (loop _k _i) i k.
+
+End SegmentIterDown.
+
+End Down.
+
+Ltac ITER_DOWN :=
+  unfold ITER_DOWN;
+  intro; intros Hinit Hstep Hfinish.
+
+Ltac SEGMENT_ITER_DOWN :=
+  unfold SEGMENT_ITER_DOWN;
+  do 6 intro;
+  let HP := fresh in
+  intro HP; unpack in HP;
+  ITER_DOWN.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A loop, counting down, using machine integers. *)
 
 Section Down.
 Context {S : Type}.
 Implicit Types s : S.
 
-Variable _a : int.
+Variable _i : int.
 Variable f : int → S → S.
 
-(* [down_aux _i s] applies the loop body [f] to every machine integer from
-   [_i], included, down to [_a], included. A state of type [S] is carried,
+(* [down_aux _j s] applies the loop body [f] to every machine integer from
+   [_j], included, down to [_i], included. A state of type [S] is carried,
    whose initial value is [s]. *)
 
-(* We are careful to test the condition [_i =? _a] before decrementing [_i].
+(* We are careful to test the condition [_j =? _i] before decrementing [_j].
    Because our semi-open intervals are closed at the bottom end, we cannot
-   first decrement and then test the condition [_i <? _a]. If [_a] is zero
+   first decrement and then test the condition [_j <? _i]. If [_i] is zero
    then this would underflow. *)
 
 (* We use Equations to more easily define [down_aux] by well-founded recursion
-   over the loop counter [_i]. The somewhat strange [with] syntax is a way of
-   expressing the test [_i =? _a]. The use of [inspect] and [inspected] is an
+   over the loop counter [_j]. The somewhat strange [with] syntax is a way of
+   expressing the test [_j =? _i]. The use of [inspect] and [inspected] is an
    idiosyncratic way of making the outcome of the test visible at the logical
-   level in the branches. In the second branch, the fact that [_i =? _a] is
-   false is needed in order to prove that [_i-1] is less than [_i], a fact
+   level in the branches. In the second branch, the fact that [_j =? _i] is
+   false is needed in order to prove that [_j-1] is less than [_j], a fact
    which itself is required by the termination argument. *)
 
 (* It is worth noting that the termination argument does not need the
-   hypothesis [φ _a ≤ φ _i]. Even in the absence of this hypothesis,
+   hypothesis [φ _i ≤ φ _j]. Even in the absence of this hypothesis,
    termination is guaranteed, thanks to underflow. This said, later on,
    when we give a specification of [down_aux], we assume [a ≤ i]. It would
    be unnatural and inconvenient to propose a specification that allows
    underflow to take place. *)
 
-Equations down_aux _i s : S
-by wf _i (rilt _a) :=
-down_aux _i s with inspect (_i =? _a)%uint63 => {
+Equations down_aux _j s : S
+by wf _j (rilt _i) :=
+down_aux _j s with inspect (_j =? _i)%uint63 => {
 | inspected true :=
-    do s ← f _i s ;
+    do s ← f _j s ;
     s ;
 | inspected false :=
-    do s ← f _i s ;
-    down_aux (_i-1)%uint63 s
+    do s ← f _j s ;
+    down_aux (_j-1)%uint63 s
 }.
 Next Obligation.
   eauto using safe_decrement_relative'.
@@ -986,109 +1072,72 @@ Qed.
    produced by Equations, which are used via the tactic [funelim]. *)
 Goal int → S → S.
 Proof.
-  eapply (Fix (rilt_wf _a) (λ _, S → S)). intros _i self s.
-  destruct (_i =? _a)%uint63 eqn:Heq.
+  eapply (Fix (rilt_wf _i) (λ _, S → S)). intros _j self s.
+  destruct (_j =? _i)%uint63 eqn:Heq.
   + refine (
-      do s ← f _i s ;
+      do s ← f _j s ;
       s
     ).
   + refine (
-      do s ← f _i s ;
-      self (_i-1)%uint63 _ s
+      do s ← f _j s ;
+      self (_j-1)%uint63 _ s
     ).
     eauto using safe_decrement_relative'.
 Defined.
 
 (* A specification of [down_aux]. *)
 
-(* For comments, see the specification of [down], further down. *)
-
-Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) a _i i s :
-  isInt _a a →
-  representable a →
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i →
-    inv (i + 1) s →
-    wp (f _i s) (λ s, inv i s)
-  ) →
-  (∀ s, inv a s → Q s) →
+Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) i _j j :
   isInt _i i →
   representable i →
-  a ≤ i →
-  inv (i + 1) s →
-  wp (down_aux _i s) Q.
+  isInt _j j →
+  representable j →
+  i ≤ j →
+  ITER_DOWN inv Q
+    (λ _j j s Q', wp (f _j s) Q')
+    (λ s Q', wp (down_aux _j s) Q')
+    i (j + 1).
 Proof.
-  intros.
-  funelim (down_aux _i s); cleanup; clear Heqcall; intros; isBool_magic.
-  (* Case [i = a]. *)
-  { subst i.
-    eapply wp_bind; [ eauto | simpl; intros s' ? ].
-    wp_ret. eauto. }
-  (* Case [i ≠ a]. *)
+  intros. ITER_DOWN.
+  funelim (down_aux _j s); cleanup; clear Heqcall; intros; isBool_magic.
+  (* Case [j = i]. *)
+  { subst j. wp_op Hstep s'. wp_ret. eauto. }
+  (* Case [j ≠ i]. *)
   { rename H into IH.
-    eapply wp_bind; [ eauto | simpl; intros s' ?].
-    eapply IH; tc; autorewrite with nat.
-    eauto. }
+    wp_op Hstep s'. wp_op IH s''. eauto. }
 Qed.
 
 End Down.
 
-(* [down _i _a s f] applies the loop body [f] to every machine integer from [_i],
-   excluded, down to [_a], included. A state of type [S] is carried, whose
-   initial value is [s]. *)
+(* [down _k _i s f] applies the loop body [f] to every machine integer from
+   [_k], excluded, down to [_i], included. A state of type [S] is carried,
+   whose initial value is [s]. *)
 
-Definition down {S} _i _a (s : S) f :=
-  if (_i =? _a)%uint63 then s
-  else down_aux _a f (_i-1) s.
+Definition down {S} _k _i (s : S) f :=
+  if (_k =? _i)%uint63 then s
+  else down_aux _i f (_k-1) s.
 
 (* A specification of [down]. *)
 
-(* The user is allowed to choose a loop invariant [inv i s], where
-   [i] is the current loop index and [s] is the current state. The
-   assertion [inv i s] means that the loop has run down to index [i]
-   included, so the next iteration will concern the index [i-1]. *)
-
-(* This specification requires [a ≤ n]: that is, the start index [n] must
-   be greater than or equal to the end index [a]. This hypothesis is
+(* This specification requires [i ≤ k]: that is, the start index [k] must
+   be greater than or equal to the end index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
-Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) _n n _a a s f :
-  isInt _n n →
-  representable n →
-  isInt _a a →
-  representable a →
-  a ≤ n →
-  (* If the invariant holds of the start index [n] and start state [s], *)
-  inv n s →
-  (* If [s ← f _i s] transforms the invariant [inv (i+1) s] to [inv i s], *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < n →
-    inv (i + 1) s →
-    wp (f _i s) (λ s, inv i s)
-  ) →
-  (* Then, once the loop ends, the invariant holds of the index [a]
-     and final state [s]. *)
-  (∀ s, inv a s → Q s) →
-  wp (down _n _a s f) Q.
+Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) f :
+  SEGMENT_ITER_DOWN inv Q
+    (λ _j j s Q', wp (f _j s) Q')
+    (λ _k _i s Q', wp (down _k _i s f) Q')
+    (λ i k, representable i ∧ representable k ∧ i ≤ k).
 Proof.
-  intros. unfold down.
+  intros. SEGMENT_ITER_DOWN. unfold down.
   wp_if.
-  (* Case [n = a]. *)
-  { subst n. wp_ret. eauto. }
-  (* Case [n ≠ a]. *)
-  { (* We strengthen the loop invariant with [i ≤ n]. *)
-    eapply wp_down_aux with (inv := λ i s, i ≤ n ∧ inv i s);
-      intuition eauto with lia;
-      autorewrite with nat;
-      tc.
-    eauto using wp_conseq with lia. }
+  (* Case [k = i]. *)
+  { subst k. wp_ret. eauto. }
+  (* Case [k ≠ i]. *)
+  { eapply wp_down_aux; tc; autorewrite with nat; tc. }
 Qed.
 
-(* [down _n s @@ λ _i s, ...] is a convenient way of writing a loop. *)
+(* [down _k _i s @@ λ _j s, ...] is a convenient way of writing a loop. *)
 
 Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
@@ -1106,10 +1155,10 @@ Context {S : Type}.
    [j] is the current loop index and [s] is the current state. The
    assertion [inv j s] means that the loop has run up to index [j]
    excluded, so the next iteration will concern the index [j]. *)
-Variable (inv : nat → S → Prop).
+Variable inv : nat → S → Prop.
 
 (* The postcondition of the loop. *)
-Variable (Q : S → Prop).
+Variable Q : S → Prop.
 
 (* The body of the loop is abstracted as a [wp] judgement. The proposition
    [body _j j s Q'] means that the loop body, with current index [_j] and
@@ -1127,7 +1176,7 @@ Definition ITER_UP i k :=
   ∀ s,
   (* If the invariant holds of the start index [i] and start state [s], *)
   inv i s →
-  (* If one loop iteration transforms [inv j s] to [inv (j+1) s], *)
+  (* If one loop iteration transforms [inv j s] to [inv (j+1) s'], *)
   (∀ _j j s ,
     isInt _j j →
     representable j →
@@ -1148,7 +1197,7 @@ Section SegmentIterUp.
    explicit arguments to the loop. *)
 
 (* The loop is abstracted as a [wp] judgement. [loop _i _k s Q] means that
-   the loop, applied to the start and end indices [_i] and [_k] and to the
+   the loop, applied to the extremum indices [_i] and [_k] and to the
    initial state [s], establishes the postcondition [Q]. *)
 Variable loop : int → int → S → (S → Prop) → Prop.
 
