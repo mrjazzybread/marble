@@ -39,6 +39,11 @@ Qed.
 
 Hint Resolve to_nat_lt : lia.
 
+Global Hint Rewrite
+  Nat.max_l Nat.max_r
+  using lia
+: nat.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [unsigned z] means that [z] lies in the interval of the unsigned
@@ -1259,13 +1264,12 @@ Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
     (λ i k, representable i ∧ representable k).
 Proof.
   SEGMENT_ITER_UP.
-  funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic.
+  funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
+  autorewrite with nat in Hfinish.
   (* Case [i < k]. *)
-  { replace (i `max` k) with k in Hfinish by lia.
-    wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
+  { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
-  { replace (i `max` k) with i in Hfinish by lia.
-    wp_ret. eauto. }
+  { wp_ret. eauto. }
 Qed.
 
 (* A definition of [up], with reordered parameters. *)
