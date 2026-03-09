@@ -97,6 +97,9 @@ Global Ltac list :=
 Global Tactic Notation "list" "in" hyp(h) :=
   autorewrite with list in h.
 
+Global Tactic Notation "list" "in" "*" :=
+  autorewrite with list in *.
+
 (* A number of arithmetic simplification lemmas can be very useful
    while simplifying expressions that involve lists. *)
 
