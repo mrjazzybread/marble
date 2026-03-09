@@ -1102,9 +1102,9 @@ Section SPEC.
 Context {S : Type}.
 
 (* The body of the loop is abstracted as a [wp] judgement. The proposition
-   [body j s Q'] means that the loop body, with current index [_j] and
+   [body _j j s Q'] means that the loop body, with current index [_j] and
    current state [s], establishes the postcondition [Q']. *)
-Variable body : int → S → (S → Prop) → Prop.
+Variable body : int → nat → S → (S → Prop) → Prop.
 
 (* The loop is also abstracted as a [wp] judgement. The proposition
    [loop _i _k s Q] means that the loop, applied to the segment
@@ -1138,7 +1138,7 @@ Definition SEGMENT_ITER_UP :=
     representable j →
     i ≤ j < k →
     inv j s →
-    body _j s (λ s, inv (j + 1) s)
+    body _j j s (λ s, inv (j + 1) s)
   ) →
   (* Then, once the loop ends, the invariant holds of the index [i]
      or [k], whichever is greater, and of the final state [s]. *)
@@ -1207,7 +1207,7 @@ Implicit Types f : int → S → S.
 
 Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
   @SEGMENT_ITER_UP S
-    (λ _j s Q, wp (f _j s) Q)
+    (λ _j j s Q, wp (f _j s) Q)
     (λ _i _k s Q, wp (up_aux _k f _i s) Q)
     (λ i k, representable i ∧ representable k)
     inv Q.

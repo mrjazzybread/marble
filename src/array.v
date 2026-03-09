@@ -1333,35 +1333,19 @@ Definition iteri a s f :=
 
 (* The public specification of [segment_iteri]. *)
 
-Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop)
-  a xs _i i _k k s f :
-  isArray a xs →
-  isInt _i i →
-  isInt _k k →
-  valid_seg i k xs →
-  (* If the invariant holds of the start index [i] and start state [s], *)
-  inv i s →
-  (* If [s ← f _j a.[_j] s] transforms [inv j s] to [inv (j+1) s], *)
-  (∀ _j j x s ,
-    isInt _j j →
-    representable j → (* should be redundant with the next line *)
-    i ≤ j < k →
-    x = xs !!! j →
-    inv j s →
-    wp (f _j x s) (λ s, inv (j + 1) s)
-  ) →
-  (* Then, once the loop ends, [inv k s] holds. *)
-  (∀ s, inv k s → Q s) →
-  wp (segment_iteri a _i _k s f) Q.
+Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop) a xs f :
+  @SEGMENT_ITER_UP S
+    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
+    (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q)
+    (λ i k, isArray a xs ∧ valid_seg i k xs)
+    inv Q.
 Proof.
-  intros ???? Hinit Hstep Hfinish.
+  SEGMENT_ITER_UP.
   unfold segment_iteri.
-  eapply wp_up with (inv := inv); tc; clear dependent s.
+  eapply wp_up with (inv := inv); unpack; tc. clear dependent s.
   (* The loop body. *)
   { intros _j j s. intros.
     wp_get x. wp_op Hstep s'. wp_ret. eauto. }
-  (* The loop exit. *)
-  { intros s'. list. eauto. }
 Qed.
 
 (* The public specification of [iteri]. *)
