@@ -432,8 +432,7 @@ Proof.
      It does not need to unfold the definition of [isArray]. *)
   intros. unfold segment_to_list.
   (* The loop invariant. *)
-  eapply wp_down with (inv := λ j ys, ys = seg j k xs);
-    tc; list; intros; eauto.
+  wp_loop @wp_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
   { wp_get x.
     wp_ret. subst.
@@ -467,7 +466,7 @@ Lemma wp_to_list' a :
 Proof.
   (* This proof is based directly on the definition of [isArray a xs].
      It does not rely on the lemmas [wp_length] and [wp_get]. *)
-  intros. unfold to_list.
+  intros. unfold to_list, segment_to_list.
   (* Obtain the length of the array. *)
   eapply wp_bind_eq. intros _n ?.
   set (n := to_nat _n).
@@ -478,30 +477,31 @@ Proof.
   (* The loop invariant: when the loop index is [j] and the state is [xs],
      the length of [xs] is [n - j] and the elements of [xs] are the elements
      found at indices [j, n) in the array [a]. *)
-  eapply wp_down with (inv := λ j (ys : list A),
+  wp_loop @wp_down (λ j (ys : list A),
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
-  ); tc; list; intros.
-  (* Initialization. *)
-  { lia. }
+  );
+  rename s into xs.
   (* Preservation. *)
-  { rename s into xs.
-    match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
-    liftIsIntAndClear.
+  { liftIsIntAndClear.
     wp_bind_eq.
     wp_ret.
     list; split; [ lia |].
+    rewrite cons_is_append.
     intros o ?.
     destruct (decide (j = o)); [ subst o |]; list.
     { eauto. }
-    { rewrite Hlookup by lia. f_equal. lia. } }
+    { replace (o - j - 1) with (o - (j + 1)) by lia.
+      eauto with lia. } }
   (* Completion. *)
-  { rename s into xs.
-    match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
+  { list in *.
+    match goal with h: len xs = _ |- _ => rename h into Hxs end.
     introIsArray; try rewrite Hxs.
     + introIsInt. subst n. int. eauto.
     + eauto.
-    + intros o ?. rewrite Hlookup by lia. list. eauto. }
+    + intros o ?.
+      replace o with (o - 0) at 2 by lia.
+      eauto with lia. }
 Qed.
 
 (* [isArray a xs] is equivalent to [to_list a = xs]. *)
@@ -529,7 +529,7 @@ Context {S A : Type}.
 Implicit Types s : S.
 Implicit Types xs : list A.
 Implicit Types f : S → int → A → S.
-Implicit Types inv : S → list A → Prop.
+Implicit Types inv : list A → S → Prop.
 
 (* The code. *)
 
@@ -544,26 +544,26 @@ Fixpoint list_iteri f s _i xs :=
 
 (* An inductive specification. (This is just an auxiliary lemma.) *)
 
-(* The user-provided loop invariant [inv s history] is parameterized with the
-   current state [s] and the already-visited elements [history]. It does not
-   need to be parameterized with the current index [i], because it is just the
-   length of the list [history]. *)
+(* The user-provided loop invariant [inv history s] is parameterized
+   with the already-visited elements [history] and the current user
+   state [s]. It does not need to be parameterized with the current
+   index [i], because [i] is just the length of the list [history]. *)
 
 Local Lemma wp_list_iteri_aux f inv xs :
   ∀ future s _i i history,
   isInt _i i →
-  inv s history →
+  inv history s →
   i = len history →
   history ++ future = xs →
   ( ∀ s future history _i i x,
     isInt _i i →
-    inv s history →
+    inv history s →
     i = len history →
     history ++ future = xs →
     [x] `prefix_of` future →
-    wp (f s _i x) (λ s, inv s (history ++ [x]))
+    wp (f s _i x) (λ s, inv (history ++ [x]) s)
   ) →
-  wp (list_iteri f s _i future) (λ s, inv s xs).
+  wp (list_iteri f s _i future) (λ s, inv xs s).
 Proof.
   induction future as [| x future ];
   intros ???? HI ? Hinv Hxs Hpreservation;
@@ -580,29 +580,32 @@ Qed.
 Lemma wp_list_iteri f xs Q inv s :
   (* Initialization. The invariant must be true of the initial state [s]
      and the empty history. *)
-  inv s [] →
+  inv [] s →
   (* Preservation. If the invariant holds of the current state [s] and
-     current history [history], if the index [_i] represents the length
-     of the list [history], and if [x] is the first unvisited element of
-     the list [xs], then the function call [f s _i x] must return a new
-     state [s] such that the invariant holds of the state [s] and of the
-     new history [history ++ [x]]. *)
+     current history [history], if the index [_i] represents the
+     length of the list [history], and if [x] is the first unvisited
+     element of the list [xs], then the function call [f s _i x] must
+     return a new state [s] such that the invariant holds of the new
+     history [history ++ [x]] and of the state [s]. *)
   ( ∀ s history _i i x,
     isInt _i i →
-    inv s history →
+    inv history s →
     i = len history →
     history ++ [x] `prefix_of` xs →
-    wp (f s _i x) (λ s, inv s (history ++ [x]))
+    wp (f s _i x) (λ s, inv (history ++ [x]) s)
   ) →
-  (* Completion. The invariant, applied to the final state [s] and to
-     the complete list [xs], must imply the postcondition [Q]. *)
-  (∀ s, inv s xs → Q s) →
+  (* Completion. The invariant, applied to the complete list [xs] and
+     to the final state [s], must imply the postcondition [Q]. *)
+  (∀ s, inv xs s → Q s) →
   (* Under these three hypotheses, the loop establishes [Q]. *)
   wp (list_iteri f s 0 xs) Q.
 Proof.
   intros Hinv Hpreservation Hcompletion.
-  wp_op wp_list_iteri_aux s'; eauto.
-  list. intros. subst. eauto using prefix_app.
+  wp_op wp_list_iteri_aux s'.
+  (* The loop body. *)
+  { list in *. subst xs. eauto using prefix_app. }
+  (* Completion. *)
+  { eauto. }
 Qed.
 
 End ListIteri.
@@ -681,12 +684,11 @@ Proof.
   wp_make a.
   (* The loop invariant. *)
   set (n := len xs).
-  eapply wp_list_iteri with (inv := λ a history,
-    let h := len history in
-    isArray a (history ++ replicate (n-h) inhabitant)
-  ); simpl; list; eauto.
+  wp_loop @wp_list_iteri (λ history a,
+    isArray a (history ++ replicate (n - len history) inhabitant)
+  ).
   (* Preservation. *)
-  { intros. apply_prefix_length. wp_set. list. eauto. }
+  { apply_prefix_length. wp_set. eauto. }
 Qed.
 
 End OfList.
@@ -799,11 +801,11 @@ Lemma wp_blit a xs _i i b ys _j j _n n :
   ).
 Proof.
   intros. unfold blit.
+  (* TODO use [wp_loop] *)
   eapply wp_up with (inv := λ k b,
     isArray b
       (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
-  );
-  tc; list; eauto 1.
+  ); tc; list; eauto 1.
   (* Preservation. *)
   { clear dependent b. intros _k k b. intros.
     wp_get x. subst x.
@@ -949,6 +951,7 @@ Lemma wp_fill a xs _i i _n n  x :
   ).
 Proof.
   intros. unfold fill.
+  (* TODO use [wp_loop] *)
   eapply wp_up with (inv := λ k a,
     isArray a
       (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)

@@ -5,7 +5,7 @@ From Stdlib Require Import Wellfounded.Wellfounded.
 From Equations Require Import Equations.
 From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
-From array Require Import tactics bool wp wp_tactics.
+From array Require Import tactics bool wp wp_tactics iteration.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -935,82 +935,54 @@ Global Hint Rewrite
 (* A generic specification for a loop over a segment of the integers,
    counting down. *)
 
-Section Down.
+(* The producer state is a logical loop index, whose type is [nat].
+   The user's observation is a physical loop index, whose type is [int].
+   The semi-open interval that is enumerated is [i, k).
+   The step relation is as follows. *)
 
-(* The type of the loop-carried state. *)
-Context {S : Type}.
+(* In the definition of [step], the equation [j1 = j] means that the user
+   observes the new state. Thus, the loop invariant [inv j s] means that
+   the loop has run down to index [j] included and the next iteration will
+   concern the index [j - 1]. *)
 
-(* The user is allowed to choose a loop invariant [inv i s], where
-   [i] is the current loop index and [s] is the current state. The
-   assertion [inv j s] means that the loop has run down to index [j]
-   included, so the next iteration will concern the index [j-1]. *)
-Variable inv : nat → S → Prop.
+Definition ITER_DOWN {S}
+  (body : int → nat → S → (S → Prop) → Prop)
+  (loop : S → (S → Prop) → Prop)
+  (i k : nat)
+:=
+  let step j0 _j j j1 :=
+    j0 = j + 1 ∧
+    j1 = j ∧
+    isInt _j j ∧
+    representable j ∧
+    i ≤ j < k
+  in
+  ITER step body loop k i.
+    (* initial state is [k]; final state is [i] *)
 
-(* The postcondition of the loop. *)
-Variable Q : S → Prop.
+Ltac ITER_DOWN :=
+  ITER.
 
-(* The body of the loop is abstracted as a [wp] judgement. The proposition
-   [body _j j s Q'] means that the loop body, with current index [_j] and
-   current state [s], establishes the postcondition [Q']. *)
-Variable body : int → nat → S → (S → Prop) → Prop.
-
-Section IterDown.
-
-(* The loop is abstracted as a [wp] judgement. The proposition [loop s Q]
-   means that the loop, applied to the initial state [s], establishes the
-   postcondition [Q]. *)
-Variable loop : S → (S → Prop) → Prop.
-
-Definition ITER_DOWN i k :=
-  ∀ s,
-  (* If the invariant holds of the start index [k] and start state [s], *)
-  inv k s →
-  (* If one loop iteration transforms [inv (j+1) s] to [inv j s'], *)
-  (∀ _j j s ,
-    isInt _j j →
-    representable j →
-    i ≤ j < k →
-    inv (j + 1) s →
-    body _j j s (λ s, inv j s)
-  ) →
-  (* Then, once the loop ends, the invariant holds of the index [i]
-     and of the final state [s]. *)
-  (∀ s, inv i s → Q s) →
-  loop s Q.
-
-End IterDown.
-
-Section SegmentIterDown.
-
-(* In this variant, the loop indices [_i] and [_k] are passed as two
-   explicit arguments to the loop. *)
-
-(* The loop is abstracted as a [wp] judgement. [loop _k _i s Q] means that
-   the loop, applied to the extremum indices [_k] and [_i] and to the
-   initial state [s], establishes the postcondition [Q]. *)
-Variable loop : int → int → S → (S → Prop) → Prop.
+(* In this variant, the loop indices [_k] and [_i] are explicitly passed
+   as arguments to the loop. [loop _k _i s Q] means that the loop, applied
+   to the extremum indices [_k] and [_i] and to the initial state [s],
+   establishes the postcondition [Q]. *)
 
 (* The precondition [P i k] typically expresses the fact that [i] and [k]
    represent a valid segment with respect to a certain data structure. *)
-Variable P : nat → nat → Prop.
 
-Definition SEGMENT_ITER_DOWN :=
+Definition SEGMENT_ITER_DOWN {S}
+  (body : int → nat → S → (S → Prop) → Prop)
+  (loop : int → int → S → (S → Prop) → Prop)
+  (P : nat → nat → Prop)
+:=
   ∀ _i i _k k,
   isInt _i i →
   isInt _k k →
   P i k →
-  @ITER_DOWN (loop _k _i) i k.
-
-End SegmentIterDown.
-
-End Down.
-
-Ltac ITER_DOWN :=
-  unfold ITER_DOWN;
-  intro; intros Hinit Hstep Hfinish.
+  ITER_DOWN body (loop _k _i) i k.
 
 Ltac SEGMENT_ITER_DOWN :=
-  unfold SEGMENT_ITER_DOWN;
   do 6 intro;
   let HP := fresh in
   intro HP; unpack in HP;
@@ -1087,15 +1059,15 @@ Defined.
 
 (* A specification of [down_aux]. *)
 
-Lemma wp_down_aux (inv : nat → S → Prop) (Q : S → Prop) i _j j :
+Lemma wp_down_aux i _j j :
   isInt _i i →
   representable i →
   isInt _j j →
   representable j →
   i ≤ j →
-  ITER_DOWN inv Q
-    (λ _j j s Q', wp (f _j s) Q')
-    (λ s Q', wp (down_aux _j s) Q')
+  ITER_DOWN
+    (λ _j j s Q, wp (f _j s) Q)
+    (λ s Q, wp (down_aux _j s) Q)
     i (j + 1).
 Proof.
   intros. ITER_DOWN.
@@ -1103,8 +1075,7 @@ Proof.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
-  { rename H into IH.
-    wp_op Hstep s'. wp_op IH s''. eauto. }
+  { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
 Qed.
 
 End Down.
@@ -1123,18 +1094,18 @@ Definition down {S} _k _i (s : S) f :=
    be greater than or equal to the end index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
-Lemma wp_down {S} (inv : nat → S → Prop) (Q : S → Prop) f :
-  SEGMENT_ITER_DOWN inv Q
-    (λ _j j s Q', wp (f _j s) Q')
-    (λ _k _i s Q', wp (down _k _i s f) Q')
+Lemma wp_down {S} (f : int → S → S) :
+  SEGMENT_ITER_DOWN
+    (λ _j j s Q, wp (f _j s) Q)
+    (λ _k _i s Q, wp (down _k _i s f) Q)
     (λ i k, representable i ∧ representable k ∧ i ≤ k).
 Proof.
-  intros. SEGMENT_ITER_DOWN. unfold down.
+  SEGMENT_ITER_DOWN. unfold down.
   wp_if.
   (* Case [k = i]. *)
   { subst k. wp_ret. eauto. }
   (* Case [k ≠ i]. *)
-  { eapply wp_down_aux; tc; autorewrite with nat; tc. }
+  { wp_op_nude @wp_down_aux. }
 Qed.
 
 (* [down _k _i s @@ λ _j s, ...] is a convenient way of writing a loop. *)
@@ -1290,14 +1261,10 @@ Proof.
   SEGMENT_ITER_UP.
   funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic.
   (* Case [i < k]. *)
-  { assert (fact: i `max` k = (i + 1) `max` k) by lia.
-    rewrite fact in Hfinish.
-    wp_op Hstep s'.
-    wp_op H s''.
-    eauto. }
+  { replace (i `max` k) with k in Hfinish by lia.
+    wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
-  { assert (fact: i `max` k = i) by lia.
-    rewrite fact in Hfinish.
+  { replace (i `max` k) with i in Hfinish by lia.
     wp_ret. eauto. }
 Qed.
 

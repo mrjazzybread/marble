@@ -5,45 +5,6 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
-(* [pack] introduces conjunctions in the goal. *)
-Ltac pack :=
-  repeat match goal with
-  | |- _ ∧ _ =>
-      split
-  | |- ∃ x, _ =>
-      eexists
-  end.
-
-(* [tc] is a short name for type class search. *)
-
-(* We use [pack] to help introduce conjunctions in the goal. *)
-
-(* We use [lia] as a helper for arithmetic side conditions. *)
-
-(* [intuition eauto] can eliminate disjunctions, which is sometimes
-   handy. However, it tends to destructure the goal even when it is
-   unable to solve it, which is inconvenient. Hence we wrap it with
-   [try solve]. Furthermore, in some cases, [intuition eauto] fails
-   whereas [eauto] succeeds. Therefore [intuition eauto] should not
-   be the default tactic. *)
-
-(* TODO why does [typeclasses eauto] fail in situations where [eauto]
-   succeeds? *)
-
-Ltac tc :=
-  pack;
-  eauto with typeclass_instances lia.
-
-Ltac itc :=
-  try solve [ intuition eauto with typeclass_instances lia ].
-
-(* [cleanup] removes an equality hypothesis that is produced by
-   [funelim] and that is usually unneeded. *)
-Ltac cleanup :=
-  match goal with h: sigmaI _ _ _ = sigmaI _ _ _ |- _ =>
-    clear h
-  end.
-
 (* [unpack] destructs conjunctions in the hypotheses. *)
 Ltac unpack :=
   repeat match goal with
@@ -68,3 +29,45 @@ Ltac unpack_in h :=
 
 Global Tactic Notation "unpack" "in" hyp(h) :=
   unpack_in h.
+
+(* [pack] introduces conjunctions and quantifiers in the goal.
+   When introducing a hypothesis, it unpacks this hypothesis. *)
+Ltac pack :=
+  repeat match goal with
+  | |- _ → _ =>
+      let h := fresh in
+      intro h; unpack in h
+  | |- ∀ x, _ =>
+      intro
+  | |- _ ∧ _ =>
+      split
+  | |- ∃ x, _ =>
+      eexists
+  end.
+
+(* [tc] is a short name for type class search. *)
+
+(* We use [lia] as a helper for arithmetic side conditions. *)
+
+(* TODO why does [typeclasses eauto] fail in situations where [eauto]
+   succeeds? *)
+
+Ltac tc :=
+  eauto 6 with typeclass_instances lia.
+
+(* [intuition eauto] can eliminate disjunctions, which is sometimes
+   handy. However, it tends to destructure the goal even when it is
+   unable to solve it, which is inconvenient. Hence we wrap it with
+   [try solve]. Furthermore, in some cases, [intuition eauto] fails
+   whereas [eauto] succeeds. Therefore [intuition eauto] should not
+   be the default tactic. *)
+
+Ltac itc :=
+  try solve [ intuition eauto with typeclass_instances lia ].
+
+(* [cleanup] removes an equality hypothesis that is produced by
+   [funelim] and that is usually unneeded. *)
+Ltac cleanup :=
+  match goal with h: sigmaI _ _ _ = sigmaI _ _ _ |- _ =>
+    clear h
+  end.

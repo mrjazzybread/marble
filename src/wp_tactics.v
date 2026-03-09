@@ -28,21 +28,48 @@ Global Ltac wp_intros_overwrite x :=
   clear dependent x;
   rename x' into x.
 
-(* [wp_op lemma] applies the lemma [lemma], which is typically
-   a reasoning rule for some operation [op], then attempts to
-   solve its preconditions. The goal should have the form
-   [wp (op ...) ?Q] where [?Q] is a metavariable. *)
+(* [wp_op_nude lemma] applies the lemma [lemma], which is typically a
+   reasoning rule for some operation [op], then attempts to solve its
+   preconditions. The goal should have the form [wp (op ...) ?Q] where
+   [?Q] is a metavariable. *)
 
 Global Ltac wp_op_nude lemma :=
   (* Apply the reasoning rule for this operation. *)
   simple eapply lemma;
   (* Attempt to solve the preconditions. *)
-  (* One round of [eauto], followed by a round of rewriting
-     and a second round of [eauto]. Not very elegant, but
-     this seems effective, so good enough for now. *)
+  (* This incantation is not very elegant, but seems effective,
+     so good enough for now. Note that the semi-colon in Ltac
+     is left-associative, so each tactic in the sequence below
+     is applied to *all* preconditions before the next tactic
+     in the sequence is applied. *)
+  list;
+  intros; unpack; try subst;
   tc;
   list;
-  eauto with lia.
+  tc.
+
+(* [wp_loop lemma I] applies the lemma [lemma], which is typically a
+   reasoning rule for a loop, with the invariant (inv := I).
+   It is essentially a special case of [wp_op_nude] where we want to
+   specialize the lemma. *)
+
+Ltac wp_loop lemma I :=
+  (* Apply the reasoning rule for this operation. We infer the type [S]
+     from the type of the invariant [I]. *)
+  match type of I with ?P -> ?S -> Prop =>
+  simple eapply (@lemma S) with (inv := I);
+  (* Attempt to solve the preconditions. *)
+  (* This incantation is not very elegant, but seems effective,
+     so good enough for now. Note that the semi-colon in Ltac
+     is left-associative, so each tactic in the sequence below
+     is applied to *all* preconditions before the next tactic
+     in the sequence is applied. *)
+  list;
+  intros; unpack; try subst;
+  tc;
+  list;
+  tc
+  end.
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under
