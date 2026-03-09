@@ -5,7 +5,7 @@ From Stdlib Require Import Wellfounded.Wellfounded.
 From Equations Require Import Equations.
 From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
-From array Require Import tactics bool wp.
+From array Require Import tactics bool wp wp_tactics.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -1094,42 +1094,100 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 (* -------------------------------------------------------------------------- *)
 
-(* A loop, counting up from [a] to [b], using machine integers. *)
+(* A generic specification for a loop over a segment, counting up. *)
 
-(* Our intervals are semi-open on the right end: [a] is included,
-   [b] is excluded. *)
+Section SPEC.
+
+(* The type of the loop-carried state. *)
+Context {S : Type}.
+
+(* The body of the loop is abstracted as a [wp] judgement. The proposition
+   [body j s Q'] means that the loop body, with current index [_j] and
+   current state [s], establishes the postcondition [Q']. *)
+Variable body : int → S → (S → Prop) → Prop.
+
+(* The loop is also abstracted as a [wp] judgement. The proposition
+   [loop _i _k s Q] means that the loop, applied to the segment
+   delimited by [_i] and [_k] and to the initial state [s],
+   establishes the postcondition [Q]. *)
+Variable loop : int → int → S → (S → Prop) → Prop.
+
+(* The precondition [P i k] typically expresses the fact that [i] and [k]
+   represent a valid segment with respect to a certain data structure. *)
+Variable P : nat → nat → Prop.
+
+(* The user is allowed to choose a loop invariant [inv j s], where
+   [j] is the current loop index and [s] is the current state. The
+   assertion [inv j s] means that the loop has run up to index [j]
+   excluded, so the next iteration will concern the index [j]. *)
+Variable (inv : nat → S → Prop).
+
+(* The postcondition of the loop. *)
+Variable (Q : S → Prop).
+
+Definition SEGMENT_ITER_UP :=
+  ∀ _i i _k k s ,
+  isInt _i i →
+  isInt _k k →
+  P i k →
+  (* If the invariant holds of the start index [i] and start state [s], *)
+  inv i s →
+  (* If one loop iteration transforms [inv j s] to [inv (j+1) s], *)
+  (∀ _j j s ,
+    isInt _j j →
+    representable j →
+    i ≤ j < k →
+    inv j s →
+    body _j s (λ s, inv (j + 1) s)
+  ) →
+  (* Then, once the loop ends, the invariant holds of the index [i]
+     or [k], whichever is greater, and of the final state [s]. *)
+  (∀ s, inv (i `max` k) s → Q s) →
+  loop _i _k s Q.
+
+End SPEC.
+
+Ltac SEGMENT_ITER_UP :=
+  unfold SEGMENT_ITER_UP;
+  do 8 intro; intros Hinit Hstep Hfinish.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A loop, counting up from [i] to [k], using machine integers. *)
+
+(* Our intervals are semi-open on the right end: [i] is included,
+   [k] is excluded. *)
 
 Section UpAux.
 Context {S : Type}.
-Implicit Types _a : int.
 Implicit Types s : S.
 
 (* We hoist the loop-invariant parameters out of the loop, because
    otherwise Equations produces ugly code where these parameters are
    carried around in a tuple, itself encoded using nested pairs. *)
 
-Variable _b : int.
+Variable _k : int.
 Variable f : int → S → S.
 
-(* [up_aux _a s] applies the loop body [f] to every machine integer from
-   [_a], included, up to [_b], excluded. A state of type [S] is carried,
+(* [up_aux _i s] applies the loop body [f] to every machine integer from
+   [_i], included, up to [_k], excluded. A state of type [S] is carried,
    whose initial value is [s]. *)
 
 (* We use Equations to more easily define [up_aux] by well-founded
-   recursion over the loop counter [_a]. The somewhat strange [with]
-   syntax is a way of expressing the test [_a <? _b]. The use of [inspect]
+   recursion over the loop counter [_i]. The somewhat strange [with]
+   syntax is a way of expressing the test [_i <? _k]. The use of [inspect]
    and [inspected] is an idiosyncratic way of making the outcome of the
    test visible at the logical level in the branches. In the second
-   branch, the fact that [_a <? _b] is false is needed in order to prove
-   that [_a+1] is less than [_a], a fact which itself is required by the
+   branch, the fact that [_i <? _k] is false is needed in order to prove
+   that [_i+1] is less than [_i], a fact which itself is required by the
    termination argument. *)
 
-Equations up_aux _a s : S
-by wf _a igt :=
-up_aux _a s with inspect (_a <? _b)%uint63 => {
+Equations up_aux _i s : S
+by wf _i igt :=
+up_aux _i s with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    do s ← f _a s ;
-    do s ← up_aux (_a+1)%uint63 s ;
+    do s ← f _i s ;
+    do s ← up_aux (_i+1)%uint63 s ;
     s ;
 | inspected false :=
     s
@@ -1142,47 +1200,28 @@ End UpAux.
 
 Section Up.
 Context {S : Type}.
-Implicit Types _a _b : int.
 Implicit Types s : S.
 Implicit Types f : int → S → S.
 
 (* A specification of [up_aux]. *)
 
-(* The user is allowed to choose a loop invariant [inv a s], where
-   [a] is the current loop index and [s] is the current state. The
-   assertion [inv a s] means that the loop has run up to index [a]
-   excluded, so the next iteration will concern the index [a]. *)
-
 Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
-  ∀ _a a _b b s ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
-  (* If the invariant holds of the start index [a] and start state [s], *)
-  inv a s →
-  (* If [s ← f _i s] transforms the invariant [inv i s] to [inv (i+1) s], *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < b →
-    inv i s →
-    wp (f _i s) (λ s, inv (i + 1) s)
-  ) →
-  (* Then, once the loop ends, the invariant holds of the index [a]
-     or [b], whichever is greater, and of the final state [s]. *)
-  (∀ s, inv (a `max` b) s → Q s) →
-  wp (up_aux _b f _a s) Q.
+  @SEGMENT_ITER_UP S
+    (λ _j s Q, wp (f _j s) Q)
+    (λ _i _k s Q, wp (up_aux _k f _i s) Q)
+    (λ i k, representable i ∧ representable k)
+    inv Q.
 Proof.
-  do 9 intro. intros Hinit Hstep Hfinish.
-  funelim (up_aux _b f _a s); cleanup; clear Heqcall; isBool_magic.
-  (* Case [a < b]. *)
-  { assert (fact: a `max` b = (a + 1) `max` b) by lia.
+  SEGMENT_ITER_UP.
+  funelim (up_aux _k f _i s); cleanup; clear Heqcall; unpack; isBool_magic.
+  (* Case [i < k]. *)
+  { assert (fact: i `max` k = (i + 1) `max` k) by lia.
     rewrite fact in Hfinish.
-    eapply wp_bind; [ eapply Hstep; eauto | simpl; intros s' ? ].
-    tc. }
-  (* Case [¬ a < b]. *)
-  { assert (fact: a `max` b = a) by lia.
+    wp_op Hstep s'.
+    wp_op H s''.
+    eauto. }
+  (* Case [¬ i < k]. *)
+  { assert (fact: i `max` k = i) by lia.
     rewrite fact in Hfinish.
     wp_ret. eauto. }
 Qed.
