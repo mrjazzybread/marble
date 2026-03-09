@@ -2,7 +2,10 @@
 
 ## Short term
 
-* `isInt 12 12` still does not work.
+* `isInt 12 12` still does not work. Ask for help on Zulip.
+
+* Define generic concepts so as to shorten the specifications of loops.
+  Do so for non-interruptible and interruptible loops.
 
 * In anticipation of vectors, many operations on arrays should also
   work on a segment of a larger array.
@@ -10,7 +13,7 @@
   + `segment_exist`
   + `segment_for_all`
 
-* Sjhould `find_index_inv` and `equal_inv` be instances of `isOption`?
+* Should `find_index_inv` and `equal_inv` be instances of `isOption`?
   Develop `isOption`, and extend `wp_if` to handle it?
 
 * Tactics:
@@ -61,3 +64,15 @@
 * Find out why `compute` is unable to execute `down_aux`.
 
 * Find out how to enable `native_compute`.
+
+## Documentation
+
+* Explain the linear use discipline.
+
+  While iterating on a collection (`array.iteri`, `vector.iteri`)
+  one must not modify the collection (i.e., the state must not
+  contain the array itself). [One could enforce this in a tactic
+  by clearing `isArray a xs` in the subgoal that establishes the
+  initial state.]
+
+* Explain the various extraction options.
