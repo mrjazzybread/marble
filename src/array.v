@@ -1334,14 +1334,13 @@ Definition iteri a s f :=
 (* The public specification of [segment_iteri]. *)
 
 Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop) a xs f :
-  @SEGMENT_ITER_UP S
+  isArray a xs →
+  SEGMENT_ITER_UP inv Q
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q)
-    (λ i k, isArray a xs ∧ valid_seg i k xs)
-    inv Q.
+    (λ i k, valid_seg i k xs).
 Proof.
-  SEGMENT_ITER_UP.
-  unfold segment_iteri.
+  intros. SEGMENT_ITER_UP. unfold segment_iteri.
   eapply wp_up with (inv := inv); unpack; tc. clear dependent s.
   (* The loop body. *)
   { intros _j j s. intros.
@@ -1350,25 +1349,14 @@ Qed.
 
 (* The public specification of [iteri]. *)
 
-Lemma wp_iteri (inv : nat → S → Prop) (Q : S → Prop)
-  a xs s f :
+Lemma wp_iteri (inv : nat → S → Prop) (Q : S → Prop) a xs f :
   isArray a xs →
-  (* If the invariant holds of the start index [0] and start state [s], *)
-  inv 0 s →
-  (* If [s ← f _j a.[_j] s] transforms [inv j s] to [inv (j+1) s], *)
-  (∀ _j j x s ,
-    isInt _j j →
-    representable j → (* should be redundant with the next line *)
-    j < len xs →
-    x = xs !!! j →
-    inv j s →
-    wp (f _j x s) (λ s, inv (j + 1) s)
-  ) →
-  (* Then, once the loop ends, [inv (len xs) s] holds. *)
-  (∀ s, inv (len xs) s → Q s) →
-  wp (iteri a s f) Q.
+  ITER_UP inv Q
+    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
+    (λ s Q, wp (iteri a s f) Q)
+    0 (len xs).
 Proof.
-  intros. unfold iteri.
+  intros. ITER_UP. unfold iteri.
   wp_length _n.
   wp_op wp_segment_iteri s'.
   eauto.

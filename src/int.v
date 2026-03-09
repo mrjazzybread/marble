@@ -1094,27 +1094,13 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 (* -------------------------------------------------------------------------- *)
 
-(* A generic specification for a loop over a segment, counting up. *)
+(* A generic specification for a loop over a segment of the integers,
+   counting up. *)
 
-Section SPEC.
+Section Up.
 
 (* The type of the loop-carried state. *)
 Context {S : Type}.
-
-(* The body of the loop is abstracted as a [wp] judgement. The proposition
-   [body _j j s Q'] means that the loop body, with current index [_j] and
-   current state [s], establishes the postcondition [Q']. *)
-Variable body : int → nat → S → (S → Prop) → Prop.
-
-(* The loop is also abstracted as a [wp] judgement. The proposition
-   [loop _i _k s Q] means that the loop, applied to the segment
-   delimited by [_i] and [_k] and to the initial state [s],
-   establishes the postcondition [Q]. *)
-Variable loop : int → int → S → (S → Prop) → Prop.
-
-(* The precondition [P i k] typically expresses the fact that [i] and [k]
-   represent a valid segment with respect to a certain data structure. *)
-Variable P : nat → nat → Prop.
 
 (* The user is allowed to choose a loop invariant [inv j s], where
    [j] is the current loop index and [s] is the current state. The
@@ -1125,11 +1111,20 @@ Variable (inv : nat → S → Prop).
 (* The postcondition of the loop. *)
 Variable (Q : S → Prop).
 
-Definition SEGMENT_ITER_UP :=
-  ∀ _i i _k k s ,
-  isInt _i i →
-  isInt _k k →
-  P i k →
+(* The body of the loop is abstracted as a [wp] judgement. The proposition
+   [body _j j s Q'] means that the loop body, with current index [_j] and
+   current state [s], establishes the postcondition [Q']. *)
+Variable body : int → nat → S → (S → Prop) → Prop.
+
+Section IterUp.
+
+(* The loop is abstracted as a [wp] judgement. The proposition [loop s Q]
+   means that the loop, applied to the initial state [s], establishes the
+   postcondition [Q]. *)
+Variable loop : S → (S → Prop) → Prop.
+
+Definition ITER_UP i k :=
+  ∀ s,
   (* If the invariant holds of the start index [i] and start state [s], *)
   inv i s →
   (* If one loop iteration transforms [inv j s] to [inv (j+1) s], *)
@@ -1143,13 +1138,45 @@ Definition SEGMENT_ITER_UP :=
   (* Then, once the loop ends, the invariant holds of the index [i]
      or [k], whichever is greater, and of the final state [s]. *)
   (∀ s, inv (i `max` k) s → Q s) →
-  loop _i _k s Q.
+  loop s Q.
 
-End SPEC.
+End IterUp.
+
+Section SegmentIterUp.
+
+(* In this variant, the loop indices [_i] and [_k] are passed as two
+   explicit arguments to the loop. *)
+
+(* The loop is abstracted as a [wp] judgement. [loop _i _k s Q] means that
+   the loop, applied to the start and end indices [_i] and [_k] and to the
+   initial state [s], establishes the postcondition [Q]. *)
+Variable loop : int → int → S → (S → Prop) → Prop.
+
+(* The precondition [P i k] typically expresses the fact that [i] and [k]
+   represent a valid segment with respect to a certain data structure. *)
+Variable P : nat → nat → Prop.
+
+Definition SEGMENT_ITER_UP :=
+  ∀ _i i _k k,
+  isInt _i i →
+  isInt _k k →
+  P i k →
+  @ITER_UP (loop _i _k) i k.
+
+End SegmentIterUp.
+
+End Up.
+
+Ltac ITER_UP :=
+  unfold ITER_UP;
+  intro; intros Hinit Hstep Hfinish.
 
 Ltac SEGMENT_ITER_UP :=
   unfold SEGMENT_ITER_UP;
-  do 8 intro; intros Hinit Hstep Hfinish.
+  do 6 intro;
+  let HP := fresh in
+  intro HP; unpack in HP;
+  ITER_UP.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1206,14 +1233,13 @@ Implicit Types f : int → S → S.
 (* A specification of [up_aux]. *)
 
 Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
-  @SEGMENT_ITER_UP S
+  SEGMENT_ITER_UP inv Q
     (λ _j j s Q, wp (f _j s) Q)
     (λ _i _k s Q, wp (up_aux _k f _i s) Q)
-    (λ i k, representable i ∧ representable k)
-    inv Q.
+    (λ i k, representable i ∧ representable k).
 Proof.
   SEGMENT_ITER_UP.
-  funelim (up_aux _k f _i s); cleanup; clear Heqcall; unpack; isBool_magic.
+  funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic.
   (* Case [i < k]. *)
   { assert (fact: i `max` k = (i + 1) `max` k) by lia.
     rewrite fact in Hfinish.
