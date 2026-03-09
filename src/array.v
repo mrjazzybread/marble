@@ -1341,7 +1341,7 @@ Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop) a xs f :
     (λ i k, valid_seg i k xs).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
-  eapply wp_up with (inv := inv); unpack; tc. clear dependent s.
+  eapply wp_up; unpack; tc. clear dependent s.
   (* The loop body. *)
   { intros _j j s. intros.
     wp_get x. wp_op Hstep s'. wp_ret. eauto. }
