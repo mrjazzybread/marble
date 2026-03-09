@@ -475,15 +475,15 @@ Proof.
   assert (n ≤ max_array_length).
   { subst n _n. simple eapply leb_length'. }
   assert (representable n) by tc.
-  (* The loop invariant: when the loop index is [i] and the state is [xs],
-     the length of [xs] is [n - i] and the elements of [xs] are the elements
-     found at indices [i, n) in the array [a]. *)
-  eapply wp_down with (inv := λ i (ys : list A),
-    len ys = n - i ∧
-    ∀ j, i ≤ j < n → a.[of_nat j] = ys !!! (j - i)
+  (* The loop invariant: when the loop index is [j] and the state is [xs],
+     the length of [xs] is [n - j] and the elements of [xs] are the elements
+     found at indices [j, n) in the array [a]. *)
+  eapply wp_down with (inv := λ j (ys : list A),
+    len ys = n - j ∧
+    ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
   ); tc; list; intros.
   (* Initialization. *)
-  { split; intros; lia. }
+  { lia. }
   (* Preservation. *)
   { rename s into xs.
     match goal with h: _ ∧ _ |- _ => destruct h as [Hxs Hlookup] end.
@@ -491,8 +491,8 @@ Proof.
     wp_bind_eq.
     wp_ret.
     list; split; [ lia |].
-    intros j ?.
-    destruct (decide (i = j)); [ subst j |]; list.
+    intros o ?.
+    destruct (decide (j = o)); [ subst o |]; list.
     { eauto. }
     { rewrite Hlookup by lia. f_equal. lia. } }
   (* Completion. *)
@@ -501,7 +501,7 @@ Proof.
     introIsArray; try rewrite Hxs.
     + introIsInt. subst n. int. eauto.
     + eauto.
-    + intros j ?. rewrite Hlookup by lia. list. eauto. }
+    + intros o ?. rewrite Hlookup by lia. list. eauto. }
 Qed.
 
 (* [isArray a xs] is equivalent to [to_list a = xs]. *)
