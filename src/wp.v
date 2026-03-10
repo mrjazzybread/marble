@@ -14,6 +14,9 @@ Global Instance id_bind : MBind ID := λ A B f x, f x.
 Local Notation mret := (@mret ID _ _).
  *)
 
+Definition WP (A : Type) :=
+  (A → Prop) → Prop.
+
 Definition wp {A} (a : A) (Q : A → Prop) :=
   Q a.
 

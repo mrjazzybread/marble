@@ -951,8 +951,8 @@ Global Hint Rewrite
    concern the index [j - 1]. *)
 
 Definition ITER_DOWN {S}
-  (body : int → nat → S → (S → Prop) → Prop)
-  (loop : S → (S → Prop) → Prop)
+  (body : int → nat → S → WP S)
+  (loop : S → WP S)
   (i k : nat)
 :=
   let step j0 _j j j1 :=
@@ -977,8 +977,8 @@ Ltac ITER_DOWN :=
    represent a valid segment with respect to a certain data structure. *)
 
 Definition SEGMENT_ITER_DOWN {S}
-  (body : int → nat → S → (S → Prop) → Prop)
-  (loop : int → int → S → (S → Prop) → Prop)
+  (body : int → nat → S → WP S)
+  (loop : int → int → S → WP S)
   (P : nat → nat → Prop)
 :=
   ∀ _i i _k k,

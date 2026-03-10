@@ -49,12 +49,12 @@ Variable step : P → O → P → P → Prop.
    judgement. The proposition [body o j s Q] means that the loop body, with
    observation [o], current producer state [j], and current user state [s],
    establishes the postcondition [Q]. *)
-Variable body : O → P → S → (S → Prop) → Prop.
+Variable body : O → P → S → WP S.
 
 (* The behavior of the whole loop is represented by [loop], a [wp]-like
    judgement. The proposition [loop s Q] means that the loop, applied to the
    initial state [s], establishes the postcondition [Q]. *)
-Variable loop : S → (S → Prop) → Prop.
+Variable loop : S → WP S.
 
 (* The user's loop invariant takes the form [inv i s], where [i] is the
    current logical producer state and [s] is the current user state. *)
