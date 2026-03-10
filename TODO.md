@@ -4,6 +4,11 @@
 
 * `isInt 12 12` still does not work. Ask for help on Zulip.
 
+* Apply the generic loop spec to `list_iteri_aux` and `list_iteri`.
+
+* Generalize the generic loop spec to allow non-determinism.
+  (The final producer state should be identified by a predicate `complete`.)
+
 * Define generic concepts so as to shorten the specifications of loops.
   Do so for non-interruptible and interruptible loops.
 
