@@ -801,13 +801,11 @@ Lemma wp_blit a xs _i i b ys _j j _n n :
   ).
 Proof.
   intros. unfold blit.
-  (* TODO use [wp_loop] *)
-  eapply wp_up with (inv := λ k b,
-    isArray b
-      (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
-  ); tc; list; eauto 1.
+  wp_up (λ k b, isArray b
+    (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
+  ).
   (* Preservation. *)
-  { clear dependent b. intros ? _k k ? b. intros. unpack. subst.
+  { clear dependent b.
     wp_get x. subst x.
     wp_set.
     wp_ret. isArray. }
@@ -951,14 +949,11 @@ Lemma wp_fill a xs _i i _n n  x :
   ).
 Proof.
   intros. unfold fill.
-  (* TODO use [wp_loop] *)
-  eapply wp_up with (inv := λ k a,
-    isArray a
-      (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
-  );
-  tc; list; eauto 1.
+  wp_up (λ k a, isArray a
+    (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
+  ).
   (* Preservation. *)
-  { clear dependent a. intros ? _k k ? a. intros. unpack. subst.
+  { clear dependent a.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -1344,8 +1339,10 @@ Lemma wp_segment_iteri a xs f :
     (λ i k, valid_seg i k xs).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
-  eapply wp_up; pack; unpack; subst; eauto 4 with typeclass_instances lia.
-    (* TODO use [wp_loop]; but [tc] is slow here *)
+  (* TODO [tc] is slow here *)
+  Local Ltac tc ::= eauto 3 with typeclass_instances lia.
+  wp_up inv.
+  Local Ltac tc ::= eauto with typeclass_instances lia.
   clear dependent s.
   (* The loop body. *)
   { wp_get x. wp_op Hstep s'. wp_ret. eauto. }
@@ -1362,6 +1359,7 @@ Lemma wp_iteri a xs f :
 Proof.
   intros. ITER_UP. unfold iteri.
   wp_length _n.
+  Local Ltac tc ::= eauto 6 with typeclass_instances lia.
   wp_op wp_segment_iteri s'.
   eauto.
 Qed.

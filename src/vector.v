@@ -375,12 +375,13 @@ Lemma wp_segment_iteri v xs f :
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
   destructIsVector. destructIsVectorCap.
-  eapply array.wp_segment_iteri;
-    eauto 3 with typeclass_instances lia;
-    list; eauto 3 with lia. (* TODO *)
+  (* TODO [tc] is slow here *)
+  Local Ltac tc ::= eauto 3 with typeclass_instances lia.
+  wp_loop @array.wp_segment_iteri inv.
+  Local Ltac tc ::= eauto 6 with typeclass_instances lia.
   clear dependent s.
   (* The loop body. *)
-  { intros ? _j j ? x s. intros. subst. list. tc. }
+  { tc. }
 Qed.
 
 (* The public specification of [iteri]. *)
@@ -394,12 +395,13 @@ Lemma wp_iteri v xs f :
 Proof.
   intros. ITER_UP. unfold iteri.
   destructIsVector. destructIsVectorCap.
-  eapply array.wp_segment_iteri;
-    eauto 3 with typeclass_instances lia;
-    list; eauto 3 with lia. (* TODO *)
+  (* TODO [tc] is slow here *)
+  Local Ltac tc ::= eauto 3 with typeclass_instances lia.
+  wp_loop @array.wp_segment_iteri inv.
+  Local Ltac tc ::= eauto 6 with typeclass_instances lia.
   clear dependent s.
   (* The loop body. *)
-  { intros ? _j j ? x s. intros. subst. list. tc. }
+  { tc. }
 Qed.
 
 End Iteri.

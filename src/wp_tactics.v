@@ -58,17 +58,8 @@ Ltac wp_loop lemma I :=
      from the type of the invariant [I]. *)
   match type of I with ?P -> ?S -> Prop =>
   simple eapply (@lemma S) with (inv := I);
-  (* Attempt to solve the preconditions. *)
-  (* This incantation is not very elegant, but seems effective,
-     so good enough for now. Note that the semi-colon in Ltac
-     is left-associative, so each tactic in the sequence below
-     is applied to *all* preconditions before the next tactic
-     in the sequence is applied. *)
-  list;
-  intros; unpack; try subst;
-  tc;
-  list;
-  tc
+  list; pack; unpack; try subst;
+  tc; list in *; tc
   end.
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies

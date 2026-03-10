@@ -25,6 +25,9 @@ Implicit Types _i _j _k : int.
 Implicit Types  i : nat.
 Implicit Types  z : Z.
 
+(* Several proofs in this file need this. *)
+Local Ltac tc ::= eauto 6 with typeclass_instances lia.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Arithmetic lemmas of general interest (in Z). *)
@@ -1261,16 +1264,17 @@ Qed.
 Definition up _i _k s f :=
   up_aux _k f _i s.
 
+End Up.
+
 (* A specification of [up]. *)
 
 (* Copying the specification of [up_aux],
    to obtain a specification of [up],
    would be useless; they are the same up to the order of parameters. *)
 
-Definition wp_up :=
-  wp_up_aux.
-
-End Up.
+Global Ltac wp_up I :=
+  unfold up at 1;
+  wp_loop @wp_up_aux I.
 
 (* -------------------------------------------------------------------------- *)
 
