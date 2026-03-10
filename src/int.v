@@ -964,7 +964,6 @@ Definition ITER_DOWN {S}
     j0 = j + 1 ∧
     j1 = j ∧
     isInt _j j ∧
-    representable j ∧
     i ≤ j < k
   in
   ITER step body loop k (i `min` k).
@@ -1021,7 +1020,6 @@ Definition ITER_UP {S}
     j0 = j ∧
     j1 = j + 1 ∧
     isInt _j j ∧
-    representable j ∧
     i ≤ j < k
   in
   ITER step body loop i (i `max` k).
