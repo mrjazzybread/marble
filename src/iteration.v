@@ -24,10 +24,6 @@ Section Iter.
 Context {P : Type}.
 Implicit Types i j k : P.
 
-(* [S] is the type of the user's state. *)
-Context {S : Type}.
-Implicit Types s : S.
-
 (* [O] is the type of the observations delivered by the producer to the
    user. For example, in a loop over machine integers, this type could be
    [int]. In a loop over a collection, it could be the type of elements. *)
@@ -44,6 +40,10 @@ Implicit Type o : O.
    Parameterizing [step] and [body] (below) with [o] and [j] rather than
    just [o] seems convenient. *)
 Variable step : P → O → P → P → Prop.
+
+(* [S] is the type of the user's state. *)
+Context {S : Type}.
+Implicit Types s : S.
 
 (* The behavior of the loop body is represented by [body], a [wp]-like
    judgement. The proposition [body o j s Q] means that the loop body, with
