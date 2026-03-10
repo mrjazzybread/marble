@@ -366,36 +366,40 @@ Definition iteri v s f :=
 
 (* The public specification of [segment_iteri]. *)
 
-Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop) v xs f :
+Lemma wp_segment_iteri v xs f :
   isVector v xs →
-  SEGMENT_ITER_UP inv Q
+  SEGMENT_ITER_UP
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ _i _k s Q, wp (segment_iteri v _i _k s f) Q)
     (λ i k, valid_seg i k xs).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
   destructIsVector. destructIsVectorCap.
-  eapply array.wp_segment_iteri; tc; list; eauto with lia.
+  eapply array.wp_segment_iteri;
+    eauto 3 with typeclass_instances lia;
+    list; eauto 3 with lia. (* TODO *)
   clear dependent s.
   (* The loop body. *)
-  { intros _j j x s. intros. subst. list. tc. }
+  { intros ? _j j ? x s. intros. subst. list. tc. }
 Qed.
 
 (* The public specification of [iteri]. *)
 
-Lemma wp_iteri (inv : nat → S → Prop) (Q : S → Prop) v xs f :
+Lemma wp_iteri v xs f :
   isVector v xs →
-  ITER_UP inv Q
+  ITER_UP
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri v s f) Q)
     0 (len xs).
 Proof.
   intros. ITER_UP. unfold iteri.
   destructIsVector. destructIsVectorCap.
-  eapply array.wp_segment_iteri; tc; list; eauto with lia.
+  eapply array.wp_segment_iteri;
+    eauto 3 with typeclass_instances lia;
+    list; eauto 3 with lia. (* TODO *)
   clear dependent s.
   (* The loop body. *)
-  { intros _j j x s. intros. subst. list. tc. }
+  { intros ? _j j ? x s. intros. subst. list. tc. }
 Qed.
 
 End Iteri.

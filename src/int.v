@@ -995,6 +995,63 @@ Ltac SEGMENT_ITER_DOWN :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* A generic specification for a loop over a segment of the integers,
+   counting up. *)
+
+(* In the definition of [step], the equation [j0 = j] means that the user
+   observes the previous state. Thus, the loop invariant [inv j s] means
+   that the loop has run up to index [j] excluded and the next iteration
+   will concern the index [j]. *)
+
+(* Once the loop ends, the invariant holds of the index [i] or [k],
+   whichever is greater. This accounts for the special case where
+   [k < i] and the loop is not executed. *)
+
+Definition ITER_UP {S}
+  (body : int → nat → S → WP S)
+  (loop : S → WP S)
+  (i k : nat)
+:=
+  let step j0 _j j j1 :=
+    j0 = j ∧
+    j1 = j + 1 ∧
+    isInt _j j ∧
+    representable j ∧
+    i ≤ j < k
+  in
+  ITER step body loop i (i `max` k).
+    (* initial state is [i]; final state is [i `max` k] *)
+
+Ltac ITER_UP :=
+  ITER.
+
+(* In this variant, the loop indices [_i] and [_k] are explicitly passed
+   as arguments to the loop. [loop _i _k s Q] means that the loop, applied
+   to the extremum indices [_i] and [_k] and to the initial state [s],
+   establishes the postcondition [Q]. *)
+
+(* The precondition [P i k] typically expresses the fact that [i] and [k]
+   represent a valid segment with respect to a certain data structure. *)
+
+Definition SEGMENT_ITER_UP {S}
+  (body : int → nat → S → WP S)
+  (loop : int → int → S → WP S)
+  (P : nat → nat → Prop)
+:=
+  ∀ _i i _k k,
+  isInt _i i →
+  isInt _k k →
+  P i k →
+  ITER_UP body (loop _i _k) i k.
+
+Ltac SEGMENT_ITER_UP :=
+  do 6 intro;
+  let HP := fresh in
+  intro HP; unpack in HP;
+  ITER_UP.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A loop, counting down, using machine integers. *)
 
 Section Down.
@@ -1119,92 +1176,6 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 (* -------------------------------------------------------------------------- *)
 
-(* A generic specification for a loop over a segment of the integers,
-   counting up. *)
-
-Section Up.
-
-(* The type of the loop-carried state. *)
-Context {S : Type}.
-
-(* The user is allowed to choose a loop invariant [inv j s], where
-   [j] is the current loop index and [s] is the current state. The
-   assertion [inv j s] means that the loop has run up to index [j]
-   excluded, so the next iteration will concern the index [j]. *)
-Variable inv : nat → S → Prop.
-
-(* The postcondition of the loop. *)
-Variable Q : S → Prop.
-
-(* The body of the loop is abstracted as a [wp] judgement. The proposition
-   [body _j j s Q'] means that the loop body, with current index [_j] and
-   current state [s], establishes the postcondition [Q']. *)
-Variable body : int → nat → S → (S → Prop) → Prop.
-
-Section IterUp.
-
-(* The loop is abstracted as a [wp] judgement. The proposition [loop s Q]
-   means that the loop, applied to the initial state [s], establishes the
-   postcondition [Q]. *)
-Variable loop : S → (S → Prop) → Prop.
-
-Definition ITER_UP i k :=
-  ∀ s,
-  (* If the invariant holds of the start index [i] and start state [s], *)
-  inv i s →
-  (* If one loop iteration transforms [inv j s] to [inv (j+1) s'], *)
-  (∀ _j j s ,
-    isInt _j j →
-    representable j →
-    i ≤ j < k →
-    inv j s →
-    body _j j s (λ s, inv (j + 1) s)
-  ) →
-  (* Then, once the loop ends, the invariant holds of the index [i]
-     or [k], whichever is greater, and of the final state [s]. *)
-  (∀ s, inv (i `max` k) s → Q s) →
-  loop s Q.
-
-End IterUp.
-
-Section SegmentIterUp.
-
-(* In this variant, the loop indices [_i] and [_k] are passed as two
-   explicit arguments to the loop. *)
-
-(* The loop is abstracted as a [wp] judgement. [loop _i _k s Q] means that
-   the loop, applied to the extremum indices [_i] and [_k] and to the
-   initial state [s], establishes the postcondition [Q]. *)
-Variable loop : int → int → S → (S → Prop) → Prop.
-
-(* The precondition [P i k] typically expresses the fact that [i] and [k]
-   represent a valid segment with respect to a certain data structure. *)
-Variable P : nat → nat → Prop.
-
-Definition SEGMENT_ITER_UP :=
-  ∀ _i i _k k,
-  isInt _i i →
-  isInt _k k →
-  P i k →
-  @ITER_UP (loop _i _k) i k.
-
-End SegmentIterUp.
-
-End Up.
-
-Ltac ITER_UP :=
-  unfold ITER_UP;
-  intro; intros Hinit Hstep Hfinish.
-
-Ltac SEGMENT_ITER_UP :=
-  unfold SEGMENT_ITER_UP;
-  do 6 intro;
-  let HP := fresh in
-  intro HP; unpack in HP;
-  ITER_UP.
-
-(* -------------------------------------------------------------------------- *)
-
 (* A loop, counting up from [i] to [k], using machine integers. *)
 
 (* Our intervals are semi-open on the right end: [i] is included,
@@ -1257,8 +1228,8 @@ Implicit Types f : int → S → S.
 
 (* A specification of [up_aux]. *)
 
-Lemma wp_up_aux f (inv : nat → S → Prop) (Q : S → Prop) :
-  SEGMENT_ITER_UP inv Q
+Lemma wp_up_aux f :
+  SEGMENT_ITER_UP
     (λ _j j s Q, wp (f _j s) Q)
     (λ _i _k s Q, wp (up_aux _k f _i s) Q)
     (λ i k, representable i ∧ representable k).
@@ -1274,14 +1245,14 @@ Qed.
 
 (* A definition of [up], with reordered parameters. *)
 
-(* [up _a _b s f] applies the loop body [f] to every machine integer from
-   [_a], included, up to [_b], excluded. A state of type [S] is carried,
+(* [up _i _k s f] applies the loop body [f] to every machine integer from
+   [_i], included, up to [_k], excluded. A state of type [S] is carried,
    whose initial value is [s]. *)
 
-(* [up _a _b s @@ λ _i s, ...] is a convenient way of writing a loop. *)
+(* [up _i _k s @@ λ _j s, ...] is a convenient way of writing a loop. *)
 
-Definition up _a _b s f :=
-  up_aux _b f _a s.
+Definition up _i _k s f :=
+  up_aux _k f _i s.
 
 (* A specification of [up]. *)
 

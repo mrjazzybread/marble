@@ -807,7 +807,7 @@ Proof.
       (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   ); tc; list; eauto 1.
   (* Preservation. *)
-  { clear dependent b. intros _k k b. intros.
+  { clear dependent b. intros ? _k k ? b. intros. unpack. subst.
     wp_get x. subst x.
     wp_set.
     wp_ret. isArray. }
@@ -958,7 +958,7 @@ Proof.
   );
   tc; list; eauto 1.
   (* Preservation. *)
-  { clear dependent a. intros _k k a. intros.
+  { clear dependent a. intros ? _k k ? a. intros. unpack. subst.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -1336,25 +1336,26 @@ Definition iteri a s f :=
 
 (* The public specification of [segment_iteri]. *)
 
-Lemma wp_segment_iteri (inv : nat → S → Prop) (Q : S → Prop) a xs f :
+Lemma wp_segment_iteri a xs f :
   isArray a xs →
-  SEGMENT_ITER_UP inv Q
+  SEGMENT_ITER_UP
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q)
     (λ i k, valid_seg i k xs).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
-  eapply wp_up; unpack; tc. clear dependent s.
+  eapply wp_up; pack; unpack; subst; eauto 4 with typeclass_instances lia.
+    (* TODO use [wp_loop]; but [tc] is slow here *)
+  clear dependent s.
   (* The loop body. *)
-  { intros _j j s. intros.
-    wp_get x. wp_op Hstep s'. wp_ret. eauto. }
+  { wp_get x. wp_op Hstep s'. wp_ret. eauto. }
 Qed.
 
 (* The public specification of [iteri]. *)
 
-Lemma wp_iteri (inv : nat → S → Prop) (Q : S → Prop) a xs f :
+Lemma wp_iteri a xs f :
   isArray a xs →
-  ITER_UP inv Q
+  ITER_UP
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri a s f) Q)
     0 (len xs).
