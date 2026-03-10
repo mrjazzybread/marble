@@ -332,6 +332,9 @@ Proof. intros. unfold seg. list. eauto. Qed.
 Lemma seg_none' {A} i j (xs : list A) : j ≤ i → seg i j xs = [].
 Proof. intros. unfold seg. list. eauto. Qed.
 
+Lemma seg_overshoot {A} i j (xs : list A) : length xs ≤ i → seg i j xs = [].
+Proof. intros. unfold seg. list. eauto. Qed.
+
 Lemma seg_all {A} i j (xs : list A) : i ≤ 0 → length xs ≤ j → seg i j xs = xs.
 Proof. intros. unfold seg. list. eauto. Qed.
 
@@ -359,6 +362,8 @@ Proof. lia. Qed.
 
 (* Interaction of [length] and [seg]. *)
 
+(* [length_seg'] is simpler but weaker. *)
+
 Lemma length_seg {A} i j (xs : list A) :
   length (seg i j xs) = (j `min` length xs) - i.
 Proof. intros. unfold seg. list. lia. Qed.
@@ -370,28 +375,32 @@ Proof. intros. rewrite length_seg. lia. Qed.
 
 (* Interaction of [lookup] and [seg]. *)
 
+(* [valid_seg i j xs ∧ k < j - i] are sufficient conditions,
+   but they are too strong. *)
+
 Lemma lookup_seg {A} i j (xs : list A) k :
-  valid_seg i j xs →
-  k < j - i →
+  valid k (seg i j xs) →
   seg i j xs !! k = xs !! (i + k).
-Proof. intros. unfold seg. list. eauto. Qed.
+Proof.
+  rewrite length_seg. intros. unfold seg. list. eauto.
+Qed.
 
 (* Interaction of [lookup_total] and [seg]. *)
 
 Lemma lookup_total_seg `{Inhabited A} i j (xs : list A) k :
-  valid_seg i j xs →
-  k < j - i →
+  valid k (seg i j xs) →
   seg i j xs !!! k = xs !!! (i + k).
 Proof.
   intros. rewrite !list_lookup_total_alt, lookup_seg by eauto. eauto.
 Qed.
 
 Global Hint Rewrite
-  @length_seg'
+  @length_seg
   @lookup_seg
   @lookup_total_seg
   @seg_none
   @seg_none'
+  @seg_overshoot
   @seg_all
   using (list; lia)
 : list.
@@ -449,8 +458,7 @@ Global Hint Rewrite
 
 Lemma seg_app {A} i j (xs ys : list A) :
   seg i j (xs ++ ys) =
-    let n := length xs in
-    seg i j xs ++ seg (i - n) (j - n) ys.
+    seg i j xs ++ seg (i - length xs) (j - length xs) ys.
 Proof.
   intros. unfold seg. list. f_equal. listx k. list. eauto. (* yes! *)
   (* This is just as good as an SMT solver...! *)
@@ -537,13 +545,22 @@ Qed.
 
 (* Interaction of [seg] with itself. *)
 
-Lemma seg_seg {A} i j k l (xs : list A) :
+(* [seg_seg'] is simpler but weaker. *)
+
+Lemma seg_seg' {A} i j k l (xs : list A) :
   valid_seg k l xs →
   i ≤ j ≤ l - k → (* valid_seg i j (seg k l xs) *)
   seg i j (seg k l xs) =
   seg (k + i) (k + j) xs.
 Proof.
   intros. listx o. list. eauto.
+Qed.
+
+Lemma seg_seg {A} i j k l (xs : list A) :
+  seg i j (seg k l xs) =
+  seg (k + (i `min` (l - k))) (k + (j `min` (l - k))) xs.
+Proof.
+  intros. listx o. list. eauto. (* nice! *)
 Qed.
 
 Global Hint Rewrite
