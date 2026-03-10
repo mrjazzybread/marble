@@ -40,6 +40,7 @@ Qed.
 Hint Resolve to_nat_lt : lia.
 
 Global Hint Rewrite
+  Nat.min_l Nat.min_r
   Nat.max_l Nat.max_r
   using lia
 : nat.
@@ -950,6 +951,10 @@ Global Hint Rewrite
    the loop has run down to index [j] included and the next iteration will
    concern the index [j - 1]. *)
 
+(* Once the loop ends, the invariant holds of the index [i] or [k],
+   whichever is lower. This accounts for the special case where
+   [k < i] and the loop is not executed. *)
+
 Definition ITER_DOWN {S}
   (body : int → nat → S → WP S)
   (loop : S → WP S)
@@ -962,8 +967,8 @@ Definition ITER_DOWN {S}
     representable j ∧
     i ≤ j < k
   in
-  ITER step body loop k i.
-    (* initial state is [k]; final state is [i] *)
+  ITER step body loop k (i `min` k).
+    (* initial state is [k]; final state is [i `min` k] *)
 
 Ltac ITER_DOWN :=
   ITER.
@@ -1121,6 +1126,10 @@ Defined.
 
 (* A specification of [down_aux]. *)
 
+(* This specification requires [i ≤ k]: that is, the start index [k] must
+   be greater than or equal to the end index [i]. This hypothesis is
+   natural: it is required to guarantee that no underflow takes place. *)
+
 Lemma wp_down_aux i _j j :
   isInt _i i →
   representable i →
@@ -1133,11 +1142,13 @@ Lemma wp_down_aux i _j j :
     i (j + 1).
 Proof.
   intros. ITER_DOWN.
-  funelim (down_aux _j s); cleanup; clear Heqcall; intros; isBool_magic.
+  funelim (down_aux _j s); cleanup; clear Heqcall; intros; isBool_magic;
+  autorewrite with nat in Hfinish.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
-  { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
+  { rename H into IH. wp_op Hstep s'. wp_op IH s''.
+    autorewrite with nat in *. eauto. }
 Qed.
 
 End Down.
@@ -1147,27 +1158,23 @@ End Down.
    whose initial value is [s]. *)
 
 Definition down {S} _k _i (s : S) f :=
-  if (_k =? _i)%uint63 then s
+  if (_k ≤? _i)%uint63 then s
   else down_aux _i f (_k-1) s.
 
 (* A specification of [down]. *)
-
-(* This specification requires [i ≤ k]: that is, the start index [k] must
-   be greater than or equal to the end index [i]. This hypothesis is
-   natural: it is required to guarantee that no underflow takes place. *)
 
 Lemma wp_down {S} (f : int → S → S) :
   SEGMENT_ITER_DOWN
     (λ _j j s Q, wp (f _j s) Q)
     (λ _k _i s Q, wp (down _k _i s f) Q)
-    (λ i k, representable i ∧ representable k ∧ i ≤ k).
+    (λ i k, representable i ∧ representable k).
 Proof.
   SEGMENT_ITER_DOWN. unfold down.
-  wp_if.
-  (* Case [k = i]. *)
-  { subst k. wp_ret. eauto. }
-  (* Case [k ≠ i]. *)
-  { wp_op_nude @wp_down_aux. }
+  wp_if; autorewrite with nat in Hfinish.
+  (* Case [k ≤ i]. *)
+  { wp_ret. eauto. }
+  (* Case [i < k]. *)
+  { wp_op_nude @wp_down_aux. autorewrite with nat in *. eauto. }
 Qed.
 
 (* [down _k _i s @@ λ _j s, ...] is a convenient way of writing a loop. *)

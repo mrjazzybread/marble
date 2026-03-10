@@ -131,6 +131,7 @@ Lemma simpl_sub_add i k delta :
 Proof. lia. Qed.
 
 Global Hint Rewrite
+  Nat.min_l Nat.min_r
   Nat.max_l Nat.max_r
   sub_diag'
   simpl_sub_add
