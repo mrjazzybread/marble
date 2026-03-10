@@ -25,9 +25,6 @@ Implicit Types _i _j _k : int.
 Implicit Types  i : nat.
 Implicit Types  z : Z.
 
-(* Several proofs in this file need this. *)
-Local Ltac tc ::= eauto 6 with typeclass_instances lia.
-
 (* -------------------------------------------------------------------------- *)
 
 (* Arithmetic lemmas of general interest (in Z). *)

@@ -375,10 +375,7 @@ Lemma wp_segment_iteri v xs f :
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
   destructIsVector. destructIsVectorCap.
-  (* TODO [tc] is slow here *)
-  Local Ltac tc ::= eauto 3 with typeclass_instances lia.
   wp_loop @array.wp_segment_iteri inv.
-  Local Ltac tc ::= eauto 6 with typeclass_instances lia.
   clear dependent s.
   (* The loop body. *)
   { tc. }
@@ -395,10 +392,7 @@ Lemma wp_iteri v xs f :
 Proof.
   intros. ITER_UP. unfold iteri.
   destructIsVector. destructIsVectorCap.
-  (* TODO [tc] is slow here *)
-  Local Ltac tc ::= eauto 3 with typeclass_instances lia.
   wp_loop @array.wp_segment_iteri inv.
-  Local Ltac tc ::= eauto 6 with typeclass_instances lia.
   clear dependent s.
   (* The loop body. *)
   { tc. }

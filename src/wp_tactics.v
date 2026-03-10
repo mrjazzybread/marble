@@ -59,7 +59,8 @@ Ltac wp_loop lemma I :=
   match type of I with ?P -> ?S -> Prop =>
   simple eapply (@lemma S) with (inv := I);
   list; pack; unpack; try subst;
-  tc; list in *; tc
+  tc3; list in *; tc3
+    (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
   end.
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies

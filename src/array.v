@@ -1339,10 +1339,7 @@ Lemma wp_segment_iteri a xs f :
     (λ i k, valid_seg i k xs).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
-  (* TODO [tc] is slow here *)
-  Local Ltac tc ::= eauto 3 with typeclass_instances lia.
   wp_up inv.
-  Local Ltac tc ::= eauto with typeclass_instances lia.
   clear dependent s.
   (* The loop body. *)
   { wp_get x. wp_op Hstep s'. wp_ret. eauto. }
@@ -1359,7 +1356,6 @@ Lemma wp_iteri a xs f :
 Proof.
   intros. ITER_UP. unfold iteri.
   wp_length _n.
-  Local Ltac tc ::= eauto 6 with typeclass_instances lia.
   wp_op wp_segment_iteri s'.
   eauto.
 Qed.

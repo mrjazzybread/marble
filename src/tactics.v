@@ -50,7 +50,10 @@ Ltac pack :=
    succeeds? *)
 
 Ltac tc :=
-  eauto with typeclass_instances lia.
+  eauto 6 with typeclass_instances lia.
+
+Ltac tc3 :=
+  eauto 3 with typeclass_instances lia.
 
 (* [intuition eauto] can eliminate disjunctions, which is sometimes
    handy. However, it tends to destructure the goal even when it is
