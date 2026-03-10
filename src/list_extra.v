@@ -562,10 +562,9 @@ Global Ltac split_seg j xs :=
     (* case: [xs] is already a segment *)
     rewrite (split_seg j xs) by (list; lia)
   | (* case: introduce a list segment first *)
-    rewrite (seg_intro xs); list;
+    rewrite (seg_intro xs);
     rewrite (split_seg j xs) by (list; lia)
-  ];
-  list.
+  ].
 
 (* -------------------------------------------------------------------------- *)
 
