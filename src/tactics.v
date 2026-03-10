@@ -34,9 +34,6 @@ Global Tactic Notation "unpack" "in" hyp(h) :=
    When introducing a hypothesis, it unpacks this hypothesis. *)
 Ltac pack :=
   repeat match goal with
-  | |- _ → _ =>
-      let h := fresh in
-      intro h; unpack in h
   | |- ∀ x, _ =>
       intro
   | |- _ ∧ _ =>
