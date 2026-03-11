@@ -402,4 +402,81 @@ End Iteri.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Converting an array to a vector: [steal_array] and [of_array]. *)
+
+(* In [steal_array], the array is not copied; it becomes part of the
+   representation of the vector. In [of_array], it is copied. *)
+
+Definition steal_array a :=
+  do _n ← length a ;
+  (_n, a).
+
+Definition of_array a :=
+  do a ← array.copy a ;
+  steal_array a.
+
+(* The public specification of [steal_array]. *)
+
+Lemma wp_steal_array a xs :
+  isArray a xs →
+  wp (steal_array a) (λ v, isVector v xs).
+Proof.
+  intros. unfold steal_array.
+  wp_length _n.
+  wp_ret.
+  introIsVector.
+  introIsVectorCapWithWitness ([] : list A); tc.
+Qed.
+
+(* The public specification of [of_array]. *)
+
+Lemma wp_of_array a xs :
+  isArray a xs →
+  wp (of_array a) (λ v, isVector v xs).
+Proof.
+  intros. unfold of_array.
+  wp_op @wp_copy b.
+  eapply wp_steal_array.
+  eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 End Operations.
+
+Global Ltac wp_steal_array :=
+  match goal with |- context[steal_array ?a] =>
+    wp_op_overwrite wp_steal_array a
+  end.
+
+Global Ltac wp_of_array b :=
+  wp_op wp_of_array b.
+
+(* -------------------------------------------------------------------------- *)
+
+Section OfList.
+Context `{Inhabited A}.
+Implicit Types xs : list A.
+
+(* Converting a list to a vector: [of_list]. *)
+
+Definition of_list xs :=
+  do a ← array.of_list xs ;
+  steal_array a.
+
+(* The public specification of [of_list]. *)
+
+Lemma wp_of_list xs :
+  len xs ≤ max_array_length →
+  wp (of_list xs) (λ v, isVector v xs).
+Proof.
+  intros. unfold of_list.
+  wp_op @array.wp_of_list a.
+  wp_steal_array.
+  eauto.
+Qed.
+
+End OfList.
+
+Global Ltac wp_of_list v :=
+  wp_op wp_of_list v.
