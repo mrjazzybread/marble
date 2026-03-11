@@ -1,4 +1,4 @@
-From stdpp Require Import base.
+From stdpp Require Import list.
 From array Require Import tactics wp wp_tactics.
 
 Unset Universe Minimization ToSet.
@@ -85,8 +85,59 @@ Definition ITER i k :=
   (∀ s, inv k s → Q s) →
   loop s Q.
 
+(* In summary, [ITER body loop step i k] means that, provided the loop body
+   respects the calling convention [body], it is safe to use the loop with
+   the calling convention [loop], and it will move from producer state [i]
+   to producer state [k] along the relation [step]. *)
+
 End Iter.
 
 Ltac ITER :=
-  unfold ITER;
+  unfold ITER; (* optional *)
   intros ? ? Hinit Hstep ? Hfinish.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A specification of a loop over a list. *)
+
+(* [ITER_LIST_TAIL] is an instance of [ITER] where the [step] relation is
+   fixed and the remaining four parameters remain unspecified. *)
+
+(* By convention, the producer state is the history, that is, the list of
+   elements produced so far. The [step] relation extends the history with
+   one element [x]. By convention, the loop invariant is parameterized
+   with [history0], that is, the history before it is extended with [x]. *)
+
+(* [ITER_LIST_TAIL body loop future xs] means that, provided the loop body
+   respects the calling convention [body], it is safe to use the loop with
+   the calling convention [loop], and it will move from producer state
+   [future] to producer state [xs] along the relation [step]. In practice,
+   the list [future] should be a suffix of the list [xs]; it is the list
+   of elements that remain to be enumerated. *)
+
+Definition ITER_LIST_TAIL {S A}
+  (body : A → list A → S → WP S)
+  (loop : S → WP S)
+  (future xs : list A)
+:=
+  let step history0 x history history1 :=
+    history = history0 ∧
+    history0 ++ {[x]} = history1 ∧
+    history1 `prefix_of` xs
+  in
+  ITER step body loop future xs.
+
+(* [ITER_LIST] is an instance of [ITER_LIST_TAIL] where the starting state
+   [future] is fixed: it is the empty list. *)
+
+(* [ITER_LIST body loop xs] means that, provided the loop body respects the
+   calling convention [body], it is safe to use the loop with the calling
+   convention [loop], and it will move from producer state <empty list> to
+   producer state [xs] along the relation [step]. *)
+
+Definition ITER_LIST {S A}
+  (body : A → list A → S → WP S)
+  (loop : S → WP S)
+  (xs : list A)
+:=
+  ITER_LIST_TAIL body loop [] xs.
