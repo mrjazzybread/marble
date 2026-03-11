@@ -243,6 +243,8 @@ Global Ltac lengths :=
     end;
   intros.
 
+(* Extensional equality of lists. *)
+
 Lemma list_eq_same_length' {A} (xs ys : list A) :
   length xs = length ys →
   (∀ i, i < length xs → xs !! i = ys !! i) →
@@ -604,6 +606,30 @@ Global Ltac split_seg j xs :=
     rewrite (seg_intro xs);
     rewrite (split_seg j xs) by (list; lia)
   ].
+
+(* Some properties of empty segments. *)
+
+Lemma empty_seg_iff {A} i j (xs : list A) :
+  seg i j xs = [] ↔ j `min` length xs ≤ i.
+Proof.
+  intros. rewrite <- length_zero_iff_nil. list. lia.
+Qed.
+
+Lemma invert_empty_seg {A} i j (xs : list A) :
+  seg i j xs = [] →
+  valid_seg i j xs →
+  i = j.
+Proof.
+  intros Hseg ?. rewrite empty_seg_iff in Hseg by eauto. lia.
+Qed.
+
+Lemma invert_nonempty_seg {A} i j (xs : list A) :
+  seg i j xs ≠ [] →
+  valid_seg i j xs →
+  i < j.
+Proof.
+  intros Hseg ?. rewrite empty_seg_iff in Hseg by eauto. lia.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
