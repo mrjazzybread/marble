@@ -524,6 +524,9 @@ End ToList.
    with a running index of type [int]
    and a running state of type [S]. *)
 
+(* It is usually invoked with start index 0,
+   but we do not define a helper function for this. *)
+
 Section ListIteri.
 Context {S A : Type}.
 Implicit Types s : S.
@@ -541,7 +544,7 @@ Fixpoint list_iteri _i xs s f :=
       list_iteri (_i + 1) xs s f
   end.
 
-(* An inductive specification. (This is just an auxiliary lemma.) *)
+(* An inductive specification. (This is an auxiliary lemma.) *)
 
 (* The user-provided loop invariant [inv history s] is parameterized
    with the already-visited elements [history] and the current user
@@ -566,7 +569,7 @@ Proof.
   ITER; subst xs; list in *; lengths.
   (* Case: the future is empty. *)
   { wp_ret. eauto. }
-  (* Case: the future begins with [x]. We have [i < len xs]. *)
+  (* Case: the future begins with [x]. *)
   { rewrite cons_is_append in *.
     wp_op Hstep s'.
     eapply IHfuture; tc; list; tc. }
@@ -585,12 +588,21 @@ Qed.
 
 End ListIteri.
 
+(* In the following section, we play with two alternate specifications
+   of [list_iteri]. Insteead of using [ITER_LIST], where the producer
+   state is a list (the history of past elements), we use [ITER_UP],
+   where the producer state is an integer index, and we indicate that
+   the user function receives the [i]-th element of the list as an
+   argument during the [i]-th iteration of the loop. *)
+
 Section Attic.
 Context {S : Type}.
 Context `{Inhabited A}.
 Implicit Types s : S.
 Implicit Types xs : list A.
 Implicit Types f : S → int → A → S.
+
+(* In this variant, we keep the decomposition [xs = history ++ future]. *)
 
 Local Lemma wp_list_iteri_aux_variant_1 f :
   ∀ future history xs _i i ,
@@ -613,6 +625,14 @@ Proof.
       list; tc3; list; tc3.
     pack; unpack; tc. }
 Qed.
+
+(* In this variant, we get rid of [history] and we keep track only
+   of the equation [final_seg i xs = future], which means that the
+   future is the segment of [xs] that begins at index [i]. *)
+
+(* This specification is just as concise as the previous one, but
+   the proof is slightly longer, as I am unable to automate the use
+   of the lemmas [lookup_total_through_seg] and [seg_through_seg]. *)
 
 Local Lemma wp_list_iteri_aux_variant_2 xs f :
   ∀ future _i i ,
