@@ -705,6 +705,9 @@ Qed.
 
 (* This tactic cannot fail, and does not solve the goal. *)
 
+(* The goal should be rigid. If it contains metavariables at either end
+   then they may be instantiated in incorrect ways. *)
+
 Lemma simplify_app_l {A} (xs ys zs : list A) :
   ys = zs → xs ++ ys = xs ++ zs.
 Proof. congruence. Qed.
