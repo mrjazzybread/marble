@@ -434,6 +434,36 @@ Global Hint Rewrite
   using (list; lia)
 : list.
 
+(* Interaction of [lookup] and [seg], in reverse. *)
+
+(* If a segment of [xs] is known under the name [ys], and if index [k]
+   falls within this segment, then the lookup [xs !! k] can be viewed
+   as a lookup into [ys]. *)
+
+(* This lemma is not made a rewrite hint because 1- [autorewrite]
+   seems unable to exploit it, and 2- it is perhaps not clear that
+   this would be a good idea. *)
+
+Lemma lookup_through_seg {A} i j k (xs ys : list A) :
+  seg i j xs = ys →
+  i ≤ k →
+  k < j `min` length xs →
+  xs !! k = ys !! (k - i).
+Proof.
+  intros. subst. list. eauto.
+Qed.
+
+(* Interaction of [lookup_total] and [seg], in reverse. *)
+
+Lemma lookup_total_through_seg `{Inhabited A} i j k (xs ys : list A) :
+  seg i j xs = ys →
+  i ≤ k →
+  k < j `min` length xs →
+  xs !!! k = ys !!! (k - i).
+Proof.
+  intros. subst. list. eauto.
+Qed.
+
 (* A segment can be split anywhere. *)
 
 Lemma split_seg {A} j (xs : list A) i k :
@@ -597,6 +627,22 @@ Global Hint Rewrite
   @seg_seg
   using (list; lia)
 : list.
+
+(* If a segment of [xs] is known under the name [ys],
+   then an attempt to extract a smaller segment of [xs]
+   can be viewed as an attempt to extract a segment of [ys]. *)
+
+(* This lemma is not made a rewrite hint because 1- [autorewrite]
+   seems unable to exploit it, and 2- it is perhaps not clear that
+   this would be a good idea. *)
+
+Lemma seg_through_seg {A} i j k l (xs ys : list A) :
+  seg i j xs = ys →
+  i ≤ k → l ≤ j →
+  seg k l xs = seg (k - i) (l - i) ys.
+Proof.
+  intros. subst. list. listx o. list. eauto. (* wow *)
+Qed.
 
 (* The tactic [split_seg j xs] splits a list [xs] or a list segment
    [seg i k xs] at index [j]. *)
