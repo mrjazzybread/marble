@@ -121,6 +121,10 @@ Global Hint Rewrite
   sub_succ
 : list.
 
+(* Do NOT add [sub_diag'] to the rewrite hint database, because it can
+   change an informative equation [x - y = 0] into the uniformative
+   equation [0 = 0]. (The equation destroys itself, so to speak.) *)
+
 Lemma sub_diag' (x y : nat) :
   x ≤ y → x - y = 0.
 Proof. lia. Qed.
@@ -133,7 +137,7 @@ Proof. lia. Qed.
 Global Hint Rewrite
   Nat.min_l Nat.min_r
   Nat.max_l Nat.max_r
-  sub_diag'
+  (* sub_diag' *)
   simpl_sub_add
   using (list; lia)
 : list.
@@ -540,7 +544,7 @@ Proof.
   intros.
   assert (i ≤ j ∨ j < i) as [|] by lia.
   + listx k. list. eauto.
-  + list. eauto.
+  + rewrite sub_diag' by lia. list. eauto.
 Qed.
 
 (* Interaction of [seg] with itself. *)
