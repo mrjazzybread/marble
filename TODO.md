@@ -53,6 +53,12 @@
   and to use ordinary (non-persistent, non-defensive) arrays.
   Benchmark.
 
+* Do Rocq's default persistent arrays have good behavior
+  in the presence of a large number of updates?
+  One should copy the whole array from time to time
+  so that the cost of reverting to an old version remains bounded.
+  Test, and implement a new PArray module, if needed.
+
 * Can the extracted code be improved?
   + Specialization of higher-order functions (e.g., loops)
   + Inline all small functions
@@ -81,3 +87,14 @@
   initial state.]
 
 * Explain the various extraction options.
+
+## Applications.
+
+* Vectors.
+* Hash sets, hash maps.
+* HAMTs.
+* B-Trees.
+* Chunked sequences.
+
+* Ephemeral? Persistent? Transient?
+  Can we have efficient transient chunks?
