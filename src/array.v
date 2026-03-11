@@ -2,7 +2,7 @@ From stdpp Require Import numbers list.
 Local Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From array Require Import tactics list_extra bool int wp wp_tactics.
+From array Require Import tactics list_extra bool iteration int wp wp_tactics.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -529,9 +529,10 @@ Context {S A : Type}.
 Implicit Types s : S.
 Implicit Types xs : list A.
 Implicit Types f : S → int → A → S.
-Implicit Types inv : list A → S → Prop.
 
 (* The code. *)
+
+(* TODO move [s] last, as in array.iteri *)
 
 Fixpoint list_iteri f s _i xs :=
   match xs with
@@ -549,66 +550,99 @@ Fixpoint list_iteri f s _i xs :=
    state [s]. It does not need to be parameterized with the current
    index [i], because [i] is just the length of the list [history]. *)
 
-Local Lemma wp_list_iteri_aux f inv xs :
-  ∀ future s _i i history,
-  isInt _i i →
-  inv history s →
-  i = len history →
-  history ++ future = xs →
-  ( ∀ s future history _i i x,
-    isInt _i i →
-    inv history s →
-    i = len history →
-    history ++ future = xs →
-    [x] `prefix_of` future →
-    wp (f s _i x) (λ s, inv (history ++ [x]) s)
-  ) →
-  wp (list_iteri f s _i future) (λ s, inv xs s).
+Local Lemma wp_list_iteri_aux f xs :
+  ∀ future history _i ,
+  xs = history ++ future →
+  isInt _i (len history) →
+  ITER_LIST_TAIL
+    (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
+    (λ s Q, wp (list_iteri f s _i future) Q)
+    history xs.
+(* Extend [tc] with a couple hints for this proof. *)
+Local Hint Extern 1 (_ `prefix_of` _) =>
+  (econstructor; list; reflexivity) : typeclass_instances.
+Local Hint Extern 1 (_ ++ _ ++ ?xs = _ ++ ?xs) =>
+  (rewrite app_assoc; f_equal) : typeclass_instances.
 Proof.
-  induction future as [| x future ];
-  intros ???? HI ? Hinv Hxs Hpreservation;
-  simpl list_iteri.
-  { list in Hxs. subst history. wp_ret. eauto. }
-  { wp_op Hpreservation s'.
-    { eauto using prefix_cons, prefix_nil. }
-    eapply IHfuture with (history := history ++ [x]);
-      list; tc. }
+  induction future as [| x future ]; simpl list_iteri; intros;
+  ITER; subst xs; list in *; lengths.
+  (* Case: the future is empty. *)
+  { wp_ret. eauto. }
+  (* Case: the future begins with [x]. We have [i < len xs]. *)
+  { rewrite cons_is_append in *.
+    wp_op Hstep s'.
+    eapply IHfuture; tc; list; tc. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
 
-Lemma wp_list_iteri f xs Q inv s :
-  (* Initialization. The invariant must be true of the initial state [s]
-     and the empty history. *)
-  inv [] s →
-  (* Preservation. If the invariant holds of the current state [s] and
-     current history [history], if the index [_i] represents the
-     length of the list [history], and if [x] is the first unvisited
-     element of the list [xs], then the function call [f s _i x] must
-     return a new state [s] such that the invariant holds of the new
-     history [history ++ [x]] and of the state [s]. *)
-  ( ∀ s history _i i x,
-    isInt _i i →
-    inv history s →
-    i = len history →
-    history ++ [x] `prefix_of` xs →
-    wp (f s _i x) (λ s, inv (history ++ [x]) s)
-  ) →
-  (* Completion. The invariant, applied to the complete list [xs] and
-     to the final state [s], must imply the postcondition [Q]. *)
-  (∀ s, inv xs s → Q s) →
-  (* Under these three hypotheses, the loop establishes [Q]. *)
-  wp (list_iteri f s 0 xs) Q.
+Lemma wp_list_iteri f xs s :
+  ITER_LIST
+    (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
+    (λ s Q, wp (list_iteri f s 0 xs) Q)
+    xs.
 Proof.
-  intros Hinv Hpreservation Hcompletion.
-  wp_op wp_list_iteri_aux s'.
-  (* The loop body. *)
-  { list in *. subst xs. eauto using prefix_app. }
-  (* Completion. *)
-  { eauto. }
+  unfold ITER_LIST. eapply wp_list_iteri_aux; tc.
 Qed.
 
 End ListIteri.
+
+Section Attic.
+Context {S : Type}.
+Context `{Inhabited A}.
+Implicit Types s : S.
+Implicit Types xs : list A.
+Implicit Types f : S → int → A → S.
+
+Local Lemma wp_list_iteri_aux_variant_1 f :
+  ∀ future history xs _i i ,
+  xs = history ++ future →
+  isInt _i i →
+  i = len history →
+  ITER_UP
+    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
+    (λ s Q, wp (list_iteri f s _i future) Q)
+    i (len xs).
+Proof.
+  induction future as [| x future ]; intros; ITER_UP;
+  simpl list_iteri; try rewrite cons_is_append in *;
+  subst; list in *.
+  { wp_ret. eauto. }
+  { wp_op Hstep s'.
+    (* The system cannot guess how we want to extend the history
+       because any history of length [len history + 1] will do! *)
+    eapply IHfuture with (history := history ++ {[x]});
+      list; tc3; list; tc3.
+    pack; unpack; tc. }
+Qed.
+
+Local Lemma wp_list_iteri_aux_variant_2 f xs :
+  ∀ future _i i ,
+  isInt _i i →
+  i ≤ len xs →
+  final_seg i xs = future →
+  ITER_UP
+    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
+    (λ s Q, wp (list_iteri f s _i future) Q)
+    i (len xs).
+Proof.
+  induction future as [| x future ]; intros; ITER_UP;
+  simpl list_iteri; try rewrite cons_is_append in *;
+  subst; list in *; lengths.
+  (* Case: the future is empty. We have [i = len xs]. *)
+  { replace (len xs) with i in Hfinish by lia.
+    wp_ret. eauto. }
+  (* Case: the future begins with [x]. We have [i < len xs]. *)
+  { assert (x = xs !!! i).
+    { erewrite lookup_total_through_seg by eauto with lia. list. eauto. }
+    assert (final_seg (i + 1) xs = future).
+    { erewrite seg_through_seg by eauto with lia. list. eauto. }
+    wp_op Hstep s'.
+    eapply IHfuture; list; tc3; list; tc3.
+    pack; unpack; tc. }
+Qed.
+
+End Attic.
 
 (* -------------------------------------------------------------------------- *)
 
