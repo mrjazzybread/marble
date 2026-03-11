@@ -75,8 +75,8 @@ Definition ITER i k :=
      applied to [o] and [j], must transform [inv j0 s] into
      [inv j1 s']. *)
   (∀ j0 o j j1 s ,
-    step j0 o j j1 →
     inv j0 s →
+    step j0 o j j1 →
     body o j s (λ s', inv j1 s')
   ) →
   (* Once the loop ends, the producer state is [k] and the user state is
