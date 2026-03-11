@@ -121,6 +121,11 @@ Global Hint Rewrite
   sub_succ
 : list.
 
+Global Hint Rewrite
+  <- Nat.le_add_sub
+  using (list; lia)
+: list.
+
 (* Do NOT add [sub_diag'] to the rewrite hint database, because it can
    change an informative equation [x - y = 0] into the uniformative
    equation [0 = 0]. (The equation destroys itself, so to speak.) *)
@@ -536,7 +541,7 @@ Lemma insert_seg_first {A} i j x (xs : list A) :
   <[0 := x]> (seg i j xs) =
   {[x]} ++ seg (i+1) j xs.
 Proof.
-  intros. listx o. lookup_app_split. f_equal. lia.
+  intros. listx o. lookup_app_split.
 Qed.
 
 Lemma insert_seg_last {A} i j k x (xs : list A) :
