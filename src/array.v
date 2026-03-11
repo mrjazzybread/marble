@@ -532,15 +532,13 @@ Implicit Types f : S → int → A → S.
 
 (* The code. *)
 
-(* TODO move [s] last, as in array.iteri *)
-
-Fixpoint list_iteri f s _i xs :=
+Fixpoint list_iteri _i xs s f :=
   match xs with
   | [] =>
       s
   | x :: xs =>
       do s ← f s _i x ;
-      list_iteri f s (_i + 1) xs
+      list_iteri (_i + 1) xs s f
   end.
 
 (* An inductive specification. (This is just an auxiliary lemma.) *)
@@ -550,13 +548,13 @@ Fixpoint list_iteri f s _i xs :=
    state [s]. It does not need to be parameterized with the current
    index [i], because [i] is just the length of the list [history]. *)
 
-Local Lemma wp_list_iteri_aux f xs :
+Local Lemma wp_list_iteri_aux xs f :
   ∀ future history _i ,
   xs = history ++ future →
   isInt _i (len history) →
   ITER_LIST_TAIL
     (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
-    (λ s Q, wp (list_iteri f s _i future) Q)
+    (λ s Q, wp (list_iteri _i future s f) Q)
     history xs.
 (* Extend [tc] with a couple hints for this proof. *)
 Local Hint Extern 1 (_ `prefix_of` _) =>
@@ -576,10 +574,10 @@ Qed.
 
 (* The public specification of [list_iteri]. *)
 
-Lemma wp_list_iteri f xs s :
+Lemma wp_list_iteri xs s f :
   ITER_LIST
     (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
-    (λ s Q, wp (list_iteri f s 0 xs) Q)
+    (λ s Q, wp (list_iteri 0 xs s f) Q)
     xs.
 Proof.
   unfold ITER_LIST. eapply wp_list_iteri_aux; tc.
@@ -601,7 +599,7 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
   i = len history →
   ITER_UP
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
-    (λ s Q, wp (list_iteri f s _i future) Q)
+    (λ s Q, wp (list_iteri _i future s f) Q)
     i (len xs).
 Proof.
   induction future as [| x future ]; intros; ITER_UP;
@@ -616,14 +614,14 @@ Proof.
     pack; unpack; tc. }
 Qed.
 
-Local Lemma wp_list_iteri_aux_variant_2 f xs :
+Local Lemma wp_list_iteri_aux_variant_2 xs f :
   ∀ future _i i ,
   isInt _i i →
   i ≤ len xs →
   final_seg i xs = future →
   ITER_UP
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
-    (λ s Q, wp (list_iteri f s _i future) Q)
+    (λ s Q, wp (list_iteri _i future s f) Q)
     i (len xs).
 Proof.
   induction future as [| x future ]; intros; ITER_UP;
@@ -701,7 +699,7 @@ Definition of_list xs :=
   (* Allocate an array of size [n]. *)
   do a ← make _n inhabitant ;
   (* Initialize the array by iterating on the list. *)
-  list_iteri set a 0 xs.
+  list_iteri 0 xs a set.
 
 (* The public specification of [of_list]. *)
 
