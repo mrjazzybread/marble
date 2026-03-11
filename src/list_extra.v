@@ -213,17 +213,35 @@ Global Hint Rewrite
   using (list; lia)
 : list.
 
-(* The tactic [apply_prefix_length] searches for a hypothesis of the form
-   [xs `prefix_of` ys] and introduces a new fact [length xs ≤ length ys].
-   This new fact is then simplified using the tactic [list]. *)
+Lemma length_equality {A} (xs ys : list A) :
+  xs = ys →
+  length xs = length ys.
+Proof.
+  congruence.
+Qed.
 
-Global Ltac apply_prefix_length :=
-  match goal with h: _ `prefix_of` _ |- _ =>
-    generalize h;
-    let h' := fresh h in
-    intro h'; apply prefix_length in h';
-    list in h'
-  end.
+(* The tactic [lengths] searches for hypotheses of the form [xs = ys] or
+   [xs `prefix_of` ys] and introduces new facts [length xs = length ys]
+   or [length xs ≤ length ys]. These new facts are then simplified using
+   the tactic [list]. *)
+
+Global Ltac lengths :=
+  repeat
+    match goal with
+    | h: _ = _ |- _ =>
+        let h' := fresh h in
+        generalize h; revert h; intro h';
+        apply length_equality in h';
+        list in h'
+    | h: _ `prefix_of` _ |- _ =>
+        let h' := fresh h in
+        generalize h; revert h; intro h';
+        apply prefix_length in h';
+        list in h'
+    | h: _ |- _ =>
+        revert h
+    end;
+  intros.
 
 Lemma list_eq_same_length' {A} (xs ys : list A) :
   length xs = length ys →

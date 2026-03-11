@@ -688,7 +688,7 @@ Proof.
     isArray a (history ++ replicate (n - len history) inhabitant)
   ).
   (* Preservation. *)
-  { apply_prefix_length. wp_set. eauto. }
+  { lengths. wp_set. eauto. }
 Qed.
 
 End OfList.
