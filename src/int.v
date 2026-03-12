@@ -966,7 +966,10 @@ Definition ITER_DOWN {S}
     isInt _j j ∧
     i ≤ j < k
   in
-  ITER step body loop k (i `min` k).
+  let complete j :=
+    j = i `min` k
+  in
+  ITER step body loop k complete.
     (* initial state is [k]; final state is [i `min` k] *)
 
 Ltac ITER_DOWN :=
@@ -1022,7 +1025,10 @@ Definition ITER_UP {S}
     isInt _j j ∧
     i ≤ j < k
   in
-  ITER step body loop i (i `max` k).
+  let complete j :=
+    j = i `max` k
+  in
+  ITER step body loop i complete.
     (* initial state is [i]; final state is [i `max` k] *)
 
 Ltac ITER_UP :=
