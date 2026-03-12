@@ -53,7 +53,10 @@ Global Ltac wp_op_nude lemma :=
    It is essentially a special case of [wp_op_nude] where we want to
    specialize the lemma. *)
 
-Ltac wp_loop lemma I :=
+Ltac wp_loop_exit :=
+  cbv beta; intros; unpack; try subst; list in *; eauto 3.
+
+Ltac wp_loop_nude lemma I :=
   (* Apply the reasoning rule for this operation. We infer the type [S]
      from the type of the invariant [I]. *)
   match type of I with ?P -> ?S -> Prop =>
@@ -62,6 +65,12 @@ Ltac wp_loop lemma I :=
   tc3; list in *; tc3
     (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
   end.
+
+Ltac wp_loop lemma I :=
+  first [
+    wp_loop_nude lemma I
+  | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
+  ].
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under

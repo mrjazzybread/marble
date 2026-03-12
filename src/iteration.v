@@ -95,9 +95,7 @@ Definition ITER :=
   (* Once the loop ends, the producer state is a certain state [k] such
      that [complete k] holds and the user state is some state [s]. Then,
      the invariant is guaranteed to hold. *)
-  ∀ Q ,
-  (∀ k s, complete k → inv k s → Q s) →
-  loop s Q.
+  loop s (λ s, ∃ k, complete k ∧ inv k s).
 
 (* In summary, [ITER body loop step init complete] means that, provided
    the loop body respects the calling convention [body], it is safe to use
@@ -177,10 +175,10 @@ End UserState.
 
 End Iter.
 
-Ltac ITER :=
-  intros ? ? Hinit Hstep ? Hfinish.
+(* This tactic should be used whenever the goal is [ITER ...]
+   or one of its variants. *)
 
-Ltac ITERX :=
+Ltac ITER :=
   intros ? ? Hinit Hstep.
 
 (* -------------------------------------------------------------------------- *)

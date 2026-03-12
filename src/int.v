@@ -946,34 +946,40 @@ Global Hint Rewrite
    The semi-open interval that is enumerated is [i, k).
    The step relation is as follows. *)
 
-(* In the definition of [step], the equation [j1 = j] means that the user
-   observes the new state. Thus, the loop invariant [inv j s] means that
-   the loop has run down to index [j] included and the next iteration will
-   concern the index [j - 1]. *)
+(* In the definition of [step_down], the equation [j1 = j] means that the
+   user observes the new state. Thus, the loop invariant [inv j s] means
+   that the loop has run down to index [j] included and the next iteration
+   will concern the index [j - 1]. *)
 
-(* Once the loop ends, the invariant holds of the index [i] or [k],
-   whichever is lower. This accounts for the special case where
-   [k < i] and the loop is not executed. *)
+(* Once the loop ends, the producer state is [i `min` k]. This accounts
+   for the special case where [k < i] and the loop is not executed. *)
+
+Local Notation step_down i k :=
+  ( λ j0 _j j j1 ,
+    j0 = j + 1 ∧
+    j1 = j ∧
+    isInt _j j ∧
+    i ≤ j < k
+  ).
+
+Local Notation complete_down i k :=
+  ( λ j,
+    j = i `min` k
+  ).
 
 Definition ITER_DOWN {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
-  let step j0 _j j j1 :=
-    j0 = j + 1 ∧
-    j1 = j ∧
-    isInt _j j ∧
-    i ≤ j < k
-  in
-  let complete j :=
-    j = i `min` k
-  in
-  ITER step k complete body loop.
-    (* initial state is [k]; final state is [i `min` k] *)
+  ITER (step_down i k) k (complete_down i k) body loop.
 
-Ltac ITER_DOWN :=
-  ITER.
+Definition ITERX_DOWN {S A}
+  (i k : nat)
+  (body : int → nat → S → WP (S * option A))
+  (loop : S → WP (S * option A))
+:=
+  ITERX (step_down i k) i (complete_down i k) body loop.
 
 (* In this variant, the loop indices [_k] and [_i] are explicitly passed
    as arguments to the loop. [loop _k _i s Q] means that the loop, applied
@@ -998,7 +1004,7 @@ Ltac SEGMENT_ITER_DOWN :=
   do 6 intro;
   let HP := fresh in
   intro HP; unpack in HP;
-  ITER_DOWN.
+  ITER.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1151,14 +1157,13 @@ Lemma wp_down_aux i _j j :
     (λ _j j s Q, wp (f _j s) Q)
     (λ s Q, wp (down_aux _j s) Q).
 Proof.
-  intros. ITER_DOWN.
+  intros. ITER.
   funelim (down_aux _j s); cleanup; clear Heqcall; intros; isBool_magic;
-  autorewrite with nat in Hfinish.
+  autorewrite with nat.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
-  { rename H into IH. wp_op Hstep s'. wp_op IH s''.
-    autorewrite with nat in *. eauto. }
+  { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
 Qed.
 
 End Down.
@@ -1180,11 +1185,11 @@ Lemma wp_down {S} (f : int → S → S) :
     (λ _k _i s Q, wp (down _k _i s f) Q).
 Proof.
   SEGMENT_ITER_DOWN. unfold down.
-  wp_if; autorewrite with nat in Hfinish.
+  wp_if; autorewrite with nat.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
-  { wp_op_nude @wp_down_aux. autorewrite with nat in *. eauto. }
+  { wp_op @wp_down_aux s'. eauto. }
 Qed.
 
 (* [down _k _i s @@ λ _j s, ...] is a convenient way of writing a loop. *)
@@ -1253,7 +1258,7 @@ Lemma wp_up_aux f :
 Proof.
   SEGMENT_ITER_UP.
   funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
-  autorewrite with nat in Hfinish.
+  autorewrite with nat.
   (* Case [i < k]. *)
   { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
@@ -1355,7 +1360,7 @@ Lemma wp_interruptible_up_aux f :
     (λ _j j s Q, a ≤ j < b → representable j → wp (f _j s) Q)
     (λ s Q, wp (interruptible_up_aux _b f _a s) Q).
 Proof.
-  intros. ITERX.
+  intros. ITER.
   funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall;
   isBool_magic; autorewrite with nat.
   (* [funelim] creates an induction hypothesis that contains

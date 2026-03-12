@@ -481,7 +481,8 @@ Proof.
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
   );
-  rename s into xs.
+  match goal with h: len ?s = _ |- _ =>
+  rename s into xs; rename h into Hxs end.
   (* Preservation. *)
   { liftIsIntAndClear.
     wp_bind_eq.
@@ -495,7 +496,6 @@ Proof.
       eauto with lia. } }
   (* Completion. *)
   { list in *.
-    match goal with h: len xs = _ |- _ => rename h into Hxs end.
     introIsArray; try rewrite Hxs.
     + introIsInt. subst n. int. eauto.
     + eauto.
@@ -621,9 +621,11 @@ Proof.
   { wp_op Hstep s'.
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
-    eapply IHfuture with (history := history ++ {[x]});
+    eapply wp_conseq.
+    - eapply IHfuture with (history := history ++ {[x]});
       list; tc3; list; tc3.
-    pack; unpack; tc. }
+      pack; unpack; tc.
+    - wp_loop_exit. }
 Qed.
 
 (* In this variant, we get rid of [history] and we keep track only
@@ -648,7 +650,7 @@ Proof.
   simpl list_iteri; try rewrite cons_is_append in *;
   subst; list in *; lengths.
   (* Case: the future is empty. We have [i = len xs]. *)
-  { replace (len xs) with i in Hfinish by lia.
+  { assert (i = len xs) by lia. subst.
     wp_ret. eauto. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
   { assert (x = xs !!! i).
@@ -656,8 +658,10 @@ Proof.
     assert (final_seg (i + 1) xs = future).
     { erewrite seg_through_seg by eauto with lia. list. eauto. }
     wp_op Hstep s'.
-    eapply IHfuture; list; tc3; list; tc3.
-    pack; unpack; tc. }
+    eapply wp_conseq.
+    - eapply IHfuture; list; tc3; list; tc3.
+      pack; unpack; tc.
+    - wp_loop_exit. }
 Qed.
 
 End Attic.
@@ -735,9 +739,8 @@ Proof.
   wp_op @wp_list_length _n.
   wp_make a.
   (* The loop invariant. *)
-  set (n := len xs).
   wp_loop @wp_list_iteri (λ history a,
-    isArray a (history ++ replicate (n - len history) inhabitant)
+    isArray a (history ++ replicate (len xs - len history) inhabitant)
   ).
   (* Preservation. *)
   { lengths. wp_set. eauto. }
