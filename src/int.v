@@ -1283,9 +1283,6 @@ Global Ltac wp_up I :=
    interrupting the loop via an early exit: the loop body [f] returns an
    instruction to either continue or stop (break). *)
 
-Global Notation break    := Some.
-Global Notation continue := None.
-
 Section InterruptibleUpAux.
 Context {S A : Type}.
 Implicit Types _a : int.
