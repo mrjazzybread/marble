@@ -4,11 +4,6 @@
 
 * `isInt 12 12` still does not work. Ask for help on Zulip.
 
-* Generalize the generic loop spec to allow non-determinism.
-  (The final producer state should be identified by a predicate `complete`.)
-
-* Define generic concepts for interruptible loops.
-
 * In anticipation of vectors, many operations on arrays should also
   work on a segment of a larger array.
   + `segment_find_index`
