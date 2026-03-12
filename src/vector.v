@@ -369,9 +369,9 @@ Definition iteri v s f :=
 Lemma wp_segment_iteri v xs f :
   isVector v xs →
   SEGMENT_ITER_UP
+    (λ i k, valid_seg i k xs)
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
-    (λ _i _k s Q, wp (segment_iteri v _i _k s f) Q)
-    (λ i k, valid_seg i k xs).
+    (λ _i _k s Q, wp (segment_iteri v _i _k s f) Q).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
   destructIsVector. destructIsVectorCap.
@@ -386,9 +386,9 @@ Qed.
 Lemma wp_iteri v xs f :
   isVector v xs →
   ITER_UP
+    0 (len xs)
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
-    (λ s Q, wp (iteri v s f) Q)
-    0 (len xs).
+    (λ s Q, wp (iteri v s f) Q).
 Proof.
   intros. ITER_UP. unfold iteri.
   destructIsVector. destructIsVectorCap.

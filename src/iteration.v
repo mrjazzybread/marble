@@ -5,6 +5,11 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+(* Notation for interruptible loops. *)
+
+Global Notation break    := Some.
+Global Notation continue := None.
+
 (* -------------------------------------------------------------------------- *)
 
 (* A generic specification for a loop. *)
@@ -41,6 +46,15 @@ Implicit Type o : O.
    just [o] seems convenient. *)
 Variable step : P → O → P → P → Prop.
 
+(* [init] is the initial producer state. *)
+Variable init : P.
+
+(* The predicate [complete] identifies the final producer states,
+   that is, the producer states where the producer may stop. *)
+Variable complete : P → Prop.
+
+Section UserState.
+
 (* [S] is the type of the user's state. *)
 Context {S : Type}.
 Implicit Types s : S.
@@ -58,15 +72,7 @@ Variable loop : S → WP S.
 
 (* The user's loop invariant takes the form [inv i s], where [i] is the
    current logical producer state and [s] is the current user state. *)
-
 Implicit Types inv : P → S → Prop.
-
-(* [init] is the initial producer state. *)
-Variable init : P.
-
-(* The predicate [complete] identifies the final producer states,
-   that is, the producer states where the producer may stop. *)
-Variable complete : P → Prop.
 
 (* Then, the specification of a loop takes the following form. *)
 
@@ -97,6 +103,63 @@ Definition ITER :=
    producer state [init] to some final producer state [k] along the
    relation [step]. *)
 
+End UserState.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A generic specification for an interruptible loop. *)
+
+(* An interruptible loop lets the loop body return an instruction
+   to either continue or stop (break). We write [out] for such an
+   instruction, because it is an option, and it is the outcome of
+   the loop body. *)
+
+(* An interruptible loop is in fact a normal loop where the user state
+   is a pair [(s, out)]. When [out] is [break _], the loop stops. In
+   the contrapositive form, if the loop body is invoked, then [out]
+   must be [continue]. Thus the loop body may assume [out = continue]. *)
+
+(* We could adopt an even more abstract point of view, where the user
+   state is not necessarily a pair, and a predicate of type [S → Prop]
+   determines whether the user state allows or forbids continuing. But
+   adopting a more specific convention is more comfortable. *)
+
+Section UserState.
+
+(* The first component of the user's state has type [S]. *)
+Context {S : Type}.
+Implicit Types s : S.
+
+(* The second component of the user state has type [option A].
+   In other words, [A] is the type of [x] in [break x]. *)
+Context {A : Type}.
+Implicit Types out : option A.
+Implicit Types x : A.
+
+(* The complete user state has type [S * option A]. *)
+Local Notation U := (S * option A)%type.
+
+(* In the type of the loop body, we use [S → WP U] instead of [U → WP U]
+   because when the loop body is invoked, the the second component of
+   the user state is known; it must be [continue]. *)
+Variable body : O → P → S → WP U.
+
+(* Same convention here *)
+Variable loop : S → WP U.
+
+(* The user's loop invariant takes the form [inv i (s, out)] where [i] is
+   the current logical producer state and [(s, out)] is the current user
+   state. *)
+
+Definition ITERX :=
+  ITER
+    (λ o i '(s, out) Q, out = continue → body o i s Q)
+    (λ '(s, out) Q, loop s Q).
+
+End UserState.
+
+(* -------------------------------------------------------------------------- *)
+
 End Iter.
 
 Ltac ITER :=
@@ -123,9 +186,9 @@ Ltac ITER :=
    of elements that remain to be enumerated. *)
 
 Definition ITER_LIST_TAIL {S A}
+  (init xs : list A)
   (body : A → list A → S → WP S)
   (loop : S → WP S)
-  (init xs : list A)
 :=
   let step history0 x history history1 :=
     history = history0 ∧
@@ -135,7 +198,7 @@ Definition ITER_LIST_TAIL {S A}
   let complete history :=
     history = xs
   in
-  ITER step body loop init complete.
+  ITER step  init complete body loop.
 
 (* [ITER_LIST] is an instance of [ITER_LIST_TAIL] where the starting state
    [init] is fixed: it is the empty list. *)
@@ -146,8 +209,8 @@ Definition ITER_LIST_TAIL {S A}
    producer state [xs] along the relation [step]. *)
 
 Definition ITER_LIST {S A}
+  (xs : list A)
   (body : A → list A → S → WP S)
   (loop : S → WP S)
-  (xs : list A)
 :=
-  ITER_LIST_TAIL body loop [] xs.
+  ITER_LIST_TAIL [] xs body loop.

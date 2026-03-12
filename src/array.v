@@ -556,9 +556,9 @@ Local Lemma wp_list_iteri_aux xs f :
   xs = history ++ future →
   isInt _i (len history) →
   ITER_LIST_TAIL
+    history xs
     (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
-    (λ s Q, wp (list_iteri _i future s f) Q)
-    history xs.
+    (λ s Q, wp (list_iteri _i future s f) Q).
 (* Extend [tc] with a couple hints for this proof. *)
 Local Hint Extern 1 (_ `prefix_of` _) =>
   (econstructor; list; reflexivity) : typeclass_instances.
@@ -579,9 +579,9 @@ Qed.
 
 Lemma wp_list_iteri xs s f :
   ITER_LIST
+    xs
     (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
-    (λ s Q, wp (list_iteri 0 xs s f) Q)
-    xs.
+    (λ s Q, wp (list_iteri 0 xs s f) Q).
 Proof.
   unfold ITER_LIST. eapply wp_list_iteri_aux; tc.
 Qed.
@@ -610,9 +610,9 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
   isInt _i i →
   i = len history →
   ITER_UP
+    i (len xs)
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
-    (λ s Q, wp (list_iteri _i future s f) Q)
-    i (len xs).
+    (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
   induction future as [| x future ]; intros; ITER_UP;
   simpl list_iteri; try rewrite cons_is_append in *;
@@ -640,9 +640,9 @@ Local Lemma wp_list_iteri_aux_variant_2 xs f :
   i ≤ len xs →
   final_seg i xs = future →
   ITER_UP
+    i (len xs)
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
-    (λ s Q, wp (list_iteri _i future s f) Q)
-    i (len xs).
+    (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
   induction future as [| x future ]; intros; ITER_UP;
   simpl list_iteri; try rewrite cons_is_append in *;
@@ -1386,9 +1386,9 @@ Definition iteri a s f :=
 Lemma wp_segment_iteri a xs f :
   isArray a xs →
   SEGMENT_ITER_UP
+    (λ i k, valid_seg i k xs)
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
-    (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q)
-    (λ i k, valid_seg i k xs).
+    (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
   wp_up inv.
@@ -1402,9 +1402,9 @@ Qed.
 Lemma wp_iteri a xs f :
   isArray a xs →
   ITER_UP
+    0 (len xs)
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
-    (λ s Q, wp (iteri a s f) Q)
-    0 (len xs).
+    (λ s Q, wp (iteri a s f) Q).
 Proof.
   intros. ITER_UP. unfold iteri.
   wp_length _n.

@@ -956,9 +956,9 @@ Global Hint Rewrite
    [k < i] and the loop is not executed. *)
 
 Definition ITER_DOWN {S}
+  (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
-  (i k : nat)
 :=
   let step j0 _j j j1 :=
     j0 = j + 1 ∧
@@ -969,7 +969,7 @@ Definition ITER_DOWN {S}
   let complete j :=
     j = i `min` k
   in
-  ITER step body loop k complete.
+  ITER step k complete body loop.
     (* initial state is [k]; final state is [i `min` k] *)
 
 Ltac ITER_DOWN :=
@@ -984,15 +984,15 @@ Ltac ITER_DOWN :=
    represent a valid segment with respect to a certain data structure. *)
 
 Definition SEGMENT_ITER_DOWN {S}
+  (P : nat → nat → Prop)
   (body : int → nat → S → WP S)
   (loop : int → int → S → WP S)
-  (P : nat → nat → Prop)
 :=
   ∀ _i i _k k,
   isInt _i i →
   isInt _k k →
   P i k →
-  ITER_DOWN body (loop _k _i) i k.
+  ITER_DOWN i k body (loop _k _i).
 
 Ltac SEGMENT_ITER_DOWN :=
   do 6 intro;
@@ -1015,9 +1015,9 @@ Ltac SEGMENT_ITER_DOWN :=
    [k < i] and the loop is not executed. *)
 
 Definition ITER_UP {S}
+  (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
-  (i k : nat)
 :=
   let step j0 _j j j1 :=
     j0 = j ∧
@@ -1028,7 +1028,7 @@ Definition ITER_UP {S}
   let complete j :=
     j = i `max` k
   in
-  ITER step body loop i complete.
+  ITER step i complete body loop.
     (* initial state is [i]; final state is [i `max` k] *)
 
 Ltac ITER_UP :=
@@ -1043,15 +1043,15 @@ Ltac ITER_UP :=
    represent a valid segment with respect to a certain data structure. *)
 
 Definition SEGMENT_ITER_UP {S}
+  (P : nat → nat → Prop)
   (body : int → nat → S → WP S)
   (loop : int → int → S → WP S)
-  (P : nat → nat → Prop)
 :=
   ∀ _i i _k k,
   isInt _i i →
   isInt _k k →
   P i k →
-  ITER_UP body (loop _i _k) i k.
+  ITER_UP i k body (loop _i _k).
 
 Ltac SEGMENT_ITER_UP :=
   do 6 intro;
@@ -1141,9 +1141,9 @@ Lemma wp_down_aux i _j j :
   representable j →
   i ≤ j →
   ITER_DOWN
+    i (j + 1)
     (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (down_aux _j s) Q)
-    i (j + 1).
+    (λ s Q, wp (down_aux _j s) Q).
 Proof.
   intros. ITER_DOWN.
   funelim (down_aux _j s); cleanup; clear Heqcall; intros; isBool_magic;
@@ -1169,9 +1169,9 @@ Definition down {S} _k _i (s : S) f :=
 
 Lemma wp_down {S} (f : int → S → S) :
   SEGMENT_ITER_DOWN
+    (λ i k, representable i ∧ representable k)
     (λ _j j s Q, wp (f _j s) Q)
-    (λ _k _i s Q, wp (down _k _i s f) Q)
-    (λ i k, representable i ∧ representable k).
+    (λ _k _i s Q, wp (down _k _i s f) Q).
 Proof.
   SEGMENT_ITER_DOWN. unfold down.
   wp_if; autorewrite with nat in Hfinish.
@@ -1241,9 +1241,9 @@ Implicit Types f : int → S → S.
 
 Lemma wp_up_aux f :
   SEGMENT_ITER_UP
+    (λ i k, representable i ∧ representable k)
     (λ _j j s Q, wp (f _j s) Q)
-    (λ _i _k s Q, wp (up_aux _k f _i s) Q)
-    (λ i k, representable i ∧ representable k).
+    (λ _i _k s Q, wp (up_aux _k f _i s) Q).
 Proof.
   SEGMENT_ITER_UP.
   funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
