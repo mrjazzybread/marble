@@ -1005,34 +1005,40 @@ Ltac SEGMENT_ITER_DOWN :=
 (* A generic specification for a loop over a segment of the integers,
    counting up. *)
 
-(* In the definition of [step], the equation [j0 = j] means that the user
-   observes the previous state. Thus, the loop invariant [inv j s] means
-   that the loop has run up to index [j] excluded and the next iteration
-   will concern the index [j]. *)
+(* In the definition of [step_up], the equation [j0 = j] means that the
+   user observes the previous state. Thus, the loop invariant [inv j s]
+   means that the loop has run up to index [j] excluded and the next
+   iteration will concern the index [j]. *)
 
-(* Once the loop ends, the invariant holds of the index [i] or [k],
-   whichever is greater. This accounts for the special case where
-   [k < i] and the loop is not executed. *)
+(* Once the loop ends, the producer state is [i `max` k]. This accounts
+   for the special case where [k < i] and the loop is not executed. *)
+
+Local Notation step_up i k :=
+  ( λ j0 _j j j1 ,
+    j0 = j ∧
+    j1 = j + 1 ∧
+    isInt _j j ∧
+    i ≤ j < k
+  ).
+
+Local Notation complete_up i k :=
+  ( λ j,
+    j = i `max` k
+  ).
 
 Definition ITER_UP {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
-  let step j0 _j j j1 :=
-    j0 = j ∧
-    j1 = j + 1 ∧
-    isInt _j j ∧
-    i ≤ j < k
-  in
-  let complete j :=
-    j = i `max` k
-  in
-  ITER step i complete body loop.
-    (* initial state is [i]; final state is [i `max` k] *)
+  ITER (step_up i k) i (complete_up i k) body loop.
 
-Ltac ITER_UP :=
-  ITER.
+Definition ITERX_UP {S A}
+  (i k : nat)
+  (body : int → nat → S → WP (S * option A))
+  (loop : S → WP (S * option A))
+:=
+  ITERX (step_up i k) i (complete_up i k) body loop.
 
 (* In this variant, the loop indices [_i] and [_k] are explicitly passed
    as arguments to the loop. [loop _i _k s Q] means that the loop, applied
@@ -1057,7 +1063,7 @@ Ltac SEGMENT_ITER_UP :=
   do 6 intro;
   let HP := fresh in
   intro HP; unpack in HP;
-  ITER_UP.
+  ITER.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1336,150 +1342,34 @@ Implicit Types _a _b : int.
 Implicit Types s : S.
 Implicit Types f : int → S → S * option A.
 
-(* The assertion [finished a b i s o] means that the loop has ended.
-
-   It is defined as a disjunction of the following situations:
-
-   - The loop has run at least once. [a < i ≤ b] holds.
-     Furthermore, if the loop has stopped early, which is indicated
-     by the condition [i < b], then [o] must be [break _].
-
-   - The loop has not run at all, in which case [b ≤ a = i] holds.
-     In this case, [i] must be [a] and [o] must be [continue]. *)
-
-Definition finished {A} a b i s (o : option A) :=
-  a < i ∧ i ≤ b ∧ (i < b → o ≠ continue) ∨
-  b ≤ a ∧ i = a ∧ o = continue.
-
-(* The assertion [finished a b i s o], as defined above, is somewhat strange,
-   as it is a disjunction between the case where at least one iteration has
-   taken place (a < b) and the case where none has taken place (a ≥ b). What
-   seems more natural is a disjunction between the case where the bounds are
-   ordered as expected (a ≤ b) and the case where they are not (a > b).
-   The following lemma provides an alternate characterization of [finished]
-   along these lines. *)
-
-Lemma finished_iff a b i s (o : option A) :
-  finished a b i s o ↔
-   (
-     (* Case [a ≤ b]: *)
-       (* Then [i] lies between [a] and [b], inclusive;
-          [i] is [a] if and only if the interval is empty;
-          if [i] is less than [b] then we must have broken out;
-          if the interval is empty then we cannot have broken out. *)
-       a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
-       (i < b → o ≠ continue) ∧
-       (a = b → o = continue)
-     ∨
-     (* Case [b < a]: *)
-         (* Then [i] must be [a] and we cannot have broken out. *)
-       b < a ∧ i = a ∧ o = continue
-   ).
-Proof.
-  unfold finished. split; intros [|]; unpack; subst.
-  { left. repeat split; eauto with lia. }
-  { case (decide (a = b)); intros; [ subst b |].
-    + left. eauto with lia.
-    + right. eauto with lia. }
-  { case (decide (i = a)); intros; [ subst i |].
-    + right. eauto with lia.
-    + left. eauto with lia. }
-  { eauto with lia. }
-Qed.
-
-(* Here is a different way of expressing the same result. *)
-
-Lemma finished_iff' a b i s (o : option A) :
-  finished a b i s o ↔
-   (
-     (* Case [a ≤ b]: *)
-       a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
-       (* If we have broken out then at least one element has been examined.
-          If we have not broken out then the loop index has reached the end
-          of the interval. *)
-       match o with break _ => a < i | continue => i = b end
-     ∨
-       b < a ∧ i = a ∧ o = continue
-   ).
-Proof.
-  cut (
-    a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) →
-    (i < b → o ≠ continue) ∧ (a = b → o = continue) ↔
-    match o with break _ => a < i | continue => i = b end
-  ). { rewrite finished_iff. tauto. }
-  intros. unpack.
-  destruct o; split; intros; unpack; eauto with lia.
-  { case (decide (a = b)); intros h; [ exfalso | lia ].
-    match goal with H: a = b → _ |- _ => specialize (H h) end.
-    congruence. }
-  { case (decide (i < b)); intros h; [ exfalso | lia ].
-    match goal with H: i < b → _ |- _ => specialize (H h) end.
-    congruence. }
-Qed.
-
-(* This corollary describes just the case where [a ≤ b] is known to hold.
-   It should the most useful corollary in practice. *)
-
-Lemma finished_leq_iff a b i s (o : option A) :
-  a ≤ b →
-  finished a b i s o ↔
-   (
-     a ≤ i ∧ i ≤ b ∧ (i = a ↔ a = b) ∧
-     match o with break _ => a < i | continue => i = b end
-   ).
-Proof.
-  intros. rewrite finished_iff'. split.
-  { intros [|]; [ tauto | lia ]. }
-  { tauto. }
-Qed.
-
-(* The user is allowed to choose a loop invariant [inv a s o], where [a]
-   is the current loop index, [s] is the current state, and [o] is the
-   current outcome, that is, the outcome of the previous iteration. The
-   assertion [inv a s o] means that the loop has run up to index [a]
-   excluded, so the next iteration will concern the index [a]. *)
-
-Variable inv : nat → S → option A → Prop.
-
 (* A specification of [interruptible_up_aux]. *)
 
-Lemma wp_interruptible_up_aux f (Q : S * option A → Prop) :
-  ∀ _a a _b b s ,
+Lemma wp_interruptible_up_aux f :
+  ∀ _a a _b b ,
   isInt _a a →
-  representable a →
   isInt _b b →
+  representable a →
   representable b →
-  (* If the invariant initially holds, *)
-  inv a s continue →
-  (* If [f] preserves the invariant, *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < b →
-    inv i s continue →
-    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
-  ) →
-  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
-     the final index, final state, and final outcome. They are related by the
-     assertion [finished a b i s o]. *)
-  (∀ i s o,
-     inv i s o →
-     finished a b i s o →
-     Q (s, o)
-  ) →
-  wp (interruptible_up_aux _b f _a s) Q.
+  ITERX_UP
+    a b
+    (λ _j j s Q, a ≤ j < b → representable j → wp (f _j s) Q)
+    (λ s Q, wp (interruptible_up_aux _b f _a s) Q).
 Proof.
-  unfold finished. do 9 intro. intros Hinit Hstep Hfinish.
+  intros. ITERX.
   funelim (interruptible_up_aux _b f _a s); cleanup; clear Heqcall;
-  isBool_magic.
+  isBool_magic; autorewrite with nat.
   (* [funelim] creates an induction hypothesis that contains
      spurious parameters of type [S * option A] and [option A]. *)
   assert (dummy: option A). { exact continue. }
   (* Case [a < b]. *)
-  { eapply wp_bind; [ eapply Hstep; eauto | simpl; intros [s' [|]] ? ].
+  { wp_op Hstep s'. clear dependent s. destruct s' as [ s [x|] ].
+    (* Subcase: [out] is [break x]. *)
     + wp_ret. eauto with lia.
-    + eapply H; itc. }
-  (* Case [¬ a < b]. *)
+    (* Subcase: [out] is [continue]. *)
+    + eapply wp_conseq.
+      - eapply H; itc.
+      - autorewrite with nat. eauto. }
+  (* Case [b ≤ a]. *)
   { wp_ret. eauto with lia. }
 Qed.
 
@@ -1494,47 +1384,6 @@ Definition interruptible_up _a _b s f :=
 
 Definition wp_interruptible_up :=
   wp_interruptible_up_aux.
-
-(* A rigid variant of the specification of [interruptible_up],
-   without a quantification on [Q]. This is useful when the
-   call site is flexible about the postcondition (i.e., the
-   postcondition is a metavariable). *)
-
-Lemma wp_interruptible_up_rigid f :
-  ∀ _a a _b b s ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
-  (* If the invariant initially holds, *)
-  inv a s continue →
-  (* If [f] preserves the invariant, *)
-  (∀ _i i s ,
-    isInt _i i →
-    representable i →
-    a ≤ i < b →
-    inv i s continue →
-    wp (f _i s) (λ so, let '(s, o) := so in inv (i + 1) s o)
-  ) →
-  (* Then, once the loop ends, [inv i s o] holds, where [i], [s], and [o] are
-     the final index, final state, and final outcome. They are related by the
-     assertion [finished a b i s o]. *)
-  wp (interruptible_up _a _b s f) (λ so,
-    let '(s, o) := so in
-    exists i,
-    inv i s o ∧
-    finished a b i s o
-  ).
-Proof.
-  intros. eapply wp_conseq.
-  + eapply wp_interruptible_up with (Q := λ so,
-      let '(s, o) := so in
-      exists i,
-      inv i s o ∧
-      finished a b i s o
-    ); eauto. (* This is so verbose... *)
-  + eauto.
-Qed.
 
 End InterruptibleUp.
 

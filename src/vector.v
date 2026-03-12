@@ -2,7 +2,7 @@ From stdpp Require Import numbers list.
 Local Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From array Require Import tactics list_extra bool int wp wp_tactics array.
+From array Require Import tactics list_extra bool iteration int wp wp_tactics array.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -390,7 +390,7 @@ Lemma wp_iteri v xs f :
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri v s f) Q).
 Proof.
-  intros. ITER_UP. unfold iteri.
+  intros. ITER. unfold iteri.
   destructIsVector. destructIsVectorCap.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.

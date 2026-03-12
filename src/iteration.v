@@ -7,8 +7,10 @@ Set Universe Polymorphism.
 
 (* Notation for interruptible loops. *)
 
-Global Notation break    := Some.
-Global Notation continue := None.
+Global Notation break      := Some.
+Global Notation continue   := None.
+
+Global Notation broken out := (out ≠ continue).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -109,20 +111,21 @@ End UserState.
 
 (* A generic specification for an interruptible loop. *)
 
-(* An interruptible loop lets the loop body return an instruction
-   to either continue or stop (break). We write [out] for such an
-   instruction, because it is an option, and it is the outcome of
-   the loop body. *)
+(* An interruptible loop lets the loop body return an instruction to either
+   continue or stop (break). We write [out] for such an instruction, because
+   it is an option, and it is the outcome of the loop body. *)
 
-(* An interruptible loop is in fact a normal loop where the user state
-   is a pair [(s, out)]. When [out] is [break _], the loop stops. In
-   the contrapositive form, if the loop body is invoked, then [out]
-   must be [continue]. Thus the loop body may assume [out = continue]. *)
+(* An interruptible loop is essentially a normal loop where the user state
+   is a pair [(s, out)]. When [out] is [break _], the loop stops. In the
+   contrapositive form, if the loop body is invoked, then [out] must be
+   [continue]. Thus the loop body may assume [out = continue]. Furthermore,
+   once the loop terminates, one cannot assume [complete k], as usual;
+   instead one must assume [complete k ∨ broken out]. *)
 
-(* We could adopt an even more abstract point of view, where the user
-   state is not necessarily a pair, and a predicate of type [S → Prop]
-   determines whether the user state allows or forbids continuing. But
-   adopting a more specific convention is more comfortable. *)
+(* We could adopt an even more abstract point of view, where the user state
+   is not necessarily a pair, and a predicate of type [S → Prop] determines
+   whether the user state allows or forbids continuing. But adopting a more
+   specific convention is more comfortable. *)
 
 Section UserState.
 
@@ -147,14 +150,26 @@ Variable body : O → P → S → WP U.
 (* Same convention here *)
 Variable loop : S → WP U.
 
-(* The user's loop invariant takes the form [inv i (s, out)] where [i] is
+(* The user's loop invariant takes the form [inv i s out] where [i] is
    the current logical producer state and [(s, out)] is the current user
-   state. *)
+   state. We use a curried form for increased comfort. *)
+Implicit Types inv : P → S → option A → Prop.
+
+(* Then, the specification of a loop takes the following form. This is a
+   variant of [ITER]; we highlight just on the differences. *)
 
 Definition ITERX :=
-  ITER
-    (λ o i '(s, out) Q, out = continue → body o i s Q)
-    (λ '(s, out) Q, loop s Q).
+  ∀ inv s ,
+  (* Initially, [out] is continue. *)
+  inv init s continue →
+  (* When the loop body is invoked, it can assume that [out] is [continue]. *)
+  (∀ j0 o j j1 s ,
+    inv j0 s continue →
+    step j0 o j j1 →
+    body o j s (λ '(s, out), inv j1 s out)
+  ) →
+  (* Once the loop ends, we have either [complete k] or [broken out]. *)
+  loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
 
 End UserState.
 
@@ -163,8 +178,10 @@ End UserState.
 End Iter.
 
 Ltac ITER :=
-  unfold ITER; (* optional *)
   intros ? ? Hinit Hstep ? Hfinish.
+
+Ltac ITERX :=
+  intros ? ? Hinit Hstep.
 
 (* -------------------------------------------------------------------------- *)
 

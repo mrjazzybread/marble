@@ -614,7 +614,7 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
-  induction future as [| x future ]; intros; ITER_UP;
+  induction future as [| x future ]; intros; ITER;
   simpl list_iteri; try rewrite cons_is_append in *;
   subst; list in *.
   { wp_ret. eauto. }
@@ -644,7 +644,7 @@ Local Lemma wp_list_iteri_aux_variant_2 xs f :
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
-  induction future as [| x future ]; intros; ITER_UP;
+  induction future as [| x future ]; intros; ITER;
   simpl list_iteri; try rewrite cons_is_append in *;
   subst; list in *; lengths.
   (* Case: the future is empty. We have [i = len xs]. *)
@@ -1049,24 +1049,20 @@ Variable  notOK : A → bool.
 Variable f_spec :
   ∀ x, isBool (f x) (OK x) (notOK x).
 
-(* The proposition [find_index_inv xs n i o] serves to describe both
+(* The proposition [find_index_inv xs n out] serves to describe both
    the postcondition of [find_index] and its loop invariant. Here is
    its statement: *)
 
-Definition find_index_inv xs n i o :=
-  match o with
+Definition find_index_inv xs n out :=
+  match out with
   | continue =>
-      (* If [o] is [continue] then, up to index [n], no element [x]
-         of the list [xs] satisfies the condition [f x = true]. *)
+      (* Up to index [n], no element [x] of the list [xs] is OK. *)
       ∀ j, j < n → notOK (xs !!! j)
   | break _i =>
-      (* If [o] is [break _i] then the machine integer [_i] represents
-         the index [i]; this is a valid index into the list [xs]; the
-         element [x] found at this index satisfies [f x = true]; and
-         no earlier element satisfies it. *)
-      isInt _i i ∧
-      valid i xs ∧
-      OK (xs !!! i) ∧
+      (* The machine integer [_i] represents the index [i], which is a
+         valid index into the list [xs]; the element [x] found at this
+         index is OK; and no earlier element is OK. *)
+      ∃ i , isInt _i i ∧ valid i xs ∧ OK (xs !!! i) ∧
       ∀ j, j < i → notOK (xs !!! j)
   end.
 
@@ -1074,27 +1070,19 @@ Definition find_index_inv xs n i o :=
 
 Lemma wp_find_index a xs :
   isArray a xs →
-  wp (find_index a) (λ o,
-    exists i, find_index_inv xs (len xs) i o
-  ).
+  wp (find_index a) (λ out, find_index_inv xs (len xs) out).
 Proof.
   intros. unfold find_index.
   wp_length _n.
   rewrite interruptible_up_unit_eq.
   eapply wp_bind.
-  (* The loop invariant is slightly subtle. Instantiating [n := i] means
-     that, when the current outcome [o] is [continue], up to the current
-     index [i] (excluded), no element of the array satisfies [f].
-     Instantiating [i := i - 1] means that, when the current outcome is
-     [break _], up to index [i - 1] (excluded), no element of the array
-     satisfies [f], and at index [i], an element satisfies [f]. *)
-  { set (inv := λ i s o, find_index_inv xs i (i - 1) o).
-    eapply wp_interruptible_up_rigid with (inv := inv);
-      tc; unfold inv, find_index_inv.
+  { eapply wp_interruptible_up
+      with (inv := λ j s o, find_index_inv xs j o);
+      tc; unfold find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
-    { intros. list.
+    { intros; unpack; subst.
       wp_get x. subst x.
       rewrite bind_if. wp_if; wp_bind_eq; wp_ret.
       (* Case: [OK x]. *)
@@ -1103,14 +1091,17 @@ Proof.
       + eapply one_step_further; eauto. }
   }
   (* The loop is finished. Conclude. *)
-  intros [ s o ].
-  intros (i&?&?). wp_ret.
-  destruct o as [ _i |].
+  intros [ _ out ].
+  intros (k&?&?). wp_ret.
+  destruct out as [ _i |].
   (* Subcase: the loop has ended with [break _i]. *)
-  + eauto.
+  (* The loop index is an unknown [k]. Fortunately
+     [find_index_inv xs k (break _i)] is independent of [k]. *)
+  + assumption.
   (* Subcase: the loop has ended with [continue]. *)
-  + rewrite finished_leq_iff in * by lia. unpack.
-    unfold find_index_inv. eauto with lia.
+  (* The loop index must be [len xs]. *)
+  + assert (k = len xs) by tauto. subst k.
+    assumption.
 Qed.
 
 End FindIndex.
@@ -1305,11 +1296,11 @@ Proof.
   (* First branch: the lengths of the arrays coincide. *)
   { rewrite interruptible_up_unit_eq, bind_bind.
     eapply wp_bind.
-    { eapply wp_interruptible_up_rigid
+    { eapply wp_interruptible_up
         with (inv := λ i s o, equal_inv xs ys i o);
         tc; unfold equal_inv; eauto with lia.
       (* Preservation. *)
-      intros.
+      intros; unpack; subst.
       wp_get x. wp_get y.
       rewrite bind_if. wp_if; wp_bind_eq; wp_ret; subst.
       (* Case: [eq x y] returns [true]. *)
@@ -1322,7 +1313,7 @@ Proof.
     (* Case: the loop ends with [break ()]. *)
     { tc. }
     (* Case: the loop ends with [continue]. *)
-    { rewrite finished_leq_iff in * by lia. unpack.
+    { assert (i = len xs) by tauto. subst.
       tc. }
   }
   (* Second branch: the lengths of the arrays differ. *)
@@ -1406,7 +1397,7 @@ Lemma wp_iteri a xs f :
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri a s f) Q).
 Proof.
-  intros. ITER_UP. unfold iteri.
+  intros. ITER. unfold iteri.
   wp_length _n.
   wp_op wp_segment_iteri s'.
   eauto.
