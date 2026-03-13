@@ -836,7 +836,7 @@ Implicit Types xs ys : list A.
    physical array. *)
 
 Definition blit a _i b _j _n :=
-  up _i (_i + _n)%uint63 b @@ λ _k b,
+  int.iter_up _i (_i + _n)%uint63 b @@ λ _k b,
   do x ← get a _k ;
   do b ← set b (_j + (_k - _i))%uint63 x ;
   b.
@@ -856,7 +856,7 @@ Lemma wp_blit a xs _i i b ys _j j _n n :
   ).
 Proof.
   intros. unfold blit.
-  wp_up (λ k b, isArray b
+  int.wp_iter_up (λ k b, isArray b
     (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   ).
   (* Preservation. *)
@@ -988,7 +988,7 @@ Implicit Types xs ys : list A.
 (* The code. *)
 
 Definition fill a _i _n x :=
-  up _i (_i + _n)%uint63 a @@ λ _k a,
+  int.iter_up _i (_i + _n)%uint63 a @@ λ _k a,
   do a ← set a _k x ;
   a.
 
@@ -1004,7 +1004,7 @@ Lemma wp_fill a xs _i i _n n  x :
   ).
 Proof.
   intros. unfold fill.
-  wp_up (λ k a, isArray a
+  int.wp_iter_up (λ k a, isArray a
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
   (* Preservation. *)
@@ -1037,7 +1037,7 @@ Variable f : A → bool.
 
 Definition find_index a : option int :=
   do _n ← length a ;
-  iter_up 0 _n @@ λ _i _ continue break,
+  int.uxiter_up 0 _n @@ λ _i _ continue break,
   do x ← get a _i ;
   if f x then break _i else continue ().
 
@@ -1078,9 +1078,9 @@ Proof.
   intros. unfold find_index.
   wp_length _n.
   (* TODO clean up *)
-  unfold iter_up.
+  unfold uxiter_up.
   eapply wp_conseq.
-  { eapply wp_iter_up with (inv := λ j o, find_index_inv xs j o); tc;
+  { eapply wp_uxiter_up with (inv := λ j o, find_index_inv xs j o); tc;
     unfold find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
@@ -1239,7 +1239,7 @@ Variable eq : A → A → bool.
 (* The code. *)
 
 Definition equal_aux _m a b : option unit :=
-  iter_up 0 _m @@ λ _i _ continue break ,
+  int.uxiter_up 0 _m @@ λ _i _ continue break ,
   do x ← get a _i ;
   do y ← get b _i ;
   if eq x y then continue () else break ().
@@ -1295,9 +1295,9 @@ Proof.
   wp_if.
   (* First branch: the lengths of the arrays coincide. *)
   { eapply wp_bind.
-    { unfold equal_aux.
-      unfold iter_up.
-      eapply wp_iter_up
+    { unfold equal_aux. (* TODO remove equal_aux *)
+      unfold int.uxiter_up. (* TODO clean up *)
+      eapply int.wp_uxiter_up
         with (inv := λ i o, equal_inv xs ys i o);
         tc; unfold equal_inv; eauto with lia.
       (* Preservation. *)
@@ -1363,7 +1363,7 @@ Implicit Types f : int → A → S → S.
 (* The code. *)
 
 Definition segment_iteri a _i _k s f : S :=
-  up _i _k s @@ λ _j s ,
+  int.iter_up _i _k s @@ λ _j s ,
   do x ← get a _j ;
   do s ← f _j x s ;
   s.
@@ -1382,7 +1382,7 @@ Lemma wp_segment_iteri a xs f :
     (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
   intros. SEGMENT_ITER_UP. unfold segment_iteri.
-  wp_up inv.
+  int.wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)
   { wp_get x. wp_op Hstep s'. wp_ret. eauto. }

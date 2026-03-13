@@ -1203,7 +1203,7 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 (* Our intervals are semi-open on the right end: [i] is included,
    [k] is excluded. *)
 
-Section UpAux.
+Section IterUpAux.
 Context {S : Type}.
 Implicit Types s : S.
 
@@ -1214,11 +1214,11 @@ Implicit Types s : S.
 Variable _k : int.
 Variable f : int → S → S.
 
-(* [up_aux _i s] applies the loop body [f] to every machine integer from
-   [_i], included, up to [_k], excluded. A state of type [S] is carried,
-   whose initial value is [s]. *)
+(* [iter_up_aux _i s] applies the loop body [f] to every machine integer
+   from [_i], included, up to [_k], excluded. A state of type [S] is
+   carried, whose initial value is [s]. *)
 
-(* We use Equations to more easily define [up_aux] by well-founded
+(* We use Equations to more easily define [iter_up_aux] by well-founded
    recursion over the loop counter [_i]. The somewhat strange [with]
    syntax is a way of expressing the test [_i <? _k]. The use of [inspect]
    and [inspected] is an idiosyncratic way of making the outcome of the
@@ -1227,12 +1227,12 @@ Variable f : int → S → S.
    that [_i+1] is less than [_i], a fact which itself is required by the
    termination argument. *)
 
-Equations up_aux _i s : S
+Equations iter_up_aux _i s : S
 by wf _i igt :=
-up_aux _i s with inspect (_i <? _k)%uint63 => {
+iter_up_aux _i s with inspect (_i <? _k)%uint63 => {
 | inspected true :=
     do s ← f _i s ;
-    do s ← up_aux (_i+1)%uint63 s ;
+    do s ← iter_up_aux (_i+1)%uint63 s ;
     s ;
 | inspected false :=
     s
@@ -1241,23 +1241,23 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
-End UpAux.
+End IterUpAux.
 
-Section Up.
+Section IterUp.
 Context {S : Type}.
 Implicit Types s : S.
 Implicit Types f : int → S → S.
 
-(* A specification of [up_aux]. *)
+(* A specification of [iter_up_aux], which also serves for [iter_up]. *)
 
-Lemma wp_up_aux f :
+Lemma wp_iter_up_aux f :
   SEGMENT_ITER_UP
     (λ i k, representable i ∧ representable k)
     (λ _j j s Q, wp (f _j s) Q)
-    (λ _i _k s Q, wp (up_aux _k f _i s) Q).
+    (λ _i _k s Q, wp (iter_up_aux _k f _i s) Q).
 Proof.
   SEGMENT_ITER_UP.
-  funelim (up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
+  funelim (iter_up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
   autorewrite with nat.
   (* Case [i < k]. *)
   { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
@@ -1265,28 +1265,22 @@ Proof.
   { wp_ret. eauto. }
 Qed.
 
-(* A definition of [up], with reordered parameters. *)
+(* A definition of [iter_up], with reordered parameters. *)
 
-(* [up _i _k s f] applies the loop body [f] to every machine integer from
-   [_i], included, up to [_k], excluded. A state of type [S] is carried,
-   whose initial value is [s]. *)
+(* [iter_up _i _k s f] applies the loop body [f] to every machine integer
+   from [_i], included, up to [_k], excluded. A state of type [S] is
+   carried, whose initial value is [s]. *)
 
-(* [up _i _k s @@ λ _j s, ...] is a convenient way of writing a loop. *)
+(* [iter_up _i _k s @@ λ _j s, ...] is a convenient way of writing a loop. *)
 
-Definition up _i _k s f :=
-  up_aux _k f _i s.
+Definition iter_up _i _k s f :=
+  iter_up_aux _k f _i s.
 
-End Up.
+End IterUp.
 
-(* A specification of [up]. *)
-
-(* Copying the specification of [up_aux],
-   to obtain a specification of [up],
-   would be useless; they are the same up to the order of parameters. *)
-
-Global Ltac wp_up I :=
-  unfold up at 1;
-  wp_loop @wp_up_aux I.
+Global Ltac wp_iter_up I :=
+  unfold iter_up at 1;
+  wp_loop @wp_iter_up_aux I.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1481,7 +1475,7 @@ Definition wp_walk_up :=
 
 (* -------------------------------------------------------------------------- *)
 
-Section IterUp.
+Section UXIterUp.
 Context {A : Type}.
 Implicit Types _a : int.
 
@@ -1492,12 +1486,12 @@ Variable _b : int.
 Variable body : int → ∀ {W}, (unit → W) → (A → W) → W.
 
 (* The code. *)
-Equations iter_up_aux _a : option A
+Equations uxiter_up_aux _a : option A
 by wf _a igt :=
-iter_up_aux _a
+uxiter_up_aux _a
 with inspect (_a <? _b)%uint63 => {
 | inspected true :=
-    let continue s := iter_up_aux (_a+1)%uint63 in
+    let continue s := uxiter_up_aux (_a+1)%uint63 in
     let break x := Some x in
     body _a continue break
 | inspected false :=
@@ -1507,9 +1501,9 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
-(* A specification of [iter_up_aux]. *)
+(* A specification of [uxiter_up_aux]. *)
 
-Lemma wp_iter_up_aux :
+Lemma wp_uxiter_up_aux :
   ∀ _a a b ,
   isInt _a a →
   representable a →
@@ -1518,11 +1512,11 @@ Lemma wp_iter_up_aux :
   ITERXU_CPS
     (step_up a b) a (complete_up a b)
     (λ _j j _ normal exit Q, wp (body _j normal exit) Q)
-    (λ Q, wp (iter_up_aux _a) Q).
+    (λ Q, wp (uxiter_up_aux _a) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. intros ? Hinit Hbody.
-  funelim (iter_up_aux _a); cleanup; clear Heqcall; intros;
+  funelim (uxiter_up_aux _a); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
@@ -1534,16 +1528,17 @@ Proof.
   { wp_ret. eauto. }
 Qed.
 
-End IterUp.
+End UXIterUp.
 
-(* [iter_up] with reordered parameters. *)
+(* [uxiter_up] with reordered parameters. *)
 
-Definition iter_up {A} _a _b
+Definition uxiter_up {A} _a _b
   (body : int → ∀ {W}, (unit → W) → (A → W) → W) :=
-  iter_up_aux _b body _a.
+  uxiter_up_aux _b body _a.
 
-Definition wp_iter_up :=
-  @wp_iter_up_aux.
+(* TODO define a tactic *)
+Definition wp_uxiter_up :=
+  @wp_uxiter_up_aux.
 
 (* -------------------------------------------------------------------------- *)
 
