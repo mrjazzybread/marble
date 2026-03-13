@@ -10,17 +10,15 @@
   + `segment_exist`
   + `segment_for_all`
 
-* Should `find_index_inv` and `equal_inv` be instances of `isOption`?
-  Develop `isOption`, and extend `wp_if` to handle it?
-
 * Tactics:
   + automate the search for a specification
   + every (user) function that modifies an array should be
     accompanied by a tactic that performs clear-and-rename
 
 * Missing functions on integers:
-  + `interruptible_down`
-  + `interruptible_down_unit`
+  + `down` should be renamed `iter_down`
+  + `xiter_down`
+  + `uxiter_down`
 
 * Missing functions on arrays:
   + `init` on lists and arrays
