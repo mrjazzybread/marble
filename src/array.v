@@ -1035,9 +1035,9 @@ Variable f : A → bool.
 
 (* The code. *)
 
-Definition find_index a : option int :=
+Definition find_index a : outcome int :=
   do _n ← length a ;
-  int.uxiter_up 0 _n @@ λ _i _ continue break,
+  int.uxiter_up 0 _n @@ λ _ _i continue break,
   do x ← get a _i ;
   if f x then break _i else continue ().
 
@@ -1058,10 +1058,10 @@ Variable f_spec :
 
 Definition find_index_inv xs n out :=
   match out with
-  | continue =>
+  | Continue =>
       (* Up to index [n], no element [x] of the list [xs] is OK. *)
       ∀ j, j < n → notOK (xs !!! j)
-  | break _i =>
+  | Break _i =>
       (* The machine integer [_i] represents the index [i], which is a
          valid index into the list [xs]; the element [x] found at this
          index is OK; and no earlier element is OK. *)
@@ -1077,11 +1077,9 @@ Lemma wp_find_index a xs :
 Proof.
   intros. unfold find_index.
   wp_length _n.
-  (* TODO clean up *)
-  unfold uxiter_up.
   eapply wp_conseq.
-  { eapply wp_uxiter_up with (inv := λ j o, find_index_inv xs j o); tc;
-    unfold find_index_inv.
+  { int.wp_uxiter_up (find_index_inv xs); tc;
+    unfold find_index_inv in *.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
@@ -1091,13 +1089,13 @@ Proof.
       (* Case: [OK x]. *)
       + tc.
       (* Case: [notOK x]. *)
-      + match goal with Hnormal: _ → ?goal |- ?goal => eapply Hnormal end.
+      + match goal with H: _ → ?goal |- ?goal => eapply H end.
         eapply one_step_further; eauto. }}
   { autorewrite with nat.
     intros [|] (k&?&?).
-    (* Subcase: the loop has ended with [break _]. *)
-    (* The loop index is an unknown [i]. Fortunately
-       [find_index_inv xs k (break i)] is independent of [k]. *)
+    (* Subcase: the loop has ended by breaking. The loop index is an
+       unknown [i]. Fortunately [find_index_inv xs k (Break i)] is
+       independent of [k]. *)
     + assumption.
     (* Subcase: the loop has ended normally. *)
     + assert (k = len xs) by tauto. subst k. assumption. }
@@ -1114,27 +1112,27 @@ Local Definition multiple_of_7 (z : Z) : bool :=
 
 Goal
   find_index multiple_of_7 (of_list [2;3;4;14;12;14])%Z =
-  Some 3%uint63.
+  Break 3%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [])%Z =
-  None.
+  Continue.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [1;2;3])%Z =
-  None.
+  Continue.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [1;1;1;1;1;1;1;1;1;1;0])%Z =
-  Some 10%uint63.
+  Break 10%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [140;1;1;1;1;1;1;1;1;1;0])%Z =
-  Some 0%uint63.
+  Break 0%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1149,11 +1147,8 @@ Implicit Types xs : list A.
 Variable f : A → bool.
 
 Definition exist a :=
-  do b ← find_index f a ;
-  match b with
-  | None   => false
-  | Some _ => true
-  end.
+  do out ← find_index f a ;
+  did_break out.
 
 (* Our hypothesis about [f]. (See [find_index].) *)
 
@@ -1173,8 +1168,8 @@ Lemma wp_exist a xs :
   ).
 Proof.
   intros. unfold exist.
-  wp_op @wp_find_index o.
-  destruct o as [ _i |]; unfold find_index_inv in *; unpack;
+  wp_op @wp_find_index out.
+  destruct out as [ _i |]; unfold find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
 
@@ -1194,11 +1189,8 @@ Variable f : A → bool.
 (* The code. *)
 
 Definition for_all a :=
-  do b ← find_index (λ x, negb (f x)) a ;
-  match b with
-  | None   => true
-  | Some _ => false
-  end.
+  do out ← find_index (λ x, negb (f x)) a ;
+  did_not_break out.
 
 (* Our hypothesis about [f]. (See [find_index].) *)
 
@@ -1218,8 +1210,8 @@ Lemma wp_for_all a xs :
   ).
 Proof.
   intros. unfold for_all.
-  wp_op @wp_find_index o.
-  destruct o as [ _i |]; unfold find_index_inv in *; unpack;
+  wp_op @wp_find_index out.
+  destruct out as [ _i |]; unfold find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
 
@@ -1238,8 +1230,8 @@ Variable eq : A → A → bool.
 
 (* The code. *)
 
-Definition equal_aux _m a b : option unit :=
-  int.uxiter_up 0 _m @@ λ _i _ continue break ,
+Definition equal_aux _m a b : outcome unit :=
+  int.uxiter_up 0 _m @@ λ _ _i continue break ,
   do x ← get a _i ;
   do y ← get b _i ;
   if eq x y then continue () else break ().
@@ -1248,8 +1240,8 @@ Definition equal a b : bool :=
   do _m ← length a ;
   do _n ← length b ;
   if (_m =? _n)%uint63 then
-    do o ← equal_aux _m a b ;
-    match o with continue => true | break () => false end
+    do out ← equal_aux _m a b ;
+    did_not_break out
   else
     false.
 
@@ -1266,14 +1258,12 @@ Variable eq_spec :
 
 Definition equal_inv xs ys i o :=
   match o with
-  | continue =>
-      (* If [o] is [continue] then, up to index [i], the lists [xs]
-         and [ys] agree. *)
+  | Continue =>
+      (* Up to index [i], the lists [xs] and [ys] agree. *)
       ∀ j, j < i → xs !!! j ≡ ys !!! j
-  | break () =>
-      (* If [o] is [break ()] then [i - 1] is a valid index into the list
-         [xs], the two lists agree up to index [i - 1], and they disagree
-         at this index. *)
+  | Break () =>
+      (* [i - 1] is a valid index into the list [xs], the two lists
+         agree up to index [i - 1], and they disagree at this index. *)
       let i := i - 1 in
       valid i xs ∧
       ¬ xs !!! i ≡ ys !!! i ∧
@@ -1295,25 +1285,23 @@ Proof.
   wp_if.
   (* First branch: the lengths of the arrays coincide. *)
   { eapply wp_bind.
-    { unfold equal_aux. (* TODO remove equal_aux *)
-      unfold int.uxiter_up. (* TODO clean up *)
-      eapply int.wp_uxiter_up
-        with (inv := λ i o, equal_inv xs ys i o);
-        tc; unfold equal_inv; eauto with lia.
+    { unfold equal_aux.
+      int.wp_uxiter_up (equal_inv xs ys);
+        tc; unfold equal_inv in *; eauto with lia.
       (* Preservation. *)
       intros; unpack; subst.
       wp_get x. wp_get y.
       wp_if; wp_bind_eq; subst.
       (* Case: [eq x y] returns [true]. *)
-      { match goal with Hnormal: _ → ?goal |- ?goal => apply Hnormal end.
+      { match goal with H: _ → ?goal |- ?goal => apply H end.
         eapply one_step_further; eauto. }
       (* Case: [eq x y] returns [false]. *)
       { list in *. eauto with lia. }
     }
     intros [[]|]; unfold equal_inv; intros (i&?); unpack; wp_ret.
-    (* Case: the loop ends with [break ()]. *)
+    (* Case: the loop ends by breaking. *)
     { tc. }
-    (* Case: the loop ends with [continue]. *)
+    (* Case: the loop ends normally. *)
     { assert (i = len xs) by tauto. subst. tc. }
   }
   (* Second branch: the lengths of the arrays differ. *)

@@ -57,14 +57,18 @@ Ltac wp_loop_exit :=
   cbv beta; intros; unpack; try subst; list in *; eauto 3.
 
 Ltac wp_loop_nude lemma I :=
-  (* Apply the reasoning rule for this operation. We infer the type [S]
-     from the type of the invariant [I]. *)
-  match type of I with ?P -> ?S -> Prop =>
-  simple eapply (@lemma S) with (inv := I);
+  (* Apply the reasoning rule for this operation. *)
+  first [
+    simple eapply lemma with (inv := I)
+  |
+    (* We may need to infer the type [S]
+       from the type of the invariant [I]. *)
+    match type of I with ?P -> ?S -> Prop =>
+    simple eapply (@lemma S) with (inv := I) end
+  ];
   list; pack; unpack; try subst;
-  tc3; list in *; tc3
+  tc3; list in *; tc3.
     (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
-  end.
 
 Ltac wp_loop lemma I :=
   first [

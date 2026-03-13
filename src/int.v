@@ -1290,7 +1290,7 @@ Qed.
    [continue] and [break] and must invoke either [continue s] or
    [break s x]. *)
 
-Section WalkUp.
+Section XiterUp.
 Context {S A : Type}.
 Implicit Types _a : int.
 Implicit Types s : S.
@@ -1299,27 +1299,27 @@ Implicit Types s : S.
 Variable _b : int.
 
 (* The loop body: [body _a s continue break]. *)
-Variable body : int → S → ∀ {W}, (S → W) → (S → A → W) → W.
+Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
 
 (* The code. *)
-Equations walk_up_aux _a s : S * option A
+Equations xiter_up_aux _a s : S * outcome A
 by wf _a igt :=
-walk_up_aux _a s
+xiter_up_aux _a s
 with inspect (_a <? _b)%uint63 => {
 | inspected true :=
-    let continue s := walk_up_aux (_a+1)%uint63 s in
-    let break s x := (s, Some x) in
+    let continue s := xiter_up_aux (_a+1)%uint63 s in
+    let break s x := (s, Break x) in
     body _a s continue break
 | inspected false :=
-    (s, None)
+    (s, Continue)
 }.
 Next Obligation.
   eauto using safe_increment'.
 Qed.
 
-(* A specification of [walk_up_aux]. *)
+(* A specification of [xiter_up_aux]. *)
 
-Lemma wp_walk_up_aux :
+Lemma wp_xiter_up_aux :
   ∀ _a a b ,
   isInt _a a →
   representable a →
@@ -1327,15 +1327,15 @@ Lemma wp_walk_up_aux :
   representable b →
   XITER
     (step_up a b) a (complete_up a b)
-    (λ _ _j j s normal exit Q, wp (body _j s normal exit) Q)
-    (λ s Q, wp (walk_up_aux _a s) Q).
+    (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
+    (λ s Q, wp (xiter_up_aux _a s) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
-  intros. ITER.
-  funelim (walk_up_aux _a s); cleanup; clear Heqcall; intros;
+  intros. XITER.
+  funelim (xiter_up_aux _a s); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
-  { eapply Hstep; pack; tc; intros.
+  { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
     + wp_op H sout. assumption.
     (* Exit continuation. *)
@@ -1344,18 +1344,18 @@ Proof.
   { wp_ret. eauto. }
 Qed.
 
-End WalkUp.
+End XiterUp.
 
-(* [walk_up] with reordered parameters. *)
+(* [xiter_up] with reordered parameters. *)
 
-Definition walk_up {S A} _a _b s
-  (body : int → S → ∀ {W}, (S → W) → (S → A → W) → W) :=
-  walk_up_aux _b body _a s.
+Definition xiter_up {S A} _a _b s
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :=
+  xiter_up_aux _b (@body) _a s.
 
-(* The specification of [walk_up]. *)
+(* The specification of [xiter_up]. *)
 
-Definition wp_walk_up :=
-  @wp_walk_up_aux.
+Definition wp_xiter_up :=
+  @wp_xiter_up_aux.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1367,19 +1367,19 @@ Implicit Types _a : int.
 Variable _b : int.
 
 (* The loop body: [body _a continue break]. *)
-Variable body : int → ∀ {W}, (unit → W) → (A → W) → W.
+Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
 
 (* The code. *)
-Equations uxiter_up_aux _a : option A
+Equations uxiter_up_aux _a : outcome A
 by wf _a igt :=
 uxiter_up_aux _a
 with inspect (_a <? _b)%uint63 => {
 | inspected true :=
     let continue s := uxiter_up_aux (_a+1)%uint63 in
-    let break x := Some x in
+    let break x := Break x in
     body _a continue break
 | inspected false :=
-    None
+    Continue
 }.
 Next Obligation.
   eauto using safe_increment'.
@@ -1395,11 +1395,11 @@ Lemma wp_uxiter_up_aux :
   representable b →
   UXITER
     (step_up a b) a (complete_up a b)
-    (λ _j j _ normal exit Q, wp (body _j normal exit) Q)
+    (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_up_aux _a) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
-  intros. intros ? Hinit Hbody.
+  intros. UXITER.
   funelim (uxiter_up_aux _a); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
@@ -1417,9 +1417,9 @@ End UXIterUp.
 (* [uxiter_up] with reordered parameters. *)
 
 Definition uxiter_up {A} _a _b
-  (body : int → ∀ {W}, (unit → W) → (A → W) → W) :=
-  uxiter_up_aux _b body _a.
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
+  uxiter_up_aux _b (@body) _a.
 
-(* TODO define a tactic *)
-Definition wp_uxiter_up :=
-  @wp_uxiter_up_aux.
+Global Ltac wp_uxiter_up I :=
+  unfold uxiter_up at 1;
+  wp_loop @wp_uxiter_up_aux I.

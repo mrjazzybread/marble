@@ -8,15 +8,35 @@ Set Universe Polymorphism.
 (* -------------------------------------------------------------------------- *)
 
 (* An exitable loop lets the loop body return an instruction to either
-   continue or stop (break). We write [out] for such an instruction:
-   its type is [option A]. *)
+   continue or stop (break). We write [out] for such an instruction. *)
 
-(* TODO use a dedicated type instead of abusing [option] *)
+(* This type is isomorphic to [option A]. We prefer to use a distinct
+   type so as to avoid confusion. *)
 
-Global Notation break      := Some.
-Global Notation continue   := None.
+Inductive outcome (A : Type) : Type :=
+| Break : A → outcome A
+| Continue : outcome A.
 
-Global Notation broken out := (out ≠ continue).
+Arguments Break {A} x.
+Arguments Continue {A}.
+
+(* [broken out] means that [out] is [Break _]. *)
+
+Global Notation broken out := (out ≠ Continue).
+
+(* These conversion functions can be useful. *)
+
+Definition did_break {A} (out : outcome A) :=
+  match out with
+  | Continue => false
+  | Break _  => true
+  end.
+
+Definition did_not_break {A} (out : outcome A) :=
+  match out with
+  | Continue => true
+  | Break _  => false
+  end.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -117,9 +137,9 @@ End ITER.
 
 (* At an abstract level, an exitable loop can be viewed essentially as a
    normal loop where the user state is a pair [(s, out)]. When [out] is
-   [break _], the loop stops. In the contrapositive form, if the loop
-   body is invoked, then [out] must be [continue]. Thus the loop body
-   may assume [out = continue]. Furthermore, once the loop terminates,
+   [Break _], the loop stops. In the contrapositive form, if the loop
+   body is invoked, then [out] must be [Continue]. Thus the loop body
+   may assume [out = Continue]. Furthermore, once the loop terminates,
    one cannot assume [complete k], as in a normal loop; instead one must
    assume [complete k ∨ broken out]. *)
 
@@ -131,7 +151,7 @@ End ITER.
    this seems to require [match/match] commutations and other magic.
    A better approach is to provide the loop body with two continuations:
    the loop body invokes one or the other to indicate how to proceed.
-   (In other words, the loop body returns a Church-encoded option.)
+   (In other words, the loop body returns a Church-encoded outcome.)
    The fact that the user state involves two components [s] and [out] is
    still visible in the specification, where the loop invariant takes
    the form [inv j s out]. *)
@@ -142,43 +162,40 @@ Section XITER.
 Context {S : Type}.
 Implicit Types s : S.
 
-(* The second component of the user state has type [option A].
+(* The second component of the user state has type [outcome A].
    In other words, [A] is the type of [x] in [break x]. *)
 Context {A : Type}.
-Implicit Types out : option A.
+Implicit Types out : outcome A.
 Implicit Types x : A.
 
-(* The loop body expects two continuations, which we name [normal] and
-   [exit] here, although in client code it may be desirable to name
-   them [continue] and [break], at the cost of a potential confusion
-   with the two constructors of the [option] type. *)
+(* The loop body expects two continuations [continue] and [break]. *)
 Variable body : ∀ {W}, O → P → S → (S → W) → (S → A → W) → WP W.
 
 (* The loop returns a pair [(s, out)]. *)
-Variable loop : S → WP (S * option A).
+Variable loop : S → WP (S * outcome A).
 
 (* The user's loop invariant takes the form [inv i s out] where [i] is
    the current logical producer state and [(s, out)] is the current user
    state. We use a curried form for increased comfort. *)
-Implicit Types inv : P → S → option A → Prop.
+Implicit Types inv : P → S → outcome A → Prop.
 
 (* The specification of an exitable loop takes the following form. *)
 
 Definition XITER :=
   ∀ inv s,
-  (* Initially, [out] is continue. *)
-  inv init s continue →
+  (* Initially, [out] is [Continue]. *)
+  inv init s Continue →
   (* When the loop body is invoked,
-     it can assume that [out] is [continue]. *)
+     it can assume that [out] is [Continue]. *)
   ( ∀ j0 o j j1 s ,
-    inv j0 s continue →
+    inv j0 s Continue →
     step j0 o j j1 →
-    ∀ {W} (Q : W → Prop) normal exit,
-    (* Invoking [normal s] is like returning [continue]. *)
-    (∀ s  , inv j1 s continue  → wp (normal s) Q) →
-    (* Invoking [exit s x] is like returning [break x]. *)
-    (∀ s x, inv j1 s (break x) → wp (exit s x) Q) →
-    body o j s normal exit Q
+    ∀ {W} (Q : W → Prop) (continue : S → W) (break : S → A → W),
+    (* Invoking [continue s] is like returning [(s, Continue)]. *)
+    (∀ s  , inv j1 s Continue  → wp (continue s) Q) →
+    (* Invoking [break s x] is like returning [(s, Break x)]. *)
+    (∀ s x, inv j1 s (Break x) → wp (break s x) Q) →
+    body o j s continue break Q
   ) →
   (* Once the loop ends, we have either [complete k] or [broken out]. *)
   loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
@@ -187,20 +204,19 @@ Definition XITER :=
    the loop body, the continuations, and the loop have slightly simpler
    types. The loop invariant is [inv j out] instead of [inv j s out]. *)
 
-Variable ubody : O → P → ∀ {W}, (unit → W) → (A → W) → WP W.
-
-Variable uloop : WP (option A).
+Variable ubody : ∀ {W}, O → P → (unit → W) → (A → W) → WP W.
+Variable uloop : WP (outcome A).
 
 Definition UXITER :=
-  ∀ (inv : P → option A → Prop) ,
-  inv init continue →
+  ∀ (inv : P → outcome A → Prop) ,
+  inv init Continue →
   ( ∀ j0 o j j1 ,
-    inv j0 continue →
+    inv j0 Continue →
     step j0 o j j1 →
-    ∀ {W} (Q : W → Prop) normal exit,
-    (     inv j1 continue  → wp (normal()) Q) →
-    (∀ x, inv j1 (break x) → wp (exit x  ) Q) →
-    ubody o j normal exit Q
+    ∀ {W} (Q : W → Prop) continue break,
+    (     inv j1 Continue  → wp (continue()) Q) →
+    (∀ x, inv j1 (Break x) → wp (break x   ) Q) →
+    ubody o j continue break Q
   ) →
   uloop (λ out, ∃ k, (complete k ∨ broken out) ∧ inv k out).
 
@@ -269,3 +285,5 @@ Definition ITER_LIST {S A}
   (loop : S → WP S)
 :=
   ITER_LIST_TAIL [] xs body loop.
+
+(* -------------------------------------------------------------------------- *)
