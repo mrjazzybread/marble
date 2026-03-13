@@ -1148,6 +1148,9 @@ Proof.
   { wp_op @wp_iter_down_aux s'. eauto. }
 Qed.
 
+Global Ltac wp_iter_down I :=
+  wp_loop @wp_iter_down I.
+
 (* [iter_down _k _i s @@ λ _j s, ...] is a nice way of writing a loop.
 *)
 

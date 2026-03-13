@@ -430,7 +430,7 @@ Proof.
      It does not need to unfold the definition of [isArray]. *)
   intros. unfold segment_to_list.
   (* The loop invariant. *)
-  wp_loop @int.wp_iter_down (λ j ys, ys = seg j k xs).
+  int.wp_iter_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
   { wp_get x.
     wp_ret. subst.
@@ -472,10 +472,10 @@ Proof.
   assert (n ≤ max_array_length).
   { subst n _n. simple eapply leb_length'. }
   assert (representable n) by tc.
-  (* The loop invariant: when the loop index is [j] and the state is [xs],
-     the length of [xs] is [n - j] and the elements of [xs] are the elements
+  (* The loop invariant: when the loop index is [j] and the state is [ys],
+     the length of [ys] is [n - j] and the elements of [ys] are the elements
      found at indices [j, n) in the array [a]. *)
-  wp_loop @int.wp_iter_down (λ j (ys : list A),
+  int.wp_iter_down (λ j ys,
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
   );
