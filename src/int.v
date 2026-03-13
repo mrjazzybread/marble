@@ -1167,9 +1167,9 @@ Implicit Types s : S.
    carried around in a tuple, itself encoded using nested pairs. *)
 
 Variable _k : int.
-Variable f : int → S → S.
+Variable body : int → S → S.
 
-(* [iter_up_aux _i s] applies the loop body [f] to every machine integer
+(* [iter_up_aux _i s] applies the loop body [body] to every machine integer
    from [_i], included, up to [_k], excluded. A state of type [S] is
    carried, whose initial value is [s]. *)
 
@@ -1186,7 +1186,7 @@ Equations iter_up_aux _i s : S
 by wf _i igt :=
 iter_up_aux _i s with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    do s ← f _i s ;
+    do s ← body _i s ;
     do s ← iter_up_aux (_i+1)%uint63 s ;
     s ;
 | inspected false :=
@@ -1200,16 +1200,16 @@ End IterUp.
 
 (* A specification of [iter_up_aux], which also serves for [iter_up]. *)
 
-Lemma wp_iter_up_aux {S} (f : int → S → S) :
+Lemma wp_iter_up_aux {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
   ITER_UP i k
-    (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (iter_up_aux _k f _i s) Q).
+    (λ _j j s Q, wp (body _j s) Q)
+    (λ s Q, wp (iter_up_aux _k body _i s) Q).
 Proof.
   intros. ITER.
-  funelim (iter_up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
-  autorewrite with nat.
+  funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
+  isBool_magic; autorewrite with nat.
   (* Case [i < k]. *)
   { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
@@ -1218,14 +1218,12 @@ Qed.
 
 (* A definition of [iter_up], with reordered parameters. *)
 
-(* [iter_up _i _k s f] applies the loop body [f] to every machine integer
-   from [_i], included, up to [_k], excluded. A state of type [S] is
-   carried, whose initial value is [s]. *)
+(* [iter_up _i _k s body] applies the loop body [body] to every machine
+   integer from [_i], included, up to [_k], excluded. A state of type [S]
+   is carried, whose initial value is [s]. *)
 
-(* [iter_up _i _k s @@ λ _j s, ...] is a convenient way of writing a loop. *)
-
-Definition iter_up {S} _i _k s (f : int → S → S) :=
-  iter_up_aux _k f _i s.
+Definition iter_up {S} _i _k s (body : int → S → S) :=
+  iter_up_aux _k body _i s.
 
 Global Ltac wp_iter_up I :=
   unfold iter_up at 1;
@@ -1233,31 +1231,30 @@ Global Ltac wp_iter_up I :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* An interruptible loop, counting up from [a] to [b]. The loop can be
+(* An interruptible loop, counting up from [i] to [k]. The loop can be
    broken via an early exit: the loop body receives two continuations
    [continue] and [break] and must invoke either [continue s] or
    [break s x]. *)
 
 Section XiterUp.
 Context {S A : Type}.
-Implicit Types _a : int.
 Implicit Types s : S.
 
 (* The upper bound. *)
-Variable _b : int.
+Variable _k : int.
 
-(* The loop body: [body _a s continue break]. *)
+(* The loop body: [body _i s continue break]. *)
 Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
 
 (* The code. *)
-Equations xiter_up_aux _a s : S * outcome A
-by wf _a igt :=
-xiter_up_aux _a s
-with inspect (_a <? _b)%uint63 => {
+Equations xiter_up_aux _i s : S * outcome A
+by wf _i igt :=
+xiter_up_aux _i s
+with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    let continue s := xiter_up_aux (_a+1)%uint63 s in
+    let continue s := xiter_up_aux (_i+1)%uint63 s in
     let break s x := (s, Break x) in
-    body _a s continue break
+    body _i s continue break
 | inspected false :=
     (s, Continue)
 }.
@@ -1271,16 +1268,16 @@ End XiterUp.
 
 Lemma wp_xiter_up_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
-  ∀IntR _a a ,
-  ∀IntR _b b ,
+  ∀IntR _i i ,
+  ∀IntR _k k ,
   XITER
-    (step_up a b) a (complete_up a b)
+    (step_up i k) i (complete_up i k)
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_up_aux _b (@body) _a s) Q).
+    (λ s Q, wp (xiter_up_aux _k (@body) _i s) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. XITER.
-  funelim (xiter_up_aux _b (@body) _a s); cleanup; clear Heqcall; intros;
+  funelim (xiter_up_aux _k (@body) _i s); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
@@ -1294,9 +1291,9 @@ Qed.
 
 (* [xiter_up] with reordered parameters. *)
 
-Definition xiter_up {S A} _a _b s
+Definition xiter_up {S A} _i _k s
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :=
-  xiter_up_aux _b (@body) _a s.
+  xiter_up_aux _k (@body) _i s.
 
 (* The specification of [xiter_up]. *)
 
@@ -1307,23 +1304,22 @@ Definition wp_xiter_up :=
 
 Section UXIterUp.
 Context {A : Type}.
-Implicit Types _a : int.
 
 (* The upper bound. *)
-Variable _b : int.
+Variable _k : int.
 
-(* The loop body: [body _a continue break]. *)
+(* The loop body: [body _i continue break]. *)
 Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
 
 (* The code. *)
-Equations uxiter_up_aux _a : outcome A
-by wf _a igt :=
-uxiter_up_aux _a
-with inspect (_a <? _b)%uint63 => {
+Equations uxiter_up_aux _i : outcome A
+by wf _i igt :=
+uxiter_up_aux _i
+with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    let continue s := uxiter_up_aux (_a+1)%uint63 in
+    let continue s := uxiter_up_aux (_i+1)%uint63 in
     let break x := Break x in
-    body _a continue break
+    body _i continue break
 | inspected false :=
     Continue
 }.
@@ -1336,16 +1332,16 @@ End UXIterUp.
 (* A specification of [uxiter_up_aux]. *)
 
 Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
-  ∀IntR _a a ,
-  ∀IntR _b b ,
+  ∀IntR _i i ,
+  ∀IntR _k k ,
   UXITER
-    (step_up a b) a (complete_up a b)
+    (step_up i k) i (complete_up i k)
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_up_aux _b (@body) _a) Q).
+    (λ Q, wp (uxiter_up_aux _k (@body) _i) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. UXITER.
-  funelim (uxiter_up_aux _b (@body) _a); cleanup; clear Heqcall; intros;
+  funelim (uxiter_up_aux _k (@body) _i); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
@@ -1359,9 +1355,9 @@ Qed.
 
 (* [uxiter_up] with reordered parameters. *)
 
-Definition uxiter_up {A} _a _b
+Definition uxiter_up {A} _i _k
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
-  uxiter_up_aux _b (@body) _a.
+  uxiter_up_aux _k (@body) _i.
 
 Global Ltac wp_uxiter_up I :=
   unfold uxiter_up at 1;
