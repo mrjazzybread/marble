@@ -1153,6 +1153,89 @@ Global Ltac wp_iter_down I :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* An exitable loop, counting down, using machine integers. *)
+
+Section XIterDown.
+Context {S A : Type}.
+Implicit Types s : S.
+
+(* The lower bound. *)
+Variable _i : int.
+
+(* The loop body: [body _j s continue break]. *)
+Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
+
+(* The code. *)
+Equations xiter_down_aux _j s : S * outcome A
+by wf _j (rilt _i) :=
+xiter_down_aux _j s with inspect (_j =? _i)%uint63 => {
+| inspected true :=
+    let continue s := (s, Continue) in
+    let break s x := (s, Break x) in
+    body _j s continue break
+| inspected false :=
+    let continue s := xiter_down_aux (_j - 1)%uint63 s in
+    let break s x := (s, Break x) in
+    body _j s continue break
+}.
+Next Obligation.
+  eauto using safe_decrement_relative'.
+Qed.
+
+End XIterDown.
+
+(* A specification of [xiter_down_aux]. *)
+
+Lemma wp_xiter_down_aux {S A}
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
+  i ≤ j →
+  XITER
+    (step_down i (j + 1)) (j + 1) (complete_down i (j + 1))
+    (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
+    (λ s Q, wp (xiter_down_aux _i (@body) _j s) Q).
+Proof.
+  intros. XITER.
+  funelim (xiter_down_aux _i (@body) _j s); cleanup; clear Heqcall;
+  intros; isBool_magic; autorewrite with nat.
+  (* Case [j = i]. *)
+  { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
+  (* Case [j ≠ i]. *)
+  { rename H into IH. eapply Hbody; pack; tc.
+    + wp_op IH s'. assumption.
+    + wp_ret. eauto. }
+Qed.
+
+Definition xiter_down {S A} _k _i (s : S)
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :=
+  if (_k ≤? _i)%uint63 then (s, Continue)
+  else xiter_down_aux _i (@body) (_k - 1) s.
+
+(* A specification of [xiter_down]. *)
+
+Lemma wp_xiter_down {S A}
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
+  ∀IntR _i i ,
+  ∀IntR _k k ,
+  XITER
+    (step_down i k) k (complete_down i k)
+    (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
+    (λ s Q, wp (xiter_down _k _i s (@body)) Q).
+Proof.
+  intros. XITER. unfold xiter_down.
+  wp_if; autorewrite with nat.
+  (* Case [k ≤ i]. *)
+  { wp_ret. eauto. }
+  (* Case [i < k]. *)
+  { wp_op @wp_xiter_down_aux s'. eauto. }
+Qed.
+
+Global Ltac wp_xiter_down I :=
+  wp_loop @wp_xiter_down I.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A loop, counting up from [i] to [k], using machine integers. *)
 
 (* Our intervals are semi-open on the right end: [i] is included,
@@ -1179,7 +1262,7 @@ Variable body : int → S → S.
    and [inspected] is an idiosyncratic way of making the outcome of the
    test visible at the logical level in the branches. In the second
    branch, the fact that [_i <? _k] is false is needed in order to prove
-   that [_i+1] is less than [_i], a fact which itself is required by the
+   that [_i + 1] is less than [_i], a fact which itself is required by the
    termination argument. *)
 
 Equations iter_up_aux _i s : S
@@ -1187,7 +1270,7 @@ by wf _i igt :=
 iter_up_aux _i s with inspect (_i <? _k)%uint63 => {
 | inspected true :=
     do s ← body _i s ;
-    do s ← iter_up_aux (_i+1)%uint63 s ;
+    do s ← iter_up_aux (_i + 1)%uint63 s ;
     s ;
 | inspected false :=
     s
@@ -1231,7 +1314,7 @@ Global Ltac wp_iter_up I :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* An interruptible loop, counting up from [i] to [k]. The loop can be
+(* An exitable loop, counting up from [i] to [k]. The loop can be
    broken via an early exit: the loop body receives two continuations
    [continue] and [break] and must invoke either [continue s] or
    [break s x]. *)
@@ -1252,7 +1335,7 @@ by wf _i igt :=
 xiter_up_aux _i s
 with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    let continue s := xiter_up_aux (_i+1)%uint63 s in
+    let continue s := xiter_up_aux (_i + 1)%uint63 s in
     let break s x := (s, Break x) in
     body _i s continue break
 | inspected false :=
@@ -1317,7 +1400,7 @@ by wf _i igt :=
 uxiter_up_aux _i
 with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    let continue s := uxiter_up_aux (_i+1)%uint63 in
+    let continue s := uxiter_up_aux (_i + 1)%uint63 in
     let break x := Break x in
     body _i continue break
 | inspected false :=
