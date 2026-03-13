@@ -1088,7 +1088,7 @@ Proof.
       + tc.
       (* Case: [notOK x]. *)
       + match goal with H: _ → ?goal |- ?goal => eapply H end.
-        eapply one_step_further; eauto. }}
+        eapply one_step_up; eauto. }}
   { autorewrite with nat.
     intros [|] (k&?&?).
     (* Subcase: the loop has ended by breaking. The loop index is an
@@ -1292,7 +1292,7 @@ Proof.
       wp_if; wp_bind_eq; subst.
       (* Case: [eq x y] returns [true]. *)
       { match goal with H: _ → ?goal |- ?goal => apply H end.
-        eapply one_step_further; eauto. }
+        eapply one_step_up; eauto. }
       (* Case: [eq x y] returns [false]. *)
       { list in *. eauto with lia. }
     }

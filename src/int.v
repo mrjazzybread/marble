@@ -1014,9 +1014,24 @@ Definition ITER_UP {S}
 
 (* -------------------------------------------------------------------------- *)
 
+(* This lemma can help prove that a loop invariant can be extended. *)
+
+(* Unfortunately, [eauto] refuses to use it as a hint, and I am also
+   unable to use it via [Hint Extern]. *)
+
+Lemma one_step_up {P : nat → Prop} i :
+  (∀ j, j < i → P j) →
+  P i →
+  ∀ j, j < i + 1 → P j.
+Proof.
+  intros. case (decide (j = i)); intros; try subst; eauto with lia.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A loop, counting down, using machine integers. *)
 
-Section Down.
+Section IterDown.
 Context {S : Type}.
 Implicit Types s : S.
 
@@ -1081,7 +1096,7 @@ Proof.
     eauto using safe_decrement_relative'.
 Defined.
 
-End Down.
+End IterDown.
 
 (* A specification of [down_aux]. *)
 
@@ -1143,7 +1158,7 @@ Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 (* Our intervals are semi-open on the right end: [i] is included,
    [k] is excluded. *)
 
-Section IterUpAux.
+Section IterUp.
 Context {S : Type}.
 Implicit Types s : S.
 
@@ -1181,16 +1196,11 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
-End IterUpAux.
-
-Section IterUp.
-Context {S : Type}.
-Implicit Types s : S.
-Implicit Types f : int → S → S.
+End IterUp.
 
 (* A specification of [iter_up_aux], which also serves for [iter_up]. *)
 
-Lemma wp_iter_up_aux f :
+Lemma wp_iter_up_aux {S} (f : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
   ITER_UP i k
@@ -1214,29 +1224,12 @@ Qed.
 
 (* [iter_up _i _k s @@ λ _j s, ...] is a convenient way of writing a loop. *)
 
-Definition iter_up _i _k s f :=
+Definition iter_up {S} _i _k s (f : int → S → S) :=
   iter_up_aux _k f _i s.
-
-End IterUp.
 
 Global Ltac wp_iter_up I :=
   unfold iter_up at 1;
   wp_loop @wp_iter_up_aux I.
-
-(* -------------------------------------------------------------------------- *)
-
-(* This lemma can help prove that a loop invariant can be extended. *)
-
-(* Unfortunately, [eauto] refuses to use it as a hint, and I am also
-   unable to use it via [Hint Extern]. *)
-
-Lemma one_step_further {P : nat → Prop} i :
-  (∀ j, j < i → P j) →
-  P i →
-  ∀ j, j < i + 1 → P j.
-Proof.
-  intros. case (decide (j = i)); intros; try subst; eauto with lia.
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
