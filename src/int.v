@@ -1290,9 +1290,9 @@ Global Ltac wp_up I :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* A variant of [up], counting up from [a] to [b], with the possibility of
-   interrupting the loop via an early exit: the loop body [f] returns an
-   instruction to either continue or stop (break). *)
+(* An interruptible loop, counting up from [a] to [b]. The loop can be
+   broken via an early exit: the loop body [f] returns an instruction to
+   either continue or stop (break). *)
 
 Section InterruptibleUpAux.
 Context {S A : Type}.
@@ -1404,6 +1404,146 @@ Lemma one_step_further {P : nat → Prop} i :
 Proof.
   intros. case (decide (j = i)); intros; try subst; eauto with lia.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* An interruptible loop, counting up from [a] to [b]. The loop can be
+   broken via an early exit: the loop body receives two continuations
+   [continue] and [break] and must invoke either [continue s] or
+   [break s x]. *)
+
+Section WalkUp.
+Context {S A : Type}.
+Implicit Types _a : int.
+Implicit Types s : S.
+
+(* The upper bound. *)
+Variable _b : int.
+
+(* The loop body: [body _a s continue break]. *)
+Variable body : int → S → ∀ {W}, (S → W) → (S → A → W) → W.
+
+(* The code. *)
+Equations walk_up_aux _a s : S * option A
+by wf _a igt :=
+walk_up_aux _a s
+with inspect (_a <? _b)%uint63 => {
+| inspected true :=
+    let continue s := walk_up_aux (_a+1)%uint63 s in
+    let break s x := (s, Some x) in
+    body _a s continue break
+| inspected false :=
+    (s, None)
+}.
+Next Obligation.
+  eauto using safe_increment'.
+Qed.
+
+(* A specification of [walk_up_aux]. *)
+
+Lemma wp_walk_up_aux :
+  ∀ _a a b ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  ITERX_CPS
+    (step_up a b) a (complete_up a b)
+    (λ _j j s W normal exit Q, wp (body _j s normal exit) Q)
+    (λ s Q, wp (walk_up_aux _a s) Q).
+Proof.
+  (* The spec is quite complex, but the proof is very simple. *)
+  intros. ITER.
+  funelim (walk_up_aux _a s); cleanup; clear Heqcall; intros;
+  isBool_magic; autorewrite with nat.
+  (* Case [a < b]. *)
+  { eapply Hstep; pack; tc; intros.
+    (* Normal continuation. *)
+    + wp_op H sout. assumption.
+    (* Exit continuation. *)
+    + wp_ret. eauto. }
+  (* Case [b ≤ a]. *)
+  { wp_ret. eauto. }
+Qed.
+
+End WalkUp.
+
+(* [walk_up] with reordered parameters. *)
+
+Definition walk_up {S A} _a _b s
+  (body : int → S → ∀ {W}, (S → W) → (S → A → W) → W) :=
+  walk_up_aux _b body _a s.
+
+(* The specification of [walk_up]. *)
+
+Definition wp_walk_up :=
+  @wp_walk_up_aux.
+
+(* -------------------------------------------------------------------------- *)
+
+Section IterUp.
+Context {A : Type}.
+Implicit Types _a : int.
+
+(* The upper bound. *)
+Variable _b : int.
+
+(* The loop body: [body _a continue break]. *)
+Variable body : int → ∀ {W}, (unit → W) → (A → W) → W.
+
+(* The code. *)
+Equations iter_up_aux _a : option A
+by wf _a igt :=
+iter_up_aux _a
+with inspect (_a <? _b)%uint63 => {
+| inspected true :=
+    let continue s := iter_up_aux (_a+1)%uint63 in
+    let break x := Some x in
+    body _a continue break
+| inspected false :=
+    None
+}.
+Next Obligation.
+  eauto using safe_increment'.
+Qed.
+
+(* A specification of [iter_up_aux]. *)
+
+Lemma wp_iter_up_aux :
+  ∀ _a a b ,
+  isInt _a a →
+  representable a →
+  isInt _b b →
+  representable b →
+  ITERXU_CPS
+    (step_up a b) a (complete_up a b)
+    (λ _j j _ normal exit Q, wp (body _j normal exit) Q)
+    (λ Q, wp (iter_up_aux _a) Q).
+Proof.
+  (* The spec is quite complex, but the proof is very simple. *)
+  intros. intros ? Hinit Hbody.
+  funelim (iter_up_aux _a); cleanup; clear Heqcall; intros;
+  isBool_magic; autorewrite with nat.
+  (* Case [a < b]. *)
+  { eapply Hbody; pack; tc; intros.
+    (* Normal continuation. *)
+    + wp_op (H()) out. eauto.
+    (* Exit continuation. *)
+    + wp_ret. eauto. }
+  (* Case [b ≤ a]. *)
+  { wp_ret. eauto. }
+Qed.
+
+End IterUp.
+
+(* [iter_up] with reordered parameters. *)
+
+Definition iter_up {A} _a _b
+  (body : int → ∀ {W}, (unit → W) → (A → W) → W) :=
+  iter_up_aux _b body _a.
+
+Definition wp_iter_up :=
+  @wp_iter_up_aux.
 
 (* -------------------------------------------------------------------------- *)
 

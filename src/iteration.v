@@ -107,7 +107,7 @@ End UserState.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A generic specification for an interruptible loop. *)
+(* Generic specifications for an interruptible loop. *)
 
 (* An interruptible loop lets the loop body return an instruction to either
    continue or stop (break). We write [out] for such an instruction, because
@@ -141,33 +141,77 @@ Implicit Types x : A.
 Local Notation U := (S * option A)%type.
 
 (* In the type of the loop body, we use [S → WP U] instead of [U → WP U]
-   because when the loop body is invoked, the the second component of
-   the user state is known; it must be [continue]. *)
+   because when the loop body is invoked, the second component of the user
+   state is known; it must be [continue]. *)
 Variable body : O → P → S → WP U.
+
+(* An alternative convention is to write the loop body in CPS style,
+   with two continuations, [normal] and [exit]. This convention seems
+   preferable in practice, as it avoids the need to allocate an option
+   and a pair at each iteration. It is worth noting that the type
+   [∀ {W}, (S → W) → (S → A → W) → W] is the Church encoding of
+   the type [S * option A]. *)
+Variable body_cps : O → P → S → ∀ {W}, (S → W) → (S → A → W) → WP W.
+
+Variable body_cps_unit : O → P → ∀ {W}, (unit → W) → (A → W) → WP W.
 
 (* Same convention here *)
 Variable loop : S → WP U.
+
+Variable loop_u : WP (option A).
 
 (* The user's loop invariant takes the form [inv i s out] where [i] is
    the current logical producer state and [(s, out)] is the current user
    state. We use a curried form for increased comfort. *)
 Implicit Types inv : P → S → option A → Prop.
 
-(* Then, the specification of a loop takes the following form. This is a
-   variant of [ITER]; we highlight just on the differences. *)
+(* In direct style, the specification of a loop takes the following
+   form. This is a variant of [ITER]; we highlight just on the
+   differences. *)
 
 Definition ITERX :=
   ∀ inv s ,
   (* Initially, [out] is continue. *)
   inv init s continue →
   (* When the loop body is invoked, it can assume that [out] is [continue]. *)
-  (∀ j0 o j j1 s ,
+  ( ∀ j0 o j j1 s ,
     inv j0 s continue →
     step j0 o j j1 →
     body o j s (λ '(s, out), inv j1 s out)
   ) →
   (* Once the loop ends, we have either [complete k] or [broken out]. *)
   loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
+
+(* In CPS style, the specification of a loop takes the following form. *)
+
+(* The specification indicates under what conditions the loop body is
+   allowed to invoke each of the continuations [normal] and [exit]. *)
+
+Definition ITERX_CPS :=
+  ∀ inv s,
+  inv init s continue →
+  ( ∀ j0 o j j1 s ,
+    inv j0 s continue →
+    step j0 o j j1 →
+    ∀ {W} (Q : W → Prop) normal exit,
+    (∀ s  , inv j1 s continue  → wp (normal s) Q) →
+    (∀ s x, inv j1 s (break x) → wp (exit s x) Q) →
+    body_cps o j s normal exit Q
+  ) →
+  loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
+
+Definition ITERXU_CPS :=
+  ∀ (inv : P → option A → Prop) ,
+  inv init continue →
+  ( ∀ j0 o j j1 ,
+    inv j0 continue →
+    step j0 o j j1 →
+    ∀ {W} (Q : W → Prop) normal exit,
+    (     inv j1 continue  → wp (normal()) Q) →
+    (∀ x, inv j1 (break x) → wp (exit x  ) Q) →
+    body_cps_unit o j normal exit Q
+  ) →
+  loop_u (λ out, ∃ k, (complete k ∨ broken out) ∧ inv k out).
 
 End UserState.
 

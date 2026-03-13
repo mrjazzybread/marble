@@ -1037,9 +1037,9 @@ Variable f : A → bool.
 
 Definition find_index a : option int :=
   do _n ← length a ;
-  interruptible_up_unit 0 _n @@ λ _i,
+  iter_up 0 _n @@ λ _i _ continue break,
   do x ← get a _i ;
-  if f x then break _i else continue.
+  if f x then break _i else continue ().
 
 (* Our hypothesis about [f]. *)
 
@@ -1077,34 +1077,30 @@ Lemma wp_find_index a xs :
 Proof.
   intros. unfold find_index.
   wp_length _n.
-  rewrite interruptible_up_unit_eq.
-  eapply wp_bind.
-  { eapply wp_interruptible_up
-      with (inv := λ j s o, find_index_inv xs j o);
-      tc; unfold find_index_inv.
+  (* TODO clean up *)
+  unfold iter_up.
+  eapply wp_conseq.
+  { eapply wp_iter_up with (inv := λ j o, find_index_inv xs j o); tc;
+    unfold find_index_inv.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
     { intros; unpack; subst.
       wp_get x. subst x.
-      rewrite bind_if. wp_if; wp_bind_eq; wp_ret.
+      wp_if; wp_bind_eq.
       (* Case: [OK x]. *)
-      + eauto with lia.
+      + tc.
       (* Case: [notOK x]. *)
-      + eapply one_step_further; eauto. }
-  }
-  (* The loop is finished. Conclude. *)
-  intros [ _ out ].
-  intros (k&?&?). wp_ret.
-  destruct out as [ _i |].
-  (* Subcase: the loop has ended with [break _i]. *)
-  (* The loop index is an unknown [k]. Fortunately
-     [find_index_inv xs k (break _i)] is independent of [k]. *)
-  + assumption.
-  (* Subcase: the loop has ended with [continue]. *)
-  (* The loop index must be [len xs]. *)
-  + assert (k = len xs) by tauto. subst k.
-    assumption.
+      + match goal with Hnormal: _ → ?goal |- ?goal => eapply Hnormal end.
+        eapply one_step_further; eauto. }}
+  { autorewrite with nat.
+    intros [|] (k&?&?).
+    (* Subcase: the loop has ended with [break _]. *)
+    (* The loop index is an unknown [i]. Fortunately
+       [find_index_inv xs k (break i)] is independent of [k]. *)
+    + assumption.
+    (* Subcase: the loop has ended normally. *)
+    + assert (k = len xs) by tauto. subst k. assumption. }
 Qed.
 
 End FindIndex.
@@ -1242,16 +1238,17 @@ Variable eq : A → A → bool.
 
 (* The code. *)
 
-Definition equal a b :=
+Definition equal_aux _m a b : option unit :=
+  iter_up 0 _m @@ λ _i _ continue break ,
+  do x ← get a _i ;
+  do y ← get b _i ;
+  if eq x y then continue () else break ().
+
+Definition equal a b : bool :=
   do _m ← length a ;
   do _n ← length b ;
   if (_m =? _n)%uint63 then
-    do o ← (
-      interruptible_up_unit 0 _m @@ λ _i ,
-      do x ← get a _i ;
-      do y ← get b _i ;
-      if eq x y then continue else break ()
-    ) ;
+    do o ← equal_aux _m a b ;
     match o with continue => true | break () => false end
   else
     false.
@@ -1297,27 +1294,27 @@ Proof.
   wp_length _n.
   wp_if.
   (* First branch: the lengths of the arrays coincide. *)
-  { rewrite interruptible_up_unit_eq, bind_bind.
-    eapply wp_bind.
-    { eapply wp_interruptible_up
-        with (inv := λ i s o, equal_inv xs ys i o);
+  { eapply wp_bind.
+    { unfold equal_aux.
+      unfold iter_up.
+      eapply wp_iter_up
+        with (inv := λ i o, equal_inv xs ys i o);
         tc; unfold equal_inv; eauto with lia.
       (* Preservation. *)
       intros; unpack; subst.
       wp_get x. wp_get y.
-      rewrite bind_if. wp_if; wp_bind_eq; wp_ret; subst.
+      wp_if; wp_bind_eq; subst.
       (* Case: [eq x y] returns [true]. *)
-      { eapply one_step_further; eauto. }
+      { match goal with Hnormal: _ → ?goal |- ?goal => apply Hnormal end.
+        eapply one_step_further; eauto. }
       (* Case: [eq x y] returns [false]. *)
-      { list. eauto with lia. }
+      { list in *. eauto with lia. }
     }
-    intros [? [[]|]]; unfold equal_inv; intros (i&?); unpack;
-    unfold bind; wp_ret.
+    intros [[]|]; unfold equal_inv; intros (i&?); unpack; wp_ret.
     (* Case: the loop ends with [break ()]. *)
     { tc. }
     (* Case: the loop ends with [continue]. *)
-    { assert (i = len xs) by tauto. subst.
-      tc. }
+    { assert (i = len xs) by tauto. subst. tc. }
   }
   (* Second branch: the lengths of the arrays differ. *)
   { wp_ret. tc. }
