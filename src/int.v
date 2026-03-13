@@ -991,31 +991,6 @@ Definition ITER_DOWN {S}
 :=
   ITER (step_down i k) k (complete_down i k) body loop.
 
-(* In this variant, the loop indices [_k] and [_i] are explicitly passed
-   as arguments to the loop. [loop _k _i s Q] means that the loop, applied
-   to the extremum indices [_k] and [_i] and to the initial state [s],
-   establishes the postcondition [Q]. *)
-
-(* The precondition [P i k] typically expresses the fact that [i] and [k]
-   represent a valid segment with respect to a certain data structure. *)
-
-Definition SEGMENT_ITER_DOWN {S}
-  (P : nat → nat → Prop)
-  (body : int → nat → S → WP S)
-  (loop : int → int → S → WP S)
-:=
-  ∀ _i i _k k,
-  isInt _i i →
-  isInt _k k →
-  P i k →
-  ITER_DOWN i k body (loop _k _i).
-
-Ltac SEGMENT_ITER_DOWN :=
-  do 6 intro;
-  let HP := fresh in
-  intro HP; unpack in HP;
-  ITER.
-
 (* -------------------------------------------------------------------------- *)
 
 (* A generic specification for a loop over a segment of the integers,
@@ -1157,12 +1132,13 @@ Definition down {S} _k _i (s : S) f :=
 (* A specification of [down]. *)
 
 Lemma wp_down {S} (f : int → S → S) :
-  SEGMENT_ITER_DOWN
-    (λ i k, representable i ∧ representable k)
+  ∀IntR _i i ,
+  ∀IntR _k k ,
+  ITER_DOWN i k
     (λ _j j s Q, wp (f _j s) Q)
-    (λ _k _i s Q, wp (down _k _i s f) Q).
+    (λ s Q, wp (down _k _i s f) Q).
 Proof.
-  SEGMENT_ITER_DOWN. unfold down.
+  intros. ITER. unfold down.
   wp_if; autorewrite with nat.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
