@@ -84,6 +84,15 @@ Local Ltac destructAndKeepIsVectorCap :=
     intros (u&?&?&?)
   end.
 
+Global Instance isVector_representable `{Inhabited A} (a : vector A) xs :
+  isVector a xs →
+  representable (len xs).
+Proof.
+  intros. destructIsVector. destructIsVectorCap.
+  assert (representable (len (xs ++ unoccupied))) by tc.
+  list in *. tc.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 Section Operations.
@@ -368,12 +377,14 @@ Definition iteri v s f :=
 
 Lemma wp_segment_iteri v xs f :
   isVector v xs →
-  SEGMENT_ITER_UP
-    (λ i k, valid_seg i k xs)
+  ∀Int _i i ,
+  ∀Int _k k ,
+  valid_seg i k xs →
+  ITER_UP i k
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
-    (λ _i _k s Q, wp (segment_iteri v _i _k s f) Q).
+    (λ s Q, wp (segment_iteri v _i _k s f) Q).
 Proof.
-  intros. SEGMENT_ITER_UP. unfold segment_iteri.
+  intros. ITER. unfold segment_iteri.
   destructIsVector. destructIsVectorCap.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.

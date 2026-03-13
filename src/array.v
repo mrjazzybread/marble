@@ -419,12 +419,10 @@ Definition to_list a :=
    appears in the precondition of [to_list]. A stronger specification of
    [to_list] is given later on. *)
 
-Lemma wp_segment_to_list a xs _i i _k k :
+Lemma wp_segment_to_list a xs :
   isArray a xs →
-  isInt _i i →
-  representable i →
-  isInt _k k →
-  representable k →
+  ∀Int _i i ,
+  ∀Int _k k ,
   valid_seg i k xs →
   wp (segment_to_list a _i _k) (λ xs', xs' = seg i k xs).
 Proof.
@@ -1364,12 +1362,14 @@ Definition iteri a s f :=
 
 Lemma wp_segment_iteri a xs f :
   isArray a xs →
-  SEGMENT_ITER_UP
-    (λ i k, valid_seg i k xs)
+  ∀Int _i i ,
+  ∀Int _k k ,
+  valid_seg i k xs →
+  ITER_UP i k
     (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
-    (λ _i _k s Q, wp (segment_iteri a _i _k s f) Q).
+    (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
-  intros. SEGMENT_ITER_UP. unfold segment_iteri.
+  intros. ITER. unfold segment_iteri.
   int.wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)

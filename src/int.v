@@ -534,6 +534,23 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* This helps write specifications. *)
+
+Notation "'∀Int' _i i , P" :=
+  ( ∀ _i i ,
+    isInt _i i →
+    P
+  ) (at level 200, _i name, i name).
+
+Notation "'∀IntR' _i i , P" :=
+  ( ∀ _i i ,
+    isInt _i i →
+    representable i →
+    P
+  ) (at level 200, _i name, i name).
+
+(* -------------------------------------------------------------------------- *)
+
 (* Equality. *)
 
 (* In the absence of hypotheses about the natural integers [i] and [j], an
@@ -1032,31 +1049,6 @@ Definition ITER_UP {S}
 :=
   ITER (step_up i k) i (complete_up i k) body loop.
 
-(* In this variant, the loop indices [_i] and [_k] are explicitly passed
-   as arguments to the loop. [loop _i _k s Q] means that the loop, applied
-   to the extremum indices [_i] and [_k] and to the initial state [s],
-   establishes the postcondition [Q]. *)
-
-(* The precondition [P i k] typically expresses the fact that [i] and [k]
-   represent a valid segment with respect to a certain data structure. *)
-
-Definition SEGMENT_ITER_UP {S}
-  (P : nat → nat → Prop)
-  (body : int → nat → S → WP S)
-  (loop : int → int → S → WP S)
-:=
-  ∀ _i i _k k,
-  isInt _i i →
-  isInt _k k →
-  P i k →
-  ITER_UP i k body (loop _i _k).
-
-Ltac SEGMENT_ITER_UP :=
-  do 6 intro;
-  let HP := fresh in
-  intro HP; unpack in HP;
-  ITER.
-
 (* -------------------------------------------------------------------------- *)
 
 (* A loop, counting down, using machine integers. *)
@@ -1237,12 +1229,13 @@ Implicit Types f : int → S → S.
 (* A specification of [iter_up_aux], which also serves for [iter_up]. *)
 
 Lemma wp_iter_up_aux f :
-  SEGMENT_ITER_UP
-    (λ i k, representable i ∧ representable k)
+  ∀IntR _i i ,
+  ∀IntR _k k ,
+  ITER_UP i k
     (λ _j j s Q, wp (f _j s) Q)
-    (λ _i _k s Q, wp (iter_up_aux _k f _i s) Q).
+    (λ s Q, wp (iter_up_aux _k f _i s) Q).
 Proof.
-  SEGMENT_ITER_UP.
+  intros. ITER.
   funelim (iter_up_aux _k f _i s); cleanup; clear Heqcall; isBool_magic;
   autorewrite with nat.
   (* Case [i < k]. *)
