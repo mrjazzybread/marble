@@ -5,7 +5,13 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
-(* Notation for interruptible loops. *)
+(* -------------------------------------------------------------------------- *)
+
+(* An exitable loop lets the loop body return an instruction to either
+   continue or stop (break). We write [out] for such an instruction:
+   its type is [option A]. *)
+
+(* TODO use a dedicated type instead of abusing [option] *)
 
 Global Notation break      := Some.
 Global Notation continue   := None.
@@ -14,9 +20,9 @@ Global Notation broken out := (out ≠ continue).
 
 (* -------------------------------------------------------------------------- *)
 
-(* A generic specification for a loop. *)
+(* Generic specifications for loops. *)
 
-Section Iter.
+Section Loops.
 
 (* We distinguish the producer state and the user state.
 
@@ -55,7 +61,7 @@ Variable init : P.
    that is, the producer states where the producer may stop. *)
 Variable complete : P → Prop.
 
-Section UserState.
+Section ITER.
 
 (* [S] is the type of the user's state. *)
 Context {S : Type}.
@@ -103,29 +109,34 @@ Definition ITER :=
    producer state [init] to some final producer state [k] along the
    relation [step]. *)
 
-End UserState.
+End ITER.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Generic specifications for an interruptible loop. *)
+(* Generic specifications for exitable (interruptible) loops. *)
 
-(* An interruptible loop lets the loop body return an instruction to either
-   continue or stop (break). We write [out] for such an instruction, because
-   it is an option, and it is the outcome of the loop body. *)
+(* At an abstract level, an exitable loop can be viewed essentially as a
+   normal loop where the user state is a pair [(s, out)]. When [out] is
+   [break _], the loop stops. In the contrapositive form, if the loop
+   body is invoked, then [out] must be [continue]. Thus the loop body
+   may assume [out = continue]. Furthermore, once the loop terminates,
+   one cannot assume [complete k], as in a normal loop; instead one must
+   assume [complete k ∨ broken out]. *)
 
-(* An interruptible loop is essentially a normal loop where the user state
-   is a pair [(s, out)]. When [out] is [break _], the loop stops. In the
-   contrapositive form, if the loop body is invoked, then [out] must be
-   [continue]. Thus the loop body may assume [out = continue]. Furthermore,
-   once the loop terminates, one cannot assume [complete k], as usual;
-   instead one must assume [complete k ∨ broken out]. *)
+(* At runtime, an exitable loop can be implemented in several ways. One
+   approach is to ask the loop body to return a pair [(s, out)], and to
+   then inspect [out] to determine whether to continue or to stop. This
+   produces fairly bad code: an option and a pair are allocated at each
+   iteration. This code seems fairly difficult to optimize a posteriori:
+   this seems to require [match/match] commutations and other magic.
+   A better approach is to provide the loop body with two continuations:
+   the loop body invokes one or the other to indicate how to proceed.
+   (In other words, the loop body returns a Church-encoded option.)
+   The fact that the user state involves two components [s] and [out] is
+   still visible in the specification, where the loop invariant takes
+   the form [inv j s out]. *)
 
-(* We could adopt an even more abstract point of view, where the user state
-   is not necessarily a pair, and a predicate of type [S → Prop] determines
-   whether the user state allows or forbids continuing. But adopting a more
-   specific convention is more comfortable. *)
-
-Section UserState.
+Section XITER.
 
 (* The first component of the user's state has type [S]. *)
 Context {S : Type}.
@@ -137,70 +148,50 @@ Context {A : Type}.
 Implicit Types out : option A.
 Implicit Types x : A.
 
-(* The complete user state has type [S * option A]. *)
-Local Notation U := (S * option A)%type.
+(* The loop body expects two continuations, which we name [normal] and
+   [exit] here, although in client code it may be desirable to name
+   them [continue] and [break], at the cost of a potential confusion
+   with the two constructors of the [option] type. *)
+Variable body : ∀ {W}, O → P → S → (S → W) → (S → A → W) → WP W.
 
-(* In the type of the loop body, we use [S → WP U] instead of [U → WP U]
-   because when the loop body is invoked, the second component of the user
-   state is known; it must be [continue]. *)
-Variable body : O → P → S → WP U.
-
-(* An alternative convention is to write the loop body in CPS style,
-   with two continuations, [normal] and [exit]. This convention seems
-   preferable in practice, as it avoids the need to allocate an option
-   and a pair at each iteration. It is worth noting that the type
-   [∀ {W}, (S → W) → (S → A → W) → W] is the Church encoding of
-   the type [S * option A]. *)
-Variable body_cps : O → P → S → ∀ {W}, (S → W) → (S → A → W) → WP W.
-
-Variable body_cps_unit : O → P → ∀ {W}, (unit → W) → (A → W) → WP W.
-
-(* Same convention here *)
-Variable loop : S → WP U.
-
-Variable loop_u : WP (option A).
+(* The loop returns a pair [(s, out)]. *)
+Variable loop : S → WP (S * option A).
 
 (* The user's loop invariant takes the form [inv i s out] where [i] is
    the current logical producer state and [(s, out)] is the current user
    state. We use a curried form for increased comfort. *)
 Implicit Types inv : P → S → option A → Prop.
 
-(* In direct style, the specification of a loop takes the following
-   form. This is a variant of [ITER]; we highlight just on the
-   differences. *)
+(* The specification of an exitable loop takes the following form. *)
 
-Definition ITERX :=
-  ∀ inv s ,
+Definition XITER :=
+  ∀ inv s,
   (* Initially, [out] is continue. *)
   inv init s continue →
-  (* When the loop body is invoked, it can assume that [out] is [continue]. *)
-  ( ∀ j0 o j j1 s ,
-    inv j0 s continue →
-    step j0 o j j1 →
-    body o j s (λ '(s, out), inv j1 s out)
-  ) →
-  (* Once the loop ends, we have either [complete k] or [broken out]. *)
-  loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
-
-(* In CPS style, the specification of a loop takes the following form. *)
-
-(* The specification indicates under what conditions the loop body is
-   allowed to invoke each of the continuations [normal] and [exit]. *)
-
-Definition ITERX_CPS :=
-  ∀ inv s,
-  inv init s continue →
+  (* When the loop body is invoked,
+     it can assume that [out] is [continue]. *)
   ( ∀ j0 o j j1 s ,
     inv j0 s continue →
     step j0 o j j1 →
     ∀ {W} (Q : W → Prop) normal exit,
+    (* Invoking [normal s] is like returning [continue]. *)
     (∀ s  , inv j1 s continue  → wp (normal s) Q) →
+    (* Invoking [exit s x] is like returning [break x]. *)
     (∀ s x, inv j1 s (break x) → wp (exit s x) Q) →
-    body_cps o j s normal exit Q
+    body o j s normal exit Q
   ) →
+  (* Once the loop ends, we have either [complete k] or [broken out]. *)
   loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
 
-Definition ITERXU_CPS :=
+(* We propose a variant where the user state [s] has type [unit]. Then
+   the loop body, the continuations, and the loop have slightly simpler
+   types. The loop invariant is [inv j out] instead of [inv j s out]. *)
+
+Variable ubody : O → P → ∀ {W}, (unit → W) → (A → W) → WP W.
+
+Variable uloop : WP (option A).
+
+Definition UXITER :=
   ∀ (inv : P → option A → Prop) ,
   inv init continue →
   ( ∀ j0 o j j1 ,
@@ -209,21 +200,26 @@ Definition ITERXU_CPS :=
     ∀ {W} (Q : W → Prop) normal exit,
     (     inv j1 continue  → wp (normal()) Q) →
     (∀ x, inv j1 (break x) → wp (exit x  ) Q) →
-    body_cps_unit o j normal exit Q
+    ubody o j normal exit Q
   ) →
-  loop_u (λ out, ∃ k, (complete k ∨ broken out) ∧ inv k out).
+  uloop (λ out, ∃ k, (complete k ∨ broken out) ∧ inv k out).
 
-End UserState.
+End XITER.
 
 (* -------------------------------------------------------------------------- *)
 
-End Iter.
+End Loops.
 
-(* This tactic should be used whenever the goal is [ITER ...]
-   or one of its variants. *)
+(* The tactic [ITER] should be used when the goal is [ITER ...]. *)
 
 Ltac ITER :=
   intros ? ? Hinit Hstep.
+
+Ltac XITER :=
+  intros ? ? Hinit Hbody.
+
+Ltac UXITER :=
+  intros ? Hinit Hbody.
 
 (* -------------------------------------------------------------------------- *)
 
