@@ -1272,22 +1272,22 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
+End XiterUp.
+
 (* A specification of [xiter_up_aux]. *)
 
-Lemma wp_xiter_up_aux :
-  ∀ _a a b ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
+Lemma wp_xiter_up_aux {S A}
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
+  ∀IntR _a a ,
+  ∀IntR _b b ,
   XITER
     (step_up a b) a (complete_up a b)
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_up_aux _a s) Q).
+    (λ s Q, wp (xiter_up_aux _b (@body) _a s) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. XITER.
-  funelim (xiter_up_aux _a s); cleanup; clear Heqcall; intros;
+  funelim (xiter_up_aux _b (@body) _a s); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
@@ -1298,8 +1298,6 @@ Proof.
   (* Case [b ≤ a]. *)
   { wp_ret. eauto. }
 Qed.
-
-End XiterUp.
 
 (* [xiter_up] with reordered parameters. *)
 
@@ -1340,22 +1338,21 @@ Next Obligation.
   eauto using safe_increment'.
 Qed.
 
+End UXIterUp.
+
 (* A specification of [uxiter_up_aux]. *)
 
-Lemma wp_uxiter_up_aux :
-  ∀ _a a b ,
-  isInt _a a →
-  representable a →
-  isInt _b b →
-  representable b →
+Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
+  ∀IntR _a a ,
+  ∀IntR _b b ,
   UXITER
     (step_up a b) a (complete_up a b)
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_up_aux _a) Q).
+    (λ Q, wp (uxiter_up_aux _b (@body) _a) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. UXITER.
-  funelim (uxiter_up_aux _a); cleanup; clear Heqcall; intros;
+  funelim (uxiter_up_aux _b (@body) _a); cleanup; clear Heqcall; intros;
   isBool_magic; autorewrite with nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
@@ -1366,8 +1363,6 @@ Proof.
   (* Case [b ≤ a]. *)
   { wp_ret. eauto. }
 Qed.
-
-End UXIterUp.
 
 (* [uxiter_up] with reordered parameters. *)
 
