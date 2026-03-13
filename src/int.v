@@ -1038,7 +1038,7 @@ Implicit Types s : S.
 Variable _i : int.
 Variable f : int → S → S.
 
-(* [down_aux _j s] applies the loop body [f] to every machine integer from
+(* [iter_down_aux _j s] applies the loop body [f] to every machine integer from
    [_j], included, down to [_i], included. A state of type [S] is carried,
    whose initial value is [s]. *)
 
@@ -1047,40 +1047,41 @@ Variable f : int → S → S.
    first decrement and then test the condition [_j <? _i]. If [_i] is zero
    then this would underflow. *)
 
-(* We use Equations to more easily define [down_aux] by well-founded recursion
-   over the loop counter [_j]. The somewhat strange [with] syntax is a way of
-   expressing the test [_j =? _i]. The use of [inspect] and [inspected] is an
-   idiosyncratic way of making the outcome of the test visible at the logical
-   level in the branches. In the second branch, the fact that [_j =? _i] is
-   false is needed in order to prove that [_j-1] is less than [_j], a fact
-   which itself is required by the termination argument. *)
+(* We use Equations to more easily define [iter_down_aux] by well-founded
+   recursion over the loop counter [_j]. The somewhat strange [with] syntax
+   is a way of expressing the test [_j =? _i]. The use of [inspect] and
+   [inspected] is an idiosyncratic way of making the outcome of the test
+   visible at the logical level in the branches. In the second branch, the
+   fact that [_j =? _i] is false is needed in order to prove that [_j-1] is
+   less than [_j], a fact which itself is required by the termination
+   argument. *)
 
 (* It is worth noting that the termination argument does not need the
    hypothesis [φ _i ≤ φ _j]. Even in the absence of this hypothesis,
-   termination is guaranteed, thanks to underflow. This said, later on,
-   when we give a specification of [down_aux], we assume [a ≤ i]. It would
+   termination is guaranteed, thanks to underflow. This said, later on, when
+   we give a specification of [iter_down_aux], we assume [a ≤ i]. It would
    be unnatural and inconvenient to propose a specification that allows
    underflow to take place. *)
 
-Equations down_aux _j s : S
+Equations iter_down_aux _j s : S
 by wf _j (rilt _i) :=
-down_aux _j s with inspect (_j =? _i)%uint63 => {
+iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
 | inspected true :=
     do s ← f _j s ;
     s ;
 | inspected false :=
     do s ← f _j s ;
-    down_aux (_j-1)%uint63 s
+    iter_down_aux (_j-1)%uint63 s
 }.
 Next Obligation.
   eauto using safe_decrement_relative'.
 Qed.
 
-(* For the record, here is an alternative direct definition of [down_aux],
-   which does not use Equations. At extraction time, this definition produces
-   slightly better-looking OCaml code. However, reasoning about it is more
-   difficult; we lose the fixed point equation and the induction principle
-   produced by Equations, which are used via the tactic [funelim]. *)
+(* For the record, here is a direct definition of [iter_down_aux], which does
+   not use Equations. At extraction time, this definition produces slightly
+   better-looking OCaml code. However, reasoning about it is more difficult;
+   we lose the fixed point equation and the induction principle produced by
+   Equations, which are used via the tactic [funelim]. *)
 Goal int → S → S.
 Proof.
   eapply (Fix (rilt_wf _i) (λ _, S → S)). intros _j self s.
@@ -1098,23 +1099,23 @@ Defined.
 
 End IterDown.
 
-(* A specification of [down_aux]. *)
+(* A specification of [iter_down_aux]. *)
 
 (* This specification requires [i ≤ k]: that is, the start index [k] must
    be greater than or equal to the end index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
-Lemma wp_down_aux {S} (f : int → S → S) :
+Lemma wp_iter_down_aux {S} (f : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
   ITER_DOWN
     i (j + 1)
     (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (down_aux _i f _j s) Q).
+    (λ s Q, wp (iter_down_aux _i f _j s) Q).
 Proof.
   intros. ITER.
-  funelim (down_aux _i f _j s); cleanup; clear Heqcall; intros; isBool_magic;
+  funelim (iter_down_aux _i f _j s); cleanup; clear Heqcall; intros; isBool_magic;
   autorewrite with nat.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
@@ -1122,32 +1123,33 @@ Proof.
   { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
 Qed.
 
-(* [down _k _i s f] applies the loop body [f] to every machine integer from
-   [_k], excluded, down to [_i], included. A state of type [S] is carried,
-   whose initial value is [s]. *)
+(* [iter_down _k _i s f] applies the loop body [f] to every machine integer
+   from [_k], excluded, down to [_i], included. A state of type [S] is
+   carried, whose initial value is [s]. *)
 
-Definition down {S} _k _i (s : S) f :=
+Definition iter_down {S} _k _i (s : S) f :=
   if (_k ≤? _i)%uint63 then s
-  else down_aux _i f (_k-1) s.
+  else iter_down_aux _i f (_k-1) s.
 
-(* A specification of [down]. *)
+(* A specification of [iter_down]. *)
 
-Lemma wp_down {S} (f : int → S → S) :
+Lemma wp_iter_down {S} (f : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
   ITER_DOWN i k
     (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (down _k _i s f) Q).
+    (λ s Q, wp (iter_down _k _i s f) Q).
 Proof.
-  intros. ITER. unfold down.
+  intros. ITER. unfold iter_down.
   wp_if; autorewrite with nat.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
-  { wp_op @wp_down_aux s'. eauto. }
+  { wp_op @wp_iter_down_aux s'. eauto. }
 Qed.
 
-(* [down _k _i s @@ λ _j s, ...] is a convenient way of writing a loop. *)
+(* [iter_down _k _i s @@ λ _j s, ...] is a nice way of writing a loop.
+*)
 
 Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 

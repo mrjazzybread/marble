@@ -399,7 +399,7 @@ Implicit Types xs : list A.
 Definition segment_to_list a _i _k :=
   (* For [_j] ranging from [_k] down to [_i],
      with running state [xs], initially empty, *)
-  down _k _i [] @@ λ _j xs,
+  int.iter_down _k _i [] @@ λ _j xs,
   (* Read the [_j]-th element of the array [a], *)
   do x ← a.[_j] ;
   (* and prepend it in front of [xs]. *)
@@ -430,7 +430,7 @@ Proof.
      It does not need to unfold the definition of [isArray]. *)
   intros. unfold segment_to_list.
   (* The loop invariant. *)
-  wp_loop @wp_down (λ j ys, ys = seg j k xs).
+  wp_loop @int.wp_iter_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
   { wp_get x.
     wp_ret. subst.
@@ -475,7 +475,7 @@ Proof.
   (* The loop invariant: when the loop index is [j] and the state is [xs],
      the length of [xs] is [n - j] and the elements of [xs] are the elements
      found at indices [j, n) in the array [a]. *)
-  wp_loop @wp_down (λ j (ys : list A),
+  wp_loop @int.wp_iter_down (λ j (ys : list A),
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
   );
@@ -775,7 +775,7 @@ Qed.
 (* Some tests of [to_list . of_list]. *)
 
 (* This test shows that [compute] is unable to properly evaluate
-   a call to [down_aux]. I don't know whether this is normal. *)
+   a call to [int.iter_down_aux]. I don't know whether this is normal. *)
 Goal to_list (of_list [1;2;3]) = [1;2;3].
 Proof. compute. Abort.
 
@@ -1331,9 +1331,9 @@ Qed.
 (* [segment_iteri] and [iteri]. *)
 
 (* An iteration function on an array is not super useful, as the user
-   can just as well use [up] or [down] directly. However, this is a
-   good exercise in preparation for defining iteration functions on
-   vectors, hash tables, or other containers.  *)
+   can just as well use [int.iter_up] or [int.iter_down] directly.
+   However, this is a good exercise in preparation for defining
+   iteration functions on vectors, hash tables, or other containers. *)
 
 (* Although we name this function [iteri], it carries a state, so it
    is of course a fold. *)

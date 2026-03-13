@@ -12,9 +12,9 @@ From array Require Import iteration.
 Extraction Inline did_break did_not_break.
 
 From array Require Import int.
-Extraction Inline down iter_up xiter_up uxiter_up.
+Extraction Inline iter_down iter_up xiter_up uxiter_up.
 
-(* Recursive Extraction down up interruptible_up interruptible_up_unit. *)
+(* Recursive Extraction iter_down iter_up xiter_up uxiter_up. *)
 
 From Stdlib Require ExtrOCamlPArray.
 From array Require Import array.
