@@ -119,9 +119,6 @@ Global Ltac check_flex_post :=
     is_evar Q
   end.
 
-(* TODO not useful? *)
-Global Ltac wp_let :=
-  match goal with
-  |- wp (let x := ?e in _) ?Q =>
-    set (x := e)
-  end.
+(* [iter_down _k _i s @@ λ _j s, ...] is a nice way of writing a loop. *)
+
+Global Notation "f '@@' x" := (f x) (at level 61, only parsing).

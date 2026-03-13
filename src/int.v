@@ -1036,11 +1036,11 @@ Context {S : Type}.
 Implicit Types s : S.
 
 Variable _i : int.
-Variable f : int → S → S.
+Variable body : int → S → S.
 
-(* [iter_down_aux _j s] applies the loop body [f] to every machine integer from
-   [_j], included, down to [_i], included. A state of type [S] is carried,
-   whose initial value is [s]. *)
+(* [iter_down_aux _j s] applies the loop body [body] to every machine
+   integer from [_j], included, down to [_i], included. A state of type [S]
+   is carried, whose initial value is [s]. *)
 
 (* We are careful to test the condition [_j =? _i] before decrementing [_j].
    Because our semi-open intervals are closed at the bottom end, we cannot
@@ -1052,8 +1052,8 @@ Variable f : int → S → S.
    is a way of expressing the test [_j =? _i]. The use of [inspect] and
    [inspected] is an idiosyncratic way of making the outcome of the test
    visible at the logical level in the branches. In the second branch, the
-   fact that [_j =? _i] is false is needed in order to prove that [_j-1] is
-   less than [_j], a fact which itself is required by the termination
+   fact that [_j =? _i] is false is needed in order to prove that [_j - 1]
+   is less than [_j], a fact which itself is required by the termination
    argument. *)
 
 (* It is worth noting that the termination argument does not need the
@@ -1067,32 +1067,32 @@ Equations iter_down_aux _j s : S
 by wf _j (rilt _i) :=
 iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
 | inspected true :=
-    do s ← f _j s ;
+    do s ← body _j s ;
     s ;
 | inspected false :=
-    do s ← f _j s ;
-    iter_down_aux (_j-1)%uint63 s
+    do s ← body _j s ;
+    iter_down_aux (_j - 1)%uint63 s
 }.
 Next Obligation.
   eauto using safe_decrement_relative'.
 Qed.
 
-(* For the record, here is a direct definition of [iter_down_aux], which does
-   not use Equations. At extraction time, this definition produces slightly
-   better-looking OCaml code. However, reasoning about it is more difficult;
-   we lose the fixed point equation and the induction principle produced by
-   Equations, which are used via the tactic [funelim]. *)
+(* For the record, here is a direct definition of [iter_down_aux], which
+   does not use Equations. At extraction time, this definition produces
+   slightly better-looking OCaml code. However, reasoning about it is more
+   difficult; we lose the fixed point equation and the induction principle
+   produced by Equations, which are used via the tactic [funelim]. *)
 Goal int → S → S.
 Proof.
   eapply (Fix (rilt_wf _i) (λ _, S → S)). intros _j self s.
   destruct (_j =? _i)%uint63 eqn:Heq.
   + refine (
-      do s ← f _j s ;
+      do s ← body _j s ;
       s
     ).
   + refine (
-      do s ← f _j s ;
-      self (_j-1)%uint63 _ s
+      do s ← body _j s ;
+      self (_j - 1)%uint63 _ s
     ).
     eauto using safe_decrement_relative'.
 Defined.
@@ -1105,40 +1105,40 @@ End IterDown.
    be greater than or equal to the end index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
-Lemma wp_iter_down_aux {S} (f : int → S → S) :
+Lemma wp_iter_down_aux {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
   ITER_DOWN
     i (j + 1)
-    (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (iter_down_aux _i f _j s) Q).
+    (λ _j j s Q, wp (body _j s) Q)
+    (λ s Q, wp (iter_down_aux _i body _j s) Q).
 Proof.
   intros. ITER.
-  funelim (iter_down_aux _i f _j s); cleanup; clear Heqcall; intros; isBool_magic;
-  autorewrite with nat.
+  funelim (iter_down_aux _i body _j s); cleanup; clear Heqcall;
+  intros; isBool_magic; autorewrite with nat.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
 Qed.
 
-(* [iter_down _k _i s f] applies the loop body [f] to every machine integer
-   from [_k], excluded, down to [_i], included. A state of type [S] is
-   carried, whose initial value is [s]. *)
+(* [iter_down _k _i s body] applies the loop body [body] to every machine
+   integer from [_k], excluded, down to [_i], included. A state of type [S]
+   is carried, whose initial value is [s]. *)
 
-Definition iter_down {S} _k _i (s : S) f :=
+Definition iter_down {S} _k _i (s : S) body :=
   if (_k ≤? _i)%uint63 then s
-  else iter_down_aux _i f (_k-1) s.
+  else iter_down_aux _i body (_k - 1) s.
 
 (* A specification of [iter_down]. *)
 
-Lemma wp_iter_down {S} (f : int → S → S) :
+Lemma wp_iter_down {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
   ITER_DOWN i k
-    (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (iter_down _k _i s f) Q).
+    (λ _j j s Q, wp (body _j s) Q)
+    (λ s Q, wp (iter_down _k _i s body) Q).
 Proof.
   intros. ITER. unfold iter_down.
   wp_if; autorewrite with nat.
@@ -1150,11 +1150,6 @@ Qed.
 
 Global Ltac wp_iter_down I :=
   wp_loop @wp_iter_down I.
-
-(* [iter_down _k _i s @@ λ _j s, ...] is a nice way of writing a loop.
-*)
-
-Global Notation "f '@@' x" := (f x) (at level 61, only parsing).
 
 (* -------------------------------------------------------------------------- *)
 
