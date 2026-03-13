@@ -557,9 +557,9 @@ Notation "'∀IntR' _i i , P" :=
    equality test on the machine integers [_i] and [_j] tests the condition
    [proj i = proj j]. *)
 
-Lemma isBool_eqb_proj _i i _j j :
-  isInt _i i →
-  isInt _j j →
+Lemma isBool_eqb_proj :
+  ∀Int _i i ,
+  ∀Int _j j ,
   isBool1 (_i =? _j)%uint63 (proj i = proj j).
 Proof.
   intros. eapply isBool_intro. rewrite eqb_spec.
@@ -571,11 +571,9 @@ Qed.
 (* If the natural integers [i] and [j] are representable then an equality
    test on the machine integers [_i] and [_j] tests the condition [i = j]. *)
 
-Global Instance isBool_eqb _i i _j j :
-  isInt _i i →
-  isInt _j j →
-  representable i →
-  representable j →
+Global Instance isBool_eqb :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
   isBool1 (_i =? _j)%uint63 (i = j).
 Proof.
   intros. eapply isBool1_conseq; [ eapply isBool_eqb_proj; eauto |].
@@ -593,9 +591,9 @@ Global Hint Resolve
 (* In the absence of hypotheses about the natural integers [i] and [j],
    the test [_i <?_j] tests the condition [proj i < proj j]. *)
 
-Lemma isBool_ltb_proj _i i _j j :
-  isInt _i i →
-  isInt _j j →
+Lemma isBool_ltb_proj :
+  ∀Int _i i ,
+  ∀Int _j j ,
   isBool1 (_i <? _j)%uint63 (proj i < proj j)%nat.
 Proof.
   generalize wB_pos; intro HwB. intros.
@@ -611,11 +609,9 @@ Qed.
 (* If the natural integers [i] and [j] are representable then
    the test [_i <?_j] tests the condition [i < j]. *)
 
-Global Instance isBool_ltb _i i _j j :
-  isInt _i i →
-  isInt _j j →
-  representable i →
-  representable j →
+Global Instance isBool_ltb :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
   isBool1 (_i <? _j)%uint63 (i < j)%nat.
 Proof.
   intros. eapply isBool1_conseq; [ eapply isBool_ltb_proj; eauto |].
@@ -625,9 +621,9 @@ Qed.
 (* In the absence of hypotheses about the natural integers [i] and [j],
    the test [_i ≤?_j] tests the condition [proj i ≤ proj j]. *)
 
-Lemma isBool_leb_proj _i i _j j :
-  isInt _i i →
-  isInt _j j →
+Lemma isBool_leb_proj :
+  ∀Int _i i ,
+  ∀Int _j j ,
   isBool1 (_i ≤? _j)%uint63 (proj i ≤ proj j)%nat.
 Proof.
   generalize wB_pos; intro HwB. intros.
@@ -643,11 +639,9 @@ Qed.
 (* If the natural integers [i] and [j] are representable then
    the test [_i ≤?_j] tests the condition [i ≤ j]. *)
 
-Global Instance isBool_leb _i i _j j :
-  isInt _i i →
-  isInt _j j →
-  representable i →
-  representable j →
+Global Instance isBool_leb :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
   isBool1 (_i ≤? _j)%uint63 (i ≤ j)%nat.
 Proof.
   intros. eapply isBool1_conseq; [ eapply isBool_leb_proj; eauto |].
@@ -664,11 +658,9 @@ Definition _min _m _n : int :=
 Definition _max _m _n : int :=
   if (_m ≤? _n)%uint63 then _n else _m.
 
-Global Instance isInt_min _m m _n n :
-  isInt _m m →
-  isInt _n n →
-  representable m →
-  representable n →
+Global Instance isInt_min :
+  ∀IntR _m m ,
+  ∀IntR _n n ,
   isInt (_min _m _n) (m `min` n).
 Proof.
   intros. unfold _min.
@@ -677,11 +669,9 @@ Proof.
   + rewrite Nat.min_r by lia. eauto.
 Qed.
 
-Global Instance isInt_max _m m _n n :
-  isInt _m m →
-  representable m →
-  isInt _n n →
-  representable n →
+Global Instance isInt_max :
+  ∀IntR _m m ,
+  ∀IntR _n n ,
   isInt (_max _m _n) (m `max` n).
 Proof.
   intros. unfold _max.
@@ -745,11 +735,9 @@ Qed.
 
 (* Division of representable integers works. *)
 
-Global Instance div_compat _i i _j j :
-  isInt _i i →
-  representable i →
-  isInt _j j →
-  representable j →
+Global Instance div_compat :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
   j ≠ 0%nat →
   isInt (_i/_j) (i/j)%nat.
 Proof.
@@ -1093,33 +1081,31 @@ Proof.
     eauto using safe_decrement_relative'.
 Defined.
 
+End Down.
+
 (* A specification of [down_aux]. *)
 
 (* This specification requires [i ≤ k]: that is, the start index [k] must
    be greater than or equal to the end index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
-Lemma wp_down_aux i _j j :
-  isInt _i i →
-  representable i →
-  isInt _j j →
-  representable j →
+Lemma wp_down_aux {S} (f : int → S → S) :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
   i ≤ j →
   ITER_DOWN
     i (j + 1)
     (λ _j j s Q, wp (f _j s) Q)
-    (λ s Q, wp (down_aux _j s) Q).
+    (λ s Q, wp (down_aux _i f _j s) Q).
 Proof.
   intros. ITER.
-  funelim (down_aux _j s); cleanup; clear Heqcall; intros; isBool_magic;
+  funelim (down_aux _i f _j s); cleanup; clear Heqcall; intros; isBool_magic;
   autorewrite with nat.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
 Qed.
-
-End Down.
 
 (* [down _k _i s f] applies the loop body [f] to every machine integer from
    [_k], excluded, down to [_i], included. A state of type [S] is carried,
