@@ -1,5 +1,5 @@
 From stdpp Require Import numbers list.
-Local Notation len := List.length.
+Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics list_extra bool iteration int wp wp_tactics.
