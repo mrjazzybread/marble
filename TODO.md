@@ -5,7 +5,7 @@
 * `isInt 12 12` still does not work. Ask for help on Zulip.
 
 * In anticipation of vectors, many operations on arrays should also
-  work on a segment of a larger array.
+  work on array segments.
   + `segment_find_index`
   + `segment_exist`
   + `segment_for_all`
@@ -15,17 +15,13 @@
   + every (user) function that modifies an array should be
     accompanied by a tactic that performs clear-and-rename
 
-* Missing functions on integers:
-  + `down` should be renamed `iter_down`
-  + `xiter_down`
-  + `uxiter_down`
-
 * Missing functions on arrays:
   + `init` on lists and arrays
   + `map`
   + `compare`
   + `merge`
   + `sort`
+    - allow sorting with respect to a preorder; prove stability
 
 * More lemmas should be marked `Local`.
 
