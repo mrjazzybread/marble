@@ -1236,6 +1236,88 @@ Global Ltac wp_xiter_down I :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* A simplified exitable loop with a state of type [unit]. *)
+
+Section UXIterDown.
+Context {A : Type}.
+
+(* The lower bound. *)
+Variable _i : int.
+
+(* The loop body: [body _j continue break]. *)
+Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
+
+(* The code. *)
+Equations uxiter_down_aux _j : outcome A
+by wf _j (rilt _i) :=
+uxiter_down_aux _j with inspect (_j =? _i)%uint63 => {
+| inspected true :=
+    let continue '() := Continue in
+    let break x := Break x in
+    body _j continue break
+| inspected false :=
+    let continue '() := uxiter_down_aux (_j - 1)%uint63 in
+    let break x := Break x in
+    body _j continue break
+}.
+Next Obligation.
+  eauto using safe_decrement_relative'.
+Qed.
+
+End UXIterDown.
+
+(* A specification of [uxiter_down_aux]. *)
+
+Lemma wp_uxiter_down_aux {A}
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
+  ∀IntR _i i ,
+  ∀IntR _j j ,
+  i ≤ j →
+  UXITER
+    (step_down i (j + 1)) (j + 1) (complete_down i (j + 1))
+    (λ _ _j j continue break Q, wp (body _j continue break) Q)
+    (λ Q, wp (uxiter_down_aux _i (@body) _j) Q).
+Proof.
+  intros. UXITER.
+  funelim (uxiter_down_aux _i (@body) _j); cleanup; clear Heqcall;
+  intros; isBool_magic; autorewrite with nat.
+  (* Case [j = i]. *)
+  { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
+  (* Case [j ≠ i]. *)
+  { rename H into IH. eapply Hbody; pack; tc.
+    + wp_op (IH()) s'. eauto.
+    + wp_ret. eauto. }
+Qed.
+
+Definition uxiter_down {A} _k _i
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
+  if (_k ≤? _i)%uint63 then Continue
+  else uxiter_down_aux _i (@body) (_k - 1).
+
+(* A specification of [uxiter_down]. *)
+
+Lemma wp_uxiter_down {A}
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
+  ∀IntR _i i ,
+  ∀IntR _k k ,
+  UXITER
+    (step_down i k) k (complete_down i k)
+    (λ _ _j j continue break Q, wp (body _j continue break) Q)
+    (λ Q, wp (uxiter_down _k _i (@body)) Q).
+Proof.
+  intros. UXITER. unfold uxiter_down.
+  wp_if; autorewrite with nat.
+  (* Case [k ≤ i]. *)
+  { wp_ret. eauto. }
+  (* Case [i < k]. *)
+  { wp_op @wp_uxiter_down_aux s'. eauto. }
+Qed.
+
+Global Ltac wp_uxiter_down I :=
+  wp_loop @wp_uxiter_down I.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A loop, counting up from [i] to [k], using machine integers. *)
 
 (* Our intervals are semi-open on the right end: [i] is included,
@@ -1314,10 +1396,9 @@ Global Ltac wp_iter_up I :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* An exitable loop, counting up from [i] to [k]. The loop can be
-   broken via an early exit: the loop body receives two continuations
-   [continue] and [break] and must invoke either [continue s] or
-   [break s x]. *)
+(* An exitable loop, counting up from [i] to [k]. The loop can be broken via
+   an early exit: the loop body receives two continuations [continue] and
+   [break] and must invoke either [continue s] or [break s x]. *)
 
 Section XiterUp.
 Context {S A : Type}.
@@ -1385,6 +1466,8 @@ Definition wp_xiter_up :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* A simplified exitable loop with a state of type [unit]. *)
+
 Section UXIterUp.
 Context {A : Type}.
 
@@ -1400,7 +1483,7 @@ by wf _i igt :=
 uxiter_up_aux _i
 with inspect (_i <? _k)%uint63 => {
 | inspected true :=
-    let continue s := uxiter_up_aux (_i + 1)%uint63 in
+    let continue '() := uxiter_up_aux (_i + 1)%uint63 in
     let break x := Break x in
     body _i continue break
 | inspected false :=
