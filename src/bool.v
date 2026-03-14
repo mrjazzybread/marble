@@ -1,5 +1,5 @@
 From Stdlib Require Import Utf8.
-From array Require Import tactics.
+From marble Require Import tactics.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.

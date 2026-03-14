@@ -1,0 +1,17 @@
+opam-version: "2.0"
+authors: "François Pottier <francois.pottier@inria.fr>"
+maintainer: "François Pottier <francois.pottier@inria.fr>"
+homepage: "https://gitlab.inria.fr/fpottier/marble"
+bug-reports: "https://gitlab.inria.fr/fpottier/marble/issues"
+dev-repo: "git+https://gitlab.inria.fr/fpottier/marble/"
+version: "dev"
+synopsis: "A Rocq library of data structures based on machine integers and primitive arrays"
+tags: [
+  "logpath:marble"
+]
+
+depends: [
+  "rocq-core" { (>= "9.0") }
+  "rocq-stdlib"
+  "rocq-stdpp"
+]

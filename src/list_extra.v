@@ -751,7 +751,7 @@ Qed.
 (* The following instances allow the tactic [isBool] to exploit
    the previous result to establish [isBool _ (Forall2 _ _ _)]. *)
 
-From array Require Import bool.
+From marble Require Import bool.
 
 Global Instance isBool1_true_Forall2 `{Inhabited A} P (xs ys : list A) :
   length xs = length ys →

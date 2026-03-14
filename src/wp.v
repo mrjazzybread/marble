@@ -1,5 +1,5 @@
 From stdpp Require Import base.
-From array Require Import tactics bool.
+From marble Require Import tactics bool.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.

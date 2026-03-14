@@ -1,4 +1,4 @@
-From array Require Import tactics list_extra wp.
+From marble Require Import tactics list_extra wp.
 
 (* [wp_intros x] introduces [x] and a hypothesis [Hx] and simplifies this
    hypothesis. It is typically used in the second subgoal of [wp_bind] and

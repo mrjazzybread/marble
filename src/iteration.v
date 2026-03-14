@@ -1,5 +1,5 @@
 From stdpp Require Import list.
-From array Require Import tactics wp wp_tactics.
+From marble Require Import tactics wp wp_tactics.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
