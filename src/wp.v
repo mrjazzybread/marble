@@ -7,13 +7,6 @@ Set Universe Polymorphism.
 
 (* TODO comment *)
 
-(* TODO
-Notation ID := (λ (A : Type), A).
-Global Instance id_ret: MRet ID := λ A x, x.
-Global Instance id_bind : MBind ID := λ A B f x, f x.
-Local Notation mret := (@mret ID _ _).
- *)
-
 Definition WP (A : Type) :=
   (A → Prop) → Prop.
 
