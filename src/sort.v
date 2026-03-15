@@ -16,6 +16,19 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/V9.1.0/corelib/Corelib.Classes.RelationClasses.html
  *)
 
+(* TODO *)
+Lemma list_insert_id'' `{Inhabited A} (xs : list A) (i : nat) (x : A) :
+  valid i xs →
+  xs !!! i = x →
+  <[i:=x]>xs = xs.
+Proof.
+  rewrite <- lookup_lt_is_Some.
+  intros Hvalid Hlookup.
+  apply list_lookup_lookup_total in Hvalid.
+  rewrite list_insert_id by congruence.
+  eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Three-way comparisons. *)
@@ -98,6 +111,7 @@ End Comparable.
 
 (* Insertion sort: [isortto]. *)
 
+
 Section Sort.
 
 Context `{Inhabited A} `{Comparable A}.
@@ -106,10 +120,10 @@ Implicit Types src dst : array A.
 Implicit Types _srcofs _dstofs _n : int.
 Implicit Types srcofs dstofs n : nat.
 
-Local Definition empty_slot (out : outcome int) : int :=
+Local Definition empty_slot _dstofs (out : outcome int) : int :=
   match out with
   | Break _j => _j + 1
-  | Continue => 0
+  | Continue => _dstofs
   end.
 
 (* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
@@ -136,7 +150,7 @@ Definition isortto src _srcofs dst _dstofs _n :=
         end
     );
     (* Write [xi] into the logically empty slot of the array [dst]. *)
-    set dst (empty_slot out) xi.
+    set dst (empty_slot _dstofs out) xi.
 
 Infix "≤" := R
   (at level 70, no associativity) : element_scope.
@@ -156,13 +170,30 @@ Implicit Types xs ys zs : list A.
 Infix "π" := (@Permutation A) (* TODO find better symbol *)
   (at level 70, no associativity).
 
-Notation isortto_inv xs srcofs ys dstofs n dst := (
+Notation isortto_inv xs srcofs ys dstofs i dst := (
   ∃ zs,
   isArray dst zs ∧
   len zs = len ys ∧
   initial_seg dstofs ys = initial_seg dstofs zs ∧
-  seg dstofs (dstofs + n) xs π seg dstofs (dstofs + n) zs ∧
-  final_seg (dstofs + n) ys = final_seg (dstofs + n) zs
+  final_seg (dstofs + i) ys = final_seg (dstofs + i) zs ∧
+  seg srcofs (srcofs + i) xs π seg dstofs (dstofs + i) zs
+).
+
+Notation isortto_inner_inv xs srcofs ys dstofs i j dst out := (
+  ∃ zs,
+  isArray dst zs ∧
+  len zs = len ys ∧
+  initial_seg dstofs ys = initial_seg dstofs zs ∧
+  final_seg (dstofs + (i + 1)) ys = final_seg (dstofs + (i + 1)) zs ∧
+  seg srcofs (srcofs + (i + 1)) xs π
+    <[j - dstofs := xs !!! (srcofs + i)]>(seg dstofs (dstofs + (i + 1)) zs)
+  ∧
+  match out with
+  | Continue => True
+  | Break _j =>
+      isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
+      zs !!! j ≤ xs !!! (srcofs + i)
+  end
 ).
 
 Lemma equiv_le x y :  x ≡ y → x ≤ y.
@@ -212,10 +243,13 @@ Proof.
     rename o into _i, j into i, s into dst.
     wp_get xi.
     eapply wp_bind.
-    { int.wp_xiter_down (λ (j : nat) dst (out : outcome int),
-        (* TODO this invariant is wrong *)
-        isortto_inv xs srcofs ys dstofs i dst
+    { int.wp_xiter_down (λ j dst out,
+        isortto_inner_inv xs srcofs ys dstofs i j dst out
       ).
+      { admit. }
+      { replace (dstofs + (i + 1) - 1) with (dstofs + i) by lia. (* TODO rewrite hint *)
+        (* TODO set up rewriting modulo π *)
+        admit. }
       (* TODO avoid manual renamings. *)
       subst j0 j1. clear dependent dst.
       rename o into _j, s into dst.
@@ -224,21 +258,30 @@ Proof.
       (* Case [xi < xj]. *)
       { wp_set. wp_continue; pack; list; tc3; list; tc3.
         + admit.
-        + admit.
       }
       (* Case [xj ≤ xi]. *)
-      { wp_break; pack; list; tc3; list; tc3. }
+      { wp_break; pack; list; tc3; list; tc3.
+        + admit.
+        + subst. assumption.
+      }
     }
     (* Conclusion of the inner loop. *)
     { clear dependent dst. intros [ dst out ].
-      intros (j&?). unpack.
-      assert (dstofs ≤ to_nat (empty_slot out) < dstofs + n). (* TODO *)
-      { admit. }
+      intros (j&?). unpack. list in *.
+      assert (dstofs ≤ to_nat (empty_slot _dstofs out) ≤ dstofs + i). (* TODO *)
+      { destruct out; simpl empty_slot.
+        - replace (to_nat (i0 + 1)) with (j + 1) by admit.
+          lia.
+        - rewrite H5. int.
+          replace (proj dstofs) with dstofs.
+          2: symmetry.
+          2: rewrite <- representable_iff_proj.
+          2: tc.
+          lia. }
       wp_set.
       { eapply introIsInt. }
       { eauto with lia. }
       pack; list; tc3; list; tc3.
-      + admit.
       + admit.
     }
   }
