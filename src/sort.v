@@ -116,7 +116,8 @@ Section Sort.
 
 Context `{Inhabited A} `{Comparable A}.
 
-Implicit Types src dst : array A.
+Implicit Types _src _dst : array A.
+Implicit Types src dst : list A.
 Implicit Types _srcofs _dstofs _n : int.
 Implicit Types srcofs dstofs n : nat.
 
@@ -131,22 +132,22 @@ Local Definition empty_slot _dstofs (out : outcome int) : int :=
    segment described by [dst], [_dstofs], [_n]. The source and destination
    arrays must be distinct. This is an insertion sort. *)
 
-Definition isortto src _srcofs dst _dstofs _n :=
+Definition isortto _src _srcofs _dst _dstofs _n :=
   (* Let [i] scan the source segment upwards. *)
-  int.iter_up 0 _n dst @@ λ _i dst ,
+  int.iter_up 0 _n _dst @@ λ _i _dst ,
     (* Extract [xi] at offset [i] in the source segment. *)
-    do xi ← get src (_srcofs + _i)%uint63 ;
+    do xi ← get _src (_srcofs + _i)%uint63 ;
     do (dst, out) ← (
       (* Let [j] scan the sorted part of the destination segment, downwards. *)
-      int.xiter_down (_dstofs + _i)%uint63 _dstofs dst @@
-      λ _ _j dst continue break ,
+      int.xiter_down (_dstofs + _i)%uint63 _dstofs _dst @@
+      λ _ _j _dst continue break ,
         (* Read an element [xj] at offset [j] in the destination segment.
            If [xj ≥ xi] holds then move [xj] upwards by one position and
            continue. Otherwise stop. *)
-        do xj ← get dst _j ;
+        do xj ← get _dst _j ;
         match compare xj xi with
-        | Gt      => do dst ← set dst (_j + 1) xj; continue dst
-        | Lt | Eq => break dst _j
+        | Gt      => do _dst ← set _dst (_j + 1) xj; continue _dst
+        | Lt | Eq => break _dst _j
         end
     );
     (* Write [xi] into the logically empty slot of the array [dst]. *)
@@ -165,34 +166,43 @@ Infix "≡" := (kernel R)
 
 Open Scope element_scope.
 
-Implicit Types xs ys zs : list A.
-
 Infix "π" := (@Permutation A) (* TODO find better symbol *)
   (at level 70, no associativity).
 
-Notation isortto_inv xs srcofs ys dstofs i dst := (
-  ∃ zs,
-  isArray dst zs ∧
-  len zs = len ys ∧
-  initial_seg dstofs ys = initial_seg dstofs zs ∧
-  final_seg (dstofs + i) ys = final_seg (dstofs + i) zs ∧
-  seg srcofs (srcofs + i) xs π seg dstofs (dstofs + i) zs
+(* This is the invariant of the main loop. *)
+
+(* Here,
+   [src] is the content of the source array;
+   [dst] is the initial content of the destination array;
+   [dst']  is the final content of the destination array.
+ *)
+
+Notation isortto_inv src srcofs dst dstofs := (λ i _dst,
+  ∃ dst',
+  isArray _dst dst' ∧
+  len dst' = len dst ∧
+  initial_seg dstofs dst = initial_seg dstofs dst' ∧
+  final_seg (dstofs + i) dst = final_seg (dstofs + i) dst' ∧
+  seg srcofs (srcofs + i) src π seg dstofs (dstofs + i) dst'
 ).
 
-Notation isortto_inner_inv xs srcofs ys dstofs i j dst out := (
-  ∃ zs,
-  isArray dst zs ∧
-  len zs = len ys ∧
-  initial_seg dstofs ys = initial_seg dstofs zs ∧
-  final_seg (dstofs + (i + 1)) ys = final_seg (dstofs + (i + 1)) zs ∧
-  seg srcofs (srcofs + (i + 1)) xs π
-    <[j - dstofs := xs !!! (srcofs + i)]>(seg dstofs (dstofs + (i + 1)) zs)
-  ∧
+Notation isortto_inner_inv src srcofs dst dstofs i := (λ j _dst out,
+  ∃ dst',
+  isArray _dst dst' ∧
+  len dst' = len dst ∧
+  initial_seg dstofs dst = initial_seg dstofs dst' ∧
+  final_seg (dstofs + (i + 1)) dst = final_seg (dstofs + (i + 1)) dst' ∧
+  (
+    let xi := src !!! (srcofs + i) in
+    seg srcofs (srcofs + (i + 1)) src
+      π
+    seg dstofs j dst' ++ {[xi]} ++ seg (j+1) (dstofs + (i + 1)) dst'
+  ) ∧
   match out with
   | Continue => True
   | Break _j =>
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
-      zs !!! j ≤ xs !!! (srcofs + i)
+      dst' !!! j ≤ src !!! (srcofs + i)
   end
 ).
 
@@ -222,51 +232,61 @@ Ltac wp_compare :=
   ];
   intro.
 
-Lemma wp_issortto src xs _srcofs srcofs dst ys _dstofs dstofs _n n :
-  isArray src xs →
+(* TODO *)
+Lemma a_bp1_m1 a b : a + (b + 1) - 1 = a + b.
+Proof. lia. Qed.
+Hint Rewrite a_bp1_m1 : list.
+
+Lemma wp_issortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
+  isArray _src src →
   isInt _srcofs srcofs →
-  isArray dst ys →
+  isArray _dst dst →
   isInt _dstofs dstofs →
   isInt _n n →
-  valid_seg srcofs (srcofs + n) xs →
-  valid_seg dstofs (dstofs + n) ys →
-  wp (isortto src _srcofs dst _dstofs _n) (λ dst,
-    isortto_inv xs srcofs ys dstofs n dst
+  valid_seg srcofs (srcofs + n) src →
+  valid_seg dstofs (dstofs + n) dst →
+  wp (isortto _src _srcofs _dst _dstofs _n) (λ _dst,
+    isortto_inv src srcofs dst dstofs n _dst
   ).
 Proof.
   intros. unfold isortto.
-  wp_iter_up (λ i dst, isortto_inv xs srcofs ys dstofs i dst).
+  wp_iter_up (isortto_inv src srcofs dst dstofs).
   (* The loop body. *)
   { (* TODO avoid manual renamings. *)
     (* TODO [wp_loop] should probably NOT use [pack] *)
-    subst j0 j1. clear dependent dst.
-    rename o into _i, j into i, s into dst.
+    subst j0 j1. clear dependent _dst.
+    rename o into _i, j into i, s into _dst.
     wp_get xi.
     eapply wp_bind.
-    { int.wp_xiter_down (λ j dst out,
-        isortto_inner_inv xs srcofs ys dstofs i j dst out
-      ).
+    { int.wp_xiter_down (isortto_inner_inv src srcofs dst dstofs i).
       { admit. }
-      { replace (dstofs + (i + 1) - 1) with (dstofs + i) by lia. (* TODO rewrite hint *)
-        (* TODO set up rewriting modulo π *)
-        admit. }
+      { cbv zeta. rewrite <- H16. list. eauto. } (* yes! *)
       (* TODO avoid manual renamings. *)
-      subst j0 j1. clear dependent dst.
-      rename o into _j, s into dst.
+      subst j0 j1. clear dependent _dst.
+      rename o into _j, s into _dst, x0 into dst'.
       wp_get xj.
       wp_compare.
       (* Case [xi < xj]. *)
-      { wp_set. wp_continue; pack; list; tc3; list; tc3.
-        + admit.
+      { wp_set. wp_continue. pack; list; tc3; list; tc3.
+        + cbv zeta.
+          rewrite H26.
+          split_seg j dst'.
+          rewrite (seg_is_singleton j (j+1) dst') by lia.
+          rewrite <- !H4, <- !H7.
+          list.
+          eapply Permutation_app_head.
+          rewrite !app_assoc.
+          eapply Permutation_app_tail.
+          eapply Permutation_app_comm.
       }
       (* Case [xj ≤ xi]. *)
-      { wp_break; pack; list; tc3; list; tc3.
-        + admit.
+      { wp_break. pack; list; tc3; list; tc3; cbv zeta.
+        + admit. (* TEMPORARY seems identical to previous case? *)
         + subst. assumption.
       }
     }
     (* Conclusion of the inner loop. *)
-    { clear dependent dst. intros [ dst out ].
+    { clear dependent _dst. intros [ _dst out ].
       intros (j&?). unpack. list in *.
       assert (dstofs ≤ to_nat (empty_slot _dstofs out) ≤ dstofs + i). (* TODO *)
       { destruct out; simpl empty_slot.
