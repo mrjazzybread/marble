@@ -1,6 +1,7 @@
 From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
+From Stdlib Require Import Sorting.Permutation.
 From Corelib Require Import Classes.RelationClasses.
 From marble Require Import tactics list_extra bool iteration int wp wp_tactics array.
 Implicit Types _i _j _k : int.
@@ -61,6 +62,7 @@ End Kernel.
    is correct with respect to the default preorder on this type. *)
 
 Declare Scope element_scope.
+Delimit Scope element_scope with element.
 
 Section Comparable.
 
@@ -74,9 +76,9 @@ Infix "≤" := R
   (at level 70, no associativity) : element_scope.
 Infix "<" := (strict R)
   (at level 70, no associativity) : element_scope.
-Notation "y ≥ x" := (x ≤ y)
+Notation "y ≥ x" := (x ≤ y)%element
   (only parsing, at level 70, no associativity) : element_scope.
-Notation "y > x" := (x < y)
+Notation "y > x" := (x < y)%element
   (only parsing, at level 70, no associativity) : element_scope.
 Infix "≡" := (kernel R)
   (at level 70, no associativity) : element_scope.
@@ -104,6 +106,12 @@ Implicit Types src dst : array A.
 Implicit Types _srcofs _dstofs _n : int.
 Implicit Types srcofs dstofs n : nat.
 
+Local Definition empty_slot (out : outcome int) : int :=
+  match out with
+  | Break _j => _j + 1
+  | Continue => 0
+  end.
+
 (* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
    by [src], [_srcofs], [_n]. The resulting data is written into the array
    segment described by [dst], [_dstofs], [_n]. The source and destination
@@ -120,22 +128,23 @@ Definition isortto src _srcofs dst _dstofs _n :=
       λ _ _j dst continue break ,
         (* Read an element [xj] at offset [j] in the destination segment.
            If [xj ≥ xi] holds then move [xj] upwards by one position and
-           continue. Otherwise write [xi] into position [j] and stop. *)
+           continue. Otherwise stop. *)
         do xj ← get dst _j ;
         match compare xj xi with
         | Gt      => do dst ← set dst (_j + 1) xj; continue dst
-        | Lt | Eq => do dst ← set dst (_j + 1) xi; break dst ()
+        | Lt | Eq => break dst _j
         end
     );
-    dst.
+    (* Write [xi] into the logically empty slot of the array [dst]. *)
+    set dst (empty_slot out) xi.
 
 Infix "≤" := R
   (at level 70, no associativity) : element_scope.
 Infix "<" := (strict R)
   (at level 70, no associativity) : element_scope.
-Notation "y ≥ x" := (x ≤ y)
+Notation "y ≥ x" := (x ≤ y)%element
   (only parsing, at level 70, no associativity) : element_scope.
-Notation "y > x" := (x < y)
+Notation "y > x" := (x < y)%element
   (only parsing, at level 70, no associativity) : element_scope.
 Infix "≡" := (kernel R)
   (at level 70, no associativity) : element_scope.
@@ -151,6 +160,32 @@ Notation isortto_inv xs srcofs ys dstofs n dst := (
   initial_seg dstofs zs = initial_seg dstofs ys ∧
   final_seg (dstofs + n) zs = final_seg (dstofs + n) zs
 ).
+
+Lemma equiv_le x y :  x ≡ y → x ≤ y.
+Proof. unfold kernel. tauto. Qed.
+Lemma lt_le x y :  x < y → x ≤ y.
+Proof. unfold strict. tauto. Qed.
+Lemma equiv_ge x y :  x ≡ y → x ≥ y.
+Proof. unfold kernel. tauto. Qed.
+Lemma gt_ge x y :  x > y → x ≥ y.
+Proof. eauto using lt_le. Qed.
+
+Lemma wp_compare_Gt_Le {B} (x y : A) (e1 e2 : B) (Q : B → Prop) :
+  (x > y → wp e1 Q) →
+  (x ≤ y → wp e2 Q) →
+  wp (match compare x y with Gt => e1 | _ => e2 end) Q.
+Proof.
+  intros. destruct (compare_spec _ x y).
+  + eauto using equiv_le.
+  + eauto using lt_le.
+  + eauto.
+Qed.
+
+Ltac wp_compare :=
+  first [
+    simple eapply wp_compare_Gt_Le
+  ];
+  intro.
 
 Lemma wp_issortto src xs _srcofs srcofs dst ys _dstofs dstofs _n n :
   isArray src xs →
@@ -173,29 +208,32 @@ Proof.
     rename o into _i, j into i, s into dst.
     wp_get xi.
     eapply wp_bind.
-    { int.wp_xiter_down (λ (j : nat) dst (out : outcome unit),
+    { int.wp_xiter_down (λ (j : nat) dst (out : outcome int),
         isortto_inv xs srcofs ys dstofs i dst
       ).
       (* TODO avoid manual renamings. *)
       subst j0 j1. clear dependent dst.
       rename o into _j, s into dst.
       wp_get xj.
-      destruct (compare_spec _ xj xi);
-      wp_set.
-      (* Case [xj ≡ xi]. *)
-      { wp_break; pack; list; tc3; list; tc3. }
-      (* Case [xj < xi]. *)
-      { wp_break; pack; list; tc3; list; tc3. }
+      wp_compare.
       (* Case [xi < xj]. *)
-      { wp_continue; pack; list; tc3; list; tc3. }
+      { wp_set. wp_continue; pack; list; tc3; list; tc3. }
+      (* Case [xj ≤ xi]. *)
+      { wp_break; pack; list; tc3; list; tc3. }
     }
     (* Conclusion of the inner loop. *)
     { clear dependent dst. intros [ dst out ].
       intros (j&?). unpack.
-      wp_ret. eauto. }
+      assert (dstofs ≤ to_nat (empty_slot out) < dstofs + n). (* TODO *)
+      { admit. }
+      wp_set.
+      { eapply introIsInt. }
+      { eauto with lia. }
+      pack; list; tc3; list; tc3.
+    }
   }
   (* Conclusion of the outer loop. *)
   { eauto. }
-Qed.
+Admitted.
 
 End Sort.
