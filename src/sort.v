@@ -153,12 +153,16 @@ Open Scope element_scope.
 
 Implicit Types xs ys zs : list A.
 
+Infix "π" := (@Permutation A) (* TODO find better symbol *)
+  (at level 70, no associativity).
+
 Notation isortto_inv xs srcofs ys dstofs n dst := (
   ∃ zs,
   isArray dst zs ∧
   len zs = len ys ∧
-  initial_seg dstofs zs = initial_seg dstofs ys ∧
-  final_seg (dstofs + n) zs = final_seg (dstofs + n) zs
+  initial_seg dstofs ys = initial_seg dstofs zs ∧
+  seg dstofs (dstofs + n) xs π seg dstofs (dstofs + n) zs ∧
+  final_seg (dstofs + n) ys = final_seg (dstofs + n) zs
 ).
 
 Lemma equiv_le x y :  x ≡ y → x ≤ y.
@@ -209,6 +213,7 @@ Proof.
     wp_get xi.
     eapply wp_bind.
     { int.wp_xiter_down (λ (j : nat) dst (out : outcome int),
+        (* TODO this invariant is wrong *)
         isortto_inv xs srcofs ys dstofs i dst
       ).
       (* TODO avoid manual renamings. *)
@@ -217,7 +222,10 @@ Proof.
       wp_get xj.
       wp_compare.
       (* Case [xi < xj]. *)
-      { wp_set. wp_continue; pack; list; tc3; list; tc3. }
+      { wp_set. wp_continue; pack; list; tc3; list; tc3.
+        + admit.
+        + admit.
+      }
       (* Case [xj ≤ xi]. *)
       { wp_break; pack; list; tc3; list; tc3. }
     }
@@ -230,10 +238,12 @@ Proof.
       { eapply introIsInt. }
       { eauto with lia. }
       pack; list; tc3; list; tc3.
+      + admit.
+      + admit.
     }
   }
   (* Conclusion of the outer loop. *)
-  { eauto. }
+  { eauto 6. }
 Admitted.
 
 End Sort.
