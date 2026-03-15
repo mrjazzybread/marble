@@ -482,7 +482,8 @@ Proof.
   match goal with h: len ?s = _ |- _ =>
   rename s into xs; rename h into Hxs end.
   (* Preservation. *)
-  { liftIsIntAndClear.
+  { subst.
+    liftIsIntAndClear.
     wp_bind_eq.
     wp_ret.
     list; split; [ lia |].
@@ -741,7 +742,7 @@ Proof.
     isArray a (history ++ replicate (len xs - len history) inhabitant)
   ).
   (* Preservation. *)
-  { lengths. wp_set. eauto. }
+  { subst. lengths. wp_set. isArray. }
 Qed.
 
 End OfList.
@@ -858,7 +859,7 @@ Proof.
     (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   ).
   (* Preservation. *)
-  { clear dependent b.
+  { subst. clear dependent b.
     wp_get x. subst x.
     wp_set.
     wp_ret. isArray. }
@@ -1006,7 +1007,7 @@ Proof.
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
   (* Preservation. *)
-  { clear dependent a.
+  { subst. clear dependent a.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -1373,7 +1374,7 @@ Proof.
   int.wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_get x. wp_op Hstep s'. wp_ret. eauto. }
+  { subst. wp_get x. wp_op Hstep s'. wp_ret. eauto. }
 Qed.
 
 (* The public specification of [iteri]. *)

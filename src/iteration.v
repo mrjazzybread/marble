@@ -237,6 +237,24 @@ Ltac XITER :=
 Ltac UXITER :=
   intros ? Hinit Hbody.
 
+(* The following tactics help reason about invocations of [continue]
+   and [break]. *)
+
+Ltac wp_continue :=
+  match goal with
+  Hcontinue: ∀ s, _ → wp (?continue s) _,
+  Hbreak: ∀ s x, _ → wp (?break s x) _
+  |- wp (?continue _) _ =>
+    simple eapply Hcontinue; clear Hcontinue Hbreak
+  end.
+Ltac wp_break :=
+  match goal with
+  Hcontinue: ∀ s, _ → wp (?continue s) _,
+  Hbreak: ∀ s x, _ → wp (?break s x) _
+  |- wp (?break _ _) _ =>
+    simple eapply Hbreak; clear Hcontinue Hbreak
+  end.
+
 (* -------------------------------------------------------------------------- *)
 
 (* A specification of a loop over a list. *)

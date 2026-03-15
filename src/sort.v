@@ -3,7 +3,7 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Corelib Require Import Classes.RelationClasses.
 From marble Require Import tactics list_extra bool iteration int wp wp_tactics array.
-Implicit Types _i _j _k _n : int.
+Implicit Types _i _j _k : int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -90,6 +90,8 @@ Class Comparable := {
 
 End Comparable.
 
+(* TODO find a way of reasoning about 2-way comparisons *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* Insertion sort: [isortto]. *)
@@ -98,29 +100,102 @@ Section Sort.
 
 Context `{Inhabited A} `{Comparable A}.
 
-(* [isortto src srcofs dst dstofs n] sorts the array segment described
-   by [src], [srcofs], [n]. The resulting data is written into the array
-   segment described by [dst], [dstofs], [n]. The source and destination
+Implicit Types src dst : array A.
+Implicit Types _srcofs _dstofs _n : int.
+Implicit Types srcofs dstofs n : nat.
+
+(* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
+   by [src], [_srcofs], [_n]. The resulting data is written into the array
+   segment described by [dst], [_dstofs], [_n]. The source and destination
    arrays must be distinct. This is an insertion sort. *)
 
-Definition isortto src srcofs dst dstofs n :=
+Definition isortto src _srcofs dst _dstofs _n :=
   (* Let [i] scan the source segment upwards. *)
-  int.iter_up 0 n dst @@ λ _i dst ,
-    (* Extract [x] at offset [i] in the source segment. *)
-    do x ← get src (srcofs + _i)%uint63 ;
+  int.iter_up 0 _n dst @@ λ _i dst ,
+    (* Extract [xi] at offset [i] in the source segment. *)
+    do xi ← get src (_srcofs + _i)%uint63 ;
     do (dst, out) ← (
       (* Let [j] scan the sorted part of the destination segment, downwards. *)
-      int.xiter_down (dstofs + _i)%uint63 dstofs dst @@
+      int.xiter_down (_dstofs + _i)%uint63 _dstofs dst @@
       λ _ _j dst continue break ,
         (* Read an element [xj] at offset [j] in the destination segment.
-           If [xj ≥ x] holds then move [xj] upwards by one position and
-           continue. Otherwise write [x] into position [j] and stop. *)
+           If [xj ≥ xi] holds then move [xj] upwards by one position and
+           continue. Otherwise write [xi] into position [j] and stop. *)
         do xj ← get dst _j ;
-        match compare xj x with
+        match compare xj xi with
         | Gt      => do dst ← set dst (_j + 1) xj; continue dst
-        | Lt | Eq => do dst ← set dst (_j + 1)  x; break dst ()
+        | Lt | Eq => do dst ← set dst (_j + 1) xi; break dst ()
         end
     );
     dst.
+
+Infix "≤" := R
+  (at level 70, no associativity) : element_scope.
+Infix "<" := (strict R)
+  (at level 70, no associativity) : element_scope.
+Notation "y ≥ x" := (x ≤ y)
+  (only parsing, at level 70, no associativity) : element_scope.
+Notation "y > x" := (x < y)
+  (only parsing, at level 70, no associativity) : element_scope.
+Infix "≡" := (kernel R)
+  (at level 70, no associativity) : element_scope.
+
+Open Scope element_scope.
+
+Implicit Types xs ys zs : list A.
+
+Notation isortto_inv xs srcofs ys dstofs n dst := (
+  ∃ zs,
+  isArray dst zs ∧
+  len zs = len ys ∧
+  initial_seg dstofs zs = initial_seg dstofs ys ∧
+  final_seg (dstofs + n) zs = final_seg (dstofs + n) zs
+).
+
+Lemma wp_issortto src xs _srcofs srcofs dst ys _dstofs dstofs _n n :
+  isArray src xs →
+  isInt _srcofs srcofs →
+  isArray dst ys →
+  isInt _dstofs dstofs →
+  isInt _n n →
+  valid_seg srcofs (srcofs + n) xs →
+  valid_seg dstofs (dstofs + n) ys →
+  wp (isortto src _srcofs dst _dstofs _n) (λ dst,
+    isortto_inv xs srcofs ys dstofs n dst
+  ).
+Proof.
+  intros. unfold isortto.
+  wp_iter_up (λ i dst, isortto_inv xs srcofs ys dstofs i dst).
+  (* The loop body. *)
+  { (* TODO avoid manual renamings. *)
+    (* TODO [wp_loop] should probably NOT use [pack] *)
+    subst j0 j1. clear dependent dst.
+    rename o into _i, j into i, s into dst.
+    wp_get xi.
+    eapply wp_bind.
+    { int.wp_xiter_down (λ (j : nat) dst (out : outcome unit),
+        isortto_inv xs srcofs ys dstofs i dst
+      ).
+      (* TODO avoid manual renamings. *)
+      subst j0 j1. clear dependent dst.
+      rename o into _j, s into dst.
+      wp_get xj.
+      destruct (compare_spec _ xj xi);
+      wp_set.
+      (* Case [xj ≡ xi]. *)
+      { wp_break; pack; list; tc3; list; tc3. }
+      (* Case [xj < xi]. *)
+      { wp_break; pack; list; tc3; list; tc3. }
+      (* Case [xi < xj]. *)
+      { wp_continue; pack; list; tc3; list; tc3. }
+    }
+    (* Conclusion of the inner loop. *)
+    { clear dependent dst. intros [ dst out ].
+      intros (j&?). unpack.
+      wp_ret. eauto. }
+  }
+  (* Conclusion of the outer loop. *)
+  { eauto. }
+Qed.
 
 End Sort.

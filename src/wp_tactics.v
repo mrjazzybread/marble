@@ -65,9 +65,13 @@ Ltac wp_loop_nude lemma I :=
        from the type of the invariant [I]. *)
     match type of I with ?P -> ?S -> Prop =>
     simple eapply (@lemma S) with (inv := I) end
+  |
+    (* We may need to infer the type [S]
+       from the type of the invariant [I]. *)
+    match type of I with ?P -> ?S -> ?Out -> Prop =>
+    simple eapply (@lemma S) with (inv := I) end
   ];
-  list; pack; unpack; try subst;
-  tc3; list in *; tc3.
+  list; pack; unpack; tc3; list in *; tc3.
     (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
 
 Ltac wp_loop lemma I :=
