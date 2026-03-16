@@ -1,9 +1,9 @@
 From stdpp Require Import numbers list.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From Stdlib Require Import Sorting.Permutation.
+From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
-From marble Require Import tactics list_extra bool iteration int wp wp_tactics array.
+From marble Require Import tactics list_extra iteration int wp wp_tactics array sorting.
 Implicit Types _i _j _k : int.
 
 Unset Universe Minimization ToSet.
@@ -14,6 +14,7 @@ Open Scope nat_scope.
 
 (* Documentation:
    https://rocq-prover.org/doc/V9.1.0/corelib/Corelib.Classes.RelationClasses.html
+   https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
 (* TODO *)
@@ -81,9 +82,7 @@ Section Comparable.
 
 Open Scope element_scope.
 
-Context (A : Type).
-
-Context `{PreOrder A R}.
+Context (A : Type) (R : relation A).
 
 Infix "≤" := R
   (at level 70, no associativity) : element_scope.
@@ -114,7 +113,7 @@ End Comparable.
 
 Section Sort.
 
-Context `{Inhabited A} `{Comparable A}.
+Context `{Inhabited A} `{PreOrder A R} `{Comparable A R}.
 
 Implicit Types _src _dst : array A.
 Implicit Types src dst : list A.
@@ -168,6 +167,11 @@ Open Scope element_scope.
 Infix "π" := (@Permutation A) (* TODO find better symbol *)
   (at level 70, no associativity).
 
+Notation sorted xs :=
+  (Sorted R xs).
+
+Notation "xs '≼' ys" := (pairwise R xs ys) (at level 80).
+
 (* This is the invariant of the main loop. *)
 
 (* Here,
@@ -186,7 +190,9 @@ Local Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   final_seg (dstofs + i) dst = final_seg (dstofs + i) dst' ∧
   (* Inside the destination segment,
      we find a permutation of the data in the source segment. *)
-  seg srcofs (srcofs + i) src π seg dstofs (dstofs + i) dst'
+  seg srcofs (srcofs + i) src π seg dstofs (dstofs + i) dst' ∧
+  (* The destination segment is sorted. *)
+  sorted (seg dstofs (dstofs + i) dst')
 .
 
 Local Ltac intro_isortto_inv :=
@@ -197,11 +203,33 @@ Local Ltac elim_isortto_inv dst' :=
     destruct h as (dst' & h); unpack in h
   end.
 
-Local Definition transported_pending_last_write src srcofs i dst dstofs j :=
+Local Definition transported_pending_last_write src srcofs dst dstofs i j :=
   let xi := src !!! (srcofs + i) in
   seg srcofs (srcofs + (i + 1)) src
     π
   seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst.
+
+(* The extended destination segment, minus the hole at index [j],
+   is sorted. *)
+Local Definition sorted_with_hole dst dstofs i j :=
+  sorted (seg dstofs j dst ++ seg (j + 1) (dstofs + (i + 1)) dst).
+
+Local Definition above src srcofs dst dstofs i j :=
+  let xi := src !!! (srcofs + i) in
+  sorted ({[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst).
+
+Local Definition dst_inv src srcofs dst dstofs i j :=
+  transported_pending_last_write src srcofs dst dstofs i j ∧
+  sorted_with_hole dst dstofs i j ∧
+  above src srcofs dst dstofs i j.
+
+Local Ltac intro_dst_inv :=
+  split; [ | split ].
+
+Local Ltac elim_dst_inv :=
+  match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
+    destruct h as (Htransported & Hsorted & Habove)
+  end.
 
 Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   ∃ dst',
@@ -218,11 +246,11 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
      in the corresponding extended source segment. *)
   match out with
   | Continue =>
-      transported_pending_last_write src srcofs i dst' dstofs j
+      dst_inv src srcofs dst' dstofs i j
   | Break _j =>
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
       dst' !!! j ≤ src !!! (srcofs + i) ∧
-      transported_pending_last_write src srcofs i dst' dstofs (j + 1)
+      dst_inv src srcofs dst' dstofs i (j + 1)
   end.
 
 Local Ltac intro_inner_inv :=
@@ -242,12 +270,14 @@ Proof. unfold kernel. tauto. Qed.
 Lemma gt_ge x y :  x > y → x ≥ y.
 Proof. eauto using lt_le. Qed.
 
+Local Hint Resolve lt_le : core.
+
 Lemma wp_compare_Gt_Le {B} (x y : A) (e1 e2 : B) (Q : B → Prop) :
   (x > y → wp e1 Q) →
   (x ≤ y → wp e2 Q) →
   wp (match compare x y with Gt => e1 | _ => e2 end) Q.
 Proof.
-  intros. destruct (compare_spec _ x y).
+  intros. destruct (compare_spec _ _ x y).
   + eauto using equiv_le.
   + eauto using lt_le.
   + eauto.
@@ -260,9 +290,12 @@ Ltac wp_compare :=
   intro.
 
 (* TODO *)
-Lemma a_bp1_m1 a b : a + (b + 1) - 1 = a + b.
+Lemma abc_minus_c a b c : a + (b + c) - c = a + b.
 Proof. lia. Qed.
-Hint Rewrite a_bp1_m1 : list nat.
+Lemma ab_minus_cb a b c : a + b - c - b = a - c.
+Proof. lia. Qed.
+
+Hint Rewrite abc_minus_c ab_minus_cb : list nat.
 
 Ltac simplify_list_permutation_goal :=
   (* TODO cannot use [list] because it joins segments *)
@@ -277,9 +310,11 @@ Ltac split_seg_singleton_r xs :=
   autorewrite with nat.
 
 Ltac recognize_named_lookups :=
-  repeat match goal with h: ?x = ?xs !!! ?i |- context[?xs !!! ?i] =>
-    rewrite <- !h
-  end.
+  repeat match goal with h: ?x = ?xs !!! ?i |- _ =>
+    try rewrite <- !h in *;
+    revert h
+  end;
+  intros.
 
 Ltac use_known_permutations :=
   repeat match goal with h: ?xs π ?ys |- context[?xs] =>
@@ -307,6 +342,96 @@ Proof.
 Qed.
 
 Local Hint Resolve seg_equality_implication : seg.
+
+Lemma sorted_singleton x :
+  sorted {[x]}.
+Proof.
+  unfold singleton, singleton_list. eauto.
+Qed.
+
+Hint Resolve
+  sorted_singleton
+  Sorted_app_inv_l
+  Sorted_app_inv_r
+: sorted.
+
+Lemma sorted_insert xs ys zs :
+  sorted (xs ++ zs) →
+  xs ≼ ys →
+  ys ≼ zs →
+  sorted ys →
+  sorted (xs ++ ys ++ zs).
+Proof.
+  rewrite !Sorted_app_iff. rewrite pairwise_app_right_iff. tauto.
+Qed.
+
+Lemma pairwise_singleton_singleton x y :
+  x ≤ y →
+  {[x]} ≼ {[y]}.
+Proof.
+  intros.
+  unfold singleton, singleton_list.
+  unfold pairwise. intros x' y'. rewrite !list_elem_of_singleton.
+  intros. subst. tauto.
+Qed.
+
+Lemma sorted_implies_bounded_l xs :
+  sorted xs →
+  len xs ≠ 0 →
+  {[xs !!! 0]} ≼ xs.
+  (* ∀ x, x ∈ xs → xs !!! 0 ≤ x *)
+Proof.
+  intros Hsorted Hlen.
+  assert (Heq: xs = {[xs !!! 0]} ++ final_seg 1 xs) by (list; eauto).
+  clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 2. clear Heq.
+  rewrite Sorted_app_iff in Hsorted; unpack.
+  rewrite pairwise_app_right_iff; split.
+  - eapply pairwise_singleton_singleton. reflexivity.
+  - assumption.
+Qed.
+
+Lemma sorted_implies_bounded_r xs :
+  sorted xs →
+  len xs ≠ 0 →
+  xs ≼ {[xs !!! (len xs - 1)]}.
+  (* ∀ x, x ∈ xs → x ≤ xs !!! (len xs - 1) *)
+Proof.
+  intros Hsorted Hlen.
+  assert (Heq: xs = initial_seg (len xs - 1) xs ++ {[xs !!! (len xs - 1)]})
+    by (list; eauto).
+  clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 1. clear Heq.
+  rewrite Sorted_app_iff in Hsorted; unpack.
+  rewrite pairwise_app_left_iff; split.
+  - assumption.
+  - eapply pairwise_singleton_singleton. reflexivity.
+Qed.
+
+Lemma boundary_test xs ys :
+  sorted xs →
+  sorted ys →
+  len xs ≠ 0 →
+  len ys ≠ 0 →
+  xs !!! (len xs - 1) ≤ ys !!! 0 →
+  xs ≼ ys.
+Proof.
+  intros.
+  eapply pairwise_transitive_singleton with (y := ys !!! 0).
+  + eapply pairwise_transitive_singleton with (y := xs !!! (len xs - 1)).
+    - eauto using sorted_implies_bounded_r.
+    - eauto using pairwise_singleton_singleton.
+  + eauto using sorted_implies_bounded_l.
+Qed.
+
+Lemma sorted_app_boundary xs ys :
+  sorted xs →
+  sorted ys →
+  len xs ≠ 0 →
+  len ys ≠ 0 →
+  xs !!! (len xs - 1) ≤ ys !!! 0 →
+  sorted (xs ++ ys).
+Proof.
+  eauto using Sorted_app, boundary_test with typeclass_instances.
+Qed.
 
 Lemma wp_issortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isArray _src src →
@@ -337,8 +462,12 @@ Proof.
       (* Initialization of the inner loop. *)
       { intro_inner_inv.
         { eauto with seg lia. }
-        { unfold transported_pending_last_write.
-          split_seg_singleton_r src. use_known_permutations. list. eauto. }
+        { intro_dst_inv.
+          { unfold transported_pending_last_write.
+            split_seg_singleton_r src. use_known_permutations. list. eauto. }
+          { unfold sorted_with_hole. list. assumption. }
+          { unfold above. list. rewrite seg_is_singleton by lia. eauto with sorted. }
+        }
       }
       (* The body of the inner loop. *)
       clear dependent _dst. wp_loop_intros _j j _dst.
@@ -348,8 +477,10 @@ Proof.
       wp_get xj.
       wp_compare.
       (* Case [xi < xj]. *)
-      { wp_set. wp_continue. intro_inner_inv.
-        (* Justify the content of the destination segment. *)
+      { elim_dst_inv.
+        wp_set. wp_continue.
+        intro_inner_inv. intro_dst_inv.
+        (* The destination segment contains a permitted permutation. *)
         { unfold transported_pending_last_write in *. list.
           use_known_permutations.
           erewrite (seg_is_singleton src (srcofs + i)) by lia.
@@ -357,6 +488,19 @@ Proof.
           simplify_list_permutation_goal. recognize_named_lookups.
           (* Argue that swapping [xi] and [xj] is permitted. *)
           eapply Permutation_app_comm. }
+        (* The destination segment, minus the hole, is sorted. *)
+        { unfold sorted_with_hole in *.
+          subst xj. list. rewrite app_assoc. list. (* TODO ugly; enables fusion *)
+          autorewrite with nat in Hsorted. exact Hsorted. }
+        (* Following the hole, every element is above [xi]. *)
+        { unfold above, sorted_with_hole in *.
+          rewrite (split_seg_singleton_r dst'') in Hsorted by lia;
+          autorewrite with nat in Hsorted;
+          rewrite <- app_assoc in Hsorted.
+          recognize_named_lookups. list.
+          eapply sorted_app_boundary; list;
+          eauto with lia sorted typeclass_instances.
+        }
       }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
@@ -369,26 +513,36 @@ Proof.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
-      destruct out as [ _j |]; elim_inner_inv dst''.
+      destruct out as [ _j |]; elim_inner_inv dst''; elim_dst_inv.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv.
-        (* Justify the content of the destination segment. *)
+        (* The destination segment contains a permitted permutation. *)
         { unfold transported_pending_last_write in *.
           use_known_permutations.
           recognize_named_lookups.
           rewrite insert_seg by (list; lia); autorewrite with nat.
           eauto. }
+        (* The destination segment is sorted. *)
+        { unfold above, sorted_with_hole in *.
+          autorewrite with nat in Habove.
+          rewrite insert_seg by (list; lia); autorewrite with nat.
+          recognize_named_lookups.
+          eapply sorted_app_boundary; list;
+            eauto with lia sorted typeclass_instances.
+        }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
         intro_isortto_inv.
-        (* Justify the content of the destination segment. *)
+        (* The destination segment contains a permitted permutation. *)
         { unfold transported_pending_last_write in *.
           use_known_permutations.
           recognize_named_lookups.
           list. eauto. }
+        (* The destination segment is sorted. *)
+        { unfold above in *. recognize_named_lookups. assumption. }
       }
     }
   }
