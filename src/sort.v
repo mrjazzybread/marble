@@ -91,16 +91,48 @@ Class Comparable := {
 
 End Comparable.
 
-(* TODO find a way of reasoning about 2-way comparisons *)
-
 (* -------------------------------------------------------------------------- *)
 
 (* Insertion sort: [isortto]. *)
 
-
 Section Sort.
 
+(* We assume that there is a preorder [R], also written [≤], on the type [A]. *)
+
+(* We also assume that there is a three-way comparison function [compare]. *)
+
 Context `{Inhabited A} `{PreOrder A R} `{Comparable A R}.
+
+(* Standard mathematical notation. *)
+
+Infix "≤" := R
+  (at level 70, no associativity) : element_scope.
+Infix "<" := (strict R)
+  (at level 70, no associativity) : element_scope.
+Notation "y ≥ x" := (x ≤ y)%element
+  (only parsing, at level 70, no associativity) : element_scope.
+Notation "y > x" := (x < y)%element
+  (only parsing, at level 70, no associativity) : element_scope.
+Infix "≡" := (kernel R)
+  (at level 70, no associativity) : element_scope.
+
+Open Scope element_scope.
+
+(* We write [xs π ys] when the lists [xs] and [ys] are equivalent up to
+   a permutation of their elements. *)
+
+Local Infix "π" := (@Permutation A)
+  (at level 70, no associativity).
+
+(* We write [sorted xs] when the list [xs] is sorted with respect to [≤]. *)
+
+(* We write [xs ≼ ys] when every element [x ∈ xs]
+   and every element [y ∈ ys] satisfy [x ≤ y]. *)
+
+Notation sorted xs   :=  (Sorted R xs).
+Notation "xs '≼' ys" := (pairwise R xs ys) (at level 80).
+
+(* Insertion sort: the code. *)
 
 Implicit Types _src _dst : array A.
 Implicit Types src dst : list A.
@@ -110,7 +142,7 @@ Implicit Types srcofs dstofs n : nat.
 (* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
    by [src], [_srcofs], [_n]. The resulting data is written into the array
    segment described by [dst], [_dstofs], [_n]. The source and destination
-   arrays must be distinct. This is an insertion sort. *)
+   arrays must be distinct. *)
 
 Definition isortto _src _srcofs _dst _dstofs _n :=
   (* Let [i] scan the source segment upwards. *)
@@ -138,49 +170,27 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
         set dst  _dstofs xi
     end.
 
-Infix "≤" := R
-  (at level 70, no associativity) : element_scope.
-Infix "<" := (strict R)
-  (at level 70, no associativity) : element_scope.
-Notation "y ≥ x" := (x ≤ y)%element
-  (only parsing, at level 70, no associativity) : element_scope.
-Notation "y > x" := (x < y)%element
-  (only parsing, at level 70, no associativity) : element_scope.
-Infix "≡" := (kernel R)
-  (at level 70, no associativity) : element_scope.
-
-Open Scope element_scope.
-
-Infix "π" := (@Permutation A) (* TODO find better symbol *)
-  (at level 70, no associativity).
-
-Notation sorted xs :=
-  (Sorted R xs).
-
-Notation "xs '≼' ys" := (pairwise R xs ys) (at level 80).
-
 (* This is the invariant of the main loop. *)
 
-(* Here,
-   [src] is the content of the source array;
+(* [src] is the content of the source array;
    [dst] is the initial content of the destination array;
-   [dst']  is the final content of the destination array.
- *)
+   [dst']  is the final content of the destination array. *)
 
-Local Definition isortto_inv src srcofs dst dstofs := λ i _dst,
+Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   ∃ dst',
   isArray _dst dst' ∧
-  len dst' = len dst ∧
+  len dst = len dst' ∧
   (* Outside of the destination segment,
      the destination array is unmodified. *)
   initial_seg dstofs dst = initial_seg dstofs dst' ∧
   final_seg (dstofs + i) dst = final_seg (dstofs + i) dst' ∧
   (* Inside the destination segment,
      we find a permutation of the data in the source segment. *)
-  seg srcofs (srcofs + i) src π seg dstofs (dstofs + i) dst' ∧
+  seg srcofs (srcofs + i) src
+    π
+  seg dstofs (dstofs + i) dst' ∧
   (* The destination segment is sorted. *)
-  sorted (seg dstofs (dstofs + i) dst')
-.
+  sorted (seg dstofs (dstofs + i) dst').
 
 Local Ltac intro_isortto_inv :=
   unfold isortto_inv; pack; list; tc3; list; tc3.
