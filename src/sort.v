@@ -121,12 +121,6 @@ Implicit Types src dst : list A.
 Implicit Types _srcofs _dstofs _n : int.
 Implicit Types srcofs dstofs n : nat.
 
-Local Definition empty_slot _dstofs (out : outcome int) : int :=
-  match out with
-  | Break _j => _j + 1
-  | Continue => _dstofs
-  end.
-
 (* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
    by [src], [_srcofs], [_n]. The resulting data is written into the array
    segment described by [dst], [_dstofs], [_n]. The source and destination
@@ -151,7 +145,12 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
         end
     );
     (* Write [xi] into the logically empty slot of the array [dst]. *)
-    set dst (empty_slot _dstofs out) xi.
+    match out with
+    | Break _j =>
+        set dst (_j + 1) xi
+    | Continue =>
+        set dst  _dstofs xi
+    end.
 
 Infix "≤" := R
   (at level 70, no associativity) : element_scope.
@@ -370,7 +369,7 @@ Proof.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
-      destruct out as [ _j |]; simpl empty_slot; elim_inner_inv dst''.
+      destruct out as [ _j |]; elim_inner_inv dst''.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv.
