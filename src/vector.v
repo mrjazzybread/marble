@@ -388,7 +388,7 @@ Proof.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.
   (* The loop body. *)
-  { tc. }
+  { wp_loop_intros _j j s. wp_op Hstep s'. eauto. }
 Qed.
 
 (* The public specification of [iteri]. *)
@@ -405,7 +405,7 @@ Proof.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.
   (* The loop body. *)
-  { tc. }
+  { wp_loop_intros _j j s. wp_op Hstep s'. eauto. }
 Qed.
 
 End Iteri.

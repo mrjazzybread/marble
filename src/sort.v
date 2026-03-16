@@ -177,26 +177,45 @@ Infix "π" := (@Permutation A) (* TODO find better symbol *)
    [dst']  is the final content of the destination array.
  *)
 
-Notation isortto_inv src srcofs dst dstofs := (λ i _dst,
+Local Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   ∃ dst',
   isArray _dst dst' ∧
   len dst' = len dst ∧
+  (* Outside of the destination segment,
+     the destination array is unmodified. *)
   initial_seg dstofs dst = initial_seg dstofs dst' ∧
   final_seg (dstofs + i) dst = final_seg (dstofs + i) dst' ∧
+  (* Inside the destination segment,
+     we find a permutation of the data in the source segment. *)
   seg srcofs (srcofs + i) src π seg dstofs (dstofs + i) dst'
-).
+.
 
-Notation isortto_inner_inv src srcofs dst dstofs i := (λ j _dst out,
+Local Ltac intro_isortto_inv :=
+  unfold isortto_inv; pack; list; tc3; list; tc3.
+
+Local Ltac elim_isortto_inv dst' :=
+  match goal with h: isortto_inv _ _ _ _ _ _ |- _ =>
+    destruct h as (dst' & h); unpack in h
+  end.
+
+Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   ∃ dst',
   isArray _dst dst' ∧
   len dst' = len dst ∧
+  (* Outside of the destination segment,
+     extended by one slot up to index [i+1],
+     the destination array is unmodified. *)
   initial_seg dstofs dst = initial_seg dstofs dst' ∧
   final_seg (dstofs + (i + 1)) dst = final_seg (dstofs + (i + 1)) dst' ∧
+  (* Inside this extended destination segment,
+     provided the element at offset [j] is replaced with [xi],
+     we find a permutation of the data
+     in the corresponding extended source segment. *)
   (
     let xi := src !!! (srcofs + i) in
     seg srcofs (srcofs + (i + 1)) src
       π
-    seg dstofs j dst' ++ {[xi]} ++ seg (j+1) (dstofs + (i + 1)) dst'
+    seg dstofs j dst' ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst'
   ) ∧
   match out with
   | Continue => True
@@ -204,7 +223,15 @@ Notation isortto_inner_inv src srcofs dst dstofs i := (λ j _dst out,
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
       dst' !!! j ≤ src !!! (srcofs + i)
   end
-).
+.
+
+Local Ltac intro_inner_inv :=
+  unfold inner_inv; pack; list; tc3; list; tc3.
+
+Local Ltac elim_inner_inv dst' :=
+  match goal with h: inner_inv _ _ _ _ _ _ _ _ |- _ =>
+    destruct h as (dst' & h); cbv zeta in h; unpack in h
+  end.
 
 Lemma equiv_le x y :  x ≡ y → x ≤ y.
 Proof. unfold kernel. tauto. Qed.
@@ -236,6 +263,53 @@ Ltac wp_compare :=
 Lemma a_bp1_m1 a b : a + (b + 1) - 1 = a + b.
 Proof. lia. Qed.
 Hint Rewrite a_bp1_m1 : list.
+Hint Rewrite a_bp1_m1 : nat.
+Hint Rewrite Nat.add_simpl_r : nat.
+Hint Rewrite Nat.add_assoc : nat.
+
+Ltac simplify_list_permutation_goal :=
+  (* TODO cannot use [list] because it joins segments *)
+  autorewrite with nat;
+  repeat rewrite app_assoc;
+  repeat eapply Permutation_app_tail;
+  repeat rewrite <- app_assoc;
+  repeat eapply Permutation_app_head.
+
+Ltac split_seg_singleton_r xs :=
+  erewrite (split_seg_singleton_r xs) by lia;
+  autorewrite with nat.
+
+Ltac recognize_named_lookups :=
+  repeat match goal with h: ?x = ?xs !!! ?i |- context[?xs !!! ?i] =>
+    rewrite <- !h
+  end.
+
+Ltac use_known_permutations :=
+  repeat match goal with h: ?xs π ?ys |- context[?xs] =>
+    rewrite h
+  end.
+
+Lemma seg_equality_implication i1 j1 i2 j2 i'1 j'1 i'2 j'2 (xs1 xs2 : list A) :
+  seg i1 j1 xs1 = seg i2 j2 xs2 →
+  valid_seg i1 j1 xs1 →
+  valid_seg i2 j2 xs2 →
+  i1 ≤ i'1 ≤ j'1 ≤ j1 →
+  i2 ≤ i'2 ≤ j'2 ≤ j2 →
+  i'2 - i2 = i'1 - i1 →
+  j'2 - i2 = j'1 - i1 →
+  seg i'1 j'1 xs1 = seg i'2 j'2 xs2.
+Proof.
+  intros.
+  replace (seg i'1 j'1 xs1) with
+          (seg (i'1 - i1) (j'1 - i1) (seg i1 j1 xs1))
+  by (list; eauto).
+  replace (seg i'2 j'2 xs2) with
+          (seg (i'2 - i2) (j'2 - i2) (seg i2 j2 xs2))
+  by (list; eauto).
+  congruence.
+Qed.
+
+Local Hint Resolve seg_equality_implication : seg.
 
 Lemma wp_issortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isArray _src src →
@@ -250,44 +324,57 @@ Lemma wp_issortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   ).
 Proof.
   intros. unfold isortto.
+  (* The outer loop. *)
   wp_iter_up (isortto_inv src srcofs dst dstofs).
-  (* The loop body. *)
-  { (* TODO avoid manual renamings. *)
-    (* TODO [wp_loop] should probably NOT use [pack] *)
-    subst j0 j1. clear dependent _dst.
-    rename o into _i, j into i, s into _dst.
+  (* Initialization of the outer loop. *)
+  { intro_isortto_inv. }
+  (* The body of the outer loop. *)
+  { clear dependent _dst. wp_loop_intros _i i _dst.
+    elim_isortto_inv dst'.
+    (* [dst'] is the content of the destination array upon entry into
+       the body of the outer loop. *)
     wp_get xi.
     eapply wp_bind.
-    { int.wp_xiter_down (isortto_inner_inv src srcofs dst dstofs i).
-      { admit. }
-      { cbv zeta. rewrite <- H16. list. eauto. } (* yes! *)
-      (* TODO avoid manual renamings. *)
-      subst j0 j1. clear dependent _dst.
-      rename o into _j, s into _dst, x0 into dst'.
+    { (* The inner loop. *)
+      int.wp_xiter_down (inner_inv src srcofs dst dstofs i).
+      (* Initialization of the inner loop. *)
+      { intro_inner_inv.
+        { eauto with seg lia. }
+        { split_seg_singleton_r src. use_known_permutations. list. eauto. }
+      }
+      (* The body of the inner loop. *)
+      clear dependent _dst. wp_loop_intros _j j _dst.
+      elim_inner_inv dst''.
+      (* [dst''s] is the content of the destination array upon entry into
+         the body of the inner loop. *)
       wp_get xj.
       wp_compare.
       (* Case [xi < xj]. *)
-      { wp_set. wp_continue. pack; list; tc3; list; tc3.
-        + cbv zeta.
-          rewrite H26.
-          split_seg j dst'.
-          rewrite (seg_is_singleton j (j+1) dst') by lia.
-          rewrite <- !H4, <- !H7.
-          list.
-          eapply Permutation_app_head.
-          rewrite !app_assoc.
-          eapply Permutation_app_tail.
-          eapply Permutation_app_comm.
+      { wp_set. wp_continue. intro_inner_inv.
+        (* Justify the content of the destination segment. *)
+        { use_known_permutations.
+          erewrite (seg_is_singleton src (srcofs + i)) by lia.
+          split_seg_singleton_r dst''.
+          simplify_list_permutation_goal. recognize_named_lookups.
+          (* Argue that swapping [xi] and [xj] is permitted. *)
+          eapply Permutation_app_comm. }
       }
       (* Case [xj ≤ xi]. *)
-      { wp_break. pack; list; tc3; list; tc3; cbv zeta.
-        + admit. (* TEMPORARY seems identical to previous case? *)
-        + subst. assumption.
+      { wp_break. intro_inner_inv.
+        (* Justify the content of the destination segment. *)
+        { use_known_permutations.
+          erewrite (seg_is_singleton src (srcofs + i)) by lia.
+          split_seg_singleton_r dst''.
+          simplify_list_permutation_goal. recognize_named_lookups.
+          admit. (* TODO wrong *)
+        }
+        { subst. assumption. }
       }
     }
     (* Conclusion of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
       intros (j&?). unpack. list in *.
+      elim_inner_inv dst''.
       assert (dstofs ≤ to_nat (empty_slot _dstofs out) ≤ dstofs + i). (* TODO *)
       { destruct out; simpl empty_slot.
         - replace (to_nat (i0 + 1)) with (j + 1) by admit.
@@ -301,12 +388,10 @@ Proof.
       wp_set.
       { eapply introIsInt. }
       { eauto with lia. }
-      pack; list; tc3; list; tc3.
+      intro_isortto_inv.
       + admit.
     }
   }
-  (* Conclusion of the outer loop. *)
-  { eauto 6. }
 Admitted.
 
 End Sort.

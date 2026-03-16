@@ -432,7 +432,8 @@ Proof.
   (* The loop invariant. *)
   int.wp_iter_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
-  { wp_get x.
+  { wp_loop_intros _j j xs'.
+    wp_get x.
     wp_ret. subst.
     rewrite cons_is_append. list. eauto. }
 Qed.
@@ -478,11 +479,9 @@ Proof.
   int.wp_iter_down (λ j ys,
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
-  );
-  match goal with h: len ?s = _ |- _ =>
-  rename s into xs; rename h into Hxs end.
+  ).
   (* Preservation. *)
-  { subst.
+  { wp_loop_intros _j j ys.
     liftIsIntAndClear.
     wp_bind_eq.
     wp_ret.
@@ -494,7 +493,9 @@ Proof.
     { replace (o - j - 1) with (o - (j + 1)) by lia.
       eauto with lia. } }
   (* Completion. *)
-  { list in *.
+  { (* TODO avoid this *)
+    match goal with h: len ?s = _ |- _ =>
+    rename s into xs; rename h into Hxs end.
     introIsArray; try rewrite Hxs.
     + introIsInt. subst n. int. eauto.
     + eauto.
@@ -742,7 +743,9 @@ Proof.
     isArray a (history ++ replicate (len xs - len history) inhabitant)
   ).
   (* Preservation. *)
-  { subst. lengths. wp_set. isArray. }
+  { clear dependent a.
+    wp_loop_intros x history a.
+    lengths. wp_set. isArray. }
 Qed.
 
 End OfList.
@@ -859,7 +862,8 @@ Proof.
     (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
   ).
   (* Preservation. *)
-  { subst. clear dependent b.
+  { clear dependent b.
+    wp_loop_intros _k k b.
     wp_get x. subst x.
     wp_set.
     wp_ret. isArray. }
@@ -1007,7 +1011,7 @@ Proof.
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
   (* Preservation. *)
-  { subst. clear dependent a.
+  { clear dependent a. wp_loop_intros _k k a.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -1374,7 +1378,10 @@ Proof.
   int.wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)
-  { subst. wp_get x. wp_op Hstep s'. wp_ret. eauto. }
+  { wp_loop_intros _j j xs'.
+    wp_get x.
+    wp_op Hstep s'.
+    wp_ret. eauto. }
 Qed.
 
 (* The public specification of [iteri]. *)

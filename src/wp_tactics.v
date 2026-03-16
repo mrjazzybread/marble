@@ -55,6 +55,7 @@ Global Ltac wp_op_nude lemma :=
 
 Ltac wp_loop_exit :=
   cbv beta; intros; unpack; try subst; list in *; eauto 3.
+    (* TODO control naming of newly introduced names *)
 
 Ltac wp_loop_nude lemma I :=
   (* Apply the reasoning rule for this operation. *)
@@ -71,7 +72,7 @@ Ltac wp_loop_nude lemma I :=
     match type of I with ?P -> ?S -> ?Out -> Prop =>
     simple eapply (@lemma S) with (inv := I) end
   ];
-  list; pack; unpack; tc3; list in *; tc3.
+  list; tc3; list in *; tc3.
     (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
 
 Ltac wp_loop lemma I :=
@@ -79,6 +80,14 @@ Ltac wp_loop lemma I :=
     wp_loop_nude lemma I
   | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
   ].
+
+(* TODO comment *)
+
+Ltac wp_loop_intros o j s :=
+  let j0 := fresh in
+  let j1 := fresh in
+  intros j0 o j j1 s;
+  intros; unpack; try subst j0 j1.
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under
