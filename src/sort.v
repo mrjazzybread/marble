@@ -17,19 +17,6 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
-(* TODO *)
-Lemma list_insert_id'' `{Inhabited A} (xs : list A) (i : nat) (x : A) :
-  valid i xs →
-  xs !!! i = x →
-  <[i:=x]>xs = xs.
-Proof.
-  rewrite <- lookup_lt_is_Some.
-  intros Hvalid Hlookup.
-  apply list_lookup_lookup_total in Hvalid.
-  rewrite list_insert_id by congruence.
-  eauto.
-Qed.
-
 (* -------------------------------------------------------------------------- *)
 
 (* Three-way comparisons. *)

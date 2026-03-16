@@ -4,6 +4,19 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+(* currently unused *)
+Lemma list_insert_id'' `{Inhabited A} (xs : list A) (i : nat) (x : A) :
+  i < length xs →
+  xs !!! i = x →
+  <[i:=x]>xs = xs.
+Proof.
+  rewrite <- lookup_lt_is_Some.
+  intros Hvalid Hlookup.
+  apply list_lookup_lookup_total in Hvalid.
+  rewrite list_insert_id by congruence.
+  eauto.
+Qed.
+
 Lemma list_lookup_insert_eq' {A} (xs : list A) i j x :
   i = j →
   i < length xs →
