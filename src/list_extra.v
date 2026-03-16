@@ -476,7 +476,7 @@ Qed.
 
 (* A singleton segment is a singleton. *)
 
-Lemma seg_is_singleton `{Inhabited A} i j (xs : list A) :
+Lemma seg_is_singleton `{Inhabited A} (xs : list A) i j :
   valid i xs →
   i + 1 = j →
   seg i j xs = {[xs !!! i]}.
@@ -491,6 +491,41 @@ Proof.
   intros. rewrite seg_is_singleton by eauto. eauto.
 Qed.
 
+(* Splitting off a singleton. *)
+
+Lemma split_seg_singleton_l `{Inhabited A} (xs : list A) i k :
+  valid_seg i k xs →
+  i < k →
+  seg i k xs = {[ xs !!! i ]} ++ seg (i + 1) k xs.
+Proof.
+  intros.
+  rewrite (split_seg (i + 1) xs) by lia.
+  rewrite singleton_is_seg by lia.
+  eauto.
+Qed.
+
+Lemma split_seg_singleton_r `{Inhabited A} (xs : list A) i k :
+  valid_seg i k xs →
+  i < k →
+  seg i k xs = seg i (k-1) xs ++ {[ xs !!! (k-1) ]}.
+Proof.
+  intros.
+  rewrite (split_seg (k-1) xs) by lia.
+  rewrite singleton_is_seg by lia.
+  list. eauto.
+Qed.
+
+Lemma split_seg_singleton_r' `{Inhabited A} (xs : list A) i k :
+  valid_seg i k xs →
+  valid k xs →
+  seg i (k+1) xs = seg i k xs ++ {[ xs !!! k ]}.
+Proof.
+  intros.
+  rewrite (split_seg k xs) by lia.
+  rewrite singleton_is_seg by lia.
+  eauto.
+Qed.
+
 (* Automatic recognition of singleton segments
    and automatic joining of adjacent segments. *)
 
@@ -501,6 +536,8 @@ Qed.
 
 (* As a poor man's approach, see [simplify_list_equality_goal] further on. *)
 
+(* It is unclear whether we want to transform singleton segments into
+   singletons, or vice-versa. *)
 (* TODO do we want this?  *)
 
 Global Hint Rewrite
@@ -512,6 +549,15 @@ Global Hint Rewrite
   <- @split_seg
   using (list; lia)
 : list.
+
+Global Hint Rewrite
+  @seg_is_singleton
+  using (list; lia)
+: seg_is_singleton.
+
+Global Ltac recognize_singleton_segments :=
+  autorewrite with seg_is_singleton.
+  (* TODO does not work well *)
 
 (* Interaction of [seg] and [app]. *)
 
