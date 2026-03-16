@@ -200,24 +200,58 @@ Local Ltac elim_isortto_inv dst' :=
     destruct h as (dst' & h); unpack in h
   end.
 
-Local Definition transported_pending_last_write src srcofs dst dstofs i j :=
+(* The invariant of the inner loop involves three auxiliary predicates,
+   which we now define. We give them short names: [transported], [punched],
+   and [above]. To find out what they mean, read on. *)
+
+(* When we speak of an "extended source segment", we mean a source segment
+   that extends up to index [srcofs + (i + 1)] in the source array.
+   Similarly, an "extended destination segment" extends up to index
+   [dstofs + (i + 1)] in the destination array. *)
+
+(* [transported ...] states that, after performing the last write of [xi]
+   into the destination array at offset [j], the extended source segment
+   and the extended destination segment have the same content, up to a
+   permutation. *)
+
+Local Definition transported src srcofs dst dstofs i j :=
   let xi := src !!! (srcofs + i) in
+  (* the extended source segment: *)
   seg srcofs (srcofs + (i + 1)) src
+  (* is a permutation of: *)
     π
+  (* the extended destination segment,
+     updated with [xi] at index [j]. *)
   seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst.
 
-(* The extended destination segment, minus the hole at index [j],
-   is sorted. *)
-Local Definition sorted_with_hole dst dstofs i j :=
-  sorted (seg dstofs j dst ++ seg (j + 1) (dstofs + (i + 1)) dst).
+(* [punched ...] states that the extended destination segment,
+   deprived of the logically empty slot at index [j], is sorted. *)
+
+Local Definition punched dst dstofs i j :=
+  sorted (
+    seg dstofs j dst ++
+    seg (j + 1) (dstofs + (i + 1)) dst
+  ).
+
+(* [above ...] states that every element that lies in the second part of
+   the extended destination segment (that is, the part that follows the
+   logically empty slot at index [j]) is above [xi]. *)
+
+(* Actually, every such element is *strictly* above [xi], but this fact
+   does not seem to be needed. *)
 
 Local Definition above src srcofs dst dstofs i j :=
   let xi := src !!! (srcofs + i) in
   sorted ({[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst).
+  (* {[xi]} ≼ seg (j + 1) (dstofs + (i + 1)) dst *)
+  (* TODO try writing it this way *)
+
+(* We refer to the conjunction of these three facts as [dst_inv ...],
+   the destination invariant. *)
 
 Local Definition dst_inv src srcofs dst dstofs i j :=
-  transported_pending_last_write src srcofs dst dstofs i j ∧
-  sorted_with_hole dst dstofs i j ∧
+  transported src srcofs dst dstofs i j ∧
+  punched dst dstofs i j ∧
   above src srcofs dst dstofs i j.
 
 Local Ltac intro_dst_inv :=
@@ -225,29 +259,36 @@ Local Ltac intro_dst_inv :=
 
 Local Ltac elim_dst_inv :=
   match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
-    destruct h as (Htransported & Hsorted & Habove)
+    destruct h as (Htransported & Hpunched & Habove)
   end.
+
+(* This is the invariant of the inner loop. *)
+
+(* This invariant holds both while the loop is running and once the loop
+   has ended. If the loop is running, [out] is [Continue]; if the loop
+   has ended, [out] indicates how it has ended. *)
 
 Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   ∃ dst',
   isArray _dst dst' ∧
   len dst' = len dst ∧
-  (* Outside of the destination segment,
-     extended by one slot up to index [i+1],
+  (* Outside of the extended destination segment,
      the destination array is unmodified. *)
   initial_seg dstofs dst = initial_seg dstofs dst' ∧
   final_seg (dstofs + (i + 1)) dst = final_seg (dstofs + (i + 1)) dst' ∧
-  (* Inside this extended destination segment,
-     provided the element at offset [j] is replaced with [xi],
-     we find a permutation of the data
-     in the corresponding extended source segment. *)
+  (* The content of the extended destination segment is described by
+     the destination invariant [dst_inv ...]. If [out] is [Continue]
+     then the logically empty slot lies at index [j]; otherwise it lies
+     at index [j + 1]. Furthermore, in the latter case, [xj ≤ xi] holds. *)
   match out with
   | Continue =>
       dst_inv src srcofs dst' dstofs i j
   | Break _j =>
+      dst_inv src srcofs dst' dstofs i (j + 1) ∧
+      let xi := src !!! (srcofs + i) in
+      let xj := dst' !!! j in
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
-      dst' !!! j ≤ src !!! (srcofs + i) ∧
-      dst_inv src srcofs dst' dstofs i (j + 1)
+      xj ≤ xi
   end.
 
 Local Ltac intro_inner_inv :=
@@ -460,9 +501,9 @@ Proof.
       { intro_inner_inv.
         { eauto with seg lia. }
         { intro_dst_inv.
-          { unfold transported_pending_last_write.
+          { unfold transported.
             split_seg_singleton_r src. use_known_permutations. list. eauto. }
-          { unfold sorted_with_hole. list. assumption. }
+          { unfold punched. list. assumption. }
           { unfold above. list. rewrite seg_is_singleton by lia. eauto with sorted. }
         }
       }
@@ -478,7 +519,7 @@ Proof.
         wp_set. wp_continue.
         intro_inner_inv. intro_dst_inv.
         (* The destination segment contains a permitted permutation. *)
-        { unfold transported_pending_last_write in *. list.
+        { unfold transported in *. list.
           use_known_permutations.
           erewrite (seg_is_singleton src (srcofs + i)) by lia.
           split_seg_singleton_r dst''.
@@ -486,14 +527,14 @@ Proof.
           (* Argue that swapping [xi] and [xj] is permitted. *)
           eapply Permutation_app_comm. }
         (* The destination segment, minus the hole, is sorted. *)
-        { unfold sorted_with_hole in *.
+        { unfold punched in *.
           subst xj. list. rewrite app_assoc. list. (* TODO ugly; enables fusion *)
-          autorewrite with nat in Hsorted. exact Hsorted. }
+          autorewrite with nat in Hpunched. exact Hpunched. }
         (* Following the hole, every element is above [xi]. *)
-        { unfold above, sorted_with_hole in *.
-          rewrite (split_seg_singleton_r dst'') in Hsorted by lia;
-          autorewrite with nat in Hsorted;
-          rewrite <- app_assoc in Hsorted.
+        { unfold above, punched in *.
+          rewrite (split_seg_singleton_r dst'') in Hpunched by lia;
+          autorewrite with nat in Hpunched;
+          rewrite <- app_assoc in Hpunched.
           recognize_named_lookups. list.
           eapply sorted_app_boundary; list;
           eauto with lia sorted typeclass_instances.
@@ -515,13 +556,13 @@ Proof.
       { wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { unfold transported_pending_last_write in *.
+        { unfold transported in *.
           use_known_permutations.
           recognize_named_lookups.
           rewrite insert_seg by (list; lia); autorewrite with nat.
           eauto. }
         (* The destination segment is sorted. *)
-        { unfold above, sorted_with_hole in *.
+        { unfold above, punched in *.
           autorewrite with nat in Habove.
           rewrite insert_seg by (list; lia); autorewrite with nat.
           recognize_named_lookups.
@@ -534,7 +575,7 @@ Proof.
         wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { unfold transported_pending_last_write in *.
+        { unfold transported in *.
           use_known_permutations.
           recognize_named_lookups.
           list. eauto. }
