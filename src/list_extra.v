@@ -160,6 +160,13 @@ Global Hint Rewrite
   using (list; lia)
 : list nat.
 
+Lemma abc_minus_c a b c : a + (b + c) - c = a + b.
+Proof. lia. Qed.
+Lemma ab_minus_cb a b c : a + b - c - b = a - c.
+Proof. lia. Qed.
+
+Hint Rewrite abc_minus_c ab_minus_cb : list nat.
+
 Global Hint Rewrite
   @app_nil_l @app_nil_r
   @replicate_0
@@ -563,15 +570,8 @@ Global Hint Rewrite
   <- @split_seg
   using (list; lia)
 : list.
-
-Global Hint Rewrite
-  @seg_is_singleton
-  using (list; lia)
-: seg_is_singleton.
-
-Global Ltac recognize_singleton_segments :=
-  autorewrite with seg_is_singleton.
-  (* TODO does not work well *)
+  (* TODO recognizing a fusion opportunity may require rewriting
+          modulo associativity *)
 
 (* Interaction of [seg] and [app]. *)
 
@@ -728,6 +728,22 @@ Global Ltac split_seg j xs :=
     rewrite (split_seg j xs) by (list; lia)
   ].
 
+(* The tactic [split_seg_singleton_l xs] splits off the first element
+   of a nonempty segment of the form [seg i k xs]. *)
+
+Global Ltac split_seg_singleton_l xs :=
+  erewrite (split_seg_singleton_l xs) by lia;
+  autorewrite with nat.
+    (* We do not use [list] because it would undo the splitting. *)
+
+(* The tactic [split_seg_singleton_r xs] splits off the last element
+   of a nonempty segment of the form [seg i k xs]. *)
+
+Global Ltac split_seg_singleton_r xs :=
+  erewrite (split_seg_singleton_r xs) by lia;
+  autorewrite with nat.
+    (* We do not use [list] because it would undo the splitting. *)
+
 (* Some properties of empty segments. *)
 
 Lemma empty_seg_iff {A} i j (xs : list A) :
@@ -750,6 +766,29 @@ Lemma invert_nonempty_seg {A} i j (xs : list A) :
   i < j.
 Proof.
   intros Hseg ?. rewrite empty_seg_iff in Hseg by eauto. lia.
+Qed.
+
+(* If certain two list segments are known to be equal, then two smaller
+   segments must be equal as well. *)
+
+Lemma seg_equality_implication {A} i1 j1 i2 j2 i'1 j'1 i'2 j'2 (xs1 xs2 : list A) :
+  seg i1 j1 xs1 = seg i2 j2 xs2 →
+  valid_seg i1 j1 xs1 →
+  valid_seg i2 j2 xs2 →
+  i1 ≤ i'1 ≤ j'1 ≤ j1 →
+  i2 ≤ i'2 ≤ j'2 ≤ j2 →
+  i'2 - i2 = i'1 - i1 →
+  j'2 - i2 = j'1 - i1 →
+  seg i'1 j'1 xs1 = seg i'2 j'2 xs2.
+Proof.
+  intros.
+  replace (seg i'1 j'1 xs1) with
+          (seg (i'1 - i1) (j'1 - i1) (seg i1 j1 xs1))
+  by (list; eauto).
+  replace (seg i'2 j'2 xs2) with
+          (seg (i'2 - i2) (j'2 - i2) (seg i2 j2 xs2))
+  by (list; eauto).
+  congruence.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -793,6 +832,20 @@ Global Ltac simplify_list_equality_goal :=
   repeat rewrite <- app_assoc;
   repeat eapply simplify_app_l;
   list.
+
+(* [simplify_list_permutation_goal] simplies a goal of the form [xs π ys],
+   that is, an obligation to prove that the lists [xs] and [ys] are equal
+   up to a permutation of their elements. *)
+
+(* We do not use the tactic [list] because it fuses adjacent segments,
+   which, in a permutation goal, can be counter-productive. *)
+
+Ltac simplify_list_permutation_goal :=
+  autorewrite with nat;
+  repeat rewrite app_assoc;
+  repeat eapply Permutation_app_tail;
+  repeat rewrite <- app_assoc;
+  repeat eapply Permutation_app_head.
 
 (* -------------------------------------------------------------------------- *)
 
