@@ -400,11 +400,13 @@ Local Definition punched dst dstofs i j :=
 (* Actually, every such element is *strictly* above [xi], but this fact
    does not seem to be needed. *)
 
+(* One could also write this fact under the form:
+     {[xi]} ≼ seg (j + 1) (dstofs + (i + 1)) dst
+   but this form does not seem to be significantly easier to work with. *)
+
 Local Definition above src srcofs dst dstofs i j :=
   let xi := src !!! (srcofs + i) in
   sorted ({[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst).
-  (* {[xi]} ≼ seg (j + 1) (dstofs + (i + 1)) dst *)
-  (* TODO try writing it this way *)
 
 (* We refer to the conjunction of these three facts as [dst_inv ...],
    the destination invariant. *)
