@@ -109,7 +109,7 @@ Proof. lia. Qed.
 
 Global Hint Rewrite
   <- Nat.add_assoc
-: list.
+: list nat.
 
 Global Hint Rewrite
   Nat.add_0_l
@@ -119,12 +119,12 @@ Global Hint Rewrite
   Nat.sub_diag
   Nat.add_simpl_l Nat.add_simpl_r
   sub_succ
-: list.
+: list nat.
 
 Global Hint Rewrite
   <- Nat.le_add_sub
   using (list; lia)
-: list.
+: list nat.
 
 (* Do NOT add [sub_diag'] to the rewrite hint database, because it can
    change an informative equation [x - y = 0] into the uniformative
@@ -145,7 +145,7 @@ Global Hint Rewrite
   (* sub_diag' *)
   simpl_sub_add
   using (list; lia)
-: list.
+: list nat.
 
 Global Hint Rewrite
   @app_nil_l @app_nil_r
@@ -537,8 +537,9 @@ Qed.
 (* As a poor man's approach, see [simplify_list_equality_goal] further on. *)
 
 (* It is unclear whether we want to transform singleton segments into
-   singletons, or vice-versa. *)
-(* TODO do we want this?  *)
+   singletons, or vice-versa. Our current choice is to transform
+   singletons into singleton segments, in the hope of enabling fusions
+   between segments. *)
 
 Global Hint Rewrite
   @singleton_is_seg
@@ -630,9 +631,19 @@ Proof.
   intros. listx o. lookup_app_split.
 Qed.
 
+Lemma insert_seg {A} i j k x (xs : list A) :
+  valid_seg i j xs →
+  valid k (seg i j xs) →
+  <[k := x]> (seg i j xs) =
+  seg i (i + k) xs ++ {[x]} ++ seg (i + k + 1) j xs.
+Proof.
+  list. intros. listx o. do 2 lookup_app_split.
+Qed.
+
 Global Hint Rewrite
   @insert_seg_first
   @insert_seg_last
+  (* TODO @insert_seg *)
   using (list; lia)
 : list.
 
