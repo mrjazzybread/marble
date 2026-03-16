@@ -198,6 +198,12 @@ Local Ltac elim_isortto_inv dst' :=
     destruct h as (dst' & h); unpack in h
   end.
 
+Local Definition transported_pending_last_write src srcofs i dst dstofs j :=
+  let xi := src !!! (srcofs + i) in
+  seg srcofs (srcofs + (i + 1)) src
+    π
+  seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst.
+
 Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   ∃ dst',
   isArray _dst dst' ∧
@@ -211,19 +217,14 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
      provided the element at offset [j] is replaced with [xi],
      we find a permutation of the data
      in the corresponding extended source segment. *)
-  (
-    let xi := src !!! (srcofs + i) in
-    seg srcofs (srcofs + (i + 1)) src
-      π
-    seg dstofs j dst' ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst'
-  ) ∧
   match out with
-  | Continue => True
+  | Continue =>
+      transported_pending_last_write src srcofs i dst' dstofs j
   | Break _j =>
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
-      dst' !!! j ≤ src !!! (srcofs + i)
-  end
-.
+      dst' !!! j ≤ src !!! (srcofs + i) ∧
+      transported_pending_last_write src srcofs i dst' dstofs (j + 1)
+  end.
 
 Local Ltac intro_inner_inv :=
   unfold inner_inv; pack; list; tc3; list; tc3.
@@ -262,10 +263,7 @@ Ltac wp_compare :=
 (* TODO *)
 Lemma a_bp1_m1 a b : a + (b + 1) - 1 = a + b.
 Proof. lia. Qed.
-Hint Rewrite a_bp1_m1 : list.
-Hint Rewrite a_bp1_m1 : nat.
-Hint Rewrite Nat.add_simpl_r : nat.
-Hint Rewrite Nat.add_assoc : nat.
+Hint Rewrite a_bp1_m1 : list nat.
 
 Ltac simplify_list_permutation_goal :=
   (* TODO cannot use [list] because it joins segments *)
@@ -340,7 +338,8 @@ Proof.
       (* Initialization of the inner loop. *)
       { intro_inner_inv.
         { eauto with seg lia. }
-        { split_seg_singleton_r src. use_known_permutations. list. eauto. }
+        { unfold transported_pending_last_write.
+          split_seg_singleton_r src. use_known_permutations. list. eauto. }
       }
       (* The body of the inner loop. *)
       clear dependent _dst. wp_loop_intros _j j _dst.
@@ -352,7 +351,8 @@ Proof.
       (* Case [xi < xj]. *)
       { wp_set. wp_continue. intro_inner_inv.
         (* Justify the content of the destination segment. *)
-        { use_known_permutations.
+        { unfold transported_pending_last_write in *. list.
+          use_known_permutations.
           erewrite (seg_is_singleton src (srcofs + i)) by lia.
           split_seg_singleton_r dst''.
           simplify_list_permutation_goal. recognize_named_lookups.
@@ -361,37 +361,38 @@ Proof.
       }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
-        (* Justify the content of the destination segment. *)
-        { use_known_permutations.
-          erewrite (seg_is_singleton src (srcofs + i)) by lia.
-          split_seg_singleton_r dst''.
-          simplify_list_permutation_goal. recognize_named_lookups.
-          admit. (* TODO wrong *)
-        }
         { subst. assumption. }
       }
     }
     (* Conclusion of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
-      intros (j&?). unpack. list in *.
-      elim_inner_inv dst''.
-      assert (dstofs ≤ to_nat (empty_slot _dstofs out) ≤ dstofs + i). (* TODO *)
-      { destruct out; simpl empty_slot.
-        - replace (to_nat (i0 + 1)) with (j + 1) by admit.
-          lia.
-        - rewrite H5. int.
-          replace (proj dstofs) with dstofs.
-          2: symmetry.
-          2: rewrite <- representable_iff_proj.
-          2: tc.
-          lia. }
-      wp_set.
-      { eapply introIsInt. }
-      { eauto with lia. }
-      intro_isortto_inv.
-      + admit.
+      intros (j&Hj). list in Hj. unpack in Hj.
+      (* Perform a case analysis on [out], so as to separately analyze
+         the case where the loop has been stopped early and the case
+         where it has finished normally. *)
+      destruct out as [ _j |]; simpl empty_slot; elim_inner_inv dst''.
+      (* Case: we have broken out. *)
+      { wp_set.
+        intro_isortto_inv.
+        (* Justify the content of the destination segment. *)
+        { unfold transported_pending_last_write in *.
+          use_known_permutations.
+          recognize_named_lookups.
+          rewrite insert_seg by (list; lia); autorewrite with nat.
+          eauto. }
+      }
+      (* Case: the loop has finished normally. *)
+      { assert (j = dstofs) by tauto. subst j.
+        wp_set.
+        intro_isortto_inv.
+        (* Justify the content of the destination segment. *)
+        { unfold transported_pending_last_write in *.
+          use_known_permutations.
+          recognize_named_lookups.
+          list. eauto. }
+      }
     }
   }
-Admitted.
+Qed.
 
 End Sort.
