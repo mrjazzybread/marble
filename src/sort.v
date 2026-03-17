@@ -245,6 +245,12 @@ Proof.
     eauto with lia.
 Qed.
 
+Lemma smt_sorted_iff xs :
+  smt_sorted xs ↔ sorted xs.
+Proof.
+  split; eauto using smt_sorted_sorted, sorted_smt_sorted.
+Qed.
+
 (* A usable corollary of [sorted_smt_sorted]. *)
 
 Lemma exploit_smt_sorted xs x y i j :
