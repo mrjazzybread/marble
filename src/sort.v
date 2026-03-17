@@ -17,6 +17,10 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
+(* -------------------------------------------------------------------------- *)
+
+(* A couple local tactics. *)
+
 (* The tactic [recognize_named_lookups] detects hypotheses of the form
    [x = xs !!! i] and uses them to replace [xs !!! i] with [x] both in
    the goal and in all hypotheses. *)
@@ -29,8 +33,9 @@ Local Ltac recognize_named_lookups :=
   intros.
 
 (* The tactic [use_known_permutation] detects a hypothesis of the form
-   [xs ≃ ys], where [xs] occurs in the goal, and uses it to replace[xs]
-   with [ys] in the goal (which presumably is a permutation goal). *)
+   [xs ≃ ys], where [xs] occurs in the goal, and uses it to replace [xs]
+   with [ys] in the goal. (Of course this requires the surrounding context
+   to be compatible with such a rewriting step.) *)
 
 Local Ltac use_known_permutation :=
   match goal with h: Permutation ?xs ?ys |- context[?xs] =>
