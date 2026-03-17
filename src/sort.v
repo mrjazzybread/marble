@@ -265,6 +265,34 @@ Proof.
   intros Hsorted. intros; subst. eapply sorted_smt_sorted; eauto.
 Qed.
 
+(* An SMT-style definition of the existence of a sorted segment. *)
+
+Definition smt_sorted_seg i k xs :=
+  ∀ j1 j2,
+  valid j1 xs →
+  valid j2 xs →
+  (i ≤ j1) %nat → (j1 ≤ j2)%nat → (j2 < k)%nat →
+  xs !!! j1 ≤ xs !!! j2.
+
+Lemma smt_sorted_seg_iff i k xs :
+  smt_sorted_seg i k xs ↔
+  smt_sorted (seg i k xs).
+Proof.
+  unfold smt_sorted_seg, smt_sorted. split; intros Hsorted j1 j2; intros.
+  + list in *. list.
+    eauto with lia.
+  + replace (xs !!! j1) with (seg i k xs !!! (j1 - i)) by (list; eauto).
+    replace (xs !!! j2) with (seg i k xs !!! (j2 - i)) by (list; eauto).
+    eauto with lia.
+Qed.
+
+Lemma smt_sorted_seg_iff' i k xs :
+  smt_sorted_seg i k xs ↔
+  sorted (seg i k xs).
+Proof.
+  rewrite <- smt_sorted_iff, smt_sorted_seg_iff. tauto.
+Qed.
+
 End Sortedness.
 
 Local Hint Resolve
