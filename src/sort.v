@@ -366,11 +366,23 @@ Notation "y > x" := (x < y)
 Infix "≡" := (equivalent R)
   (at level 70, no associativity) : element_scope.
 
-Definition lt_le' := (@lt_le A R).
-Hint Resolve lt_le' : core.
+(* The following hints seem to be needed. I don't understand why
+   reflexivity and transitivity do not work out of the box. *)
 
-(* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
-   a permutation of their elements. *)
+Local Lemma reflex_le x : x ≤ x.
+Proof. intros. reflexivity. Qed.
+Local Lemma trans_le x y z : x ≤ y → y ≤ z → x ≤ z.
+Proof. intros. transitivity y; eauto. Qed.
+Local Hint Resolve reflex_le trans_le : core.
+
+Definition lt_le' := (@lt_le A R).
+Local Hint Resolve lt_le' : core.
+
+Lemma lt_equiv_lt x y z : x < y → y ≡ z → x < z.
+Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
+Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
+Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
+Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
 
 Local Infix "≃" := (@Permutation A)
   (at level 70, no associativity).
