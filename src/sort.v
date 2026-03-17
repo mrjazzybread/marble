@@ -313,11 +313,6 @@ Abort. (* TODO *)
 
 End Sortedness.
 
-Local Hint Resolve
-  @sorted_singleton
-  @Sorted_app_inv_l
-  @Sorted_app_inv_r
-: sorted.
 Arguments smt_sorted {A H} R xs.
 Arguments smt_sorted_seg {A H} R i k xs.
 Arguments smt_sorted_seg_except {A H} R i k xs j.
