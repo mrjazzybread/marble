@@ -251,10 +251,10 @@ Proof.
   split; eauto using smt_sorted_sorted, sorted_smt_sorted.
 Qed.
 
-(* A usable corollary of [sorted_smt_sorted]. *)
+(* A statement that allows [smt_sorted] to be more easily exploited. *)
 
 Lemma exploit_smt_sorted xs x y i j :
-  sorted xs →
+  smt_sorted xs →
   x = xs !!! i →
   y = xs !!! j →
   valid i xs →
@@ -262,7 +262,7 @@ Lemma exploit_smt_sorted xs x y i j :
   (i ≤ j)%nat →
   x ≤ y.
 Proof.
-  intros Hsorted. intros; subst. eapply sorted_smt_sorted; eauto.
+  intros Hsorted. intros; subst. eauto.
 Qed.
 
 (* An SMT-style definition of the existence of a sorted segment. *)
@@ -318,6 +318,9 @@ Local Hint Resolve
   @Sorted_app_inv_l
   @Sorted_app_inv_r
 : sorted.
+Arguments smt_sorted {A H} R xs.
+Arguments smt_sorted_seg {A H} R i k xs.
+Arguments smt_sorted_seg_except {A H} R i k xs j.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -520,9 +523,9 @@ Notation "xs '≼' ys" := (pairwise lex xs ys) (at level 80).
    commit 8ecbec7bae8cb942b6e200f3e0fc719e444b87fb. *)
 
 Notation smt_sorted_seg i k xs :=
-  (@smt_sorted_seg _ _ lex i k xs).
+  (smt_sorted_seg lex i k xs).
 Notation smt_sorted_seg_except i k xs j :=
-  (@smt_sorted_seg_except _ _ lex i k xs j).
+  (smt_sorted_seg_except lex i k xs j).
 
 Ltac smt_reasoning :=
   unfold smt_sorted_seg, smt_sorted_seg_except in *;
@@ -721,7 +724,7 @@ Lemma wp_isortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isInt _n n →
   valid_seg srcofs (srcofs + n) src →
   valid_seg dstofs (dstofs + n) dst →
-  Sorted R' src →
+  smt_sorted R' src →
   wp (isortto _src _srcofs _dst _dstofs _n) (λ _dst,
     isortto_inv src srcofs dst dstofs n _dst
   ).
