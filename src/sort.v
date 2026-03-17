@@ -384,16 +384,82 @@ Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
 Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
 
-Local Infix "≃" := (@Permutation A)
-  (at level 70, no associativity).
+(* We assume that there is a second preorder [R'] on the type [A]. *)
 
-(* We write [sorted xs] when the list [xs] is sorted with respect to [≤]. *)
+(* We write [x `precedes` y] for this preorder. We will assume that
+   the input array is sorted with respect to this order. Therefore,
+   intuitively, [x `precedes` y] means that [x] comes earlier than [y]
+   in the input array. *)
+
+Context `{PreOrder A R'}.
+
+Infix "`precedes`" := R'
+  (at level 70, no associativity) : element_scope.
+
+(* The following hints seem to be needed. I don't understand why
+   reflexivity and transitivity do not work out of the box. *)
+
+Local Lemma reflex_precedes x : x `precedes` x.
+Proof. intros. reflexivity. Qed.
+Local Lemma trans_precedes x y z : x `precedes` y → y `precedes` z → x `precedes` z.
+Proof. intros. transitivity y; eauto. Qed.
+Local Hint Resolve reflex_precedes trans_precedes : core.
+
+(* [lex] is the lexicographic combination of the two preorders. *)
+
+(* We do NOT use the following straightforward definition, because
+   it involves a disjunction. This in turn entails the need for the
+   law of excluded middle (or a hypothesis [RelDecision R]) in the
+   proof of the statement: [x ≤ y → x `precedes` y → lex x y].
+
+Local Definition lex x y :=
+  x < y ∨
+  x ≡ y ∧ x `precedes` y.
+ *)
+
+(* Instead, we use this definition: *)
+
+Local Definition lex x y :=
+  x ≤ y ∧ (y ≤ x → x `precedes` y).
+
+Local Hint Unfold lex : core.
+
+(* [lex] is a preorder. *)
+
+Global Instance : PreOrder lex.
+Proof.
+  constructor; unfold lex.
+  + intros x. eauto.
+  + intros x y z. intuition eauto 8.
+Qed.
+
+(* Our definition of [lex] implies the usual definition. *)
+
+Lemma lt_lex x y : x < y → lex x y.
+Proof.
+  split.
+  + eauto.
+  + intro. exfalso. unfold strict in *. tauto.
+Qed.
+
+Lemma le_le_lex x y : x ≤ y → x `precedes` y → lex x y.
+Proof. eauto. Qed.
+
+Local Hint Resolve lt_lex : core.
+
+(* We write [sorted xs] when the list [xs] is sorted with respect to [lex]. *)
 
 (* We write [xs ≼ ys] when every element [x ∈ xs]
    and every element [y ∈ ys] satisfy [x ≤ y]. *)
 
-Notation sorted xs   := (Sorted R xs).
-Notation "xs '≼' ys" := (pairwise R xs ys) (at level 80).
+Notation sorted xs   := (Sorted lex xs).
+Notation "xs '≼' ys" := (pairwise lex xs ys) (at level 80).
+
+(* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
+   a permutation of their elements. *)
+
+Local Infix "≃" := (@Permutation A)
+  (at level 70, no associativity).
 
 (* Insertion sort: the code. *)
 
@@ -550,7 +616,8 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   (* The content of the extended destination segment is described by
      the destination invariant [dst_inv ...]. If [out] is [Continue]
      then the logically empty slot lies at index [j]; otherwise it lies
-     at index [j + 1]. Furthermore, in the latter case, [xj ≤ xi] holds. *)
+     at index [j + 1]. Furthermore, in the latter case, [lex xj xi]
+     holds. *)
   match out with
   | Continue =>
       dst_inv src srcofs dst' dstofs i j
@@ -559,7 +626,7 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
       let xi := src !!! (srcofs + i) in
       let xj := dst' !!! j in
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
-      xj ≤ xi
+      lex xj xi
   end.
 
 Local Ltac intro_inner_inv :=
@@ -580,6 +647,7 @@ Lemma wp_isortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isInt _n n →
   valid_seg srcofs (srcofs + n) src →
   valid_seg dstofs (dstofs + n) dst →
+  Sorted R' src →
   wp (isortto _src _srcofs _dst _dstofs _n) (λ _dst,
     isortto_inv src srcofs dst dstofs n _dst
   ).
@@ -636,7 +704,18 @@ Proof.
           eauto with lia sorted typeclass_instances. } }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
-        + recognize_named_lookups. assumption. }
+        + recognize_named_lookups.
+          eapply le_le_lex. assumption.
+          (* Proving [xj `precedes` xi] is the slightly tricky part.
+             The argument is that [xj] comes from the extended source
+             segment, whose rightmost element is [xi]. This is the only
+             point where stability creates an extra proof obligation. *)
+          elim_dst_inv. unfold transported in Htransported.
+          assert (Hseg: xj ∈ seg srcofs (srcofs + (i + 1)) src).
+          { use_known_permutation. subst xj. eauto with elem_of_app lia. }
+          rewrite lookup_total_elem_seg in Hseg by lia.
+          destruct Hseg as (j' & ? & ?).
+          eapply exploit_smt_sorted; eauto with lia. }
     }
     (* Epilogue of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
