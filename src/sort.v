@@ -173,12 +173,98 @@ Proof.
   eauto using Sorted_app, boundary_test with typeclass_instances.
 Qed.
 
+(* The definition of sortedness that is best suited for use with SMT
+   solvers is this: *)
+
+Definition smt_sorted xs :=
+  ∀ i j,
+  valid i xs →
+  valid j xs →
+  (i ≤ j)%nat →
+  xs !!! i ≤ xs !!! j.
+
+Lemma smt_sorted_nil :
+  smt_sorted [].
+Proof.
+  unfold smt_sorted. list. lia.
+Qed.
+
+Lemma smt_sorted_cons x xs :
+  smt_sorted xs →
+  (∀ y, y ∈ xs → x ≤ y) →
+  smt_sorted (x :: xs).
+Proof.
+  unfold smt_sorted. intros Hxs Hxy. intros.
+  destruct (decide (i = 0)); destruct (decide (j = 0));
+  subst; try lia; list in *.
+  { reflexivity. }
+  { eauto using list_elem_of_lookup_total_2 with lia. }
+  { eauto with lia. }
+Qed.
+
+Lemma smt_sorted_uncons x xs :
+  smt_sorted (x :: xs) →
+  smt_sorted xs.
+Proof.
+  unfold smt_sorted. intros Hsorted. intros.
+  change (xs !!! i) with ((x :: xs) !!! (S i)).
+  change (xs !!! j) with ((x :: xs) !!! (S j)).
+  eauto with lia.
+Qed.
+
+(* [sorted] implies [smt_sorted]. *)
+
+Lemma sorted_smt_sorted xs :
+  sorted xs →
+  smt_sorted xs.
+Proof.
+  rewrite Sorted_iff_StronglySorted.
+  induction 1.
+  + eauto using smt_sorted_nil.
+  + rename a into x, l into xs.
+    rewrite Forall_forall in *.
+    eauto using smt_sorted_cons.
+Qed.
+
+(* [smt_sorted] implies [sorted]. *)
+
+Lemma smt_sorted_sorted xs :
+  smt_sorted xs →
+  sorted xs.
+Proof.
+  rewrite Sorted_iff_StronglySorted.
+  induction xs as [|x xs]; intros Hsmt; constructor.
+  + eauto using smt_sorted_uncons.
+  + rewrite Forall_forall.
+    unfold smt_sorted in Hsmt.
+    intros y Hy.
+    rewrite list_elem_of_lookup_total in Hy.
+    destruct Hy as (j & ? & ?). subst y.
+    change x with ((x :: xs) !!! 0).
+    change (xs !!! j) with ((x :: xs) !!! (S j)).
+    eauto with lia.
+Qed.
+
+(* A usable corollary of [sorted_smt_sorted]. *)
+
+Lemma exploit_smt_sorted xs x y i j :
+  sorted xs →
+  x = xs !!! i →
+  y = xs !!! j →
+  valid i xs →
+  valid j xs →
+  (i ≤ j)%nat →
+  x ≤ y.
+Proof.
+  intros Hsorted. intros; subst. eapply sorted_smt_sorted; eauto.
+Qed.
+
 End Sortedness.
 
 Local Hint Resolve
-  sorted_singleton
-  Sorted_app_inv_l
-  Sorted_app_inv_r
+  @sorted_singleton
+  @Sorted_app_inv_l
+  @Sorted_app_inv_r
 : sorted.
 
 (* -------------------------------------------------------------------------- *)
