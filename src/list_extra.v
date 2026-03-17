@@ -768,6 +768,8 @@ Proof.
   intros Hseg ?. rewrite empty_seg_iff in Hseg by eauto. lia.
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 (* If certain two list segments are known to be equal, then two smaller
    segments must be equal as well. *)
 
@@ -790,6 +792,68 @@ Proof.
   by (list; eauto).
   congruence.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Membership in a list: [x ∈ xs]. *)
+
+(* The following two lemmas are variants of [elem_of_app],
+   intended to be used by [eauto]. *)
+
+Lemma elem_of_app_l {A} x (xs ys : list A) :
+  x ∈ xs → x ∈ xs ++ ys.
+Proof. rewrite elem_of_app. eauto. Qed.
+
+Lemma elem_of_app_r {A} x (xs ys : list A) :
+  x ∈ ys → x ∈ xs ++ ys.
+Proof. rewrite elem_of_app. eauto. Qed.
+
+(* The following lemmas characterize the property of membership
+   in a list segment, [x ∈ seg i k xs]. *)
+
+(* We do not require [valid_seg i k xs]. *)
+
+Lemma lookup_total_elem_seg_2 `{Inhabited A} i j k (xs : list A) :
+  i ≤ j < k `min` length xs →
+  xs !!! j ∈ seg i k xs.
+Proof.
+  intros.
+  rewrite (seg_valid i k xs). cbv zeta. autorewrite with nat.
+  assert (valid (j - i) (seg i (k `min` length xs) xs)) by (list; lia).
+  replace j with (i + (j - i)) by lia.
+  erewrite <- lookup_total_seg by eauto.
+  eapply list_elem_of_lookup_total_2. eauto.
+Qed.
+
+Lemma lookup_total_elem_seg_1 `{Inhabited A} i k (xs : list A) x :
+  x ∈ seg i k xs →
+  ∃ j, i ≤ j < k `min` length xs ∧ x = xs !!! j.
+Proof.
+  intros Hx.
+  apply list_elem_of_lookup_total_1 in Hx.
+  destruct Hx as (delta & ? & ?).
+  list in *. list in *. (* weird; two steps are required *)
+  exists (i + delta). eauto with lia.
+Qed.
+
+Lemma lookup_total_elem_seg `{Inhabited A} i k (xs : list A) x :
+  x ∈ seg i k xs ↔
+  ∃ j, i ≤ j < k `min` length xs ∧ x = xs !!! j.
+Proof.
+  intros. split; intros Hx.
+  + eauto using lookup_total_elem_seg_1.
+  + destruct Hx as (j & ? & ?). subst. eauto using lookup_total_elem_seg_2.
+Qed.
+
+(* [eauto with elem_of_app] can prove that [xs !!! i] is a member of
+   a concatenation of lists, one of which is a segment of [xs] that
+   contains the index [i]. *)
+
+Global Hint Resolve
+  @lookup_total_elem_seg_2
+  @elem_of_app_l
+  @elem_of_app_r
+: elem_of_app.
 
 (* -------------------------------------------------------------------------- *)
 
