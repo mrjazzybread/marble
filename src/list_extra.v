@@ -833,7 +833,7 @@ Global Ltac simplify_list_equality_goal :=
   repeat eapply simplify_app_l;
   list.
 
-(* [simplify_list_permutation_goal] simplies a goal of the form [xs π ys],
+(* [simplify_list_permutation_goal] simplies a goal of the form [xs ≃ ys],
    that is, an obligation to prove that the lists [xs] and [ys] are equal
    up to a permutation of their elements. *)
 

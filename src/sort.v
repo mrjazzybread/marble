@@ -29,7 +29,7 @@ Local Ltac recognize_named_lookups :=
   intros.
 
 (* The tactic [use_known_permutation] detects a hypothesis of the form
-   [xs π ys], where [xs] occurs in the goal, and uses it to replace[xs]
+   [xs ≃ ys], where [xs] occurs in the goal, and uses it to replace[xs]
    with [ys] in the goal (which presumably is a permutation goal). *)
 
 Local Ltac use_known_permutation :=
@@ -278,10 +278,10 @@ Infix "≡" := (equivalent R)
 Definition lt_le' := (@lt_le A R).
 Hint Resolve lt_le' : core.
 
-(* We write [xs π ys] when the lists [xs] and [ys] are equivalent up to
+(* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
    a permutation of their elements. *)
 
-Local Infix "π" := (@Permutation A)
+Local Infix "≃" := (@Permutation A)
   (at level 70, no associativity).
 
 (* We write [sorted xs] when the list [xs] is sorted with respect to [≤]. *)
@@ -347,7 +347,7 @@ Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   (* Inside the destination segment,
      we find a permutation of the data in the source segment. *)
   seg srcofs (srcofs + i) src
-    π
+    ≃
   seg dstofs (dstofs + i) dst' ∧
   (* The destination segment is sorted. *)
   sorted (seg dstofs (dstofs + i) dst').
@@ -379,7 +379,7 @@ Local Definition transported src srcofs dst dstofs i j :=
   (* the extended source segment: *)
   seg srcofs (srcofs + (i + 1)) src
   (* is a permutation of: *)
-    π
+    ≃
   (* the extended destination segment,
      updated with [xi] at index [j]. *)
   seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst.
