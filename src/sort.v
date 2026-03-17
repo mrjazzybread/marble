@@ -507,6 +507,33 @@ Local Hint Resolve lt_lex : core.
 Notation sorted xs   := (Sorted lex xs).
 Notation "xs '≼' ys" := (pairwise lex xs ys) (at level 80).
 
+(* When stating the invariants of insertion sort, we have a choice between
+   two styles: we can either reason in terms of list segments or reason in
+   terms of the elements of these segments. In other words, we can either
+   write [sorted (seg ...)] or write [smt_sorted_seg ...]. The first style
+   is somewhat higher-level and makes intermediate goals more readable; the
+   second style is somewhat lower-level and more amenable to SMT-style
+   automation. *)
+
+(* In the following, we use the low-level SMT style. This saves 10 to 15
+   lines in the main proof. The earlier high-level style is visible in
+   commit 8ecbec7bae8cb942b6e200f3e0fc719e444b87fb. *)
+
+Notation smt_sorted_seg i k xs :=
+  (@smt_sorted_seg _ _ lex i k xs).
+Notation smt_sorted_seg_except i k xs j :=
+  (@smt_sorted_seg_except _ _ lex i k xs j).
+
+Ltac smt_reasoning :=
+  unfold smt_sorted_seg, smt_sorted_seg_except in *;
+  intros; list in *;
+  rewrite ?list_lookup_total_insert;
+  repeat case_decide; unpack; subst;
+  (* Iterative deepening is required to avoid needless uses of
+     transitivity, which create unresolved metavariables. *)
+  eauto 2 with lia; eauto 3 with lia;
+  eauto 4 with lia; eauto 5 with lia.
+
 (* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
    a permutation of their elements. *)
 
@@ -571,7 +598,8 @@ Definition isortto_inv src srcofs dst dstofs := λ i _dst,
     ≃
   seg dstofs (dstofs + i) dst' ∧
   (* The destination segment is sorted. *)
-  sorted (seg dstofs (dstofs + i) dst').
+  smt_sorted_seg dstofs (dstofs + i) dst'.
+  (* in high-level style: sorted (seg dstofs (dstofs + i) dst') *)
 
 Local Ltac intro_isortto_inv :=
   unfold isortto_inv; pack; list; tc3; list; tc3.
@@ -595,24 +623,23 @@ Local Ltac elim_isortto_inv dst' :=
    and the extended destination segment have the same content, up to a
    permutation. *)
 
-Local Definition transported src srcofs dst dstofs i j :=
-  let xi := src !!! (srcofs + i) in
-  (* the extended source segment: *)
-  seg srcofs (srcofs + (i + 1)) src
-  (* is a permutation of: *)
-    ≃
-  (* the extended destination segment,
-     updated with [xi] at index [j]. *)
-  seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst.
+Local Notation transported src srcofs dst dstofs i j := (
+  let xi := src%list !!! (srcofs + i) in
+  (* the extended source segment is a permutation of *)
+  seg srcofs (srcofs + (i + 1)) src ≃
+  (* the extended destination segment, updated with [xi] at index [j]. *)
+  seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst
+) (only parsing).
 
 (* [punched ...] states that the extended destination segment,
    deprived of the logically empty slot at index [j], is sorted. *)
 
-Local Definition punched dst dstofs i j :=
-  sorted (
-    seg dstofs j dst ++
-    seg (j + 1) (dstofs + (i + 1)) dst
-  ).
+(* In high-level style, one would write
+   sorted (seg dstofs j dst ++ seg (j + 1) (dstofs + (i + 1)) dst *)
+
+Local Notation punched dst dstofs i j := (
+  smt_sorted_seg_except dstofs (dstofs + (i + 1)) dst (* except: *) j
+) (only parsing).
 
 (* [above ...] states that every element that lies in the second part of
    the extended destination segment (that is, the part that follows the
@@ -621,13 +648,13 @@ Local Definition punched dst dstofs i j :=
 (* Actually, every such element is *strictly* above [xi], but this fact
    does not seem to be needed. *)
 
-(* One could also write this fact under the form:
-     {[xi]} ≼ seg (j + 1) (dstofs + (i + 1)) dst
-   but this form does not seem to be significantly easier to work with. *)
+(* In high-level style, one would write:
+   sorted ({[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst) *)
 
-Local Definition above src srcofs dst dstofs i j :=
+Local Notation above src srcofs dst dstofs i j := (
   let xi := src !!! (srcofs + i) in
-  sorted ({[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst).
+  ∀ j', j + 1 ≤ j' ≤ dstofs + i → lex xi (dst !!! j')
+) (only parsing).
 
 (* We refer to the conjunction of these three facts as [dst_inv ...],
    the destination invariant. *)
@@ -638,17 +665,12 @@ Local Definition dst_inv src srcofs dst dstofs i j :=
   above src srcofs dst dstofs i j.
 
 Local Ltac intro_dst_inv :=
-  split; [
-    unfold transported in *
-  | split; [
-    unfold punched in *
-  | unfold punched, above in *
-  ]];
-  autorewrite with nat in *.
+  split; [| split ]; cbv zeta.
 
 Local Ltac elim_dst_inv :=
   match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
-    destruct h as (Htransported & Hpunched & Habove)
+    destruct h as (Htransported & Hpunched & Habove);
+    cbv zeta in Htransported, Habove
   end.
 
 (* This is the invariant of the inner loop. *)
@@ -708,7 +730,7 @@ Proof.
   (* The outer loop. *)
   wp_iter_up (isortto_inv src srcofs dst dstofs).
   (* Initialization of the outer loop. *)
-  { intro_isortto_inv. }
+  { intro_isortto_inv. smt_reasoning. }
   (* The body of the outer loop. *)
   { clear dependent _dst. wp_loop_intros _i i _dst.
     elim_isortto_inv dst'.
@@ -721,7 +743,7 @@ Proof.
       (* Initialization of the inner loop. *)
       { intro_inner_inv; eauto using seg_equality_implication with lia.
         intro_dst_inv; list; rewrite ?(seg_is_singleton src) by lia;
-        eauto 2 with sorted.
+        smt_reasoning.
         + split_seg_singleton_r src. use_known_permutation. list. eauto. }
       (* The body of the inner loop. *)
       clear dependent _dst. wp_loop_intros _j j _dst.
@@ -733,7 +755,7 @@ Proof.
       (* Case [xi < xj]. *)
       { elim_dst_inv.
         wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv.
+        intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
         { list. use_known_permutation.
           rewrite (seg_is_singleton src) by lia.
@@ -742,18 +764,7 @@ Proof.
           simplify_list_permutation_goal.
           (* Argue that swapping [xi] and [xj] is permitted. *)
           eapply Permutation_app_comm. }
-        (* The destination segment, minus the hole, is sorted. *)
-        { subst xj. list.
-          rewrite app_assoc. list. (* associativity enables fusion *)
-          exact Hpunched. }
-        (* Following the hole, every element is above [xi]. *)
-        { rewrite (split_seg_singleton_r dst'') in Hpunched by lia;
-          autorewrite with nat in Hpunched.
-          rewrite <- app_assoc in Hpunched.
-          recognize_named_lookups.
-          list.
-          eapply sorted_app_boundary; list;
-          eauto with lia sorted typeclass_instances. } }
+      }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
         + recognize_named_lookups.
@@ -762,7 +773,7 @@ Proof.
              The argument is that [xj] comes from the extended source
              segment, whose rightmost element is [xi]. This is the only
              point where stability creates an extra proof obligation. *)
-          elim_dst_inv. unfold transported in Htransported.
+          elim_dst_inv.
           assert (Hseg: xj ∈ seg srcofs (srcofs + (i + 1)) src).
           { use_known_permutation. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
@@ -780,28 +791,20 @@ Proof.
       { wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { unfold transported in *.
-          use_known_permutation. recognize_named_lookups.
+        { use_known_permutation. recognize_named_lookups.
           rewrite insert_seg by (list; lia); autorewrite with nat.
           eauto. }
         (* The destination segment is sorted. *)
-        { unfold above, punched in *.
-          autorewrite with nat in Habove.
-          rewrite insert_seg by (list; lia); autorewrite with nat.
-          recognize_named_lookups.
-          eapply sorted_app_boundary; list;
-            eauto with lia sorted typeclass_instances. }
+        { smt_reasoning.
+          eapply transitivity; [| eauto ]. eauto with lia. }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
-        intro_isortto_inv.
+        intro_isortto_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
-        { unfold transported in *.
-          use_known_permutation. recognize_named_lookups.
+        { use_known_permutation. recognize_named_lookups.
           list. eauto. }
-        (* The destination segment is sorted. *)
-        { unfold above in *. recognize_named_lookups. assumption. }
       }
     }
   }
