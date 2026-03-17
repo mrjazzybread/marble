@@ -49,6 +49,10 @@ Local Ltac use_known_permutation :=
 (* These lemmas use some of our notations about lists, so they cannot be
    moved to sorting.v, unless we allow this file to depend on list_extra.v. *)
 
+(* Many of the lemmas in this section concern the predicate [sorted]. They
+   are currently unused, because we now use [smt_sorted] instead, which is
+   equivalent. *)
+
 Declare Scope element_scope.
 Delimit Scope element_scope with element.
 
