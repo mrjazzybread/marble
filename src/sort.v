@@ -293,6 +293,24 @@ Proof.
   rewrite <- smt_sorted_iff, smt_sorted_seg_iff. tauto.
 Qed.
 
+(* [smt_sorted_seg_except i k xs j] means that the segment [seg i k xs],
+   deprived of its element at index [j], is sorted. *)
+
+Definition smt_sorted_seg_except i k xs j :=
+  ∀ j1 j2,
+  valid j1 xs →
+  valid j2 xs →
+  (i ≤ j1) %nat → (j1 ≤ j2)%nat → (j2 < k)%nat →
+  j1 ≠ j → j2 ≠ j →
+  xs !!! j1 ≤ xs !!! j2.
+
+Lemma smt_sorted_seg_except_iff i k xs j :
+  i ≤ j ≤ k →
+  smt_sorted_seg_except i k xs j ↔
+  sorted (seg i j xs ++ seg (j + 1) k xs).
+Proof.
+Abort. (* TODO *)
+
 End Sortedness.
 
 Local Hint Resolve
