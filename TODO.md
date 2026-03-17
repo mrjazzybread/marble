@@ -19,9 +19,17 @@
   + `init` on lists and arrays
   + `map`
   + `compare`
+  + `isortto`: deal with the cases where `src` and `dst` are the same array
+     - either the source and destination segments coincide,
+     - or they are disjoint
   + `merge`
   + `sort`
-    - allow sorting with respect to a preorder; prove stability
+
+* Sorting: probably we only ever use 2-way comparisons.
+  Get rid of 3-way `compare`?
+  Or, is `compare` more modular?
+  Keep `compare` and offer a generic way of obtaining a 2-way
+  comparison out of a 3-way comparison?
 
 * More lemmas should be marked `Local`.
 
