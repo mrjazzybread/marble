@@ -959,7 +959,7 @@ Global Hint Rewrite
 (* Once the loop ends, the producer state is [i `min` k]. This accounts
    for the special case where [k < i] and the loop is not executed. *)
 
-Definition ITER_DOWN {S}
+Definition ITER_INT_DOWN {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
@@ -984,7 +984,7 @@ Ltac wp_down_intros _j j s :=
 
 (* TODO reduce redundancy? *)
 
-Definition XITER_DOWN {S A}
+Definition XITER_INT_DOWN {S A}
   (i k : nat)
   (body : ∀ {W}, int → nat → S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
@@ -1001,7 +1001,7 @@ Definition XITER_DOWN {S A}
     )
     loop.
 
-Definition UXITER_DOWN {A}
+Definition UXITER_INT_DOWN {A}
   (i k : nat)
   (body : ∀ {W}, int → nat → (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
@@ -1026,7 +1026,7 @@ Definition UXITER_DOWN {A}
    receives both [_j] and [j], related by [isInt _j j], instead of
    just [j]. *)
 
-Definition ITER_UP {S}
+Definition ITER_INT_UP {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
@@ -1043,7 +1043,7 @@ Ltac wp_up_intros _j j s :=
 
 (* TODO reduce redundancy? *)
 
-Definition XITER_UP {S A}
+Definition XITER_INT_UP {S A}
   (i k : nat)
   (body : ∀ {W}, int → nat → S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
@@ -1060,7 +1060,7 @@ Definition XITER_UP {S A}
     )
     loop.
 
-Definition UXITER_UP {A}
+Definition UXITER_INT_UP {A}
   (i k : nat)
   (body : ∀ {W}, int → nat → (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
@@ -1174,7 +1174,7 @@ Lemma wp_iter_down_aux {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  ITER_DOWN
+  ITER_INT_DOWN
     i (j + 1)
     (λ _j j s Q, wp (body _j s) Q)
     (λ s Q, wp (iter_down_aux _i body _j s) Q).
@@ -1201,7 +1201,7 @@ Definition iter_down {S} _k _i (s : S) body :=
 Lemma wp_iter_down {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  ITER_DOWN i k
+  ITER_INT_DOWN i k
     (λ _j j s Q, wp (body _j s) Q)
     (λ s Q, wp (iter_down _k _i s body) Q).
 Proof.
@@ -1256,7 +1256,7 @@ Lemma wp_xiter_down_aux {S A}
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  XITER_DOWN i (j + 1)
+  XITER_INT_DOWN i (j + 1)
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down_aux _i (@body) _j s) Q).
 Proof.
@@ -1282,7 +1282,7 @@ Lemma wp_xiter_down {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  XITER_DOWN i k
+  XITER_INT_DOWN i k
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down _k _i s (@body)) Q).
 Proof.
@@ -1336,7 +1336,7 @@ Lemma wp_uxiter_down_aux {A}
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  UXITER_DOWN i (j + 1)
+  UXITER_INT_DOWN i (j + 1)
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down_aux _i (@body) _j) Q).
 Proof.
@@ -1362,7 +1362,7 @@ Lemma wp_uxiter_down {A}
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  UXITER_DOWN i k
+  UXITER_INT_DOWN i k
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down _k _i (@body)) Q).
 Proof.
@@ -1429,7 +1429,7 @@ End IterUp.
 Lemma wp_iter_up_aux {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  ITER_UP i k
+  ITER_INT_UP i k
     (λ _j j s Q, wp (body _j s) Q)
     (λ s Q, wp (iter_up_aux _k body _i s) Q).
 Proof.
@@ -1495,7 +1495,7 @@ Lemma wp_xiter_up_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  XITER_UP i k
+  XITER_INT_UP i k
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_up_aux _k (@body) _i s) Q).
 Proof.
@@ -1560,7 +1560,7 @@ End UXIterUp.
 Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  UXITER_UP i k
+  UXITER_INT_UP i k
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_up_aux _k (@body) _i) Q).
 Proof.
