@@ -286,6 +286,8 @@ Definition ITER_LIST {S A}
 
 (* Iteration on a semi-open interval [i, k), in [nat], going up. *)
 
+(* The producer state [j] is the loop index. *)
+
 (* The fact that [body] is applied to [j0] means that the consumer
    observes the previous state [j0], as opposed to the new state [j1].
    Thus, the assertion [inv j s] means that the loop has run up to
@@ -343,4 +345,62 @@ Definition UXITER_NAT_UP {A}
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO define ITER_NAT and obtain ITER_INT later as an instance *)
+(* Iteration on a semi-open interval [i, k), in [nat], going down. *)
+
+(* The producer state [j] is the loop index. *)
+
+(* The fact that [body] is applied to [j1] means that the consumer
+   observes the new state [j1], as opposed to the previous state [j0].
+   Thus, the loop invariant [inv j s] means that the loop has run down
+   to index [j] included and that the next iteration will concern the
+   index [j - 1]. *)
+
+(* Once the loop ends, the producer state is [i `min` k]. This accounts
+   for the special case where [k < i] and the loop is not executed. *)
+
+Definition ITER_NAT_DOWN {S}
+  (i k : nat)
+  (body : nat → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    k
+    ( λ j, j = i `min` k )
+    ( λ j0 j1 s Q,
+      j0 = j1 + 1 →
+      i ≤ j1 < k →
+      body j1 s Q
+    )
+    loop.
+
+(* TODO how can I reduce this redundancy? *)
+
+Definition XITER_NAT_DOWN {S A}
+  (i k : nat)
+  (body : ∀ {W}, nat → S → (S → W) → (S → A → W) → WP W)
+  (loop : S → WP (S * outcome A))
+:=
+  XITER
+    k
+    ( λ j, j = i `min` k )
+    ( λ _ j0 j1 s continue break Q,
+      j0 = j1 + 1 →
+      i ≤ j1 < k →
+      body j1 s continue break Q
+    )
+    loop.
+
+Definition UXITER_NAT_DOWN {A}
+  (i k : nat)
+  (body : ∀ {W}, nat → (unit → W) → (A → W) → WP W)
+  (loop : WP (outcome A))
+:=
+  UXITER
+    k
+    ( λ j, j = i `min` k )
+    ( λ _ j0 j1 continue break Q,
+      j0 = j1 + 1 →
+      i ≤ j1 < k →
+      body j1 continue break Q
+    )
+    loop.

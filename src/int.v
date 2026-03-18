@@ -946,59 +946,31 @@ Global Hint Rewrite
 (* A generic specification for a loop over a segment of the integers,
    counting down. *)
 
-(* The producer state is a logical loop index, whose type is [nat].
-   The loop body is parameterized with a physical loop index,
-   whose type is [int].
-   The semi-open interval that is enumerated is [i, k). *)
+(* This is the same thing as [ITER_NAT_DOWN], except that [body] now
+   receives both [_j] and [j], related by [isInt _j j], instead of
+   just [j]. *)
 
-(* The hypothesis [isInt _j j1] means that the user observes the new
-   state. Thus, the loop invariant [inv j s] means that the loop has
-   run down to index [j] included and the next iteration will concern
-   the index [j - 1]. *)
-
-(* Once the loop ends, the producer state is [i `min` k]. This accounts
-   for the special case where [k < i] and the loop is not executed. *)
+(* TODO how can I reduce this noise and redundancy? one option would
+   be to just abandon these definitions and use the NAT definitions
+   everywhere, at the cost of writing ∀ _j, isInt _j j → ... *)
 
 Definition ITER_INT_DOWN {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
-  ITER
-    k
-    ( λ j, j = i `min` k )
-    ( λ j0 j1 s Q,
-      ∀ _j,
-      j0 = j1 + 1 →
-      i ≤ j1 < k →
-      isInt _j j1 →
-      body _j j1 s Q
-    )
+  ITER_NAT_DOWN i k
+    ( λ j s Q, ∀ _j, isInt _j j → body _j j s Q )
     loop.
-
-Ltac wp_down_intros _j j s :=
-  let j0 := fresh in
-  wp_loop_intros j0 j s;
-  intros _j ? ? ?;
-  try subst j0.
-
-(* TODO reduce redundancy? *)
 
 Definition XITER_INT_DOWN {S A}
   (i k : nat)
   (body : ∀ {W}, int → nat → S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
 :=
-  XITER
-    k
-    ( λ j, j = i `min` k )
-    ( λ _ j0 j1 s continue break Q,
-      ∀ _j,
-      j0 = j1 + 1 →
-      i ≤ j1 < k →
-      isInt _j j1 →
-      body _j j1 s continue break Q
-    )
+  XITER_NAT_DOWN i k
+    ( λ _ j s continue break Q,
+      ∀ _j, isInt _j j → body _j j s continue break Q )
     loop.
 
 Definition UXITER_INT_DOWN {A}
@@ -1006,17 +978,17 @@ Definition UXITER_INT_DOWN {A}
   (body : ∀ {W}, int → nat → (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
 :=
-  UXITER
-    k
-    ( λ j, j = i `min` k )
-    ( λ _ j0 j1 continue break Q,
-      ∀ _j,
-      j0 = j1 + 1 →
-      i ≤ j1 < k →
-      isInt _j j1 →
-      body _j j1 continue break Q
-    )
+  UXITER_NAT_DOWN i k
+    ( λ _ j continue break Q,
+      ∀ _j, isInt _j j → body _j j continue break Q )
     loop.
+
+(* TODO *)
+Ltac wp_down_intros _j j s :=
+  let j0 := fresh in
+  wp_loop_intros j0 j s;
+  intros _j ? ? ?;
+  try subst j0.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1026,7 +998,9 @@ Definition UXITER_INT_DOWN {A}
    receives both [_j] and [j], related by [isInt _j j], instead of
    just [j]. *)
 
-(* TODO how can I reduce this noise and redundancy? *)
+(* TODO how can I reduce this noise and redundancy? one option would
+   be to just abandon these definitions and use the NAT definitions
+   everywhere, at the cost of writing ∀ _j, isInt _j j → ... *)
 
 Definition ITER_INT_UP {S}
   (i k : nat)
