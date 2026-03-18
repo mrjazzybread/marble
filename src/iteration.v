@@ -17,9 +17,6 @@ Class PropLike (A : Type) :=
 Global Instance PropLike_Prop : PropLike Prop :=
   { implication := λ A B, A → B }.
 
-Global Instance PropLike_arrow {A} `{PropLike B} : PropLike (A → B) :=
-  { implication := λ (P : Prop) (f : A → B) (a : A), implication P (f a) }.
-
 Global Instance PropLike_forall {A} `{∀ a, PropLike (B a)} : PropLike (∀ a : A, B a) :=
   { implication := λ (P : Prop) (f : ∀ a : A, B a) (a : A), implication P (f a) }.
 
