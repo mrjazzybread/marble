@@ -74,6 +74,7 @@ Implicit Types s : S.
    judgement. The proposition [body j0 j1 s Q] means that the loop body,
    in a step of producer state [j0] to producer state [j1], with current
    user state [s], establishes the postcondition [Q]. *)
+(* TODO note that [body] describes at the same time the evolution of the producer and the calling convention of the loop body. *)
 Variable body : P → P → S → WP S.
 
 (* The behavior of the whole loop is represented by [loop], a [wp]-like
@@ -242,25 +243,14 @@ Ltac wp_break :=
    The list [init] is the initial producer state; the list [xs] is the
    final producer state. *)
 
-Definition ITER_LIST {S A}
-  (init xs : list A)
-  (body : A → S → WP S)
-  (loop : S → WP S)
-:=
-  ITER
-    init
-    ( λ history, history = xs )
-    ( λ history0 history1 s Q,
-      ∀ x,
-      init `prefix_of` history0 →
-      history0 ++ {[x]} = history1 →
-      history1 `prefix_of` xs →
-      body x s Q
-    )
-    loop.
+(* We first define a variant where the loop body is parameterized with
+   the current element [x] and its index [i] in the history. *)
 
-(* A variant where the loop body is parameterized not only with the
-   current element [x], but also with its index [i]. *)
+(* Then, as a degenerate case, we obtain a variant where the loop body
+   is parameterized with just [x]. *)
+
+(* One could also define a more general variant where the loop body is
+   parameterized with the full history. *)
 
 Definition ITERI_LIST {S A}
   (init xs : list A)
@@ -278,6 +268,16 @@ Definition ITERI_LIST {S A}
       i = length history0 →
       body x i s Q
     )
+    loop.
+
+Definition ITER_LIST {S A}
+  (init xs : list A)
+  (body : A → S → WP S)
+  (loop : S → WP S)
+:=
+  ITERI_LIST
+    init xs
+    ( λ x i s Q, body x s Q )
     loop.
 
 (* -------------------------------------------------------------------------- *)
