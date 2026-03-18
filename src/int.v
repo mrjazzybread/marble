@@ -1030,7 +1030,7 @@ End IterDown.
 
 (* A specification of [iter_down_aux]. *)
 
-(* This specification requires [i ≤ k]: that is, the start index [k] must
+(* This specification requires [i ≤ j]: that is, the start index [j] must
    be greater than or equal to the end index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
@@ -1038,8 +1038,8 @@ Lemma wp_iter_down_aux {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  ITER_NAT_DOWN
-    i (j + 1)
+  ITER_NAT
+    i (j + 1) Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_down_aux _i body _j s) Q).
 Proof.
@@ -1065,7 +1065,7 @@ Definition iter_down {S} _k _i (s : S) body :=
 Lemma wp_iter_down {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  ITER_NAT_DOWN i k
+  ITER_NAT i k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_down _k _i s body) Q).
 Proof.
@@ -1074,7 +1074,7 @@ Proof.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
-  { wp_op @wp_iter_down_aux s'. eauto. }
+  { wp_loop @wp_iter_down_aux inv. }
 Qed.
 
 Global Ltac wp_iter_down I :=
@@ -1120,8 +1120,8 @@ Lemma wp_xiter_down_aux {S A}
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  XITER_NAT_DOWN i (j + 1)
-    (λ _ j s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
+  XITER_NAT i (j + 1) Down
+    (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down_aux _i (@body) _j s) Q).
 Proof.
   intros. XITER.
@@ -1146,8 +1146,8 @@ Lemma wp_xiter_down {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  XITER_NAT_DOWN i k
-    (λ _ j s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
+  XITER_NAT i k Down
+    (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down _k _i s (@body)) Q).
 Proof.
   intros. XITER. unfold xiter_down.
@@ -1155,7 +1155,7 @@ Proof.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
-  { wp_op @wp_xiter_down_aux s'. eauto. }
+  { wp_loop @wp_xiter_down_aux inv. }
 Qed.
 
 Global Ltac wp_xiter_down I :=
@@ -1200,8 +1200,8 @@ Lemma wp_uxiter_down_aux {A}
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  UXITER_NAT_DOWN i (j + 1)
-    (λ _ j continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
+  UXITER_NAT i (j + 1) Down
+    (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down_aux _i (@body) _j) Q).
 Proof.
   intros. UXITER.
@@ -1226,8 +1226,8 @@ Lemma wp_uxiter_down {A}
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  UXITER_NAT_DOWN i k
-    (λ _ j continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
+  UXITER_NAT i k Down
+    (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down _k _i (@body)) Q).
 Proof.
   intros. UXITER. unfold uxiter_down.
@@ -1235,7 +1235,7 @@ Proof.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
-  { wp_op @wp_uxiter_down_aux s'. eauto. }
+  { wp_loop @wp_uxiter_down_aux inv. }
 Qed.
 
 Global Ltac wp_uxiter_down I :=
@@ -1293,7 +1293,7 @@ End IterUp.
 Lemma wp_iter_up_aux {S} (body : int → S → S) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  ITER_NAT_UP i k
+  ITER_NAT i k Up
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_up_aux _k body _i s) Q).
 Proof.
@@ -1359,8 +1359,8 @@ Lemma wp_xiter_up_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  XITER_NAT_UP i k
-    (λ _ j s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
+  XITER_NAT i k Up
+    (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_up_aux _k (@body) _i s) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
@@ -1424,8 +1424,8 @@ End UXIterUp.
 Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  UXITER_NAT_UP i k
-    (λ _ j continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
+  UXITER_NAT i k Up
+    (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_up_aux _k (@body) _i) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)

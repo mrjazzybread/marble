@@ -740,6 +740,9 @@ Proof.
        the body of the outer loop. *)
     wp_get xi.
     eapply wp_bind.
+    (* TODO [wp_bind] with flexible postcondition
+       allows [nat_complete] to leak into the second subgoal,
+       requiring the use of [expand_ITER]. *)
     { (* The inner loop. *)
       int.wp_xiter_down (inner_inv src srcofs dst dstofs i).
       (* Initialization of the inner loop. *)
@@ -785,7 +788,8 @@ Proof.
           eapply exploit_smt_sorted; eauto with lia. }
     }
     (* Epilogue of the inner loop. *)
-    { clear dependent _dst. intros [ _dst out ].
+    { expand_ITER. (* see comment higher up *)
+      clear dependent _dst. intros [ _dst out ].
       intros (j&Hj). list in Hj. unpack in Hj.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case

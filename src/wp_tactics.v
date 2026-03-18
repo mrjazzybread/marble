@@ -48,46 +48,6 @@ Global Ltac wp_op_nude lemma :=
   list;
   tc.
 
-(* [wp_loop lemma I] applies the lemma [lemma], which is typically a
-   reasoning rule for a loop, with the invariant (inv := I).
-   It is essentially a special case of [wp_op_nude] where we want to
-   specialize the lemma. *)
-
-Ltac wp_loop_exit :=
-  cbv beta; intros; unpack; try subst; list in *; eauto 3.
-    (* TODO control naming of newly introduced names *)
-
-Ltac wp_loop_nude lemma I :=
-  (* Apply the reasoning rule for this operation. *)
-  first [
-    simple eapply lemma with (inv := I)
-  |
-    (* We may need to infer the type [S]
-       from the type of the invariant [I]. *)
-    match type of I with ?P -> ?S -> Prop =>
-    simple eapply (@lemma S) with (inv := I) end
-  |
-    (* We may need to infer the type [S]
-       from the type of the invariant [I]. *)
-    match type of I with ?P -> ?S -> ?Out -> Prop =>
-    simple eapply (@lemma S) with (inv := I) end
-  ];
-  list; tc3; list in *; tc3.
-    (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
-
-Ltac wp_loop lemma I :=
-  first [
-    wp_loop_nude lemma I
-  | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
-  ].
-
-(* TODO comment; combine with [wp_loop_nude]? *)
-
-Ltac wp_loop_intros j0 j1 s :=
-  let h := fresh "Hinv" in
-  intros j0 j1 s h;
-  unpack in h. (* TODO useful, but loses the name *)
-
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under
    the name [x] in the second subgoal. The goal should have the form

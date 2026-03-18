@@ -1,9 +1,32 @@
 From stdpp Require Import list.
-From marble Require Import tactics wp wp_tactics.
+From marble Require Import tactics wp wp_tactics list_extra.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
+
+(* -------------------------------------------------------------------------- *)
+
+(* This little type class lets us define an implication [⇝] connective
+   whose right-hand side is not necessarily a proposition, but can be
+   a function of arbitrarily many arguments to a proposition. *)
+
+Class PropLike (A : Type) :=
+  { implication : Prop → A → A }.
+
+Global Instance PropLike_Prop : PropLike Prop :=
+  { implication := λ A B, A → B }.
+
+Global Instance PropLike_arrow {A} `{PropLike B} : PropLike (A → B) :=
+  { implication := λ (P : Prop) (f : A → B) (a : A), implication P (f a) }.
+
+Global Instance PropLike_forall {A} `{∀ a, PropLike (B a)} : PropLike (∀ a : A, B a) :=
+  { implication := λ (P : Prop) (f : ∀ a : A, B a) (a : A), implication P (f a) }.
+
+Global Infix "⇝" := implication
+  (right associativity, at level 90).
+
+(* Expanding this connective can require using [simpl implication]. *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -70,12 +93,16 @@ Section ITER.
 Context {S : Type}.
 Implicit Types s : S.
 
-(* The behavior of the loop body is represented by [body], a [wp]-like
-   judgement. The proposition [body j0 j1 s Q] means that the loop body,
-   in a step of producer state [j0] to producer state [j1], with current
-   user state [s], establishes the postcondition [Q]. *)
-(* TODO note that [body] describes at the same time the evolution of the producer and the calling convention of the loop body. *)
+(* The evolution of the producer's state AND the calling convention of
+   the loop body are represented by [body], a [wp]-like judgement. The
+   proposition [body j0 j1 s Q] means that, under the assumption that
+   the producer can step from state [j0] to state [j1], the loop body,
+   with current user state [s], establishes the postcondition [Q]. *)
 Variable body : P → P → S → WP S.
+  (* If one would like to have separate descriptions of the evolution
+     of the producer and of the calling convention of the loop body,
+     this is possible, by instantating [body] in a suitable way. See
+     our definition of [ITER_NAT] below. *)
 
 (* The behavior of the whole loop is represented by [loop], a [wp]-like
    judgement. The proposition [loop s Q] means that the loop, applied to
@@ -150,7 +177,7 @@ Implicit Types out : outcome A.
 Implicit Types x : A.
 
 (* The loop body expects two continuations [continue] and [break]. *)
-Variable body : ∀ {W}, P → P → S → (S → W) → (S → A → W) → WP W.
+Variable body : P → P → ∀ {W}, S → (S → W) → (S → A → W) → WP W.
 
 (* The loop returns a pair [(s, out)]. *)
 Variable loop : S → WP (S * outcome A).
@@ -184,7 +211,7 @@ Definition XITER :=
    the loop body, the continuations, and the loop have slightly simpler
    types. The loop invariant is [inv j out] instead of [inv j s out]. *)
 
-Variable ubody : ∀ {W}, P → P → (unit → W) → (A → W) → WP W.
+Variable ubody : P → P → ∀ {W}, (unit → W) → (A → W) → WP W.
 Variable uloop : WP (outcome A).
 
 Definition UXITER :=
@@ -201,38 +228,7 @@ Definition UXITER :=
 
 End XITER.
 
-(* -------------------------------------------------------------------------- *)
-
 End Loops.
-
-(* The tactic [ITER] should be used when the goal is [ITER ...]. *)
-
-Ltac ITER :=
-  intros ? ? Hinit Hstep.
-
-Ltac XITER :=
-  intros ? ? Hinit Hbody.
-
-Ltac UXITER :=
-  intros ? Hinit Hbody.
-
-(* The following tactics help reason about invocations of [continue]
-   and [break]. *)
-
-Ltac wp_continue :=
-  match goal with
-  Hcontinue: ∀ s, _ → wp (?continue s) _,
-  Hbreak: ∀ s x, _ → wp (?break s x) _
-  |- wp (?continue _) _ =>
-    simple eapply Hcontinue; clear Hcontinue Hbreak
-  end.
-Ltac wp_break :=
-  match goal with
-  Hcontinue: ∀ s, _ → wp (?continue s) _,
-  Hbreak: ∀ s x, _ → wp (?break s x) _
-  |- wp (?break _ _) _ =>
-    simple eapply Hbreak; clear Hcontinue Hbreak
-  end.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -280,143 +276,228 @@ Definition ITER_LIST {S A}
     ( λ x i s Q, body x s Q )
     loop.
 
-(* TODO could we define [XITER_LIST] and [UXITER_LIST] without duplication?   *)
+(* TODO define [XITER_LIST] and [UXITER_LIST] *)
 
 (* -------------------------------------------------------------------------- *)
 
-(* Iteration on a semi-open interval [i, k), in [nat], going up. *)
+(* Iteration on a semi-open interval [i, k)
+   in the natural integers. *)
 
 (* The producer state [j] is the loop index. *)
 
-(* The fact that [body] is applied to [j0] means that the consumer
-   observes the previous state [j0], as opposed to the new state [j1].
-   Thus, the assertion [inv j s] means that the loop has run up to
-   index [j] excluded and the next iteration will concern [j]. *)
+(* To avoid duplication, we parameterize these definitions with
+   a direction, which is [Up] or [Down]. *)
 
-(* Once the loop ends, the producer state is [i `max` k]. This accounts
+Inductive direction := Up | Down.
+
+(* The function [nat_init i k dir] defines the initial producer state. *)
+
+Definition nat_init i k dir : nat :=
+  match dir with Up => i | Down => k end.
+
+(* The predicate [nat_complete i k dir] defines which producer states are
+   final; in other words, it specifies when it is permitted for iteration
+   to finish. *)
+
+(* Because iteration is deterministic, there is only one final state. *)
+
+(* When going up, the final state is [i `max` k]. When going down, the
+   final state is [i `min` k]. These `max` and `min` operators account
    for the special case where [k < i] and the loop is not executed. *)
 
-(* TODO share UP and DOWN by introducing a [direction] parameter? *)
+Definition nat_complete i k dir : nat → Prop :=
+  ( λ j,
+    match dir with
+    | Up   => j = i `max` k
+    | Down => j = i `min` k
+    end
+  ).
 
-Definition ITER_NAT_UP {S}
-  (i k : nat)
+(* The predicate transformer [nat_step i k dir] transforms a judgement
+   [body : nat → A] that is indexed by the current state into a judgement
+   [nat_step i k dir body : nat → nat → A] that is indexed by two states,
+   namely the previous producer state and the new producer state. *)
+
+(* Upon first reading, one can think that the type [A] is [Prop], and
+   the squiggly arrow [⇝] is implication [→]. In the general case, the
+   type [A] must be PropLike; this allows [nat_step] to work also in the
+   case where [body] has extra parameters beyond the current state [j]. *)
+
+(* In either direction, [j0] represents the previous state and [j1]
+   represents the new state. When going up, we have [j1 = j0 + 1];
+   when going down, we have [j0 = j1 + 1]. *)
+
+(* The argument that is passed to [body] represents the state that the
+   consumer observes. When going up, [body] is applied to [j0]. This means
+   that the consumer observes the previous state [j0], as opposed to the
+   new state [j1]. Thus, the assertion [inv j s] means that the loop has
+   run up to index [j] excluded and that the next iteration will concern
+   index [j]. When going down, [body] is applied to [j1]. This means that
+   the consumer observes the new state [j1], as opposed to the previous
+   state [j0]. Thus, the loop invariant [inv j s] means that the loop
+   has run down to index [j] included and that the next iteration will
+   concern index [j - 1]. *)
+
+(* In either direction, the state [j] that is observed by the consumer
+   satisfies [i ≤ j < k]. It lies inside the semi-open interval that is
+   being enumerated. *)
+
+(* These are just conventions. They seem natural to me, but they could
+   be changed, if desired. *)
+
+Definition nat_step i k dir `{PropLike A}
+  (body : nat → A)
+: nat → nat → A :=
+  λ j0 j1 ,
+  match dir with
+  | Up =>
+      j1 = j0 + 1 ⇝
+      i ≤ j0 < k ⇝
+      body j0
+  | Down =>
+      j0 = j1 + 1 ⇝
+      i ≤ j1 < k ⇝
+      body j1
+  end.
+
+Definition ITER_NAT {S}
+  i k dir
   (body : nat → S → WP S)
   (loop : S → WP S)
 :=
   ITER
-    i
-    ( λ j, j = i `max` k )
-    ( λ j0 j1 s Q,
-      j1 = j0 + 1 →
-      i ≤ j0 < k →
-      body j0 s Q
-    )
+    (nat_init i k dir)
+    (nat_complete i k dir)
+    (nat_step i k dir body)
     loop.
 
-(* TODO how can I reduce this redundancy? *)
-
-Definition XITER_NAT_UP {S A}
-  (i k : nat)
-  (body : ∀ {W}, nat → S → (S → W) → (S → A → W) → WP W)
+Definition XITER_NAT {S A}
+  i k dir
+  (body : nat → ∀ {W}, S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
 :=
   XITER
-    i
-    ( λ j, j = i `max` k )
-    ( λ _ j0 j1 s continue break Q,
-      j1 = j0 + 1 →
-      i ≤ j0 < k →
-      body j0 s continue break Q
-    )
+    (nat_init i k dir)
+    (nat_complete i k dir)
+    (nat_step i k dir body)
     loop.
 
-Definition UXITER_NAT_UP {A}
-  (i k : nat)
-  (body : ∀ {W}, nat → (unit → W) → (A → W) → WP W)
+Definition UXITER_NAT {A}
+  i k dir
+  (body : nat → ∀ {W}, (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
 :=
   UXITER
-    i
-    ( λ j, j = i `max` k )
-    ( λ _ j0 j1 continue break Q,
-      j1 = j0 + 1 →
-      i ≤ j0 < k →
-      body j0 continue break Q
-    )
+    (nat_init i k dir)
+    (nat_complete i k dir)
+    (nat_step i k dir body)
     loop.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Iteration on a semi-open interval [i, k), in [nat], going down. *)
+(* Tactics. *)
 
-(* The producer state [j] is the loop index. *)
+(* [expand_ITER] expands all of the definitions made above, so that they
+   do not get in the way. It is automatically invoked by [ITER], below. In
+   a proof by induction, it is necessary to explicitly use [expand_ITER]
+   before beginning the induction, so that the definitions are expanded
+   not only in the goal but also in the induction hypothesis. *)
 
-(* The fact that [body] is applied to [j1] means that the consumer
-   observes the new state [j1], as opposed to the previous state [j0].
-   Thus, the loop invariant [inv j s] means that the loop has run down
-   to index [j] included and that the next iteration will concern the
-   index [j - 1]. *)
+Ltac expand_ITER :=
+  unfold
+    ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_complete, nat_step,
+    ITER_LIST, ITERI_LIST,
+    ITER, XITER, UXITER;
+    simpl implication.
 
-(* Once the loop ends, the producer state is [i `min` k]. This accounts
-   for the special case where [k < i] and the loop is not executed. *)
+(* The tactic [ITER] should be used when the goal is [ITER ...]. *)
 
-Definition ITER_NAT_DOWN {S}
-  (i k : nat)
-  (body : nat → S → WP S)
-  (loop : S → WP S)
-:=
-  ITER
-    k
-    ( λ j, j = i `min` k )
-    ( λ j0 j1 s Q,
-      j0 = j1 + 1 →
-      i ≤ j1 < k →
-      body j1 s Q
-    )
-    loop.
+Ltac ITER :=
+  expand_ITER;
+  intros ? ? Hinit Hstep.
 
-(* TODO how can I reduce this redundancy? *)
+Ltac XITER :=
+  expand_ITER;
+  intros ? ? Hinit Hbody.
 
-Definition XITER_NAT_DOWN {S A}
-  (i k : nat)
-  (body : ∀ {W}, nat → S → (S → W) → (S → A → W) → WP W)
-  (loop : S → WP (S * outcome A))
-:=
-  XITER
-    k
-    ( λ j, j = i `min` k )
-    ( λ _ j0 j1 s continue break Q,
-      j0 = j1 + 1 →
-      i ≤ j1 < k →
-      body j1 s continue break Q
-    )
-    loop.
+Ltac UXITER :=
+  expand_ITER;
+  intros ? Hinit Hbody.
 
-Definition UXITER_NAT_DOWN {A}
-  (i k : nat)
-  (body : ∀ {W}, nat → (unit → W) → (A → W) → WP W)
-  (loop : WP (outcome A))
-:=
-  UXITER
-    k
-    ( λ j, j = i `min` k )
-    ( λ _ j0 j1 continue break Q,
-      j0 = j1 + 1 →
-      i ≤ j1 < k →
-      body j1 continue break Q
-    )
-    loop.
+(* The following tactics help reason about invocations of [continue]
+   and [break]. *)
 
-(* -------------------------------------------------------------------------- *)
+Ltac wp_continue :=
+  match goal with
+  Hcontinue: ∀ s, _ → wp (?continue s) _,
+  Hbreak: ∀ s x, _ → wp (?break s x) _
+  |- wp (?continue _) _ =>
+    simple eapply Hcontinue; clear Hcontinue Hbreak
+  end.
 
-(* TODO *)
+Ltac wp_break :=
+  match goal with
+  Hcontinue: ∀ s, _ → wp (?continue s) _,
+  Hbreak: ∀ s x, _ → wp (?break s x) _
+  |- wp (?break _ _) _ =>
+    simple eapply Hbreak; clear Hcontinue Hbreak
+  end.
+
+(* [wp_loop lemma I] applies the lemma [lemma], which is typically a
+   reasoning rule for a loop, with the invariant (inv := I).
+   It is essentially a special case of [wp_op_nude] where we want to
+   specialize the lemma. *)
+
+Ltac wp_loop_exit :=
+  cbv beta;
+  (* Expand the definitions that could get in the way. *)
+  expand_ITER;
+  intros; unpack; try subst; list in *; eauto 3.
+    (* TODO control naming of newly introduced names *)
+
+Ltac wp_loop_nude lemma I :=
+  (* Apply the reasoning rule for this operation. *)
+  first [
+    simple eapply lemma with (inv := I)
+  |
+    (* We may need to infer the type [S]
+       from the type of the invariant [I]. *)
+    match type of I with ?P -> ?S -> Prop =>
+    simple eapply (@lemma S) with (inv := I) end
+  |
+    (* We may need to infer the type [S]
+       from the type of the invariant [I]. *)
+    match type of I with ?P -> ?S -> ?Out -> Prop =>
+    simple eapply (@lemma S) with (inv := I) end
+  ];
+  (* Expand the definitions that could get in the way. *)
+  expand_ITER;
+  list; tc3; list in *; tc3.
+    (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
+
+Ltac wp_loop lemma I :=
+  first [
+    wp_loop_nude lemma I
+  | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
+  ].
+
+(* TODO comment; combine with [wp_loop_nude]? *)
+
+Ltac wp_loop_intros j0 j1 s :=
+  let h := fresh "Hinv" in
+  intros j0 j1 s h;
+  unpack in h.
+
+(* TODO improve / comment *)
+
 Ltac wp_down_intros _j j s :=
   let j0 := fresh in
   wp_loop_intros j0 j s;
   intros _j ? ? ?;
   try subst j0.
 
-(* TODO improve/generalize/move *)
+(* TODO improve / comment *)
+
 Ltac wp_up_intros _j j s :=
   let j1 := fresh in
   wp_loop_intros j j1 s;

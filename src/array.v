@@ -610,12 +610,15 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
   xs = history ++ future →
   isInt _i i →
   i = len history →
-  ITER_NAT_UP
-    i (len xs)
+  ITER_NAT
+    i (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
-  induction future as [| x future ]; intros; ITER;
+  expand_ITER.
+  induction future as [| x future ];
+  intros history xs _i i ? ? ?;
+  ITER;
   simpl list_iteri; try rewrite cons_is_append in *;
   subst; list in *.
   { wp_ret. eauto. }
@@ -641,12 +644,15 @@ Local Lemma wp_list_iteri_aux_variant_2 xs f :
   isInt _i i →
   i ≤ len xs →
   final_seg i xs = future →
-  ITER_NAT_UP
-    i (len xs)
+  ITER_NAT
+    i (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
-  induction future as [| x future ]; intros; ITER;
+  expand_ITER.
+  induction future as [| x future ];
+  intros _i i ? ? ?;
+  ITER;
   simpl list_iteri; try rewrite cons_is_append in *;
   subst; list in *; lengths.
   (* Case: the future is empty. We have [i = len xs]. *)
@@ -1374,7 +1380,7 @@ Lemma wp_segment_iteri a xs f :
   ∀Int _i i ,
   ∀Int _k k ,
   valid_seg i k xs →
-  ITER_NAT_UP i k
+  ITER_NAT i k Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
@@ -1392,15 +1398,14 @@ Qed.
 
 Lemma wp_iteri a xs f :
   isArray a xs →
-  ITER_NAT_UP
-    0 (len xs)
+  ITER_NAT
+    0 (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri a s f) Q).
 Proof.
   intros. ITER. unfold iteri.
   wp_length _n.
-  wp_op wp_segment_iteri s'.
-  eauto.
+  wp_loop @wp_segment_iteri inv.
 Qed.
 
 End Iteri.

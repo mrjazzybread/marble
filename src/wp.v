@@ -7,8 +7,8 @@ Set Universe Polymorphism.
 
 (* TODO comment *)
 
-Definition WP (A : Type) :=
-  (A → Prop) → Prop.
+Definition WP A :=
+  ((A → Prop) → Prop).
 
 Definition wp {A} (a : A) (Q : A → Prop) :=
   Q a.

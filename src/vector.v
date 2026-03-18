@@ -379,7 +379,7 @@ Lemma wp_segment_iteri v xs f :
   ∀Int _i i ,
   ∀Int _k k ,
   valid_seg i k xs →
-  ITER_NAT_UP i k
+  ITER_NAT i k Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri v _i _k s f) Q).
 Proof.
@@ -396,8 +396,8 @@ Qed.
 
 Lemma wp_iteri v xs f :
   isVector v xs →
-  ITER_NAT_UP
-    0 (len xs)
+  ITER_NAT
+    0 (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri v s f) Q).
 Proof.
