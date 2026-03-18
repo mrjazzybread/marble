@@ -236,7 +236,7 @@ Ltac wp_break :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* A specification of a loop over a list. *)
+(* Iteration on a list. *)
 
 (* The producer state is the history, that is, the list of elements
    produced so far. Each step extends the history with one element [x].
@@ -280,4 +280,35 @@ Definition ITER_LIST {S A}
     ( λ x i s Q, body x s Q )
     loop.
 
+(* TODO could we define [XITER_LIST] and [UXITER_LIST] without duplication?   *)
+
 (* -------------------------------------------------------------------------- *)
+
+(* Iteration on a semi-open interval [i, k), in [nat], going up. *)
+
+(* The fact that [body] is applied to [j0] means that the consumer
+   observes the previous state [j0], as opposed to the new state [j1].
+   Thus, the assertion [inv j s] means that the loop has run up to
+   index [j] excluded and the next iteration will concern [j]. *)
+
+(* Once the loop ends, the producer state is [i `max` k]. This accounts
+   for the special case where [k < i] and the loop is not executed. *)
+
+Definition ITER_NAT_UP {S}
+  (i k : nat)
+  (body : nat → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    i
+    ( λ j, j = i `max` k )
+    ( λ j0 j1 s Q,
+      j1 = j0 + 1 →
+      i ≤ j0 < k →
+      body j0 s Q
+    )
+    loop.
+
+(* -------------------------------------------------------------------------- *)
+
+(* TODO define ITER_NAT and obtain ITER_INT later as an instance *)

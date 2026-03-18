@@ -1020,32 +1020,19 @@ Definition UXITER_DOWN {A}
 
 (* -------------------------------------------------------------------------- *)
 
-(* A generic specification for a loop over a segment of the integers,
-   counting up. *)
+(* Iteration on a semi-open interval [i, k), in [int], going up. *)
 
-(* The hypothesis [isInt _j j0] means that the user observes the
-   previous state. Thus, the loop invariant [inv j s] means that the
-   loop has run up to index [j] excluded and the next iteration will
-   concern the index [j]. *)
-
-(* Once the loop ends, the producer state is [i `max` k]. This accounts
-   for the special case where [k < i] and the loop is not executed. *)
+(* This is the same thing as [ITER_NAT_UP], except that [body] now
+   receives both [_j] and [j], related by [isInt _j j], instead of
+   just [j]. *)
 
 Definition ITER_UP {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
-  ITER
-    i
-    ( λ j, j = i `max` k )
-    ( λ j0 j1 s Q,
-      ∀ _j,
-      j1 = j0 + 1 →
-      i ≤ j0 < k →
-      isInt _j j0 →
-      body _j j0 s Q
-    )
+  ITER_NAT_UP i k
+    (λ j s Q, ∀ _j, isInt _j j → body _j j s Q)
     loop.
 
 Ltac wp_up_intros _j j s :=

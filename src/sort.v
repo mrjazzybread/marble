@@ -790,7 +790,7 @@ Proof.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
-      destruct out as [ _j |]; elim_inner_inv dst''; elim_dst_inv.
+      destruct out as [ _j' |]; elim_inner_inv dst''; elim_dst_inv.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv.
