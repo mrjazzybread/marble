@@ -406,3 +406,19 @@ Definition UXITER_NAT_DOWN {A}
       body j1 continue break Q
     )
     loop.
+
+(* -------------------------------------------------------------------------- *)
+
+(* TODO *)
+Ltac wp_down_intros _j j s :=
+  let j0 := fresh in
+  wp_loop_intros j0 j s;
+  intros _j ? ? ?;
+  try subst j0.
+
+(* TODO improve/generalize/move *)
+Ltac wp_up_intros _j j s :=
+  let j1 := fresh in
+  wp_loop_intros j j1 s;
+  intros _j ? ? ?;
+  try subst j1.

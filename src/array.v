@@ -591,7 +591,7 @@ End ListIteri.
 
 (* In the following section, we play with two alternate specifications
    of [list_iteri]. Insteead of using [ITER_LIST], where the producer
-   state is a list (the history of past elements), we use [ITER_INT_UP],
+   state is a list (the history of past elements), we use [ITER_NAT_UP],
    where the producer state is an integer index, and we indicate that
    the user function receives the [i]-th element of the list as an
    argument during the [i]-th iteration of the loop. *)
@@ -610,9 +610,9 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
   xs = history ++ future →
   isInt _i i →
   i = len history →
-  ITER_INT_UP
+  ITER_NAT_UP
     i (len xs)
-    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
+    (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
   induction future as [| x future ]; intros; ITER;
@@ -641,9 +641,9 @@ Local Lemma wp_list_iteri_aux_variant_2 xs f :
   isInt _i i →
   i ≤ len xs →
   final_seg i xs = future →
-  ITER_INT_UP
+  ITER_NAT_UP
     i (len xs)
-    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f s _j x) Q)
+    (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
 Proof.
   induction future as [| x future ]; intros; ITER;
@@ -1374,8 +1374,8 @@ Lemma wp_segment_iteri a xs f :
   ∀Int _i i ,
   ∀Int _k k ,
   valid_seg i k xs →
-  ITER_INT_UP i k
-    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
+  ITER_NAT_UP i k
+    (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
   intros. ITER. unfold segment_iteri.
@@ -1392,9 +1392,9 @@ Qed.
 
 Lemma wp_iteri a xs f :
   isArray a xs →
-  ITER_INT_UP
+  ITER_NAT_UP
     0 (len xs)
-    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
+    (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri a s f) Q).
 Proof.
   intros. ITER. unfold iteri.

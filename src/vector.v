@@ -379,8 +379,8 @@ Lemma wp_segment_iteri v xs f :
   ∀Int _i i ,
   ∀Int _k k ,
   valid_seg i k xs →
-  ITER_INT_UP i k
-    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
+  ITER_NAT_UP i k
+    (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri v _i _k s f) Q).
 Proof.
   intros. ITER. unfold segment_iteri.
@@ -396,9 +396,9 @@ Qed.
 
 Lemma wp_iteri v xs f :
   isVector v xs →
-  ITER_INT_UP
+  ITER_NAT_UP
     0 (len xs)
-    (λ _j j s Q, ∀ x, x = xs !!! j → wp (f _j x s) Q)
+    (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri v s f) Q).
 Proof.
   intros. ITER. unfold iteri.
