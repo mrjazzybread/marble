@@ -57,23 +57,6 @@ Section Loops.
 Context {P : Type}.
 Implicit Types i j k : P.
 
-(* [O] is the type of the observations delivered by the producer to the
-   user. For example, in a loop over machine integers, this type could be
-   [int]. In a loop over a collection, it could be the type of elements. *)
-Context {O : Type}.
-Implicit Type o : O.
-
-(* The relation [step] describes the evolution of the producer's state and
-   the manner in which this evolution is observed by the user. The
-   proposition [step j0 o j j1] means that, in one loop iteration, the
-   producer's state can evolve from [j0] to [j1], while the user (that is,
-   the loop body) observes the observation [o] and producer state [j].
-
-   The current producer state [j] is typically either [j0] or [j1].
-   Parameterizing [step] and [body] (below) with [o] and [j] rather than
-   just [o] seems convenient. *)
-Variable step : P → O → P → P → Prop.
-
 (* [init] is the initial producer state. *)
 Variable init : P.
 
@@ -88,18 +71,18 @@ Context {S : Type}.
 Implicit Types s : S.
 
 (* The behavior of the loop body is represented by [body], a [wp]-like
-   judgement. The proposition [body o j s Q] means that the loop body, with
-   observation [o], current producer state [j], and current user state [s],
-   establishes the postcondition [Q]. *)
-Variable body : O → P → S → WP S.
+   judgement. The proposition [body j0 j1 s Q] means that the loop body,
+   in a step of producer state [j0] to producer state [j1], with current
+   user state [s], establishes the postcondition [Q]. *)
+Variable body : P → P → S → WP S.
 
 (* The behavior of the whole loop is represented by [loop], a [wp]-like
-   judgement. The proposition [loop s Q] means that the loop, applied to the
-   initial state [s], establishes the postcondition [Q]. *)
+   judgement. The proposition [loop s Q] means that the loop, applied to
+   the initial state [s], establishes the postcondition [Q]. *)
 Variable loop : S → WP S.
 
-(* The user's loop invariant takes the form [inv i s], where [i] is the
-   current logical producer state and [s] is the current user state. *)
+(* The user's loop invariant takes the form [inv j s], where [j] is the
+   current producer state and [s] is the current user state. *)
 Implicit Types inv : P → S → Prop.
 
 (* Then, the specification of a loop takes the following form. *)
@@ -109,14 +92,11 @@ Definition ITER :=
   (* Initially, the producer state is [init] and the user state is [s].
      The invariant must hold. *)
   inv init s →
-  (* If the producer can step from [j0] to [j1] while revealing the
-     observation [o] and current state [j], then the loop body,
-     applied to [o] and [j], must transform [inv j0 s] into
-     [inv j1 s']. *)
-  (∀ j0 o j j1 s ,
+  (* If the producer can step from [j0] to [j1], then the loop body
+     must transform [inv j0 s] into [inv j1 s']. *)
+  (∀ j0 j1 s ,
     inv j0 s →
-    step j0 o j j1 →
-    body o j s (λ s', inv j1 s')
+    body j0 j1 s (λ s', inv j1 s')
   ) →
   (* Once the loop ends, the producer state is a certain state [k] such
      that [complete k] holds and the user state is some state [s]. Then,
@@ -169,14 +149,14 @@ Implicit Types out : outcome A.
 Implicit Types x : A.
 
 (* The loop body expects two continuations [continue] and [break]. *)
-Variable body : ∀ {W}, O → P → S → (S → W) → (S → A → W) → WP W.
+Variable body : ∀ {W}, P → P → S → (S → W) → (S → A → W) → WP W.
 
 (* The loop returns a pair [(s, out)]. *)
 Variable loop : S → WP (S * outcome A).
 
-(* The user's loop invariant takes the form [inv i s out] where [i] is
-   the current logical producer state and [(s, out)] is the current user
-   state. We use a curried form for increased comfort. *)
+(* The user's loop invariant takes the form [inv j s out] where [j] is
+   the current producer state and [(s, out)] is the current user state.
+   We use a curried form for increased comfort. *)
 Implicit Types inv : P → S → outcome A → Prop.
 
 (* The specification of an exitable loop takes the following form. *)
@@ -187,15 +167,14 @@ Definition XITER :=
   inv init s Continue →
   (* When the loop body is invoked,
      it can assume that [out] is [Continue]. *)
-  ( ∀ j0 o j j1 s ,
+  ( ∀ j0 j1 s ,
     inv j0 s Continue →
-    step j0 o j j1 →
     ∀ {W} (Q : W → Prop) (continue : S → W) (break : S → A → W),
     (* Invoking [continue s] is like returning [(s, Continue)]. *)
     (∀ s  , inv j1 s Continue  → wp (continue s) Q) →
     (* Invoking [break s x] is like returning [(s, Break x)]. *)
     (∀ s x, inv j1 s (Break x) → wp (break s x) Q) →
-    body o j s continue break Q
+    body j0 j1 s continue break Q
   ) →
   (* Once the loop ends, we have either [complete k] or [broken out]. *)
   loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
@@ -204,19 +183,18 @@ Definition XITER :=
    the loop body, the continuations, and the loop have slightly simpler
    types. The loop invariant is [inv j out] instead of [inv j s out]. *)
 
-Variable ubody : ∀ {W}, O → P → (unit → W) → (A → W) → WP W.
+Variable ubody : ∀ {W}, P → P → (unit → W) → (A → W) → WP W.
 Variable uloop : WP (outcome A).
 
 Definition UXITER :=
   ∀ (inv : P → outcome A → Prop) ,
   inv init Continue →
-  ( ∀ j0 o j j1 ,
+  ( ∀ j0 j1 ,
     inv j0 Continue →
-    step j0 o j j1 →
     ∀ {W} (Q : W → Prop) continue break,
     (     inv j1 Continue  → wp (continue()) Q) →
     (∀ x, inv j1 (Break x) → wp (break x   ) Q) →
-    ubody o j continue break Q
+    ubody j0 j1 continue break Q
   ) →
   uloop (λ out, ∃ k, (complete k ∨ broken out) ∧ inv k out).
 
@@ -259,49 +237,47 @@ Ltac wp_break :=
 
 (* A specification of a loop over a list. *)
 
-(* [ITER_LIST_TAIL] is an instance of [ITER] where the [step] relation is
-   fixed and the remaining parameters remain unspecified. *)
-
-(* By convention, the producer state is the history, that is, the list of
-   elements produced so far. The [step] relation extends the history with
-   one element [x]. By convention, the loop invariant is parameterized
-   with [history0], that is, the history before it is extended with [x]. *)
-
-(* [ITER_LIST_TAIL body loop init xs] means that, provided the loop body
-   respects the calling convention [body], it is safe to use the loop with
-   the calling convention [loop], and it will move from producer state
-   [init] to producer state [xs] along the relation [step]. In practice,
-   the list [init] should be a suffix of the list [xs]; it is the list
-   of elements that remain to be enumerated. *)
-
-Definition ITER_LIST_TAIL {S A}
-  (init xs : list A)
-  (body : A → list A → S → WP S)
-  (loop : S → WP S)
-:=
-  let step history0 x history history1 :=
-    history = history0 ∧
-    history0 ++ {[x]} = history1 ∧
-    history1 `prefix_of` xs
-  in
-  let complete history :=
-    history = xs
-  in
-  ITER step  init complete body loop.
-
-(* [ITER_LIST] is an instance of [ITER_LIST_TAIL] where the starting state
-   [init] is fixed: it is the empty list. *)
-
-(* [ITER_LIST body loop xs] means that, provided the loop body respects the
-   calling convention [body], it is safe to use the loop with the calling
-   convention [loop], and it will move from producer state <empty list> to
-   producer state [xs] along the relation [step]. *)
+(* The producer state is the history, that is, the list of elements
+   produced so far. Each step extends the history with one element [x].
+   The list [init] is the initial producer state; the list [xs] is the
+   final producer state. *)
 
 Definition ITER_LIST {S A}
-  (xs : list A)
-  (body : A → list A → S → WP S)
+  (init xs : list A)
+  (body : A → S → WP S)
   (loop : S → WP S)
 :=
-  ITER_LIST_TAIL [] xs body loop.
+  ITER
+    init
+    ( λ history, history = xs )
+    ( λ history0 history1 s Q,
+      ∀ x,
+      init `prefix_of` history0 →
+      history0 ++ {[x]} = history1 →
+      history1 `prefix_of` xs →
+      body x s Q
+    )
+    loop.
+
+(* A variant where the loop body is parameterized not only with the
+   current element [x], but also with its index [i]. *)
+
+Definition ITERI_LIST {S A}
+  (init xs : list A)
+  (body : A → nat → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    init
+    ( λ history, history = xs )
+    ( λ history0 history1 s Q,
+      ∀ x i,
+      init `prefix_of` history0 →
+      history0 ++ {[x]} = history1 →
+      history1 `prefix_of` xs →
+      i = length history0 →
+      body x i s Q
+    )
+    loop.
 
 (* -------------------------------------------------------------------------- *)

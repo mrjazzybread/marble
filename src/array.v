@@ -432,7 +432,7 @@ Proof.
   (* The loop invariant. *)
   int.wp_iter_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
-  { wp_loop_intros _j j xs'.
+  { wp_down_intros _j j xs'.
     wp_get x.
     wp_ret. subst.
     rewrite cons_is_append. list. eauto. }
@@ -481,7 +481,7 @@ Proof.
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
   ).
   (* Preservation. *)
-  { wp_loop_intros _j j ys.
+  { wp_down_intros _j j ys.
     liftIsIntAndClear.
     wp_bind_eq.
     wp_ret.
@@ -555,15 +555,16 @@ Local Lemma wp_list_iteri_aux xs f :
   ∀ future history _i ,
   xs = history ++ future →
   isInt _i (len history) →
-  ITER_LIST_TAIL
+  ITERI_LIST
     history xs
-    (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
+    (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
-(* Extend [tc] with a couple hints for this proof. *)
+(* Extend [tc] with hints for this proof. *)
 Local Hint Extern 1 (_ `prefix_of` _) =>
   (econstructor; list; reflexivity) : typeclass_instances.
 Local Hint Extern 1 (_ ++ _ ++ ?xs = _ ++ ?xs) =>
   (rewrite app_assoc; f_equal) : typeclass_instances.
+Local Hint Resolve prefix_app_l : typeclass_instances.
 Proof.
   induction future as [| x future ]; simpl list_iteri; intros;
   ITER; subst xs; list in *; lengths.
@@ -578,12 +579,12 @@ Qed.
 (* The public specification of [list_iteri]. *)
 
 Lemma wp_list_iteri xs s f :
-  ITER_LIST
-    xs
-    (λ x history s Q, ∀ _i, isInt _i (len history) → wp (f s _i x) Q)
+  ITERI_LIST
+    [] xs
+    (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
     (λ s Q, wp (list_iteri 0 xs s f) Q).
 Proof.
-  unfold ITER_LIST. eapply wp_list_iteri_aux; tc.
+  unfold ITERI_LIST. eapply wp_list_iteri_aux; tc.
 Qed.
 
 End ListIteri.
@@ -624,7 +625,6 @@ Proof.
     eapply wp_conseq.
     - eapply IHfuture with (history := history ++ {[x]});
       list; tc3; list; tc3.
-      pack; unpack; tc.
     - wp_loop_exit. }
 Qed.
 
@@ -660,7 +660,6 @@ Proof.
     wp_op Hstep s'.
     eapply wp_conseq.
     - eapply IHfuture; list; tc3; list; tc3.
-      pack; unpack; tc.
     - wp_loop_exit. }
 Qed.
 
@@ -744,7 +743,8 @@ Proof.
   ).
   (* Preservation. *)
   { clear dependent a.
-    wp_loop_intros x history a.
+    wp_loop_intros history0 history1 a.
+    intros x i _; intros. subst history1. (* TODO tactic? *)
     lengths. wp_set. isArray. }
 Qed.
 
@@ -863,7 +863,7 @@ Proof.
   ).
   (* Preservation. *)
   { clear dependent b.
-    wp_loop_intros _k k b.
+    wp_up_intros _k k b.
     wp_get x. subst x.
     wp_set.
     wp_ret. isArray. }
@@ -1011,7 +1011,7 @@ Proof.
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
   (* Preservation. *)
-  { clear dependent a. wp_loop_intros _k k a.
+  { clear dependent a. wp_up_intros _k k a.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -1086,7 +1086,9 @@ Proof.
     (* Initialization. *)
     { eauto with lia. }
     (* Preservation. *)
-    { intros; unpack; subst.
+    { (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
+      let h := fresh "Hinv" in intros j j1 h; unpack in h.
+      intros; unpack; subst.
       wp_get x. subst x.
       wp_if; wp_bind_eq.
       (* Case: [OK x]. *)
@@ -1292,6 +1294,8 @@ Proof.
       int.wp_uxiter_up (equal_inv xs ys);
         tc; unfold equal_inv in *; eauto with lia.
       (* Preservation. *)
+      (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
+      let h := fresh "Hinv" in intros j j1 h; unpack in h.
       intros; unpack; subst.
       wp_get x. wp_get y.
       wp_if; wp_bind_eq; subst.
@@ -1378,7 +1382,7 @@ Proof.
   int.wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_loop_intros _j j xs'.
+  { wp_up_intros _j j xs'.
     wp_get x.
     wp_op Hstep s'.
     wp_ret. eauto. }

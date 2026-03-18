@@ -9,7 +9,8 @@ Set Universe Polymorphism.
 Ltac unpack :=
   repeat match goal with
   | h: _ ∧ _ |- _ =>
-      destruct h
+      let h' := fresh h in
+      destruct h as (h & h')
   | h: ∃ x, _ |- _ =>
       destruct h
   end.
@@ -18,8 +19,9 @@ Ltac unpack :=
 Ltac unpack_in h :=
   match type of h with
   | _ ∧ _ =>
-      destruct h as [ ? h ];
-      unpack_in h
+      let h' := fresh h in
+      destruct h as [ h h' ];
+      unpack_in h'
   | ∃ x, _ =>
       destruct h as [ ? h ];
       unpack_in h

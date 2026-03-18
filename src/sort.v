@@ -734,7 +734,7 @@ Proof.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. smt_reasoning. }
   (* The body of the outer loop. *)
-  { clear dependent _dst. wp_loop_intros _i i _dst.
+  { clear dependent _dst. wp_up_intros _i i _dst.
     elim_isortto_inv dst'.
     (* [dst'] is the content of the destination array upon entry into
        the body of the outer loop. *)
@@ -748,7 +748,9 @@ Proof.
         smt_reasoning.
         + split_seg_singleton_r src. use_known_permutation. list. eauto. }
       (* The body of the inner loop. *)
-      clear dependent _dst. wp_loop_intros _j j _dst.
+      clear dependent _dst.
+      (* TODO need variant of [wp_down_intros] *)
+      wp_loop_intros j0 j _dst. intros. subst j0.
       elim_inner_inv dst''.
       (* [dst''] is the content of the destination array upon entry into
          the body of the inner loop. *)

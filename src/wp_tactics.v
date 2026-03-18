@@ -81,13 +81,12 @@ Ltac wp_loop lemma I :=
   | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
   ].
 
-(* TODO comment *)
+(* TODO comment; combine with [wp_loop_nude]? *)
 
-Ltac wp_loop_intros o j s :=
-  let j0 := fresh in
-  let j1 := fresh in
-  intros j0 o j j1 s;
-  intros; unpack; try subst j0 j1.
+Ltac wp_loop_intros j0 j1 s :=
+  let h := fresh "Hinv" in
+  intros j0 j1 s h;
+  unpack in h. (* TODO useful, but loses the name *)
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under

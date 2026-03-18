@@ -947,70 +947,148 @@ Global Hint Rewrite
    counting down. *)
 
 (* The producer state is a logical loop index, whose type is [nat].
-   The user's observation is a physical loop index, whose type is [int].
-   The semi-open interval that is enumerated is [i, k).
-   The step relation is as follows. *)
+   The loop body is parameterized with a physical loop index,
+   whose type is [int].
+   The semi-open interval that is enumerated is [i, k). *)
 
-(* In the definition of [step_down], the equation [j1 = j] means that the
-   user observes the new state. Thus, the loop invariant [inv j s] means
-   that the loop has run down to index [j] included and the next iteration
-   will concern the index [j - 1]. *)
+(* The hypothesis [isInt _j j1] means that the user observes the new
+   state. Thus, the loop invariant [inv j s] means that the loop has
+   run down to index [j] included and the next iteration will concern
+   the index [j - 1]. *)
 
 (* Once the loop ends, the producer state is [i `min` k]. This accounts
    for the special case where [k < i] and the loop is not executed. *)
-
-Local Notation step_down i k :=
-  ( λ j0 _j j j1 ,
-    j0 = j + 1 ∧
-    j1 = j ∧
-    isInt _j j ∧
-    i ≤ j < k
-  ).
-
-Local Notation complete_down i k :=
-  ( λ j,
-    j = i `min` k
-  ).
 
 Definition ITER_DOWN {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
-  ITER (step_down i k) k (complete_down i k) body loop.
+  ITER
+    k
+    ( λ j, j = i `min` k )
+    ( λ j0 j1 s Q,
+      ∀ _j,
+      j0 = j1 + 1 →
+      i ≤ j1 < k →
+      isInt _j j1 →
+      body _j j1 s Q
+    )
+    loop.
+
+Ltac wp_down_intros _j j s :=
+  let j0 := fresh in
+  wp_loop_intros j0 j s;
+  intros _j ? ? ?;
+  try subst j0.
+
+(* TODO reduce redundancy? *)
+
+Definition XITER_DOWN {S A}
+  (i k : nat)
+  (body : ∀ {W}, int → nat → S → (S → W) → (S → A → W) → WP W)
+  (loop : S → WP (S * outcome A))
+:=
+  XITER
+    k
+    ( λ j, j = i `min` k )
+    ( λ _ j0 j1 s continue break Q,
+      ∀ _j,
+      j0 = j1 + 1 →
+      i ≤ j1 < k →
+      isInt _j j1 →
+      body _j j1 s continue break Q
+    )
+    loop.
+
+Definition UXITER_DOWN {A}
+  (i k : nat)
+  (body : ∀ {W}, int → nat → (unit → W) → (A → W) → WP W)
+  (loop : WP (outcome A))
+:=
+  UXITER
+    k
+    ( λ j, j = i `min` k )
+    ( λ _ j0 j1 continue break Q,
+      ∀ _j,
+      j0 = j1 + 1 →
+      i ≤ j1 < k →
+      isInt _j j1 →
+      body _j j1 continue break Q
+    )
+    loop.
 
 (* -------------------------------------------------------------------------- *)
 
 (* A generic specification for a loop over a segment of the integers,
    counting up. *)
 
-(* In the definition of [step_up], the equation [j0 = j] means that the
-   user observes the previous state. Thus, the loop invariant [inv j s]
-   means that the loop has run up to index [j] excluded and the next
-   iteration will concern the index [j]. *)
+(* The hypothesis [isInt _j j0] means that the user observes the
+   previous state. Thus, the loop invariant [inv j s] means that the
+   loop has run up to index [j] excluded and the next iteration will
+   concern the index [j]. *)
 
 (* Once the loop ends, the producer state is [i `max` k]. This accounts
    for the special case where [k < i] and the loop is not executed. *)
-
-Local Notation step_up i k :=
-  ( λ j0 _j j j1 ,
-    j0 = j ∧
-    j1 = j + 1 ∧
-    isInt _j j ∧
-    i ≤ j < k
-  ).
-
-Local Notation complete_up i k :=
-  ( λ j,
-    j = i `max` k
-  ).
 
 Definition ITER_UP {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
-  ITER (step_up i k) i (complete_up i k) body loop.
+  ITER
+    i
+    ( λ j, j = i `max` k )
+    ( λ j0 j1 s Q,
+      ∀ _j,
+      j1 = j0 + 1 →
+      i ≤ j0 < k →
+      isInt _j j0 →
+      body _j j0 s Q
+    )
+    loop.
+
+Ltac wp_up_intros _j j s :=
+  let j1 := fresh in
+  wp_loop_intros j j1 s;
+  intros _j ? ? ?;
+  try subst j1.
+
+(* TODO reduce redundancy? *)
+
+Definition XITER_UP {S A}
+  (i k : nat)
+  (body : ∀ {W}, int → nat → S → (S → W) → (S → A → W) → WP W)
+  (loop : S → WP (S * outcome A))
+:=
+  XITER
+    i
+    ( λ j, j = i `max` k )
+    ( λ _ j0 j1 s continue break Q,
+      ∀ _j,
+      j1 = j0 + 1 →
+      i ≤ j0 < k →
+      isInt _j j0 →
+      body _j j0 s continue break Q
+    )
+    loop.
+
+Definition UXITER_UP {A}
+  (i k : nat)
+  (body : ∀ {W}, int → nat → (unit → W) → (A → W) → WP W)
+  (loop : WP (outcome A))
+:=
+  UXITER
+    i
+    ( λ j, j = i `max` k )
+    ( λ _ j0 j1 continue break Q,
+      ∀ _j,
+      j1 = j0 + 1 →
+      i ≤ j0 < k →
+      isInt _j j0 →
+      body _j j0 continue break Q
+    )
+    loop.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1191,8 +1269,7 @@ Lemma wp_xiter_down_aux {S A}
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  XITER
-    (step_down i (j + 1)) (j + 1) (complete_down i (j + 1))
+  XITER_DOWN i (j + 1)
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down_aux _i (@body) _j s) Q).
 Proof.
@@ -1218,8 +1295,7 @@ Lemma wp_xiter_down {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  XITER
-    (step_down i k) k (complete_down i k)
+  XITER_DOWN i k
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down _k _i s (@body)) Q).
 Proof.
@@ -1273,8 +1349,7 @@ Lemma wp_uxiter_down_aux {A}
   ∀IntR _i i ,
   ∀IntR _j j ,
   i ≤ j →
-  UXITER
-    (step_down i (j + 1)) (j + 1) (complete_down i (j + 1))
+  UXITER_DOWN i (j + 1)
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down_aux _i (@body) _j) Q).
 Proof.
@@ -1300,8 +1375,7 @@ Lemma wp_uxiter_down {A}
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  UXITER
-    (step_down i k) k (complete_down i k)
+  UXITER_DOWN i k
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down _k _i (@body)) Q).
 Proof.
@@ -1434,8 +1508,7 @@ Lemma wp_xiter_up_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  XITER
-    (step_up i k) i (complete_up i k)
+  XITER_UP i k
     (λ _ _j j s continue break Q, wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_up_aux _k (@body) _i s) Q).
 Proof.
@@ -1500,8 +1573,7 @@ End UXIterUp.
 Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntR _i i ,
   ∀IntR _k k ,
-  UXITER
-    (step_up i k) i (complete_up i k)
+  UXITER_UP i k
     (λ _ _j j continue break Q, wp (body _j continue break) Q)
     (λ Q, wp (uxiter_up_aux _k (@body) _i) Q).
 Proof.
