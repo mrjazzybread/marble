@@ -128,11 +128,11 @@ Definition ITER :=
      the invariant is guaranteed to hold. *)
   loop s (λ s, ∃ k, complete k ∧ inv k s).
 
-(* In summary, [ITER body loop step init complete] means that, provided
-   the loop body respects the calling convention [body], it is safe to use
+(* In summary, [ITER init complete body loop] means that, provided the
+   loop body respects the calling convention [body], it is safe to use
    the loop with the calling convention [loop], and it will move from
-   producer state [init] to some final producer state [k] along the
-   relation [step]. *)
+   producer state [init] to some producer state that satisfies
+   [complete]. *)
 
 End ITER.
 
