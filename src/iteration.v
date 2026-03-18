@@ -296,6 +296,8 @@ Definition ITER_LIST {S A}
 (* Once the loop ends, the producer state is [i `max` k]. This accounts
    for the special case where [k < i] and the loop is not executed. *)
 
+(* TODO share UP and DOWN by introducing a [direction] parameter? *)
+
 Definition ITER_NAT_UP {S}
   (i k : nat)
   (body : nat → S → WP S)
