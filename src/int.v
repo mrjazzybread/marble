@@ -1026,38 +1026,25 @@ Definition UXITER_INT_DOWN {A}
    receives both [_j] and [j], related by [isInt _j j], instead of
    just [j]. *)
 
+(* TODO how can I reduce this noise and redundancy? *)
+
 Definition ITER_INT_UP {S}
   (i k : nat)
   (body : int → nat → S → WP S)
   (loop : S → WP S)
 :=
   ITER_NAT_UP i k
-    (λ j s Q, ∀ _j, isInt _j j → body _j j s Q)
+    ( λ j s Q, ∀ _j, isInt _j j → body _j j s Q )
     loop.
-
-Ltac wp_up_intros _j j s :=
-  let j1 := fresh in
-  wp_loop_intros j j1 s;
-  intros _j ? ? ?;
-  try subst j1.
-
-(* TODO reduce redundancy? *)
 
 Definition XITER_INT_UP {S A}
   (i k : nat)
   (body : ∀ {W}, int → nat → S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
 :=
-  XITER
-    i
-    ( λ j, j = i `max` k )
-    ( λ _ j0 j1 s continue break Q,
-      ∀ _j,
-      j1 = j0 + 1 →
-      i ≤ j0 < k →
-      isInt _j j0 →
-      body _j j0 s continue break Q
-    )
+  XITER_NAT_UP i k
+    ( λ _ j s continue break Q,
+      ∀ _j, isInt _j j → body _j j s continue break Q )
     loop.
 
 Definition UXITER_INT_UP {A}
@@ -1065,17 +1052,17 @@ Definition UXITER_INT_UP {A}
   (body : ∀ {W}, int → nat → (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
 :=
-  UXITER
-    i
-    ( λ j, j = i `max` k )
-    ( λ _ j0 j1 continue break Q,
-      ∀ _j,
-      j1 = j0 + 1 →
-      i ≤ j0 < k →
-      isInt _j j0 →
-      body _j j0 continue break Q
-    )
+  UXITER_NAT_UP i k
+    ( λ _ j continue break Q,
+      ∀ _j, isInt _j j → body _j j continue break Q )
     loop.
+
+(* TODO improve/generalize/move *)
+Ltac wp_up_intros _j j s :=
+  let j1 := fresh in
+  wp_loop_intros j j1 s;
+  intros _j ? ? ?;
+  try subst j1.
 
 (* -------------------------------------------------------------------------- *)
 

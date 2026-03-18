@@ -309,6 +309,38 @@ Definition ITER_NAT_UP {S}
     )
     loop.
 
+(* TODO how can I reduce this redundancy? *)
+
+Definition XITER_NAT_UP {S A}
+  (i k : nat)
+  (body : ∀ {W}, nat → S → (S → W) → (S → A → W) → WP W)
+  (loop : S → WP (S * outcome A))
+:=
+  XITER
+    i
+    ( λ j, j = i `max` k )
+    ( λ _ j0 j1 s continue break Q,
+      j1 = j0 + 1 →
+      i ≤ j0 < k →
+      body j0 s continue break Q
+    )
+    loop.
+
+Definition UXITER_NAT_UP {A}
+  (i k : nat)
+  (body : ∀ {W}, nat → (unit → W) → (A → W) → WP W)
+  (loop : WP (outcome A))
+:=
+  UXITER
+    i
+    ( λ j, j = i `max` k )
+    ( λ _ j0 j1 continue break Q,
+      j1 = j0 + 1 →
+      i ≤ j0 < k →
+      body j0 continue break Q
+    )
+    loop.
+
 (* -------------------------------------------------------------------------- *)
 
 (* TODO define ITER_NAT and obtain ITER_INT later as an instance *)
