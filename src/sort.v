@@ -559,7 +559,7 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
   int.iter_up 0 _n _dst @@ λ _i _dst ,
     (* Extract [xi] at offset [i] in the source segment. *)
     do xi ← get _src (_srcofs + _i)%uint63 ;
-    do (dst, out) ← (
+    do (_dst, out) ← (
       (* Let [j] scan the sorted part of the destination segment, downwards. *)
       int.xiter_down (_dstofs + _i)%uint63 _dstofs _dst @@
       λ _ _j _dst continue break ,
@@ -575,9 +575,9 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
     (* Write [xi] into the logically empty slot of the array [dst]. *)
     match out with
     | Break _j =>
-        set dst (_j + 1) xi
+        set _dst (_j + 1) xi
     | Continue =>
-        set dst  _dstofs xi
+        set _dst  _dstofs xi
     end.
 
 (* This is the invariant of the main loop. *)
