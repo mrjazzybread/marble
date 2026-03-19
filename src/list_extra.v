@@ -484,6 +484,27 @@ Proof.
   intros. subst. list. eauto.
 Qed.
 
+(* This tactic helps prove an equality between two lookups in the case
+   where an equality between two segments appears as a hypothesis. *)
+
+Ltac lookup_through_seg :=
+  match goal with
+  | h: seg _ _ ?xs = seg _ _ ?xs' |- ?xs !!! _ = ?xs' !!! _ =>
+      erewrite (lookup_total_through_seg _ _ _ _ _ h) by (list; lia);
+      list; eauto
+  | h: seg _ _ ?xs = seg _ _ ?xs' |- ?xs' !!! _ = ?xs !!! _ =>
+      symmetry;
+      erewrite (lookup_total_through_seg _ _ _ _ _ h) by (list; lia);
+      list; eauto
+  | h: seg _ _ ?xs = seg _ _ ?xs' |- ?xs !! _ = ?xs' !! _ =>
+      erewrite (lookup_through_seg _ _ _ _ _ h) by (list; lia);
+      list; eauto
+  | h: seg _ _ ?xs = seg _ _ ?xs' |- ?xs' !! _ = ?xs !! _ =>
+      symmetry;
+      erewrite (lookup_through_seg _ _ _ _ _ h) by (list; lia);
+      list; eauto
+  end.
+
 (* A segment can be split anywhere. *)
 
 Lemma split_seg {A} j (xs : list A) i k :
