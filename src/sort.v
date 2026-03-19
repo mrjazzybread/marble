@@ -851,25 +851,20 @@ Definition isortto_inplace a _srcofs _dstofs _n :=
     end.
 
 (* This code requires the source and destination segments to either be
-   disjoint or to coincide. In the first case, there is no interference
-   between reading and writing because the segments are disjoint. In the
-   second case, the code is correct because [xi] is read before it is
-   overwritten. In either case, when [xi] is read from the current array,
-   the same value is obtained as if [xi] had been read from the initial
-   unmodified array. *)
-
-Definition disjoint srcofs dstofs n :=
-  (srcofs + n ≤ dstofs ∨ dstofs + n ≤ srcofs)%nat.
+   disjoint or to possibly overlap in a configuration the destination
+   segment lies closer to the left end of the array than the source
+   segment. The latter situation includes the case where the two segments
+   coincide. In any of these situations case, the code is correct because
+   [xi] is read before it is overwritten (if it is ever overwritten). In
+   other words, when [xi] is read from the current array, the same value
+   is read as if [xi] had been read from the initial unmodified array. *)
 
 Definition isortto_inplace_precondition srcofs dstofs n :=
-  disjoint srcofs dstofs n ∨
-  srcofs = dstofs.
+  (srcofs + n ≤ dstofs ∨ dstofs ≤ srcofs)%nat.
 
 Local Ltac destruct_isortto_inplace_precondition :=
-  match goal with
-  h: isortto_inplace_precondition _ _ _ |- _ =>
-    destruct h as [[|]|]
-  end.
+  match goal with h: isortto_inplace_precondition _ _ _ |- _ =>
+    destruct h end.
 
 (* The public specification of [isortto_inplace]. *)
 
