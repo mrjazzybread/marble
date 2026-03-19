@@ -292,9 +292,9 @@ Inductive direction := Up | Down.
 Definition nat_init i k dir : nat :=
   match dir with Up => i | Down => k end.
 
-(* The predicate [nat_complete i k dir] defines which producer states are
-   final; in other words, it specifies when it is permitted for iteration
-   to finish. *)
+(* The predicate [nat_complete i k dir : nat → Prop] defines which producer
+   states are final; in other words, it specifies when it is permitted for
+   iteration to finish. *)
 
 (* Because iteration is deterministic, there is only one final state. *)
 
@@ -302,7 +302,13 @@ Definition nat_init i k dir : nat :=
    final state is [i `min` k]. These `max` and `min` operators account
    for the special case where [k < i] and the loop is not executed. *)
 
-Definition nat_complete i k dir : nat → Prop :=
+(* We make this a notation, as opposed to a definition, because it appears
+   in the postcondition of a loop (see [ITER]). This implies that (in the
+   case where a rigid postcondition is not known beforehand) it can leak
+   (through unification of metavariables) into the precondition of the code
+   that follows the loop. *)
+
+Notation nat_complete i k dir  :=
   ( λ j,
     match dir with
     | Up   => j = i `max` k
@@ -402,7 +408,7 @@ Definition UXITER_NAT {A}
 
 Ltac expand_ITER :=
   unfold
-    ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_complete, nat_step,
+    ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
     ITER_LIST, ITERI_LIST,
     ITER, XITER, UXITER;
     simpl implication.
