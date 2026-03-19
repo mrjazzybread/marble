@@ -800,7 +800,7 @@ Proof.
           eauto. }
         (* The destination segment is sorted. *)
         { smt_reasoning.
-          eapply transitivity; [| eauto ]. eauto with lia. }
+          + eapply transitivity; [| eassumption ]. eauto with lia. }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
@@ -809,6 +809,174 @@ Proof.
         (* The destination segment contains a permitted permutation. *)
         { use_known_permutation. recognize_named_lookups.
           list. eauto. }
+      }
+    }
+  }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* In-place insertion sort: [isortto_inplace]. *)
+
+(* [isortto_inplace a _srcofs _dstofs _n] sorts the array segment described
+   by [a], [_srcofs], [_n]. The resulting data is written into the array
+   segment described by [a], [_dstofs], [_n]. The source and destination
+   arrays are the same array. *)
+
+(* The code is the same as in [isortto] except that the two arrays [src] and
+   [dst] are replaced with a single array [a]. This change is necessary in
+   order to ensure that the code always accesses the most recent version of
+   the array, with time complexity O(1). If the same array was used as the
+   source array and as the destination array in a call to [isortto] then
+   every array access would become expensive, if a persistent array is used,
+   or would fail, if a defensive non-persistent array is used (in OCaml). *)
+
+Definition isortto_inplace a _srcofs _dstofs _n :=
+  int.iter_up 0 _n a @@ λ _i a ,
+    do xi ← get a (_srcofs + _i)%uint63 ;
+    do (a, out) ← (
+      int.xiter_down (_dstofs + _i)%uint63 _dstofs a @@
+      λ _ _j a continue break ,
+        do xj ← get a _j ;
+        match compare xj xi with
+        | Gt      => do a ← set a (_j + 1) xj; continue a
+        | Lt | Eq => break a _j
+        end
+    );
+    match out with
+    | Break _j =>
+        set a (_j + 1) xi
+    | Continue =>
+        set a _dstofs xi
+    end.
+
+(* This code requires the source and destination segments to either be
+   disjoint or to coincide. In the first case, there is no interference
+   between reading and writing because the segments are disjoint. In the
+   second case, the code is correct because [xi] is read before it is
+   overwritten. In either case, when [xi] is read from the current array,
+   the same value is obtained as if [xi] had been read from the initial
+   unmodified array. *)
+
+Definition disjoint srcofs dstofs n :=
+  (srcofs + n ≤ dstofs ∨ dstofs + n ≤ srcofs)%nat.
+
+Definition isortto_inplace_precondition srcofs dstofs n :=
+  disjoint srcofs dstofs n ∨
+  srcofs = dstofs.
+
+Local Ltac destruct_isortto_inplace_precondition :=
+  match goal with
+  h: isortto_inplace_precondition _ _ _ |- _ =>
+    destruct h as [[|]|]
+  end.
+
+(* The public specification of [isortto_inplace]. *)
+
+Lemma wp_isortto_inplace a xs _srcofs srcofs _dstofs dstofs _n n :
+  isArray a xs →
+  isInt _srcofs srcofs →
+  isInt _dstofs dstofs →
+  isInt _n n →
+  valid_seg srcofs (srcofs + n) xs →
+  valid_seg dstofs (dstofs + n) xs →
+  isortto_inplace_precondition srcofs dstofs n →
+  smt_sorted R' xs →
+  wp (isortto_inplace a _srcofs _dstofs _n) (λ a,
+    isortto_inv xs srcofs xs dstofs n a
+  ).
+Proof.
+  intros. unfold isortto_inplace.
+  (* The outer loop. *)
+  wp_iter_up (isortto_inv xs srcofs xs dstofs).
+  (* Initialization of the outer loop. *)
+  { intro_isortto_inv. smt_reasoning. }
+  (* The body of the outer loop. *)
+  { clear dependent a. wp_up_intros _i i a.
+    elim_isortto_inv xs'.
+    (* [xs'] is the content of the array upon entry into the body
+       of the outer loop. *)
+    wp_get xi.
+    (* [xi] is the same value that would have been read out of the initial
+       unmodified array. This is the key reason why the proof goes through
+       with almost no change. *)
+    assert (KEY: xs' !!! (srcofs + i) = xs !!! (srcofs + i)).
+    { destruct_isortto_inplace_precondition; lookup_through_seg. }
+    eapply wp_bind.
+    { (* The inner loop. *)
+      int.wp_xiter_down (inner_inv xs srcofs xs dstofs i).
+      (* Initialization of the inner loop. *)
+      { intro_inner_inv; eauto using seg_equality_implication with lia.
+        intro_dst_inv; list; rewrite ?(seg_is_singleton src) by lia;
+        smt_reasoning.
+        + split_seg_singleton_r xs. use_known_permutation. list. eauto. }
+      (* The body of the inner loop. *)
+      clear dependent a.
+      (* TODO need variant of [wp_down_intros] *)
+      wp_loop_intros j0 j a. intros. subst j0.
+      elim_inner_inv xs''.
+      (* [xs''] is the content of the array upon entry into the body of
+         the inner loop. *)
+      wp_get xj.
+      wp_compare.
+      (* Case [xi < xj]. *)
+      { elim_dst_inv.
+        wp_set. wp_continue.
+        intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
+        (* The destination segment contains a permitted permutation. *)
+        { list. use_known_permutation.
+          rewrite (seg_is_singleton xs) by lia.
+          split_seg_singleton_r xs''.
+          recognize_named_lookups.
+          simplify_list_permutation_goal.
+          (* Argue that swapping [xi] and [xj] is permitted. *)
+          eapply Permutation_app_comm. }
+        (* The destination segment is sorted. [KEY] is exploited here. *)
+        { smt_reasoning. recognize_named_lookups. eauto. }
+      }
+      (* Case [xj ≤ xi]. *)
+      { wp_break. intro_inner_inv.
+        + recognize_named_lookups.
+          eapply le_le_lex. assumption.
+          (* Proving [xj `precedes` xi] is the slightly tricky part.
+             The argument is that [xj] comes from the extended source
+             segment, whose rightmost element is [xi]. This is the only
+             point where stability creates an extra proof obligation. *)
+          elim_dst_inv.
+          assert (Hseg: xj ∈ seg srcofs (srcofs + (i + 1)) xs).
+          { use_known_permutation. subst xj. eauto with elem_of_app lia. }
+          rewrite lookup_total_elem_seg in Hseg by lia.
+          destruct Hseg as (j' & ? & ?).
+          eapply exploit_smt_sorted; eauto with lia. }
+    }
+    (* Epilogue of the inner loop. *)
+    { clear dependent a. intros [ a out ].
+      intros (j&Hj). list in Hj. unpack in Hj.
+      (* Perform a case analysis on [out], so as to separately analyze
+         the case where the loop has been stopped early and the case
+         where it has finished normally. *)
+      destruct out as [ _j' |]; elim_inner_inv dst''; elim_dst_inv.
+      (* Case: we have broken out. *)
+      { wp_set.
+        intro_isortto_inv.
+        (* The destination segment contains a permitted permutation. *)
+        { use_known_permutation. recognize_named_lookups.
+          rewrite insert_seg by (list; lia); autorewrite with nat.
+          eauto. }
+        (* The destination segment is sorted. [KEY] is used here. *)
+        { smt_reasoning; rewrite KEY.
+          + smt_reasoning.
+          + eapply transitivity; [| eauto ]. eauto with lia. }
+      }
+      (* Case: the loop has finished normally. *)
+      { assert (j = dstofs) by tauto. subst j.
+        wp_set.
+        intro_isortto_inv; try solve [ smt_reasoning ].
+        (* The destination segment contains a permitted permutation. *)
+        { use_known_permutation. recognize_named_lookups.
+          list. eauto. }
+        (* The destination segment is sorted. [KEY] is used here. *)
+        { smt_reasoning. rewrite KEY. smt_reasoning. }
       }
     }
   }
