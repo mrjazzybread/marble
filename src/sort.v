@@ -3,6 +3,7 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
+From marble Require Import equations.
 From marble Require Import tactics list_extra iteration int wp wp_tactics array orders sorting.
 Implicit Types _i _j _k : int.
 
@@ -982,5 +983,67 @@ Proof.
     }
   }
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Merging two sorted arrays: [merge]. *)
+
+Section MergeAux.
+
+Open Scope uint63.
+
+Implicit Types x : A.
+
+Variable _src1 _src2 : array A.
+Variable _j1 _j2 : int.
+
+(* TODO my existing loops can use IF/THEN/ELSE instead of [inspected] *)
+
+Local Definition pigt (p : int * int) (p' : int * int) :=
+  let '(p1, p2) := p in
+  let '(p'1, p'2) := p' in
+  igt p1 p'1 ∧ p2 = p'2 ∨
+  p1 = p'1 ∧ igt p2 p'2.
+Global Instance Wf_pigt : WellFounded pigt.
+Admitted.
+
+Local Hint Unfold pigt : lia.
+
+Local Obligation Tactic :=
+  simpl in *;
+  Tactics.program_simplify;
+  CoreTactics.equations_simpl;
+  try Tactics.program_solve_wf;
+  eauto 4 with lia.
+
+Equations merge_aux _i1 x1 _i2 x2 _dst _k
+  (_ : (φ (_i1) < φ (_j1))%Z)
+  (_ : (φ (_i2) < φ (_j2))%Z)
+: array A
+  by wf (_i1, _i2) pigt
+:=
+merge_aux _i1 x1 _i2 x2 _dst _k _ _ :=
+  match compare x1 x2 with
+  | Lt | Eq =>
+      do _dst ← set _dst _k x1 ;
+      let _i1 := _i1 + 1 in
+      let _k := _k + 1 in
+      IF (_i1 <? _j1) THEN
+        do x1 ← get _src1 _i1 ;
+        merge_aux _i1 x1 _i2 x2 _dst _k _ _
+      ELSE
+        blit _src2 _i2 _dst _k (_j2 - _i2)
+  | Gt =>
+      do _dst ← set _dst _k x2 ;
+      let _i2 := _i2 + 1 in
+      let _k := _k + 1 in
+      IF (_i2 <? _j2) THEN
+        do x2 ← get _src2 _i2 ;
+        merge_aux _i1 x1 _i2 x2 _dst _k _ _
+      ELSE
+        blit _src1 _i1 _dst _k (_j1 - _i1)
+  end.
+
+End MergeAux.
 
 End InsertionSort.
