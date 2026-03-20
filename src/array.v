@@ -18,6 +18,12 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
+Local Lemma exchange _i _j _k :
+  (_k + (_j - _i) = _j + (_k - _i))%uint63.
+Proof.
+  lia. (* thank you, ZifyUint63 *)
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The maximum length of an array. *)
@@ -881,10 +887,9 @@ Proof.
   { clear dependent b.
     wp_up_intros k b. intros _k ?.
     wp_get x. subst x.
-    (* Argue that the use of unsigned arithmetic in the computation of
-       [_delta] does not cause any problem. *)
-    assert (_k + (_j - _i) = _j + (_k - _i))%uint63 as ->.
-    { lia. } (* thank you, ZifyUint63 *)
+    (* The use of unsigned arithmetic in the computation of [_delta]
+       does not cause any problem. *)
+    rewrite exchange.
     wp_set.
     wp_ret. isArray. }
 Qed.
