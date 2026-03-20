@@ -910,12 +910,32 @@ Lemma simplify_app_r {A} (xs ys zs : list A) :
   ys = zs → ys ++ xs = zs ++ xs.
 Proof. congruence. Qed.
 
+Lemma simplify_app_l_seg {A} i1 j1 i2 j2 (xs ys zs : list A) :
+  i1 = i2 → j1 = j2 → ys = zs → seg i1 j1 xs ++ ys = seg i2 j2 xs ++ zs.
+Proof. congruence. Qed.
+
+Lemma simplify_app_r_seg {A} i1 j1 i2 j2 (xs ys zs : list A) :
+  i1 = i2 → j1 = j2 → ys = zs → ys ++ seg i1 j1 xs = zs ++ seg i2 j2 xs.
+Proof. congruence. Qed.
+
+Global Ltac simplify_list_equality_goal_left :=
+  first [
+    eapply simplify_app_l
+  | eapply simplify_app_l_seg; [ (list; lia) | (list; lia) |]
+  ].
+
+Global Ltac simplify_list_equality_goal_right :=
+  first [
+    eapply simplify_app_r
+  | eapply simplify_app_r_seg; [ (list; lia) | (list; lia) |]
+  ].
+
 Global Ltac simplify_list_equality_goal :=
   list;
   repeat rewrite app_assoc;
-  repeat eapply simplify_app_r;
+  repeat simplify_list_equality_goal_right;
   repeat rewrite <- app_assoc;
-  repeat eapply simplify_app_l;
+  repeat simplify_list_equality_goal_left;
   list.
 
 (* [simplify_list_permutation_goal] simplies a goal of the form [xs ≃ ys],
