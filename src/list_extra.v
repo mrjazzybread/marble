@@ -515,6 +515,15 @@ Proof.
   intros. listx o. lookup_app_split. f_equal. lia.
 Qed.
 
+Lemma join_seg {A} (xs : list A) i j1 j2 k :
+  j1 = j2 →
+  valid_seg i j1 xs →
+  valid_seg j2 k xs →
+  seg i j1 xs ++ seg j2 k xs = seg i k xs.
+Proof.
+  intros. subst. erewrite <- split_seg by eauto. eauto.
+Qed.
+
 (* A singleton segment is a singleton. *)
 
 Lemma seg_is_singleton `{Inhabited A} (xs : list A) i j :
@@ -588,7 +597,7 @@ Global Hint Rewrite
 : list.
 
 Global Hint Rewrite
-  <- @split_seg
+  @join_seg
   using (list; lia)
 : list.
   (* TODO recognizing a fusion opportunity may require rewriting
