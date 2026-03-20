@@ -1,5 +1,6 @@
 From stdpp Require Import numbers well_founded.
-From Stdlib Require Import Uint63.
+From Stdlib Require Import Uint63 ZifyUint63.
+  (* [ZifyUint63] magically makes [lia] more powerful *)
 (* TODO why is [of_to_Z] an axiom? *)
 From Stdlib Require Import Wellfounded.Wellfounded.
 From Equations Require Import Equations.
@@ -33,9 +34,7 @@ Lemma to_nat_lt z n :
   (0 ≤ z)%Z →
   (z < Z.of_nat n)%Z →
   (Z.to_nat z < n)%nat.
-Proof.
-  lia.
-Qed.
+Proof. lia. Qed.
 
 Hint Resolve to_nat_lt : lia.
 
@@ -68,16 +67,12 @@ Proof. apply of_to_Z. Qed.
 Lemma to_of_Z z :
   unsigned z →
   φ (π z) = z.
-Proof.
-  rewrite of_Z_spec. intros. eauto using Z.mod_small.
-Qed.
+Proof. lia. Qed.
 (* This is a reformulation of [is_int]. *)
 
 Goal ∀ z,
   φ (π z) = z `mod` wB.
-Proof.
-  apply of_Z_spec.
-Qed.
+Proof. lia. Qed. (* see also [of_Z_spec] *)
 
 Global Hint Rewrite
   of_to_Z
@@ -99,9 +94,7 @@ Proof. eapply to_Z_inj. Qed.
 Lemma to_Z_inj' _i1 _i2 :
   _i1 ≠ _i2 →
   φ _i1 ≠ φ _i2.
-Proof.
-  intuition eauto using to_Z_inj.
-Qed.
+Proof. lia. Qed.
 
 Global Hint Resolve to_Z_inj' : lia.
 
@@ -113,21 +106,14 @@ Lemma of_Z_inj z1 z2 :
   unsigned z2 →
   π z1 = π z2 →
   z1 = z2.
-Proof.
-  intros.
-  rewrite <- (to_of_Z z1) by eauto.
-  rewrite <- (to_of_Z z2) by eauto.
-  congruence.
-Qed.
+Proof. lia. Qed.
 
 Lemma of_Z_inj' z1 z2 :
   unsigned z1 →
   unsigned z2 →
   z1 ≠ z2 →
   π z1 ≠ π z2.
-Proof.
-  intuition eauto using of_Z_inj.
-Qed.
+Proof. lia. Qed.
 
 Global Hint Resolve of_Z_inj' : lia.
 
@@ -135,15 +121,11 @@ Global Hint Resolve of_Z_inj' : lia.
 
 Lemma to_Z_ge_0 _i :
   0 ≤ φ _i.
-Proof.
-  apply (to_Z_bounded _i).
-Qed.
+Proof. lia. Qed.
 
 Lemma to_Z_lt_wB _i :
   φ _i < wB.
-Proof.
-  apply (to_Z_bounded _i).
-Qed.
+Proof. lia. Qed.
 
 Global Hint Resolve
   to_Z_ge_0 to_Z_lt_wB
@@ -154,9 +136,7 @@ Global Hint Resolve
 Lemma to_nat_inj _i1 _i2 :
   to_nat _i1 = to_nat _i2 →
   _i1 = _i2.
-Proof.
-  eauto using to_Z_inj, Z2Nat.inj with lia.
-Qed.
+Proof. lia. Qed.
 
 Global Hint Resolve
   to_nat_inj
@@ -184,33 +164,19 @@ Qed.
 
 Lemma add_spec' z1 z2 :
   (π z1 + π z2)%uint63 = π (z1 + z2).
-Proof.
-  eapply to_Z_inj.
-  (* Rewrite on the left. *)
-  rewrite add_spec.
-  (* Rewrite three occurrences of [φ . π]. *)
-  rewrite !of_Z_spec.
-  (* A property of modulus. *)
-  rewrite <- Z.add_mod by eauto. eauto.
-Qed.
+Proof. lia. Qed.
 
 (* Subtraction in Z commutes with projection. *)
 
 Lemma sub_spec' z1 z2 :
   (π z1 - π z2)%uint63 = π (z1 - z2).
-Proof.
-  eapply to_Z_inj. rewrite sub_spec, !of_Z_spec.
-  rewrite <- Zminus_mod by eauto. eauto.
-Qed.
+Proof. lia. Qed.
 
 (* Multiplication in Z commutes with projection. *)
 
 Lemma mul_spec' z1 z2 :
   (π z1 * π z2)%uint63 = π (z1 * z2).
-Proof.
-  eapply to_Z_inj. rewrite mul_spec, !of_Z_spec.
-  rewrite <- Z.mul_mod by eauto. eauto.
-Qed.
+Proof. lia. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -218,18 +184,15 @@ Qed.
 
 Lemma add_sub_conv _i _a _b :
   (_i - _a - _b = _i - (_a + _b))%uint63.
-Proof.
-  eapply to_Z_inj.
-  rewrite !sub_spec, !add_spec.
-  rewrite Zminus_mod_idemp_l, Zminus_mod_idemp_r.
-  f_equal. lia.
-Qed.
+Proof. lia. Qed.
 
 Lemma add_sub_comm _i _a _b :
   (_i - _a - _b = _i - _b - _a)%uint63.
-Proof.
-  rewrite add_sub_conv, add_comm, add_sub_conv. eauto.
-Qed.
+Proof. lia. Qed.
+
+Lemma add_sub_exch _i _j _k :
+  (_k + (_j - _i) = _j + (_k - _i))%uint63.
+Proof. lia. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -246,9 +209,7 @@ Global Hint Mode isInt ! - : typeclass_instances.
 
 Lemma isInt_def _i i :
   isInt _i i ↔ _i = of_nat i.
-Proof.
-  tauto.
-Qed.
+Proof. tauto. Qed.
 
 Ltac introIsInt :=
   rewrite isInt_def.
@@ -313,7 +274,7 @@ Lemma isInt_inj_1 _i1 _i2 i :
   isInt _i2 i →
   _i1 = _i2.
 Proof.
-  intros. repeat destructIsInt. congruence.
+  intros. repeat destructIsInt. reflexivity.
 Qed.
 
 (* Addition. *)
@@ -323,8 +284,7 @@ Global Instance add_compat _i i _j j :
   isInt _j j →
   isInt (_i+_j) (i+j)%nat.
 Proof.
-  intros. introIsInt. repeat destructIsInt.
-  rewrite add_spec'. f_equal. lia.
+  intros. introIsInt. repeat destructIsInt. lia.
 Qed.
 
 (* Subtraction. *)
@@ -341,8 +301,7 @@ Global Instance sub_compat _i i _j j :
   (j ≤ i)%nat →
   isInt (_i-_j) (i-j)%nat.
 Proof.
-  intros. introIsInt. repeat destructIsInt.
-  rewrite sub_spec'. f_equal. lia.
+  intros. introIsInt. repeat destructIsInt. lia.
 Qed.
 
 (* Multiplication. *)
@@ -352,8 +311,7 @@ Global Instance mul_compat _i i _j j :
   isInt _j j →
   isInt (_i*_j) (i*j)%nat.
 Proof.
-  intros. introIsInt. repeat destructIsInt.
-  rewrite mul_spec'. f_equal. lia.
+  intros. introIsInt. repeat destructIsInt. lia.
 Qed.
 
 (* The representable natural integers. *)
@@ -424,9 +382,7 @@ Lemma to_Z_of_nat i :
   representable i →
   φ%uint63 (of_nat i) = Z.of_nat i.
 Proof.
-  rewrite representable_iff_Z.
-  intros. rewrite to_of_Z by assumption.
-  eauto.
+  rewrite representable_iff_Z. lia.
 Qed.
 
 Hint Rewrite
@@ -469,7 +425,7 @@ Lemma of_nat_inj i1 i2 :
   of_nat i1 = of_nat i2 →
   i1 = i2.
 Proof.
-  rewrite !representable_iff_Z. eauto using Nat2Z.inj, of_Z_inj.
+  rewrite !representable_iff_Z. lia.
 Qed.
 
 Lemma of_nat_inj' i1 i2 :
@@ -505,7 +461,7 @@ Proof.
   rewrite isInt_def.
   rewrite <- to_nat_of_nat. split.
   + congruence.
-  + eauto using to_nat_inj.
+  + lia.
 Qed.
 
 (* Yet another characterization of [isInt],
@@ -565,7 +521,7 @@ Proof.
   intros. eapply isBool_intro. rewrite eqb_spec.
   repeat destructIsInt.
   rewrite <- !to_nat_of_nat.
-  split; [ congruence | eauto using to_nat_inj ].
+  lia.
 Qed.
 
 (* If the natural integers [i] and [j] are representable then an equality
@@ -831,21 +787,13 @@ Global Instance Wf_igt : WellFounded igt :=
 Lemma safe_increment _i _j :
   φ _i < φ _j →
   (φ _i < φ (_i + 1))%Z.
-Proof.
-  intros.
-  assert (unsigned (φ _i)) by eauto with lia.
-  assert (unsigned (φ _j)) by eauto with lia.
-  assert (unsigned (φ _i + 1)) by lia.
-  rewrite add_spec. change (φ 1) with 1%Z.
-  rewrite Z.mod_small by eauto.
-  lia.
-Qed.
+Proof. lia. Qed.
 
 Lemma safe_increment' _i _j :
   (_i <? _j)%uint63 = true →
   igt (_i + 1) _i.
 Proof.
-  rewrite ltb_spec. unfold igt. eauto using safe_increment.
+  rewrite ltb_spec. unfold igt. lia.
 Qed.
 
 (* Safely decrementing a machine integer, without integer underflow. *)
@@ -859,24 +807,14 @@ Local Lemma safe_decrement _a _i :
   φ _a ≤ φ _i →
   _i ≠ _a →
   (φ (_i - 1) < φ _i)%Z.
-Proof.
-  intros.
-  assert (unsigned (φ _a)) by eauto with lia.
-  assert (unsigned (φ _i)) by eauto with lia.
-  assert (φ _i ≠ φ _a) by eauto with lia.
-  assert (unsigned (φ _i - 1)) by lia.
-  rewrite sub_spec. change (φ 1) with 1%Z.
-  rewrite Z.mod_small by eauto.
-  lia.
-Qed.
+Proof. lia. Qed.
 
 Local Lemma safe_decrement' _i _a :
   (_i =? _a)%uint63 = false →
   φ _a ≤ φ _i →
   ilt (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec.
-  unfold ilt. eauto using safe_decrement.
+  rewrite bool_neg, eqb_spec. unfold ilt. lia.
 Qed.
 
 (* The following two lemmas remove the hypothesis [φ _a ≤ φ _i],
@@ -885,21 +823,13 @@ Qed.
 Local Lemma safe_decrement_absolute _i :
   0%Z ≠ φ _i →
   (φ (_i - 1) < φ _i)%Z.
-Proof.
-  intros.
-  assert (unsigned (φ _i)) by eauto with lia.
-  rewrite sub_spec. change (φ 1) with 1%Z.
-  rewrite Z.mod_small by lia.
-  lia.
-Qed.
+Proof. lia. Qed.
 
 Local Lemma safe_decrement_absolute' _i :
   (_i =? 0)%uint63 = false →
   ilt (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold ilt. intros.
-  assert (0 ≠ φ _i)%Z. { change 0%Z with (φ 0). eauto with lia. }
-  eauto using safe_decrement_absolute.
+  rewrite bool_neg, eqb_spec. unfold ilt. intros. lia.
 Qed.
 
 (* The following two lemmas remove the hypothesis [φ _a ≤ φ _i] and they
@@ -909,25 +839,13 @@ Qed.
 Lemma safe_decrement_relative _a _i :
   _i ≠ _a →
   (φ (_i - _a - 1) < φ (_i - _a))%Z.
-Proof.
-  intros. eapply safe_decrement_absolute.
-  rewrite sub_spec.
-  symmetry.
-  rewrite <- Z.cong_iff_0.
-  assert (unsigned (φ _a)) by eauto with lia.
-  assert (unsigned (φ _i)) by eauto with lia.
-  rewrite !Z.mod_small by lia.
-  eauto with lia. (* ouf *)
-Qed.
+Proof. lia. Qed.
 
 Lemma safe_decrement_relative' _i _a :
   (_i =? _a)%uint63 = false →
   rilt _a (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec.
-  unfold rilt, ilt.
-  rewrite add_sub_comm.
-  eauto using safe_decrement_relative.
+  rewrite bool_neg, eqb_spec. unfold rilt, ilt. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)

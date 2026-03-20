@@ -1,7 +1,6 @@
 From stdpp Require Import numbers list.
 Notation len := List.length.
-From Stdlib Require Import Uint63 ZifyUint63.
-  (* [ZifyUint63] magically makes [lia] more powerful *)
+From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics list_extra bool iteration int wp wp_tactics.
 Implicit Types _i _j _k _n : int.
@@ -17,12 +16,6 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.ArrayAxioms.html
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
-
-Local Lemma exchange _i _j _k :
-  (_k + (_j - _i) = _j + (_k - _i))%uint63.
-Proof.
-  lia. (* thank you, ZifyUint63 *)
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -889,7 +882,7 @@ Proof.
     wp_get x. subst x.
     (* The use of unsigned arithmetic in the computation of [_delta]
        does not cause any problem. *)
-    rewrite exchange.
+    rewrite int.add_sub_exch.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -937,7 +930,7 @@ Proof.
     { clear dependent a.
       wp_up_intros k a. intros _k ?.
       wp_get x. subst x.
-      rewrite exchange. wp_set.
+      rewrite int.add_sub_exch. wp_set.
       wp_ret. isArray. } }
   (* Case [i < j]. *)
   { wp_bind_eq.
