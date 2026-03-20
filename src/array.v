@@ -841,12 +841,18 @@ Implicit Types xs ys : list A.
    persistent arrays that are backed by the same underlying physical
    array. To move data within a single array, see [blit']. *)
 
+(* We compute [_delta] outside of the loop so as to save one addition
+   inside the loop. This is a bit subtle, as the difference [_j - _i]
+   might be negative, yet we compute it as an unsigned integer. This
+   yields the correct result in the end anyway, but it creates a small
+   difficulty in the proof, which we have to work around. *)
+
 Definition blit a _i b _j _n :=
+  do _delta ← (_j - _i)%uint63 ;
   int.iter_up _i (_i + _n)%uint63 b @@ λ _k b,
   do x ← get a _k ;
-  do b ← set b (_j + (_k - _i))%uint63 x ;
+  do b ← set b (_k + _delta)%uint63 x ;
   b.
-  (* TODO try computing [_j - _i] outside of the loop *)
 
 (* The postcondition. *)
 
@@ -869,11 +875,16 @@ Lemma wp_blit a xs _i i b ys _j j _n n :
   wp (blit a _i b _j _n) (blit_post xs i ys j n).
 Proof.
   intros. unfold blit.
+  wp_bind_eq.
   int.wp_iter_up (λ k, blit_post xs i ys j (k - i)).
   (* Preservation. *)
   { clear dependent b.
     wp_up_intros _k k b.
     wp_get x. subst x.
+    (* Argue that the use of unsigned arithmetic in the computation of
+       [_delta] does not cause any problem. *)
+    assert (_k + (_j - _i) = _j + (_k - _i))%uint63 as ->.
+    { lia. } (* thank you, ZifyUint63 *)
     wp_set.
     wp_ret. isArray. }
 Qed.
