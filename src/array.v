@@ -44,7 +44,7 @@ Definition max_array_length_def : nat :=
 Global Instance max_length_spec :
   isInt max_length max_array_length.
 Proof.
-  introIsInt. max_array_length_def. int. eauto.
+  introIsInt. max_array_length_def. lia.
 Qed.
 
 (* [max_array_length] is representable. *)
@@ -54,9 +54,7 @@ Lemma representable_max_array_length :
 Proof.
   rewrite representable_iff_Z. split; [ lia |].
   (* (Z.of_nat max_array_length < wB)%Z *)
-  max_array_length_def. int.
-  (* (φ%uint63 max_length < wB)%Z *)
-  reflexivity.
+  max_array_length_def. lia.
 Qed.
   (* We do not make this lemma an Instance because the more powerful
      lemma [representable_le_max_array_length] follows. *)
@@ -213,8 +211,7 @@ Local Lemma isArray_show_valid `{Inhabited A} (a : array A) (xs : list A) _i :
   (_i <? length a)%uint63 = true →
   valid (to_nat _i) xs.
 Proof.
-  intro. rewrite ltb_spec, isArray_length_spec by eauto. int.
-  eauto with lia. (* [to_nat_lt] and [to_Z_ge_0] are exploited *)
+  intro. rewrite ltb_spec, isArray_length_spec by eauto. lia.
 Qed.
 
 Local Lemma isArray_use_valid `{Inhabited A} (a : array A) (xs : list A) i :
