@@ -772,6 +772,15 @@ Global Instance Wf_igt : WellFounded igt :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* This hint allows [eauto with lia] to kill the proof obligations
+   related to these orderings. After the definition of the ordering
+   is unfolded, [lia] just solves the underlying goal. *)
+
+Global Hint Unfold ilt igt rilt : lia.
+
+(* The following results are unused. I keep them for the record; they
+   are just illustrations of the power of [eauto with lia]. *)
+
 (* By taking advantage of the above well-founded orderings, we are able to
    prove that a loop, counting up or counting down, must terminate. *)
 
@@ -780,17 +789,13 @@ Global Instance Wf_igt : WellFounded igt :=
    asymmetric. When counting down, we use an equality test [_i =? _a].
    When counting up, we use a strict ordering test [_i <? _n]. *)
 
-(* Incrementation is easier to reason about, so let's begin with it. *)
-
 (* Safely incrementing a machine integer, without integer overflow. *)
 
-Global Hint Unfold ilt igt rilt : lia.
-
-Lemma safe_increment _i _j :
+Local Lemma safe_increment _i _j :
   (_i <? _j)%uint63 = true → igt (_i + 1) _i.
 Proof.
-  eauto with lia.
   (* φ _i < φ _j → φ _i < φ (_i + 1) *)
+  eauto with lia.
 Qed.
 
 (* Safely decrementing a machine integer, without integer underflow. *)
@@ -805,8 +810,8 @@ Local Lemma safe_decrement _i _a :
   φ _a ≤ φ _i →
   ilt (_i - 1) _i.
 Proof.
-  eauto with lia.
   (* _i ≠ _a → φ _a ≤ φ _i → φ (_i - 1) < φ _i *)
+  eauto with lia.
 Qed.
 
 (* The following lemma removes the hypothesis [φ _a ≤ φ _i],
@@ -817,20 +822,20 @@ Local Lemma safe_decrement_absolute _i :
   (_i =? 0)%uint63 = false →
   ilt (_i - 1) _i.
 Proof.
-  eauto with lia.
   (* _i ≠ 0%uint63 → φ (_i - 1) < φ _i *)
+  eauto with lia.
 Qed.
 
 (* The following lemma removes the hypothesis [φ _a ≤ φ _i] and accepts
    an arbitrary choice of [_a]. The relative ordering [rilt _a] is used
    instead of the absolute ordering [ilt]. *)
 
-Lemma safe_decrement_relative _i _a :
+Local Lemma safe_decrement_relative _i _a :
   (_i =? _a)%uint63 = false →
   rilt _a (_i - 1) _i.
 Proof.
-  eauto with lia.
   (* _i ≠ _a → φ (_i - 1 - _a) < φ (_i - _a) *)
+  eauto with lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -838,6 +843,13 @@ Qed.
 (* TODO I would like to split this file here *)
 
 Open Scope nat_scope.
+
+Local Obligation Tactic :=
+  simpl in *;
+  Tactics.program_simplify;
+  CoreTactics.equations_simpl;
+  try Tactics.program_solve_wf;
+  eauto 3 with lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -885,9 +897,6 @@ iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
     do s ← body _j s ;
     iter_down_aux (_j - 1)%uint63 s
 }.
-Next Obligation.
-  eauto using safe_decrement_relative.
-Qed.
 
 (* For the record, here is a direct definition of [iter_down_aux], which
    does not use Equations. At extraction time, this definition produces
@@ -992,9 +1001,6 @@ xiter_down_aux _j s with inspect (_j =? _i)%uint63 => {
     let break s x := (s, Break x) in
     body _j s continue break
 }.
-Next Obligation.
-  eauto using safe_decrement_relative.
-Qed.
 
 End XIterDown.
 
@@ -1072,9 +1078,6 @@ uxiter_down_aux _j with inspect (_j =? _i)%uint63 => {
     let break x := Break x in
     body _j continue break
 }.
-Next Obligation.
-  eauto using safe_decrement_relative.
-Qed.
 
 End UXIterDown.
 
@@ -1167,9 +1170,6 @@ iter_up_aux _i s with inspect (_i <? _k)%uint63 => {
 | inspected false :=
     s
 }.
-Next Obligation.
-  eauto using safe_increment.
-Qed.
 
 End IterUp.
 
@@ -1232,9 +1232,6 @@ with inspect (_i <? _k)%uint63 => {
 | inspected false :=
     (s, Continue)
 }.
-Next Obligation.
-  eauto using safe_increment.
-Qed.
 
 End XiterUp.
 
@@ -1298,9 +1295,6 @@ with inspect (_i <? _k)%uint63 => {
 | inspected false :=
     Continue
 }.
-Next Obligation.
-  eauto using safe_increment.
-Qed.
 
 End UXIterUp.
 
