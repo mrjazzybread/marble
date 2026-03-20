@@ -927,6 +927,13 @@ Lemma simplify_app_r_seg {A} i1 j1 i2 j2 (xs ys zs : list A) :
   i1 = i2 → j1 = j2 → ys = zs → ys ++ seg i1 j1 xs = zs ++ seg i2 j2 xs.
 Proof. congruence. Qed.
 
+Lemma simplify_seg_equality {A} i1 j1 i2 j2 (xs ys : list A) :
+  i1 = i2 → j1 = j2 → xs = ys → seg i1 j1 xs = seg i2 j2 ys.
+Proof. congruence. Qed.
+
+Global Ltac simplify_seg_equality :=
+  simple eapply simplify_seg_equality; [ (list; lia) | (list; lia) |].
+
 Global Ltac simplify_list_equality_goal_left :=
   first [
     eapply simplify_app_l
@@ -945,7 +952,10 @@ Global Ltac simplify_list_equality_goal :=
   repeat simplify_list_equality_goal_right;
   repeat rewrite <- app_assoc;
   repeat simplify_list_equality_goal_left;
-  list.
+  list;
+  (* In case a single equality between segments remains,
+     try to simplify it. *)
+  try simplify_seg_equality.
 
 (* [simplify_list_permutation_goal] simplies a goal of the form [xs ≃ ys],
    that is, an obligation to prove that the lists [xs] and [ys] are equal
