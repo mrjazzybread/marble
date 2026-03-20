@@ -820,9 +820,9 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* In-place insertion sort: [isortto_inplace]. *)
+(* In-place insertion sort: [isortto']. *)
 
-(* [isortto_inplace a _srcofs _dstofs _n] sorts the array segment described
+(* [isortto' a _srcofs _dstofs _n] sorts the array segment described
    by [a], [_srcofs], [_n]. The resulting data is written into the array
    segment described by [a], [_dstofs], [_n]. The source and destination
    arrays are the same array. *)
@@ -835,7 +835,7 @@ Qed.
    every array access would become expensive, if a persistent array is used,
    or would fail, if a defensive non-persistent array is used (in OCaml). *)
 
-Definition isortto_inplace a _srcofs _dstofs _n :=
+Definition isortto' a _srcofs _dstofs _n :=
   int.iter_up 0 _n a @@ λ _i a ,
     do xi ← get a (_srcofs + _i)%uint63 ;
     do (a, out) ← (
@@ -863,29 +863,29 @@ Definition isortto_inplace a _srcofs _dstofs _n :=
    other words, when [xi] is read from the current array, the same value
    is read as if [xi] had been read from the initial unmodified array. *)
 
-Definition isortto_inplace_precondition srcofs dstofs n :=
+Definition isortto'_precondition srcofs dstofs n :=
   (srcofs + n ≤ dstofs ∨ dstofs ≤ srcofs)%nat.
 
-Local Ltac destruct_isortto_inplace_precondition :=
-  match goal with h: isortto_inplace_precondition _ _ _ |- _ =>
+Local Ltac destruct_isortto'_precondition :=
+  match goal with h: isortto'_precondition _ _ _ |- _ =>
     destruct h end.
 
-(* The public specification of [isortto_inplace]. *)
+(* The public specification of [isortto']. *)
 
-Lemma wp_isortto_inplace a xs _srcofs srcofs _dstofs dstofs _n n :
+Lemma wp_isortto' a xs _srcofs srcofs _dstofs dstofs _n n :
   isArray a xs →
   isInt _srcofs srcofs →
   isInt _dstofs dstofs →
   isInt _n n →
   valid_seg srcofs (srcofs + n) xs →
   valid_seg dstofs (dstofs + n) xs →
-  isortto_inplace_precondition srcofs dstofs n →
+  isortto'_precondition srcofs dstofs n →
   smt_sorted R' xs →
-  wp (isortto_inplace a _srcofs _dstofs _n) (λ a,
+  wp (isortto' a _srcofs _dstofs _n) (λ a,
     isortto_inv xs srcofs xs dstofs n a
   ).
 Proof.
-  intros. unfold isortto_inplace.
+  intros. unfold isortto'.
   (* The outer loop. *)
   wp_iter_up (isortto_inv xs srcofs xs dstofs).
   (* Initialization of the outer loop. *)
@@ -900,7 +900,7 @@ Proof.
        unmodified array. This is the key reason why the proof goes through
        with almost no change. *)
     assert (KEY: xs' !!! (srcofs + i) = xs !!! (srcofs + i)).
-    { destruct_isortto_inplace_precondition; lookup_through_seg. }
+    { destruct_isortto'_precondition; lookup_through_seg. }
     eapply wp_bind.
     { (* The inner loop. *)
       int.wp_xiter_down (inner_inv xs srcofs xs dstofs i).
