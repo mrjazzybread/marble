@@ -329,6 +329,12 @@ Qed.
 
 (* Subtraction. *)
 
+(* The side condition [j ≤ i] is unfortunately needed, not because machine
+   arithmetic requires it, but because the subtraction [i - j] in [nat]
+   requires it. This can be painful, and suggests that one would sometimes
+   prefer to work with integers in [Z] at the logical level. See the proof
+   of [array.blit] for a situation where we work around this problem. *)
+
 Global Instance sub_compat _i i _j j :
   isInt _i i →
   isInt _j j →
