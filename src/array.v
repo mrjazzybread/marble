@@ -849,6 +849,14 @@ Definition blit a _i b _j _n :=
   do b ← set b (_j + (_k - _i))%uint63 x ;
   b.
 
+(* The postcondition. *)
+
+Notation blit_post xs i ys j n := (
+  λ b,
+    isArray b
+      (initial_seg j ys ++ seg i (i + n) xs ++ final_seg (j + n) ys)
+).
+
 (* The public specification of [blit]. *)
 
 Lemma wp_blit a xs _i i b ys _j j _n n :
@@ -859,14 +867,10 @@ Lemma wp_blit a xs _i i b ys _j j _n n :
   isInt _n n →
   valid_seg i (i + n) xs →
   valid_seg j (j + n) ys →
-  wp (blit a _i b _j _n) (λ b, isArray b
-    (initial_seg j ys ++ seg i (i + n) xs ++ final_seg (j + n) ys)
-  ).
+  wp (blit a _i b _j _n) (blit_post xs i ys j n).
 Proof.
   intros. unfold blit.
-  int.wp_iter_up (λ k b, isArray b
-    (initial_seg j ys ++ seg i k xs ++ final_seg (j + (k - i)) ys)
-  ).
+  int.wp_iter_up (λ k, blit_post xs i ys j (k - i)).
   (* Preservation. *)
   { clear dependent b.
     wp_up_intros _k k b.
