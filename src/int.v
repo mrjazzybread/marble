@@ -39,12 +39,6 @@ Qed.
 
 Hint Resolve to_nat_lt : lia.
 
-Global Hint Rewrite
-  Nat.min_l Nat.min_r
-  Nat.max_l Nat.max_r
-  using lia
-: nat.
-
 (* -------------------------------------------------------------------------- *)
 
 (* [unsigned z] means that [z] lies in the interval of the unsigned
@@ -932,29 +926,9 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Arithmetic lemmas of general interest (in nat). *)
+(* TODO I would like to split this file here *)
 
 Open Scope nat_scope.
-
-Global Hint Rewrite
-  Nat.sub_add
-  using lia
-: nat.
-
-(* -------------------------------------------------------------------------- *)
-
-(* This lemma can help prove that a loop invariant can be extended. *)
-
-(* Unfortunately, [eauto] refuses to use it as a hint, and I am also
-   unable to use it via [Hint Extern]. *)
-
-Lemma one_step_up {P : nat → Prop} i :
-  (∀ j, j < i → P j) →
-  P i →
-  ∀ j, j < i + 1 → P j.
-Proof.
-  intros. case (decide (j = i)); intros; try subst; eauto with lia.
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1061,6 +1035,8 @@ Definition iter_down {S} _k _i (s : S) body :=
   else iter_down_aux _i body (_k - 1) s.
 
 (* A specification of [iter_down]. *)
+
+(* TODO exchange _k and _i in the parameters of [iter_down]? *)
 
 Lemma wp_iter_down {S} (body : int → S → S) :
   ∀IntR _i i ,

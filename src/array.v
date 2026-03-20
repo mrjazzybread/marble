@@ -693,10 +693,10 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
   isInt _n n →
   wp (list_length_aux _n xs) (λ _i, isInt _i (n + len xs)).
 Proof.
-  induction xs as [| x xs ]; simpl; intros.
+  induction xs as [| x xs ]; simpl list_length_aux; intros.
   { wp_ret. list. eauto. }
   { wp_op IHxs _n'.
-    eauto. }
+    list. assumption. }
 Qed.
 
 (* The public specification of [list_length]. *)
@@ -838,16 +838,17 @@ Implicit Types xs ys : list A.
 
 (* The code. *)
 
-(* Please note: to obtain the desired performance, the arrays [a] and
-   [b] must be two *independent* arrays; that is, they should not be
-   two persistent arrays that are backed by the same underlying
-   physical array. *)
+(* Here: to obtain the desired performance, the arrays [a] and [b]
+   must be two *independent* arrays; that is, they should not be two
+   persistent arrays that are backed by the same underlying physical
+   array. To move data within a single array, see [blit']. *)
 
 Definition blit a _i b _j _n :=
   int.iter_up _i (_i + _n)%uint63 b @@ λ _k b,
   do x ← get a _k ;
   do b ← set b (_j + (_k - _i))%uint63 x ;
   b.
+  (* TODO try computing [_j - _i] outside of the loop *)
 
 (* The postcondition. *)
 
@@ -877,6 +878,73 @@ Proof.
     wp_get x. subst x.
     wp_set.
     wp_ret. isArray. }
+Qed.
+
+(* Moving data within an array: [blit']. *)
+
+(* The source and destination segments may overlap. *)
+
+Definition blit' a _i _j _n :=
+  if (_j =? _i)%uint63 then
+    a
+  else if (_j <=? _i)%uint63 then
+    int.iter_up _i (_i + _n)%uint63 a @@ λ _k a,
+    do x ← get a _k ;
+    do a ← set a (_j + (_k - _i))%uint63 x ;
+    a
+  else
+    int.iter_down (_i + _n)%uint63 _i a @@ λ _k a,
+    do x ← get a _k ;
+    do a ← set a (_j + (_k - _i))%uint63 x ;
+    a.
+
+(* The public specification of [blit']. *)
+
+(* TODO
+Lemma ab_minus_ca (a b c : nat) :
+  (a + b) - c - a = b - c.
+Proof. lia. Qed.
+
+Hint Rewrite
+  ab_minus_ca
+: nat list.
+
+Hint Rewrite
+  sub_cancel_l
+  add_sub_cancel
+  using (list; lia) : nat list.
+ *)
+
+Lemma wp_blit' a xs _i i _j j _n n :
+  isArray a xs →
+  isInt _i i →
+  isInt _j j →
+  isInt _n n →
+  valid_seg i (i + n) xs →
+  valid_seg j (j + n) xs →
+  wp (blit' a _i _j _n) (blit_post xs i xs j n).
+Proof.
+  intros. unfold blit'.
+  wp_if.
+  (* Case [j = i]. *)
+  { subst j. wp_ret. isArray. }
+  wp_if.
+  (* Case [j ≤ i]. *)
+  { int.wp_iter_up (λ k, blit_post xs i xs j (k - i)).
+    (* Preservation. *)
+    { clear dependent a.
+      wp_up_intros _k k a.
+      wp_get x. subst x.
+      wp_set.
+      wp_ret. isArray. } }
+  (* Case [i < j]. *)
+  { int.wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
+    (* Preservation. *)
+    { clear dependent a.
+      wp_down_intros _k k a. (* TODO does not quite work *)
+      wp_get x. subst x.
+      wp_set.
+      wp_ret. isArray. } }
 Qed.
 
 End Blit.

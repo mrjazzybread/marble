@@ -672,7 +672,8 @@ Local Ltac intro_dst_inv :=
 Local Ltac elim_dst_inv :=
   match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
     destruct h as (Htransported & Hpunched & Habove);
-    cbv zeta in Htransported, Habove
+    cbv zeta in Htransported, Habove;
+    list in Htransported; list in Hpunched
   end.
 
 (* This is the invariant of the inner loop. *)
@@ -710,7 +711,7 @@ Local Ltac intro_inner_inv :=
 
 Local Ltac elim_inner_inv dst' :=
   match goal with h: inner_inv _ _ _ _ _ _ _ _ |- _ =>
-    destruct h as (dst' & h); cbv zeta in h; unpack in h
+    destruct h as (dst' & h); cbv zeta in h; list in h; unpack in h
   end.
 
 (* The public specification of [isortto]. *)
@@ -744,7 +745,7 @@ Proof.
       int.wp_xiter_down (inner_inv src srcofs dst dstofs i).
       (* Initialization of the inner loop. *)
       { intro_inner_inv; eauto using seg_equality_implication with lia.
-        intro_dst_inv; list; rewrite ?(seg_is_singleton src) by lia;
+        intro_dst_inv; list; recognize_singleton_segments;
         smt_reasoning.
         + split_seg_singleton_r src. use_known_permutation. list. eauto. }
       (* The body of the inner loop. *)
@@ -762,7 +763,7 @@ Proof.
         intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
         { list. use_known_permutation.
-          rewrite (seg_is_singleton src) by lia.
+          recognize_singleton_segments.
           split_seg_singleton_r dst''.
           recognize_named_lookups.
           simplify_list_permutation_goal.
@@ -778,7 +779,7 @@ Proof.
              segment, whose rightmost element is [xi]. This is the only
              point where stability creates an extra proof obligation. *)
           elim_dst_inv.
-          assert (Hseg: xj ∈ seg srcofs (srcofs + (i + 1)) src).
+          assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
           { use_known_permutation. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
           destruct Hseg as (j' & ? & ?).
@@ -795,9 +796,11 @@ Proof.
       { wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize_named_lookups.
+        { use_known_permutation.
+          recognize_singleton_segments.
+          recognize_named_lookups.
           rewrite insert_seg by (list; lia); autorewrite with nat.
-          eauto. }
+          reflexivity. }
         (* The destination segment is sorted. *)
         { smt_reasoning.
           + eapply transitivity; [| eassumption ]. eauto with lia. }
@@ -807,8 +810,9 @@ Proof.
         wp_set.
         intro_isortto_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize_named_lookups.
-          list. eauto. }
+        { use_known_permutation.
+          recognize_singleton_segments. recognize_named_lookups.
+          list. reflexivity. }
       }
     }
   }
@@ -902,7 +906,7 @@ Proof.
       int.wp_xiter_down (inner_inv xs srcofs xs dstofs i).
       (* Initialization of the inner loop. *)
       { intro_inner_inv; eauto using seg_equality_implication with lia.
-        intro_dst_inv; list; rewrite ?(seg_is_singleton src) by lia;
+        intro_dst_inv; list; recognize_singleton_segments;
         smt_reasoning.
         + split_seg_singleton_r xs. use_known_permutation. list. eauto. }
       (* The body of the inner loop. *)
@@ -920,7 +924,7 @@ Proof.
         intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
         { list. use_known_permutation.
-          rewrite (seg_is_singleton xs) by lia.
+          recognize_singleton_segments.
           split_seg_singleton_r xs''.
           recognize_named_lookups.
           simplify_list_permutation_goal.
@@ -938,7 +942,7 @@ Proof.
              segment, whose rightmost element is [xi]. This is the only
              point where stability creates an extra proof obligation. *)
           elim_dst_inv.
-          assert (Hseg: xj ∈ seg srcofs (srcofs + (i + 1)) xs).
+          assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) xs).
           { use_known_permutation. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
           destruct Hseg as (j' & ? & ?).
@@ -955,9 +959,10 @@ Proof.
       { wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize_named_lookups.
+        { use_known_permutation.
+          recognize_singleton_segments. recognize_named_lookups.
           rewrite insert_seg by (list; lia); autorewrite with nat.
-          eauto. }
+          reflexivity. }
         (* The destination segment is sorted. [KEY] is used here. *)
         { smt_reasoning; rewrite KEY.
           + smt_reasoning.
@@ -968,8 +973,9 @@ Proof.
         wp_set.
         intro_isortto_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize_named_lookups.
-          list. eauto. }
+        { use_known_permutation.
+          recognize_singleton_segments. recognize_named_lookups.
+          list. reflexivity. }
         (* The destination segment is sorted. [KEY] is used here. *)
         { smt_reasoning. rewrite KEY. smt_reasoning. }
       }

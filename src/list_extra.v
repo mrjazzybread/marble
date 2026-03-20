@@ -4,6 +4,169 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+(* -------------------------------------------------------------------------- *)
+
+(* The tactics [list] and [list in h] perform simplification
+   (via rewriting) in the goal or in a hypothesis. *)
+
+Global Ltac list :=
+  autorewrite with list.
+
+Global Tactic Notation "list" "in" hyp(h) :=
+  autorewrite with list in h.
+
+Global Tactic Notation "list" "in" "*" :=
+  autorewrite with list in *.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A number of arithmetic simplification lemmas can be very useful
+   while simplifying expressions that involve lists. *)
+
+(* We add these lemmas to two hint databases, [nat] and [list]. The
+   database [nat] contains just facts about the natural integers; the
+   database [list] contains facts about natural integers and lists. *)
+
+(* The following lemmas do not have side conditions. *)
+
+Global Hint Rewrite
+  Nat.add_0_l           (* 0 + n = n *)
+  Nat.add_0_r           (* n + 0 = n *)
+  Nat.sub_0_l           (* 0 - n = 0 *)
+  Nat.sub_0_r           (* n - 0 = n *)
+  Nat.sub_diag          (* n - n = 0 *)
+  Nat.add_simpl_l       (* n + m - n = m *)
+  Nat.add_simpl_r       (* n + m - m = n *)
+  Nat.add_add_simpl_l_l (* n + m - (n + p) = m - p *)
+: list nat.
+
+Global Hint Rewrite
+  Nat.add_assoc
+: list nat.
+
+Lemma ab_minus_cb a b c : a + b - c - b = a - c.
+Proof. lia. Qed.
+Lemma ab_minus_ca a b c : a + b - c - a = b - c.
+Proof. lia. Qed.
+
+Lemma abc_minus_a a b c : a + b + c - a = b + c.
+Proof. lia. Qed.
+Lemma abc_minus_b a b c : a + b + c - b = a + c.
+Proof. lia. Qed.
+
+Global Hint Rewrite
+  ab_minus_cb
+  ab_minus_ca
+  abc_minus_a
+  abc_minus_b
+: list nat.
+
+(* To solve arithmetic side conditions, we use the tactic [list; lia],
+   which first simplifies applications of the [length] function, then
+   performs arithmetic reasoning using [lia]. *)
+
+Global Hint Rewrite
+  <- Nat.le_add_sub        (* n ≤ m → n + (m - n) = m *)
+  using (list; lia)
+: nat list.
+
+Global Hint Rewrite
+  Nat.sub_add              (* n ≤ m → m - n + n = m *)
+  Nat.min_l                (* n ≤ m → n `min` m = n *)
+  Nat.min_r                (* m ≤ n → n `min` m = m *)
+  Nat.max_l                (* m ≤ n → n `max` m = n *)
+  Nat.max_r                (* n ≤ m → n `max` m = m *)
+  using (list; lia)
+: nat list.
+
+Lemma ab_plus_cmb a b c : b ≤ c → a + b + (c - b) = a + c.
+Proof. lia. Qed.
+Lemma ab_plus_cma a b c : a ≤ c → a + b + (c - a) = b + c.
+Proof. lia. Qed.
+
+Global Hint Rewrite
+  ab_plus_cmb
+  ab_plus_cma
+  using (list; lia)
+: nat list.
+
+(* More custom arithmetic lemmas. *)
+
+(* These lemmas require more thought because they are not clearly
+   size-decreasing. Also, some of them compete with the previous
+   lemmas. *)
+
+Lemma sub_r_add n a b :
+  n - (a + b) = n - a - b.
+Proof. lia. Qed.
+
+Lemma sub_r_sub n a b :
+  b ≤ a →
+  n - (a - b) = n + b - a.
+Proof. lia. Qed.
+
+Lemma exch_sub_add n a b :
+  a ≤ n →
+  n - a + b = n + b - a.
+Proof. lia. Qed.
+
+Lemma add_sub_sub_l i j k :
+  j ≤ i ≤ k →
+  k + (i - j) - i = k - j.
+Proof. lia. Qed.
+
+Global Hint Rewrite
+  sub_r_add
+  sub_r_sub
+  exch_sub_add
+  add_sub_sub_l
+  using (list; lia)
+: nat list.
+
+Goal ∀ i j k,
+  j ≤ i ≤ k →
+  k - j - (k - i) = i - j.
+Proof. intros. list. eauto. Qed.
+
+(* We do NOT add [sub_diag'] to the rewrite hint database, because it can
+   change an informative equation [x - y = 0] into the uniformative equation
+   [0 = 0]. (The equation destroys itself, so to speak.) *)
+
+Lemma sub_diag' (x y : nat) :
+  x ≤ y → x - y = 0.
+Proof. lia. Qed.
+
+(* We do NOT add [succ_is_plus] to the rewrite hint database because
+   it changes 1 to 0 + 1, which is size-increasing and causes a loop. *)
+
+Lemma succ_is_plus n : S n = n + 1.
+Proof. lia. Qed.
+
+Lemma succ_is_plus' {A} (xs : list A) : S (length xs) = 1 + length xs.
+Proof. lia. Qed.
+
+Global Hint Rewrite
+  @succ_is_plus'
+: nat list.
+
+(* -------------------------------------------------------------------------- *)
+
+(* This lemma can help prove that a loop invariant can be extended. *)
+
+(* Unfortunately, [eauto] refuses to use it as a hint, and I am also
+   unable to use it via [Hint Extern]. *)
+
+Lemma one_step_up {P : nat → Prop} i :
+  (∀ j, j < i → P j) →
+  P i →
+  ∀ j, j < i + 1 → P j.
+Proof.
+  intros. case (decide (j = i)); intros; try subst; eauto with lia.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+
 (* currently unused *)
 Lemma list_insert_id'' `{Inhabited A} (xs : list A) (i : nat) (x : A) :
   i < length xs →
@@ -100,72 +263,6 @@ Proof.
   intros. rewrite insert_replicate_lt by eauto.
   rewrite app_nil_l. eauto.
 Qed.
-
-(* The tactics [list] and [list in h] perform simplification
-   (via rewriting) in the goal or in a hypothesis. *)
-
-Global Ltac list :=
-  autorewrite with list.
-
-Global Tactic Notation "list" "in" hyp(h) :=
-  autorewrite with list in h.
-
-Global Tactic Notation "list" "in" "*" :=
-  autorewrite with list in *.
-
-(* A number of arithmetic simplification lemmas can be very useful
-   while simplifying expressions that involve lists. *)
-
-Lemma sub_succ (n h : nat) :
-  n - (h + 1) = n - h - 1.
-Proof. lia. Qed.
-
-Global Hint Rewrite
-  <- Nat.add_assoc
-: list nat.
-
-Global Hint Rewrite
-  Nat.add_0_l
-  Nat.add_0_r
-  Nat.sub_0_l
-  Nat.sub_0_r
-  Nat.sub_diag
-  Nat.add_simpl_l Nat.add_simpl_r
-  sub_succ
-: list nat.
-
-Global Hint Rewrite
-  <- Nat.le_add_sub
-  using (list; lia)
-: list nat.
-
-(* Do NOT add [sub_diag'] to the rewrite hint database, because it can
-   change an informative equation [x - y = 0] into the uniformative
-   equation [0 = 0]. (The equation destroys itself, so to speak.) *)
-
-Lemma sub_diag' (x y : nat) :
-  x ≤ y → x - y = 0.
-Proof. lia. Qed.
-
-Lemma simpl_sub_add i k delta :
-  i ≤ k →
-  (k - i) + delta = (k + delta) - i.
-Proof. lia. Qed.
-
-Global Hint Rewrite
-  Nat.min_l Nat.min_r
-  Nat.max_l Nat.max_r
-  (* sub_diag' *)
-  simpl_sub_add
-  using (list; lia)
-: list nat.
-
-Lemma abc_minus_c a b c : a + (b + c) - c = a + b.
-Proof. lia. Qed.
-Lemma ab_minus_cb a b c : a + b - c - b = a - c.
-Proof. lia. Qed.
-
-Hint Rewrite abc_minus_c ab_minus_cb : list nat.
 
 Global Hint Rewrite
   @app_nil_l @app_nil_r
@@ -526,19 +623,19 @@ Qed.
 
 (* A singleton segment is a singleton. *)
 
+Lemma singleton_is_seg `{Inhabited A} i (xs : list A) :
+  valid i xs →
+  {[xs !!! i]} = seg i (i+1) xs.
+Proof.
+  intros. listx_total k. assert (k = 0) by lia. subst. list. eauto.
+Qed.
+
 Lemma seg_is_singleton `{Inhabited A} (xs : list A) i j :
   valid i xs →
   i + 1 = j →
   seg i j xs = {[xs !!! i]}.
 Proof.
-  intros. subst. listx_total k. assert (k = 0) by lia. subst. list. eauto.
-Qed.
-
-Lemma singleton_is_seg `{Inhabited A} i (xs : list A) :
-  valid i xs →
-  {[xs !!! i]} = seg i (i+1) xs.
-Proof.
-  intros. rewrite seg_is_singleton by eauto. eauto.
+  intros. rewrite singleton_is_seg by eauto. subst. eauto.
 Qed.
 
 (* Splitting off a singleton. *)
@@ -587,9 +684,15 @@ Qed.
 (* As a poor man's approach, see [simplify_list_equality_goal] further on. *)
 
 (* It is unclear whether we want to transform singleton segments into
-   singletons, or vice-versa. Our current choice is to transform
-   singletons into singleton segments, in the hope of enabling fusions
-   between segments. *)
+   singletons, or vice-versa. Our current choice in the tactic [list] is to
+   transform singletons into singleton segments, in the hope of enabling
+   fusions between segments. We offer [recognize_singleton_segments] as
+   an alternative tactic. *)
+
+Global Ltac recognize_singleton_segments :=
+  repeat match goal with |- context[seg ?i ?j ?xs] =>
+    erewrite (seg_is_singleton xs) by lia
+  end.
 
 Global Hint Rewrite
   @singleton_is_seg
@@ -655,10 +758,11 @@ Global Hint Rewrite
 
 (* Updating a segment. *)
 
-Lemma insert_seg_first {A} i j x (xs : list A) :
+Lemma insert_seg_first {A} i j k x (xs : list A) :
   valid_seg i j xs →
   i < j →
-  <[0 := x]> (seg i j xs) =
+  k = 0 →
+  <[k := x]> (seg i j xs) =
   {[x]} ++ seg (i+1) j xs.
 Proof.
   intros. listx o. lookup_app_split.
@@ -686,7 +790,7 @@ Qed.
 Global Hint Rewrite
   @insert_seg_first
   @insert_seg_last
-  (* TODO @insert_seg *)
+  (* TODO @insert_seg? *)
   using (list; lia)
 : list.
 
