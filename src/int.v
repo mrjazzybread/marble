@@ -784,13 +784,13 @@ Global Instance Wf_igt : WellFounded igt :=
 
 (* Safely incrementing a machine integer, without integer overflow. *)
 
+Global Hint Unfold ilt igt rilt : lia.
+
 Lemma safe_increment _i _j :
-  (_i <? _j)%uint63 = true →
-  igt (_i + 1) _i.
+  (_i <? _j)%uint63 = true → igt (_i + 1) _i.
 Proof.
-  rewrite ltb_spec. unfold igt.
+  eauto with lia.
   (* φ _i < φ _j → φ _i < φ (_i + 1) *)
-  lia.
 Qed.
 
 (* Safely decrementing a machine integer, without integer underflow. *)
@@ -805,9 +805,8 @@ Local Lemma safe_decrement _i _a :
   φ _a ≤ φ _i →
   ilt (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold ilt.
+  eauto with lia.
   (* _i ≠ _a → φ _a ≤ φ _i → φ (_i - 1) < φ _i *)
-  lia.
 Qed.
 
 (* The following lemma removes the hypothesis [φ _a ≤ φ _i],
@@ -818,9 +817,8 @@ Local Lemma safe_decrement_absolute _i :
   (_i =? 0)%uint63 = false →
   ilt (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold ilt.
+  eauto with lia.
   (* _i ≠ 0%uint63 → φ (_i - 1) < φ _i *)
-  lia.
 Qed.
 
 (* The following lemma removes the hypothesis [φ _a ≤ φ _i] and accepts
@@ -831,9 +829,8 @@ Lemma safe_decrement_relative _i _a :
   (_i =? _a)%uint63 = false →
   rilt _a (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold rilt, ilt.
+  eauto with lia.
   (* _i ≠ _a → φ (_i - 1 - _a) < φ (_i - _a) *)
-  lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
