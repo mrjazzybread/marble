@@ -785,67 +785,55 @@ Global Instance Wf_igt : WellFounded igt :=
 (* Safely incrementing a machine integer, without integer overflow. *)
 
 Lemma safe_increment _i _j :
-  φ _i < φ _j →
-  (φ _i < φ (_i + 1))%Z.
-Proof. lia. Qed.
-
-Lemma safe_increment' _i _j :
   (_i <? _j)%uint63 = true →
   igt (_i + 1) _i.
 Proof.
-  rewrite ltb_spec. unfold igt. lia.
+  rewrite ltb_spec. unfold igt.
+  (* φ _i < φ _j → φ _i < φ (_i + 1) *)
+  lia.
 Qed.
 
 (* Safely decrementing a machine integer, without integer underflow. *)
 
-(* The following two lemmas are correct but inconvenient, as they require
-   the hypothesis [⋅φ _a ≤ φ _i], which should not be needed, because
-   (thanks to underflow!) termination is guaranteed even without it.
-   We keep these lemmas for the record, but they are unused. *)
+(* The following lemma is correct but inconvenient, as it requires
+   [φ _a ≤ φ _i], which should not be needed, because (thanks to
+   underflow!) termination is guaranteed even without it. We keep
+   this lemma for the record, but it is unused. *)
 
-Local Lemma safe_decrement _a _i :
-  φ _a ≤ φ _i →
-  _i ≠ _a →
-  (φ (_i - 1) < φ _i)%Z.
-Proof. lia. Qed.
-
-Local Lemma safe_decrement' _i _a :
+Local Lemma safe_decrement _i _a :
   (_i =? _a)%uint63 = false →
   φ _a ≤ φ _i →
   ilt (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold ilt. lia.
+  rewrite bool_neg, eqb_spec. unfold ilt.
+  (* _i ≠ _a → φ _a ≤ φ _i → φ (_i - 1) < φ _i *)
+  lia.
 Qed.
 
-(* The following two lemmas remove the hypothesis [φ _a ≤ φ _i],
-   but they are specialized to the case where [_a] is 0. *)
+(* The following lemma removes the hypothesis [φ _a ≤ φ _i],
+   but it is specialized to the case where [_a] is 0.
+   It is also unused. *)
 
 Local Lemma safe_decrement_absolute _i :
-  0%Z ≠ φ _i →
-  (φ (_i - 1) < φ _i)%Z.
-Proof. lia. Qed.
-
-Local Lemma safe_decrement_absolute' _i :
   (_i =? 0)%uint63 = false →
   ilt (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold ilt. intros. lia.
+  rewrite bool_neg, eqb_spec. unfold ilt.
+  (* _i ≠ 0%uint63 → φ (_i - 1) < φ _i *)
+  lia.
 Qed.
 
-(* The following two lemmas remove the hypothesis [φ _a ≤ φ _i] and they
-   accept an arbitrary choice of [_a]. The relative ordering [rilt _a] is
-   used instead of the absolute ordering [ilt]. *)
+(* The following lemma removes the hypothesis [φ _a ≤ φ _i] and accepts
+   an arbitrary choice of [_a]. The relative ordering [rilt _a] is used
+   instead of the absolute ordering [ilt]. *)
 
-Lemma safe_decrement_relative _a _i :
-  _i ≠ _a →
-  (φ (_i - _a - 1) < φ (_i - _a))%Z.
-Proof. lia. Qed.
-
-Lemma safe_decrement_relative' _i _a :
+Lemma safe_decrement_relative _i _a :
   (_i =? _a)%uint63 = false →
   rilt _a (_i - 1) _i.
 Proof.
-  rewrite bool_neg, eqb_spec. unfold rilt, ilt. lia.
+  rewrite bool_neg, eqb_spec. unfold rilt, ilt.
+  (* _i ≠ _a → φ (_i - 1 - _a) < φ (_i - _a) *)
+  lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -901,7 +889,7 @@ iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
     iter_down_aux (_j - 1)%uint63 s
 }.
 Next Obligation.
-  eauto using safe_decrement_relative'.
+  eauto using safe_decrement_relative.
 Qed.
 
 (* For the record, here is a direct definition of [iter_down_aux], which
@@ -921,7 +909,7 @@ Proof.
       do s ← body _j s ;
       self (_j - 1)%uint63 _ s
     ).
-    eauto using safe_decrement_relative'.
+    eauto using safe_decrement_relative.
 Defined.
 
 End IterDown.
@@ -1008,7 +996,7 @@ xiter_down_aux _j s with inspect (_j =? _i)%uint63 => {
     body _j s continue break
 }.
 Next Obligation.
-  eauto using safe_decrement_relative'.
+  eauto using safe_decrement_relative.
 Qed.
 
 End XIterDown.
@@ -1088,7 +1076,7 @@ uxiter_down_aux _j with inspect (_j =? _i)%uint63 => {
     body _j continue break
 }.
 Next Obligation.
-  eauto using safe_decrement_relative'.
+  eauto using safe_decrement_relative.
 Qed.
 
 End UXIterDown.
@@ -1183,7 +1171,7 @@ iter_up_aux _i s with inspect (_i <? _k)%uint63 => {
     s
 }.
 Next Obligation.
-  eauto using safe_increment'.
+  eauto using safe_increment.
 Qed.
 
 End IterUp.
@@ -1248,7 +1236,7 @@ with inspect (_i <? _k)%uint63 => {
     (s, Continue)
 }.
 Next Obligation.
-  eauto using safe_increment'.
+  eauto using safe_increment.
 Qed.
 
 End XiterUp.
@@ -1314,7 +1302,7 @@ with inspect (_i <? _k)%uint63 => {
     Continue
 }.
 Next Obligation.
-  eauto using safe_increment'.
+  eauto using safe_increment.
 Qed.
 
 End UXIterUp.
