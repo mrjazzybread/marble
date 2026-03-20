@@ -19,9 +19,6 @@
   + `init` on lists and arrays
   + `map`
   + `compare`
-  + `isortto`: deal with the cases where `src` and `dst` are the same array
-     - either the source and destination segments coincide,
-     - or they are disjoint
   + `merge`
   + `sort`
 
