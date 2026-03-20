@@ -932,8 +932,11 @@ Qed.
 End Blit.
 
 Global Ltac wp_blit :=
-  match goal with |- context[blit _ _ ?b _ _] =>
-    wp_op_overwrite wp_blit b
+  match goal with
+  | |- context[blit _ _ ?b _ _] =>
+      wp_op_overwrite wp_blit b
+  | |- context[blit' ?a _ _ _] =>
+      wp_op_overwrite wp_blit a
   end.
 
 (* -------------------------------------------------------------------------- *)
