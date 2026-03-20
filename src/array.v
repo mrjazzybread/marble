@@ -902,14 +902,16 @@ Definition blit' a _i _j _n :=
   if (_j =? _i)%uint63 then
     a
   else if (_j <=? _i)%uint63 then
+    do _delta ← (_j - _i)%uint63 ;
     int.iter_up _i (_i + _n)%uint63 a @@ λ _k a,
     do x ← get a _k ;
-    do a ← set a (_j + (_k - _i))%uint63 x ;
+    do a ← set a (_k + _delta)%uint63 x ;
     a
   else
+    do _delta ← (_j - _i)%uint63 ;
     int.iter_down (_i + _n)%uint63 _i a @@ λ _k a,
     do x ← get a _k ;
-    do a ← set a (_j + (_k - _i))%uint63 x ;
+    do a ← set a (_k + _delta)%uint63 x ;
     a.
 
 (* The public specification of [blit']. *)
@@ -929,15 +931,17 @@ Proof.
   { subst j. wp_ret. isArray. }
   wp_if.
   (* Case [j ≤ i]. *)
-  { int.wp_iter_up (λ k, blit_post xs i xs j (k - i)).
+  { wp_bind_eq.
+    int.wp_iter_up (λ k, blit_post xs i xs j (k - i)).
     (* Preservation. *)
     { clear dependent a.
       wp_up_intros k a. intros _k ?.
       wp_get x. subst x.
-      wp_set.
+      rewrite exchange. wp_set.
       wp_ret. isArray. } }
   (* Case [i < j]. *)
-  { int.wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
+  { wp_bind_eq.
+    int.wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
     (* Preservation. *)
     { clear dependent a.
       wp_down_intros k a. intros _k ?.
