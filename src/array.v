@@ -493,15 +493,12 @@ Proof.
     { replace (o - j - 1) with (o - (j + 1)) by lia.
       eauto with lia. } }
   (* Completion. *)
-  { (* TODO avoid this *)
-    match goal with h: len ?s = _ |- _ =>
-    rename s into xs; rename h into Hxs end.
-    introIsArray; try rewrite Hxs.
-    + introIsInt. subst n. int. eauto.
-    + eauto.
-    + intros o ?.
-      replace o with (o - 0) at 2 by lia.
-      eauto with lia. }
+  { match goal with h: len ?s = _ |- _ =>
+      rename s into xs; rename h into Hxs end.
+    introIsArray; try rewrite Hxs; try assumption.
+    intros o ?.
+    replace o with (o - 0) at 2 by lia. (* painful *)
+    eauto with lia. }
 Qed.
 
 (* [isArray a xs] is equivalent to [to_list a = xs]. *)
