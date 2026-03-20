@@ -900,21 +900,6 @@ Definition blit' a _i _j _n :=
 
 (* The public specification of [blit']. *)
 
-(* TODO
-Lemma ab_minus_ca (a b c : nat) :
-  (a + b) - c - a = b - c.
-Proof. lia. Qed.
-
-Hint Rewrite
-  ab_minus_ca
-: nat list.
-
-Hint Rewrite
-  sub_cancel_l
-  add_sub_cancel
-  using (list; lia) : nat list.
- *)
-
 Lemma wp_blit' a xs _i i _j j _n n :
   isArray a xs →
   isInt _i i →
