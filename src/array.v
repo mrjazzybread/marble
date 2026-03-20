@@ -433,7 +433,7 @@ Proof.
   (* The loop invariant. *)
   int.wp_iter_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
-  { wp_down_intros _j j xs'.
+  { wp_down_intros j xs'. intros _j ?.
     wp_get x.
     wp_ret. subst.
     rewrite cons_is_append. list. eauto. }
@@ -482,7 +482,7 @@ Proof.
     ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
   ).
   (* Preservation. *)
-  { wp_down_intros _j j ys.
+  { wp_down_intros j ys. intros _j ?.
     liftIsIntAndClear.
     wp_bind_eq.
     wp_ret.
@@ -491,7 +491,7 @@ Proof.
     intros o ?.
     destruct (decide (j = o)); [ subst o |]; list.
     { eauto. }
-    { replace (o - j - 1) with (o - (j + 1)) by lia.
+    { replace (o - j - 1) with (o - (j + 1)) by lia. (* painful *)
       eauto with lia. } }
   (* Completion. *)
   { match goal with h: len ?s = _ |- _ =>
@@ -879,7 +879,7 @@ Proof.
   int.wp_iter_up (λ k, blit_post xs i ys j (k - i)).
   (* Preservation. *)
   { clear dependent b.
-    wp_up_intros _k k b.
+    wp_up_intros k b. intros _k ?.
     wp_get x. subst x.
     (* Argue that the use of unsigned arithmetic in the computation of
        [_delta] does not cause any problem. *)
@@ -927,7 +927,7 @@ Proof.
   { int.wp_iter_up (λ k, blit_post xs i xs j (k - i)).
     (* Preservation. *)
     { clear dependent a.
-      wp_up_intros _k k a.
+      wp_up_intros k a. intros _k ?.
       wp_get x. subst x.
       wp_set.
       wp_ret. isArray. } }
@@ -935,7 +935,7 @@ Proof.
   { int.wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
     (* Preservation. *)
     { clear dependent a.
-      wp_down_intros _k k a. (* TODO does not quite work *)
+      wp_down_intros k a. intros _k ?.
       wp_get x. subst x.
       wp_set.
       wp_ret. isArray. } }
@@ -1086,7 +1086,7 @@ Proof.
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
   (* Preservation. *)
-  { clear dependent a. wp_up_intros _k k a.
+  { clear dependent a. wp_up_intros k a. intros _k ?.
     wp_set.
     wp_ret. isArray. }
 Qed.
@@ -1457,7 +1457,7 @@ Proof.
   int.wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_up_intros _j j xs'.
+  { wp_up_intros j xs'. intros _j ?.
     wp_get x.
     wp_op Hstep s'.
     wp_ret. eauto. }

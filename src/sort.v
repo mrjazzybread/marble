@@ -735,7 +735,7 @@ Proof.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. smt_reasoning. }
   (* The body of the outer loop. *)
-  { clear dependent _dst. wp_up_intros _i i _dst.
+  { clear dependent _dst. wp_up_intros i _dst. intros _i ?.
     elim_isortto_inv dst'.
     (* [dst'] is the content of the destination array upon entry into
        the body of the outer loop. *)
@@ -891,7 +891,7 @@ Proof.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. smt_reasoning. }
   (* The body of the outer loop. *)
-  { clear dependent a. wp_up_intros _i i a.
+  { clear dependent a. wp_up_intros i a. intros _i ?.
     elim_isortto_inv xs'.
     (* [xs'] is the content of the array upon entry into the body
        of the outer loop. *)

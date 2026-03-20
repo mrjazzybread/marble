@@ -493,16 +493,14 @@ Ltac wp_loop_intros j0 j1 s :=
 
 (* TODO improve / comment *)
 
-Ltac wp_down_intros _j j s :=
-  let j0 := fresh in
-  wp_loop_intros j0 j s;
-  intros _j ? ? ?;
-  try subst j0.
+Ltac wp_up_intros j s :=
+  let j1 := fresh "j1" in
+  wp_loop_intros j j1 s;
+  intros -> ?.
 
 (* TODO improve / comment *)
 
-Ltac wp_up_intros _j j s :=
-  let j1 := fresh in
-  wp_loop_intros j j1 s;
-  intros _j ? ? ?;
-  try subst j1.
+Ltac wp_down_intros j s :=
+  let j0 := fresh "j0" in
+  wp_loop_intros j0 j s;
+  intros -> ?.
