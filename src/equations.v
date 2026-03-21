@@ -25,6 +25,16 @@ Global Notation "'IF' e0 'THEN' e1 'ELSE' e2" :=
   )
   (at level 70).
 
+(* A rich conditional construct has the same computational behavior
+   as an ordinary conditional construct. *)
+
+Lemma IF_if {A} (e0 : bool) (e1 e2 : A) :
+  IF e0 THEN e1 ELSE e2 =
+  if e0 then e1 else e2.
+Proof.
+  destruct e0; reflexivity.
+Qed.
+
 (* Instruct Equations to use [eauto with lia] to kill proof obligations. *)
 
 Global Obligation Tactic :=
