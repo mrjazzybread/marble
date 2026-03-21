@@ -719,7 +719,10 @@ Qed.
    This ordering lets us prove that a loop that counts down towards [_a]
    must end, without assuming [_a ≤ i]. There, underflow is helpful! *)
 
-(* All three orderings are well-founded. *)
+(* [rigt _a] is the ordering [>] on machine integers, relative to the
+   integer [_a]. *)
+
+(* All four orderings are well-founded. *)
 
 Definition ilt _i _j :=
   φ _i < φ _j.
@@ -746,8 +749,6 @@ Qed.
 
 Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
   wf_guard 32 (rilt_wf _a).
-  (* The use of [wf_guard] is meant to allow computation inside Rocq
-     in spite of the opaque well-foundedness proof [ilt_wf]. *)
 
 Definition igt _i _j :=
   φ _j < φ _i.
@@ -767,8 +768,19 @@ Qed.
 
 Global Instance Wf_igt : WellFounded igt :=
   wf_guard 32 igt_wf.
-  (* The use of [wf_guard] is meant to allow computation inside Rocq
-     in spite of the opaque well-foundedness proof [igt_wf]. *)
+
+Definition rigt _a _i _j :=
+  igt (_i - _a) (_j - _a).
+
+Lemma rigt_wf _a : well_founded (rigt _a).
+Proof.
+  eapply wf_incl; [| eapply Z.lt_wf_projected
+                     with (z := 0) (f := λ _i, wB - φ (_i - _a)) ].
+  intros _i _j. unfold rigt, igt. lia.
+Qed.
+
+Global Instance Wf_rigt _a : WellFounded (rigt _a) :=
+  wf_guard 32 (rigt_wf _a).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -776,7 +788,7 @@ Global Instance Wf_igt : WellFounded igt :=
    related to these orderings. After the definition of the ordering
    is unfolded, [lia] just solves the underlying goal. *)
 
-Global Hint Unfold ilt igt rilt : lia.
+Global Hint Unfold ilt igt rilt rigt : lia.
 
 (* The following results are unused. I keep them for the record; they
    are just illustrations of the power of [eauto with lia]. *)
