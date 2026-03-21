@@ -917,7 +917,7 @@ iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
    produced by Equations, which are used via the tactic [funelim]. *)
 Goal int → S → S.
 Proof.
-  eapply (Fix (rilt_wf _i) (λ _, S → S)). intros _j self s.
+  eapply (Fix (Wf_rilt _i) (λ _, S → S)). intros _j self s.
   destruct (_j =? _i)%uint63 eqn:Heq.
   + refine (
       do s ← body _j s ;
