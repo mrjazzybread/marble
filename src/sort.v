@@ -999,30 +999,26 @@ Variable _j1 _j2 : int.
 
 (* TODO my existing loops can use IF/THEN/ELSE instead of [inspected] *)
 
-Local Definition pigt (p : int * int) (p' : int * int) :=
+Local Definition order (p : int * int) (p' : int * int) :=
   let '(p1, p2) := p in
   let '(p'1, p'2) := p' in
-  igt p1 p'1 ∧ p2 = p'2 ∨
-  p1 = p'1 ∧ igt p2 p'2.
-Global Instance Wf_pigt : WellFounded pigt.
+  rigt _j1 p1 p'1 ∧ p2 = p'2 ∨
+  p1 = p'1 ∧ rigt _j2 p2 p'2.
+Global Instance Wf_order : WellFounded order.
 Admitted.
 
-Local Hint Unfold pigt : lia.
+Local Hint Unfold order : lia.
 
 Local Obligation Tactic :=
   simpl in *;
   Tactics.program_simplify;
   CoreTactics.equations_simpl;
   try Tactics.program_solve_wf;
-  eauto 4 with lia.
+  eauto with lia.
 
-Equations merge_aux _i1 x1 _i2 x2 _dst _k
-  (_ : (φ (_i1) < φ (_j1))%Z)
-  (_ : (φ (_i2) < φ (_j2))%Z)
-: array A
-  by wf (_i1, _i2) pigt
-:=
-merge_aux _i1 x1 _i2 x2 _dst _k _ _ :=
+Equations merge_aux _i1 x1 _i2 x2 _dst _k : array A
+by wf (_i1, _i2) order :=
+merge_aux _i1 x1 _i2 x2 _dst _k :=
   match compare x1 x2 with
   | Lt | Eq =>
       do _dst ← set _dst _k x1 ;
@@ -1030,7 +1026,7 @@ merge_aux _i1 x1 _i2 x2 _dst _k _ _ :=
       let _k := _k + 1 in
       IF (_i1 <? _j1) THEN
         do x1 ← get _src1 _i1 ;
-        merge_aux _i1 x1 _i2 x2 _dst _k _ _
+        merge_aux _i1 x1 _i2 x2 _dst _k
       ELSE
         blit _src2 _i2 _dst _k (_j2 - _i2)
   | Gt =>
@@ -1039,7 +1035,7 @@ merge_aux _i1 x1 _i2 x2 _dst _k _ _ :=
       let _k := _k + 1 in
       IF (_i2 <? _j2) THEN
         do x2 ← get _src2 _i2 ;
-        merge_aux _i1 x1 _i2 x2 _dst _k _ _
+        merge_aux _i1 x1 _i2 x2 _dst _k
       ELSE
         blit _src1 _i1 _dst _k (_j1 - _i1)
   end.
