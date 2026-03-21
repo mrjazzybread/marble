@@ -1009,13 +1009,6 @@ Admitted.
 
 Local Hint Unfold order : lia.
 
-Local Obligation Tactic :=
-  simpl in *;
-  Tactics.program_simplify;
-  CoreTactics.equations_simpl;
-  try Tactics.program_solve_wf;
-  eauto with lia.
-
 Equations merge_aux _i1 x1 _i2 x2 _dst _k : array A
 by wf (_i1, _i2) order :=
 merge_aux _i1 x1 _i2 x2 _dst _k :=
