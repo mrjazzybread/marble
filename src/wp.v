@@ -1,5 +1,5 @@
 From stdpp Require Import base.
-From marble Require Import tactics bool.
+From marble Require Import equations tactics bool.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -100,8 +100,18 @@ Proof.
   unfold isBool. intros. destruct b; eauto.
 Qed.
 
+Lemma wp_IF {A} (b : bool) (e1 e2 : A) (Q : A → Prop) {P1 P2 : Prop} :
+  isBool b P1 P2 →
+  (P1 → wp e1 Q) →
+  (P2 → wp e2 Q) →
+  wp (IF b THEN e1 ELSE e2) Q.
+Proof.
+  rewrite IF_if. apply wp_if.
+Qed.
+
 Global Ltac wp_if :=
-  eapply wp_if; [ tc | intros | intros ].
+  first [ simple eapply wp_if | simple eapply wp_IF ];
+    [ tc | intros | intros ].
 
 (* [check_flex_post] checks that the current postcondition is flexible
    (i.e., a metavariable), and fails if that is not the case. *)
