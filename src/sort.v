@@ -406,6 +406,8 @@ Section InsertionSort.
 
 Context `{Inhabited A} `{PreOrder A R} `{Comparable A R}.
 
+Implicit Types x y : A.
+
 (* Standard mathematical notation. *)
 
 Open Scope element_scope.
@@ -990,10 +992,6 @@ Qed.
 
 Section MergeAux.
 
-Open Scope uint63.
-
-Implicit Types x : A.
-
 Variable _src1 _src2 : array A.
 Variable _j1 _j2 : int.
 
@@ -1008,6 +1006,9 @@ Global Instance Wf_order : WellFounded order.
 Admitted.
 
 Local Hint Unfold order : lia.
+
+Section Code.
+Open Scope uint63.
 
 Equations merge_aux _i1 x1 _i2 x2 _dst _k : array A
 by wf (_i1, _i2) order :=
@@ -1032,6 +1033,88 @@ merge_aux _i1 x1 _i2 x2 _dst _k :=
       ELSE
         blit _src1 _i1 _dst _k (_j1 - _i1)
   end.
+
+End Code.
+
+(* TODO prove that if the two source segments are sorted for [lex]
+   then so is the destination segment *)
+
+Lemma wp_merge_aux src1 src2 j1 j2 :
+  isArray _src1 src1 →
+  isArray _src2 src2 →
+  isInt _j1 j1 →
+  isInt _j2 j2 →
+  ∀Int _i1 i1,
+  valid_seg i1 j1 src1 →
+  (i1 < j1)%nat →
+  ∀ x1,
+  x1 = src1 !!! i1 →
+  ∀Int _i2 i2,
+  valid_seg i2 j2 src2 →
+  (i2 < j2)%nat →
+  ∀ x2,
+  x2 = src2 !!! i2 →
+  ∀ _dst dst,
+  isArray _dst dst →
+  ∀Int _k k,
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  valid_seg k limit dst →
+  wp (merge_aux _i1 x1 _i2 x2 _dst _k) (λ _dst, ∃ dst',
+    isArray _dst dst' ∧
+    len dst = len dst' ∧
+    (* Outside of the destination segment [k, limit),
+       the destination array is unmodified. *)
+    initial_seg k dst = initial_seg k dst' ∧
+    final_seg limit dst = final_seg limit dst' ∧
+    (* Inside the destination segment, we find a permutation
+       of the data contained in the two source segments. *)
+    seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst'
+  ).
+Proof.
+  intros.
+  funelim (merge_aux _i1 x1 _i2 x2 _dst _k); clear Heqcall.
+  wp_compare.
+  (* Case [x2 < x1]. *)
+  { wp_set.
+    wp_if.
+    { simple eapply isBool_ltb; tc3. } (* TODO why not automated? *)
+    (* Subcase [i2 + 1 < j2]. *)
+    { wp_get x'2.
+      (* We are now looking at the recursive call. *)
+      admit. }
+    (* Subcase [i2 + 1 = j2]. *)
+    { assert (j2 = i2 + 1) by lia. subst j2.
+      wp_blit.
+      eexists. split; [ eauto | repeat split ].
+      + list; lia.
+      + simplify_list_equality_goal. reflexivity.
+      + simplify_list_equality_goal. reflexivity.
+      + unfold limit. autorewrite with nat. list.
+        (* TODO [list] misses this rewriting step: *)
+        erewrite (seg_none' _ _ dst) by lia. list.
+        eapply Permutation_app_comm. }
+  }
+  (* Case [x1 ≤ x2]. *)
+  { wp_set.
+    wp_if.
+    { simple eapply isBool_ltb; tc3. } (* TODO why not automated? *)
+    (* Subcase [i1 + 1 < j1]. *)
+    { wp_get x'1.
+      (* We are now looking at the recursive call. *)
+      admit. }
+    (* Subcase [i1 + 1 = j1]. *)
+    { assert (j1 = i1 + 1) by lia. subst j1.
+      wp_blit.
+      eexists. split; [ eauto | repeat split ].
+      + list; lia.
+      + simplify_list_equality_goal. reflexivity.
+      + simplify_list_equality_goal. reflexivity.
+      + unfold limit. list.
+        (* TODO [list] misses this rewriting step: *)
+        erewrite (seg_none' _ _ dst) by lia. list.
+        reflexivity. }
+  }
+Abort.
 
 End MergeAux.
 
