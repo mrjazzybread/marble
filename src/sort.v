@@ -1106,12 +1106,10 @@ Proof. lia. Qed.
 
 Local Hint Rewrite foo using lia : nat list.
 
-
 Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
 Proof.
   simple eapply (well_founded_ind Wf_order). clear _i1 _i2.
   intros (_i1, _i2) IH.
-  (* funelim (merge_aux _i1 x1 _i2 x2 _dst _k); clear Heqcall. *)
   unfold merge_aux_spec. intros. autorewrite with merge_aux.
   wp_compare.
   (* Case [x2 < x1]. *)
@@ -1139,8 +1137,8 @@ Proof.
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
-      eexists. split; [ eauto | repeat split ].
-      + list; lia.
+      intro_merge_aux_post; eauto 2; autorewrite with nat in *.
+      + list. lia.
       + simplify_list_equality_goal. reflexivity.
       + simplify_list_equality_goal. reflexivity.
       + list.
@@ -1171,8 +1169,8 @@ Proof.
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
-      eexists. split; [ eauto | repeat split ].
-      + list; lia.
+      intro_merge_aux_post; eauto 2; autorewrite with nat in *.
+      + list. lia.
       + simplify_list_equality_goal. reflexivity.
       + simplify_list_equality_goal. reflexivity.
       + list.
