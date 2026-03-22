@@ -397,7 +397,7 @@ Global Ltac wp_compare :=
 
 (* Insertion sort: [isortto]. *)
 
-Section InsertionSort.
+Section Sorting.
 
 (* We assume that there is a preorder [R], also written [≤], on the type [A]. *)
 
@@ -1039,17 +1039,53 @@ End Code.
 (* TODO prove that if the two source segments are sorted for [lex]
    then so is the destination segment *)
 
-Lemma wp_merge_aux src1 src2 j1 j2 :
+Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
+  λ _dst,
+  ∃ dst',
+  isArray _dst dst' ∧
+  len dst = len dst' ∧
+  (* Outside of the destination segment [k, limit),
+     the destination array is unmodified. *)
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  initial_seg k dst = initial_seg k dst' ∧
+  final_seg limit dst = final_seg limit dst' ∧
+  (* Inside the destination segment, we find a permutation
+     of the data contained in the two source segments. *)
+  seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst'.
+
+Local Ltac intro_merge_aux_post :=
+  unfold merge_aux_post; pack.
+
+Local Ltac decompose_segment :=
+  match goal with
+  h: seg ?i ?j ?xs ++ {[?x]} = seg ?i (?j + 1) ?ys |- _ =>
+    rewrite (split_seg j ys) in h by lia;
+    eapply app_inj_1 in h; [| list; lia ];
+    unpack in h
+  end.
+
+Local Ltac elim_merge_aux_post :=
+  let dst' := fresh "dst'" in
+  match goal with h: merge_aux_post _ _ _ _ _ _ _ _ _ |- _ =>
+    unfold merge_aux_post in h;
+    destruct h as (dst' & h);
+    list in h; unpack in h;
+    repeat decompose_segment
+  end.
+
+Definition merge_aux_spec '((_i1, _i2) : int * int) :=
+  ∀ src1 src2,
   isArray _src1 src1 →
   isArray _src2 src2 →
+  ∀ j1 j2,
   isInt _j1 j1 →
   isInt _j2 j2 →
-  ∀Int _i1 i1,
+  ∀ i1, isInt _i1 i1 →
   valid_seg i1 j1 src1 →
   (i1 < j1)%nat →
   ∀ x1,
   x1 = src1 !!! i1 →
-  ∀Int _i2 i2,
+  ∀ i2, isInt _i2 i2 →
   valid_seg i2 j2 src2 →
   (i2 < j2)%nat →
   ∀ x2,
@@ -1059,20 +1095,25 @@ Lemma wp_merge_aux src1 src2 j1 j2 :
   ∀Int _k k,
   let limit := k + (j1 - i1) + (j2 - i2) in
   valid_seg k limit dst →
-  wp (merge_aux _i1 x1 _i2 x2 _dst _k) (λ _dst, ∃ dst',
-    isArray _dst dst' ∧
-    len dst = len dst' ∧
-    (* Outside of the destination segment [k, limit),
-       the destination array is unmodified. *)
-    initial_seg k dst = initial_seg k dst' ∧
-    final_seg limit dst = final_seg limit dst' ∧
-    (* Inside the destination segment, we find a permutation
-       of the data contained in the two source segments. *)
-    seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst'
-  ).
+  wp (merge_aux _i1 x1 _i2 x2 _dst _k)
+     (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
+
+Local Lemma foo k delta i2 j2 :
+  (i2 < j2)%nat →
+  k + 1 + delta + (j2 - i2 - 1) =
+  k + delta + (j2 - i2).
+Proof. lia. Qed.
+
+Local Hint Rewrite foo using lia : nat list.
+
+
+
+Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
 Proof.
-  intros.
-  funelim (merge_aux _i1 x1 _i2 x2 _dst _k); clear Heqcall.
+  simple eapply (well_founded_ind Wf_order). clear _i1 _i2.
+  intros (_i1, _i2) IH.
+  (* funelim (merge_aux _i1 x1 _i2 x2 _dst _k); clear Heqcall. *)
+  unfold merge_aux_spec. intros. autorewrite with merge_aux.
   wp_compare.
   (* Case [x2 < x1]. *)
   { wp_set.
@@ -1081,7 +1122,24 @@ Proof.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       (* We are now looking at the recursive call. *)
-      admit. }
+      eapply wp_conseq.
+      + eapply (IH (_i1, _i2 + 1)%uint63); tc; try (list; lia).
+        (* TODO silly to have to prove termination again *)
+        - assert ((_i2 + 1 <? _j2)%uint63 = true) by admit. (* TODO *)
+          eapply merge_aux_obligations_obligation_3; eauto 3.
+      + clear dependent _dst. intros _dst Hpost.
+        elim_merge_aux_post.
+        intro_merge_aux_post; eauto 2.
+        (* Prove that we have a permutation. *)
+        { rewrite (split_seg (i2 + 1) src2) by lia.
+          rewrite (split_seg (k + 1) dst') by lia.
+          rewrite <- Hpost3.
+          simplify_list_permutation_goal.
+          rewrite Permutation_app_comm.
+          simplify_list_permutation_goal.
+          rewrite <- Hpost4.
+          subst x2. list. reflexivity. }
+    }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
@@ -1089,7 +1147,7 @@ Proof.
       + list; lia.
       + simplify_list_equality_goal. reflexivity.
       + simplify_list_equality_goal. reflexivity.
-      + unfold limit. autorewrite with nat. list.
+      + list.
         (* TODO [list] misses this rewriting step: *)
         erewrite (seg_none' _ _ dst) by lia. list.
         eapply Permutation_app_comm. }
@@ -1109,7 +1167,7 @@ Proof.
       + list; lia.
       + simplify_list_equality_goal. reflexivity.
       + simplify_list_equality_goal. reflexivity.
-      + unfold limit. list.
+      + list.
         (* TODO [list] misses this rewriting step: *)
         erewrite (seg_none' _ _ dst) by lia. list.
         reflexivity. }
@@ -1118,4 +1176,4 @@ Abort.
 
 End MergeAux.
 
-End InsertionSort.
+End Sorting.
