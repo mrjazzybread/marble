@@ -1003,17 +1003,55 @@ Section MergeAux.
 Variable _src1 _src2 : array A.
 Variable _j1 _j2 : int.
 
-(* TODO my existing loops can use IF/THEN/ELSE instead of [inspected] *)
+Local Definition order1 : relation (int * int) :=
+  λ '(_i1, _i2) '(_i'1, _i'2),
+  rigt _j1 _i1 _i'1 ∧ _i2 = _i'2.
 
-Local Definition order (p : int * int) (p' : int * int) :=
-  let '(p1, p2) := p in
-  let '(p'1, p'2) := p' in
-  rigt _j1 p1 p'1 ∧ p2 = p'2 ∨
-  p1 = p'1 ∧ rigt _j2 p2 p'2.
-Global Instance Wf_order : WellFounded order.
-Admitted.
+Local Definition order2 : relation (int * int) :=
+  λ '(_i1, _i2) '(_i'1, _i'2),
+  _i1 = _i'1 ∧ rigt _j2 _i2 _i'2.
 
-Local Hint Unfold order : lia.
+Local Definition order : relation (int * int) :=
+  λ p p', order1 p p' ∨ order2 p p'.
+
+(* TODO move *)
+From stdpp Require Import well_founded.
+
+Lemma wf_order : well_founded order.
+Proof.
+  assert (wf_order1: well_founded order1).
+  { eapply wf_incl; [|
+      eapply wf_inverse_image with (f := fst); eapply rigt_wf ].
+    intros (_i1, _i2) (_i'1, _i'2). simpl.
+    intros. unpack. eauto. }
+  assert (wf_order2: well_founded order2).
+  { eapply wf_incl; [|
+      eapply wf_inverse_image with (f := snd); eapply rigt_wf ].
+    intros (_i1, _i2) (_i'1, _i'2). simpl.
+    intros. unpack. eauto. }
+  eapply wf_incl; [|
+    eapply wf_union; [| eapply wf_order1 | eapply wf_order2 ] ].
+  { intros (_i1, _i2) (_i'1, _i'2).
+    unfold order, Relation_Operators.union. tauto. }
+  (* Commutation. *)
+  { intros (_i1, _i2) (_i'1, _i'2) Ho1 (_i''1, _i''2) Ho2.
+    unfold order1, order2 in Ho1, Ho2. unpack. subst.
+    exists (_i1, _i''2); simpl; tauto. }
+Qed.
+
+Global Instance Wf_order : WellFounded order :=
+  wf_guard 32 wf_order.
+
+Local Hint Extern 1 (order _ _) =>
+  unfold order, order1, order2
+: lia.
+
+Local Obligation Tactic :=
+  simpl in *;
+  Tactics.program_simplify;
+  CoreTactics.equations_simpl;
+  try Tactics.program_solve_wf;
+  eauto 6 with lia.
 
 Section Code.
 Open Scope uint63.
@@ -1206,7 +1244,7 @@ Proof.
         admit.
     }
   }
-Qed.
+Admitted.
 
 End MergeAux.
 
