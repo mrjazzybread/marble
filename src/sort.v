@@ -1,4 +1,4 @@
-From stdpp Require Import numbers list.
+From stdpp Require Import numbers list well_founded.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
@@ -1014,9 +1014,6 @@ Local Definition order2 : relation (int * int) :=
 Local Definition order : relation (int * int) :=
   λ p p', order1 p p' ∨ order2 p p'.
 
-(* TODO move *)
-From stdpp Require Import well_founded.
-
 Lemma wf_order : well_founded order.
 Proof.
   assert (wf_order1: well_founded order1).
@@ -1045,13 +1042,6 @@ Global Instance Wf_order : WellFounded order :=
 Local Hint Extern 1 (order _ _) =>
   unfold order, order1, order2
 : lia.
-
-Local Obligation Tactic :=
-  simpl in *;
-  Tactics.program_simplify;
-  CoreTactics.equations_simpl;
-  try Tactics.program_solve_wf;
-  eauto 6 with lia.
 
 Section Code.
 Open Scope uint63.

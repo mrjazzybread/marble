@@ -38,4 +38,4 @@ Global Obligation Tactic :=
   Tactics.program_simplify;
   CoreTactics.equations_simpl;
   try Tactics.program_solve_wf;
-  eauto with lia.
+  eauto 6 with lia.
