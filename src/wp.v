@@ -102,11 +102,11 @@ Qed.
 
 Lemma wp_IF {A} (b : bool) (e1 e2 : A) (Q : A → Prop) {P1 P2 : Prop} :
   isBool b P1 P2 →
-  (P1 → wp e1 Q) →
-  (P2 → wp e2 Q) →
+  (b = true → P1 → wp e1 Q) →
+  (b = false → P2 → wp e2 Q) →
   wp (IF b THEN e1 ELSE e2) Q.
 Proof.
-  rewrite IF_if. apply wp_if.
+  unfold isBool. intros. destruct b; eauto.
 Qed.
 
 Global Ltac wp_if :=

@@ -1098,14 +1098,13 @@ Definition merge_aux_spec '((_i1, _i2) : int * int) :=
   wp (merge_aux _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
-Local Lemma foo k delta i2 j2 :
-  (i2 < j2)%nat →
-  k + 1 + delta + (j2 - i2 - 1) =
-  k + delta + (j2 - i2).
+Local Lemma foo k (x y : nat) :
+  (0 < y)%nat →
+  k + 1 + x + (y - 1) =
+  k + x + y.
 Proof. lia. Qed.
 
 Local Hint Rewrite foo using lia : nat list.
-
 
 
 Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
@@ -1124,9 +1123,6 @@ Proof.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
       + eapply (IH (_i1, _i2 + 1)%uint63); tc; try (list; lia).
-        (* TODO silly to have to prove termination again *)
-        - assert ((_i2 + 1 <? _j2)%uint63 = true) by admit. (* TODO *)
-          eapply merge_aux_obligations_obligation_3; eauto 3.
       + clear dependent _dst. intros _dst Hpost.
         elim_merge_aux_post.
         intro_merge_aux_post; eauto 2.
@@ -1159,7 +1155,19 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
-      admit. }
+      eapply wp_conseq.
+      + eapply (IH (_i1 + 1, _i2)%uint63); tc; try (list; lia).
+      + clear dependent _dst. intros _dst Hpost.
+        elim_merge_aux_post.
+        intro_merge_aux_post; eauto 2.
+        (* Prove that we have a permutation. *)
+        { rewrite (split_seg (i1 + 1) src1) by lia.
+          rewrite (split_seg (k + 1) dst') by lia.
+          rewrite <- Hpost3.
+          simplify_list_permutation_goal.
+          rewrite <- Hpost4.
+          subst x1. list. reflexivity. }
+    }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
@@ -1172,7 +1180,7 @@ Proof.
         erewrite (seg_none' _ _ dst) by lia. list.
         reflexivity. }
   }
-Abort.
+Qed.
 
 End MergeAux.
 
