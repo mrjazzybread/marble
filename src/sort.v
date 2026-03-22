@@ -298,6 +298,14 @@ Proof.
   rewrite <- smt_sorted_iff, smt_sorted_seg_iff. tauto.
 Qed.
 
+Lemma smt_sorted_seg_variance i k i' k' xs :
+  smt_sorted_seg i k xs →
+  (i ≤ i')%nat → (k' ≤ k)%nat →
+  smt_sorted_seg i' k' xs.
+Proof.
+  unfold smt_sorted_seg, smt_sorted. eauto with lia.
+Qed.
+
 (* [smt_sorted_seg_except i k xs j] means that the segment [seg i k xs],
    deprived of its element at index [j], is sorted. *)
 
@@ -1050,8 +1058,10 @@ Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
   initial_seg k dst = initial_seg k dst' ∧
   final_seg limit dst = final_seg limit dst' ∧
   (* Inside the destination segment, we find a permutation
-     of the data contained in the two source segments. *)
-  seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst'.
+     of the data contained in the two source segments, *)
+  seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst' ∧
+  (* and the destination segment is sorted. *)
+  smt_sorted_seg k limit dst'.
 
 Local Ltac intro_merge_aux_post :=
   unfold merge_aux_post; pack.
@@ -1090,6 +1100,8 @@ Definition merge_aux_spec '((_i1, _i2) : int * int) :=
   (i2 < j2)%nat →
   ∀ x2,
   x2 = src2 !!! i2 →
+  smt_sorted_seg i1 j1 src1 →
+  smt_sorted_seg i2 j2 src2 →
   ∀ _dst dst,
   isArray _dst dst →
   ∀Int _k k,
@@ -1105,6 +1117,8 @@ Local Lemma foo k (x y : nat) :
 Proof. lia. Qed.
 
 Local Hint Rewrite foo using lia : nat list.
+
+Local Hint Resolve smt_sorted_seg_variance : lia.
 
 Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
 Proof.
@@ -1131,8 +1145,10 @@ Proof.
           simplify_list_permutation_goal.
           rewrite Permutation_app_comm.
           simplify_list_permutation_goal.
-          rewrite <- Hpost4.
+          rewrite <- Hpost5.
           subst x2. list. reflexivity. }
+        (* Prove that the destination segment is sorted. *)
+        { admit. }
     }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
@@ -1144,7 +1160,12 @@ Proof.
       + list.
         (* TODO [list] misses this rewriting step: *)
         erewrite (seg_none' _ _ dst) by lia. list.
-        eapply Permutation_app_comm. }
+        eapply Permutation_app_comm.
+      + rewrite smt_sorted_seg_iff. list.
+        erewrite (seg_none' _ _ dst) by lia. list. (* TODO again *)
+        recognize_singleton_segments. recognize_named_lookups.
+        admit.
+    }
   }
   (* Case [x1 ≤ x2]. *)
   { wp_set.
@@ -1163,8 +1184,10 @@ Proof.
           rewrite (split_seg (k + 1) dst') by lia.
           rewrite <- Hpost3.
           simplify_list_permutation_goal.
-          rewrite <- Hpost4.
+          rewrite <- Hpost5.
           subst x1. list. reflexivity. }
+        (* Prove that the destination segment is sorted. *)
+        { admit. }
     }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
@@ -1176,7 +1199,12 @@ Proof.
       + list.
         (* TODO [list] misses this rewriting step: *)
         erewrite (seg_none' _ _ dst) by lia. list.
-        reflexivity. }
+        reflexivity.
+      + rewrite smt_sorted_seg_iff. list.
+        erewrite (seg_none' _ _ dst) by lia. list. (* TODO again *)
+        recognize_singleton_segments. recognize_named_lookups.
+        admit.
+    }
   }
 Qed.
 
