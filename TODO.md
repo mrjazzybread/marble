@@ -2,6 +2,10 @@
 
 ## Short term
 
+* Split `sort.v` into multiple files.
+
+* Can the loops in `int.v` use `IF/THEN/ELSE` instead of `inspected`?
+
 * `isInt 12 12` still does not work. Ask for help on Zulip.
 
 * In anticipation of vectors, many operations on arrays should also
