@@ -43,6 +43,18 @@ Local Ltac use_known_permutation :=
     rewrite h
   end.
 
+(* The tactic [decompose_segment] detects a hypothesis of the form
+   [seg i j xs ++ {[x]} = seg i (j + 1) ys]. It deduces the two
+   equations [seg i j xs = seg i j ys] and [{[xs]} = seg j (j + 1) ys]. *)
+
+Local Ltac decompose_segment :=
+  match goal with
+  h: seg ?i ?j ?xs ++ {[?x]} = seg ?i (?j + 1) ?ys |- _ =>
+    rewrite (split_seg j ys) in h by lia;
+    eapply app_inj_1 in h; [| list; lia ];
+    unpack in h
+  end.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Three-way comparisons. *)
@@ -167,11 +179,17 @@ Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
 (* We write [x `precedes` y] for this preorder. We will assume that
    the input array is sorted with respect to this order. Therefore,
    intuitively, [x `precedes` y] means that [x] comes earlier than [y]
-   in the input array. *)
+   in the input data. *)
+
+(* We write [xs `precede` ys] when every element of [xs] precedes
+   every element of [ys]. This means that the elements of [xs] come
+   earlier than the elements of [ys] in the input data. *)
 
 Context `{PreOrder A R'}.
 
 Infix "`precedes`" := R'
+  (at level 70, no associativity) : element_scope.
+Infix "`precede`" := (pairwise R')
   (at level 70, no associativity) : element_scope.
 
 (* The following hints seem to be needed. I don't understand why
@@ -523,7 +541,7 @@ Proof.
         { use_known_permutation.
           recognize_singleton_segments.
           recognize_named_lookups.
-          rewrite insert_seg by (list; lia); autorewrite with nat.
+          rewrite insert_seg by (list; lia); nat.
           reflexivity. }
         (* The destination segment is sorted. *)
         { eapply smt_sorted_seg_fill; eauto 2; intros; list; subst xi.
@@ -686,7 +704,7 @@ Proof.
         (* The destination segment contains a permitted permutation. *)
         { use_known_permutation.
           recognize_singleton_segments. recognize_named_lookups.
-          rewrite insert_seg by (list; lia); autorewrite with nat.
+          rewrite insert_seg by (list; lia); nat.
           reflexivity. }
         (* The destination segment is sorted. [KEY] is used here. *)
         { eapply smt_sorted_seg_fill; eauto 2; intros; list; subst xi;
@@ -713,10 +731,22 @@ Qed.
 
 (* Merging two sorted arrays: [merge]. *)
 
+(* We begin with [merge_aux], which merges two sorted array segments
+   and writes the resulting data to a destination segment. *)
+
 Section MergeAux.
+
+(* In the recursive definition of [merge_aux], the following four
+   parameters remain fixed. [_src1] and [_src2] are the source arrays.
+   [_j1] and [_j2] are the end indices of the two source segments. *)
 
 Variable _src1 _src2 : array A.
 Variable _j1 _j2 : int.
+
+(* The well-founded relation [order] is used to justify termination.
+   In short, either [_i1] increases without exceeding [_j1], while
+   [_i2] remains unchanged; or, symmetrically, [_i2] increases without
+   exceeding [_j2], while [_i1] remains unchanged. *)
 
 Local Definition order1 : relation (int * int) :=
   λ '(_i1, _i2) '(_i'1, _i'2),
@@ -758,6 +788,14 @@ Local Hint Extern 1 (order _ _) =>
   unfold order, order1, order2
 : lia.
 
+(* Here is the code of [merge_aux]. *)
+
+(* [_i1] and [_i2] are the start indices of the source segments. Each
+   of the two source segments must be nonempty; [x1] and [x2] are the
+   first elements of the source segments. [_dst] is the destination
+   array. [_k] is the start index of the destination segment. The end
+   index of the destination segment is [k + (j1 - i1) + (j2 - i2)]. *)
+
 Section Code.
 Open Scope uint63.
 
@@ -787,6 +825,8 @@ merge_aux _i1 x1 _i2 x2 _dst _k :=
 
 End Code.
 
+(* The postcondition of [merge_aux]. *)
+
 Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
   λ _dst,
   ∃ dst',
@@ -801,18 +841,10 @@ Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
      of the data contained in the two source segments, *)
   seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst' ∧
   (* and the destination segment is sorted. *)
-  smt_sorted_seg k limit dst'.
+  sorted (seg k limit dst').
 
 Local Ltac intro_merge_aux_post :=
   unfold merge_aux_post; pack.
-
-Local Ltac decompose_segment :=
-  match goal with
-  h: seg ?i ?j ?xs ++ {[?x]} = seg ?i (?j + 1) ?ys |- _ =>
-    rewrite (split_seg j ys) in h by lia;
-    eapply app_inj_1 in h; [| list; lia ];
-    unpack in h
-  end.
 
 Local Ltac elim_merge_aux_post :=
   let dst' := fresh "dst'" in
@@ -822,6 +854,14 @@ Local Ltac elim_merge_aux_post :=
     list in h; unpack in h;
     repeat decompose_segment
   end.
+
+(* The specification of [merge_aux]. *)
+
+(* Because this function has 10 parameters, it is a bit verbose. *)
+
+(* The source segments must be valid, nonempty, and sorted. *)
+
+(* Furthermore, [src1] must precede [src2]. *)
 
 Definition merge_aux_spec '((_i1, _i2) : int * int) :=
   ∀ src1 src2,
@@ -840,8 +880,9 @@ Definition merge_aux_spec '((_i1, _i2) : int * int) :=
   (i2 < j2)%nat →
   ∀ x2,
   x2 = src2 !!! i2 →
-  smt_sorted_seg i1 j1 src1 →
-  smt_sorted_seg i2 j2 src2 →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  src1 `precede` src2 →
   ∀ _dst dst,
   isArray _dst dst →
   ∀Int _k k,
@@ -850,132 +891,127 @@ Definition merge_aux_spec '((_i1, _i2) : int * int) :=
   wp (merge_aux _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
-Local Lemma foo k (x y : nat) :
-  (0 < y)%nat →
-  k + 1 + x + (y - 1) =
-  k + x + y.
-Proof. lia. Qed.
+Local Hint Resolve
+  Sorted_singleton
+  sorted_seg_variance
+: lia.
 
-Local Hint Rewrite foo using lia : nat list.
-
-Local Hint Resolve smt_sorted_seg_variance : lia.
-
-(* TODO
-Lemma sorted_seg_cons i j x xs :
-  sorted (seg (i + 1) j xs) →
-  {[x]} = seg i (i + 1) xs →
-  {[x]} ≼ seg i j xs →
-  sorted (seg i j xs).
-Proof.
-Admitted.
-
-Lemma exploit_sorted_seg i j k1 k2 xs :
-  sorted (seg i j xs) →
-  i ≤ k1 ≤ k2 ≤ j →
-  lex (xs !!! k1) (xs !!! k2).
-Proof.
-Admitted.
- *)
+Local Ltac tc ::=
+  eauto 7 with typeclass_instances lia.
 
 Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
 Proof.
   simple eapply (well_founded_ind Wf_order). clear _i1 _i2.
   intros (_i1, _i2) IH.
-  unfold merge_aux_spec. intros. autorewrite with merge_aux.
+  unfold merge_aux_spec. intros.
+  (* The following fact is useful. *)
+  assert (x1 `precedes` x2).
+  { subst x1 x2. unfold pairwise in *.
+    eauto using list_elem_of_lookup_total_2 with lia. }
+  (* Now examine the code. *)
+  autorewrite with merge_aux.
   wp_compare.
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
-    { simple eapply isBool_ltb; tc3. } (* TODO why not automated? *)
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1, _i2 + 1)%uint63); tc; try (list; lia). }
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; tc; try (list; lia). }
       clear dependent _dst. intros _dst Hpost.
       elim_merge_aux_post.
       intro_merge_aux_post; eauto 2.
       (* Prove that we have a permutation. *)
-      { rewrite (split_seg (i2 + 1) src2) by lia.
-        rewrite (split_seg (k + 1) dst') by lia.
-        rewrite <- Hpost3.
+      { split_seg (i2 + 1) src2.
+        split_seg (k + 1) dst'.
+        rewrite <- Hpost3. rewrite <- Hpost5.
         simplify_list_permutation_goal.
         rewrite Permutation_app_comm.
         simplify_list_permutation_goal.
-        rewrite <- Hpost5.
         subst x2. list. reflexivity. }
       (* Prove that the destination segment is sorted. *)
-      { rewrite smt_sorted_seg_iff, smt_sorted_iff in *.
-        (* TODO not using smt style after all? *)
-        split_seg (k+1) dst'.
-        replace (seg k (k + 1) dst') with ({[x2]} : list A).
-        eapply Sorted_app; eauto using Sorted_singleton.
+      { split_seg (k + 1) dst'.
+        rewrite <- Hpost5.
+        eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
+        (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         rewrite pairwise_app_right_iff; split.
-        + apply boundary_test; eauto 2 using Sorted_singleton.
-          list. recognize_named_lookups. eauto.
-        + apply boundary_test; eauto 2 using Sorted_singleton.
+        + apply boundary_test; eauto 2 with lia.
+          intros _ _. list. recognize_named_lookups. eauto.
+        + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
-          - list. subst x2. eauto using exploit_sorted_seg with lia.
+          - intros _ _. list. subst x2.
+            eapply exploit_sorted_seg; eauto with lia.
       }
     }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
-      intro_merge_aux_post; eauto 2; autorewrite with nat in *.
-      + list. lia.
+      intro_merge_aux_post; eauto 2; nat in *; list;
+        (* UGLY [list] misses this rewriting step: *)
+        try (erewrite (seg_none' _ _ dst) by lia; list).
+      + lia.
+      + reflexivity.
       + simplify_list_equality_goal. reflexivity.
-      + simplify_list_equality_goal. reflexivity.
-      + list.
-        (* TODO [list] misses this rewriting step: *)
-        erewrite (seg_none' _ _ dst) by lia. list.
-        eapply Permutation_app_comm.
-      + rewrite smt_sorted_seg_iff. list.
-        erewrite (seg_none' _ _ dst) by lia. list. (* TODO again *)
-        recognize_singleton_segments. recognize_named_lookups.
-        admit.
+      + eapply Permutation_app_comm.
+      + recognize_singleton_segments. recognize_named_lookups.
+        eapply sorted_app_boundary; eauto 2 with lia.
+        intros _ _. list. recognize_named_lookups. eauto.
     }
   }
   (* Case [x1 ≤ x2]. *)
   { wp_set.
     wp_if.
-    { simple eapply isBool_ltb; tc3. } (* TODO why not automated? *)
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc; try (list; lia). }
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; tc; try (list; lia). }
       clear dependent _dst. intros _dst Hpost.
       elim_merge_aux_post.
       intro_merge_aux_post; eauto 2.
       (* Prove that we have a permutation. *)
-      { rewrite (split_seg (i1 + 1) src1) by lia.
-        rewrite (split_seg (k + 1) dst') by lia.
-        rewrite <- Hpost3.
+      { split_seg (i1 + 1) src1.
+        split_seg (k + 1) dst'.
+        rewrite <- Hpost3. rewrite <- Hpost5.
         simplify_list_permutation_goal.
-        rewrite <- Hpost5.
         subst x1. list. reflexivity. }
       (* Prove that the destination segment is sorted. *)
-      { admit. }
+      { split_seg (k + 1) dst'.
+        rewrite <- Hpost5.
+        eapply Sorted_app; eauto with lia.
+        rewrite <- Hpost3.
+        (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
+        rewrite pairwise_app_right_iff; split.
+        + apply boundary_test; eauto 2 with lia.
+          - eapply sorted_seg_variance; eauto 2 with lia.
+          - intros _ _. list. subst x1.
+            eapply exploit_sorted_seg; eauto with lia.
+        + apply boundary_test; eauto 2 with lia.
+          intros _ _. list. recognize_named_lookups.
+          (* The fact that [x1] precedes [x2] is used here. *)
+          eauto.
+      }
     }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
-      intro_merge_aux_post; eauto 2; autorewrite with nat in *.
-      + list. lia.
+      intro_merge_aux_post; eauto 2; nat in *; list;
+      (* UGLY [list] misses this rewriting step: *)
+      try (erewrite (seg_none' _ _ dst) by lia; list).
+      + lia.
+      + reflexivity.
       + simplify_list_equality_goal. reflexivity.
-      + simplify_list_equality_goal. reflexivity.
-      + list.
-        (* TODO [list] misses this rewriting step: *)
-        erewrite (seg_none' _ _ dst) by lia. list.
-        reflexivity.
-      + rewrite smt_sorted_seg_iff. list.
-        erewrite (seg_none' _ _ dst) by lia. list. (* TODO again *)
-        recognize_singleton_segments. recognize_named_lookups.
-        admit.
+      + reflexivity.
+      + recognize_singleton_segments. recognize_named_lookups.
+        eapply sorted_app_boundary; eauto 2 with lia.
+        intros _ _. list. recognize_named_lookups.
+        (* The fact that [x1] precedes [x2] is used here. *)
+        eauto.
     }
   }
-Admitted.
+Qed.
 
 End MergeAux.
 
