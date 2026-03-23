@@ -6,7 +6,7 @@ From Stdlib Require Import Wellfounded.Wellfounded.
 From Equations Require Import Equations.
 From Equations.Prop Require Import Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
-From marble Require Import tactics bool wp wp_tactics iteration.
+From marble Require Import tactics bool wp list_extra wp_tactics iteration.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
