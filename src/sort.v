@@ -45,293 +45,6 @@ Local Ltac use_known_permutation :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* Facts and lemmas about sortedness. *)
-
-(* These lemmas use some of our notations about lists, so they cannot be
-   moved to sorting.v, unless we allow this file to depend on list_extra.v. *)
-
-(* Many of the lemmas in this section concern the predicate [sorted]. They
-   are currently unused, because we now use [smt_sorted] instead, which is
-   equivalent. *)
-
-Declare Scope element_scope.
-Delimit Scope element_scope with element.
-
-Section Sortedness.
-
-(* We assume that there is a preorder [R], also written [≤], on the type [A]. *)
-
-Context `{Inhabited A} `{PreOrder A R}.
-
-(* Standard mathematical notation. *)
-
-Open Scope element_scope.
-
-Infix "≤" := R
-  (at level 70, no associativity) : element_scope.
-Infix "<" := (strict R)
-  (at level 70, no associativity) : element_scope.
-Notation "y ≥ x" := (x ≤ y)
-  (only parsing, at level 70, no associativity) : element_scope.
-Notation "y > x" := (x < y)
-  (only parsing, at level 70, no associativity) : element_scope.
-Infix "≡" := (equivalent R)
-  (at level 70, no associativity) : element_scope.
-
-(* We write [sorted xs] when the list [xs] is sorted with respect to [≤]. *)
-
-(* We write [xs ≼ ys] when every element [x ∈ xs]
-   and every element [y ∈ ys] satisfy [x ≤ y]. *)
-
-Notation sorted xs   := (Sorted R xs).
-Notation "xs '≼' ys" := (pairwise R xs ys) (at level 80).
-
-(* A singleton list is sorted. *)
-
-Lemma sorted_singleton x :
-  sorted {[x]}.
-Proof.
-  unfold singleton, singleton_list. eauto.
-Qed.
-
-(* Two singleton segments are ordered in the same way as their elements. *)
-
-Lemma pairwise_singleton_singleton x y :
-  x ≤ y →
-  {[x]} ≼ {[y]}.
-Proof.
-  intros.
-  unfold singleton, singleton_list.
-  unfold pairwise. intros x' y'. rewrite !list_elem_of_singleton.
-  intros. subst. tauto.
-Qed.
-
-(* If [xs] is sorted and nonempty then its first element is a lower
-   bound for every element of [xs]. *)
-
-Lemma sorted_implies_bounded_l xs :
-  sorted xs →
-  len xs ≠ 0 →
-  {[xs !!! 0]} ≼ xs.
-  (* ∀ x, x ∈ xs → xs !!! 0 ≤ x *)
-Proof.
-  intros Hsorted Hlen.
-  assert (Heq: xs = {[xs !!! 0]} ++ final_seg 1 xs) by (list; eauto).
-  clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 2. clear Heq.
-  rewrite Sorted_app_iff in Hsorted; unpack.
-  rewrite pairwise_app_right_iff; split.
-  - eapply pairwise_singleton_singleton. reflexivity.
-  - assumption.
-Qed.
-
-(* If [xs] is sorted and nonempty then its last element is an upper
-   bound for every element of [xs]. *)
-
-Lemma sorted_implies_bounded_r xs :
-  sorted xs →
-  len xs ≠ 0 →
-  xs ≼ {[xs !!! (len xs - 1)]}.
-  (* ∀ x, x ∈ xs → x ≤ xs !!! (len xs - 1) *)
-Proof.
-  intros Hsorted Hlen.
-  assert (Heq: xs = initial_seg (len xs - 1) xs ++ {[xs !!! (len xs - 1)]})
-    by (list; eauto).
-  clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 1. clear Heq.
-  rewrite Sorted_app_iff in Hsorted; unpack.
-  rewrite pairwise_app_left_iff; split.
-  - assumption.
-  - eapply pairwise_singleton_singleton. reflexivity.
-Qed.
-
-(* If [xs] and [ys] are both sorted and nonempty then, to guarantee
-   [xs ≼ ys], it suffices to check that the last element of [xs] is
-   ordered before the first element of [ys]. *)
-
-Lemma boundary_test xs ys :
-  sorted xs →
-  sorted ys →
-  len xs ≠ 0 →
-  len ys ≠ 0 →
-  xs !!! (len xs - 1) ≤ ys !!! 0 →
-  xs ≼ ys.
-Proof.
-  intros.
-  eapply pairwise_transitive_singleton with (y := ys !!! 0).
-  + eapply pairwise_transitive_singleton with (y := xs !!! (len xs - 1)).
-    - eauto using sorted_implies_bounded_r.
-    - eauto using pairwise_singleton_singleton.
-  + eauto using sorted_implies_bounded_l.
-Qed.
-
-(* If [xs] and [ys] are both sorted and nonempty then, to guarantee
-   [sorted (xs ++ ys)], it suffices to check that the last element
-   of [xs] is ordered before the first element of [ys]. *)
-
-Lemma sorted_app_boundary xs ys :
-  sorted xs →
-  sorted ys →
-  len xs ≠ 0 →
-  len ys ≠ 0 →
-  xs !!! (len xs - 1) ≤ ys !!! 0 →
-  sorted (xs ++ ys).
-Proof.
-  eauto using Sorted_app, boundary_test with typeclass_instances.
-Qed.
-
-(* The definition of sortedness that is best suited for use with SMT
-   solvers is this: *)
-
-Definition smt_sorted xs :=
-  ∀ i j,
-  valid i xs →
-  valid j xs →
-  (i ≤ j)%nat →
-  xs !!! i ≤ xs !!! j.
-
-Lemma smt_sorted_nil :
-  smt_sorted [].
-Proof.
-  unfold smt_sorted. list. lia.
-Qed.
-
-Lemma smt_sorted_cons x xs :
-  smt_sorted xs →
-  (∀ y, y ∈ xs → x ≤ y) →
-  smt_sorted (x :: xs).
-Proof.
-  unfold smt_sorted. intros Hxs Hxy. intros.
-  destruct (decide (i = 0)); destruct (decide (j = 0));
-  subst; try lia; list in *.
-  { reflexivity. }
-  { eauto using list_elem_of_lookup_total_2 with lia. }
-  { eauto with lia. }
-Qed.
-
-Lemma smt_sorted_uncons x xs :
-  smt_sorted (x :: xs) →
-  smt_sorted xs.
-Proof.
-  unfold smt_sorted. intros Hsorted. intros.
-  change (xs !!! i) with ((x :: xs) !!! (S i)).
-  change (xs !!! j) with ((x :: xs) !!! (S j)).
-  eauto with lia.
-Qed.
-
-(* [sorted] implies [smt_sorted]. *)
-
-Lemma sorted_smt_sorted xs :
-  sorted xs →
-  smt_sorted xs.
-Proof.
-  rewrite Sorted_iff_StronglySorted.
-  induction 1.
-  + eauto using smt_sorted_nil.
-  + rename a into x, l into xs.
-    rewrite Forall_forall in *.
-    eauto using smt_sorted_cons.
-Qed.
-
-(* [smt_sorted] implies [sorted]. *)
-
-Lemma smt_sorted_sorted xs :
-  smt_sorted xs →
-  sorted xs.
-Proof.
-  rewrite Sorted_iff_StronglySorted.
-  induction xs as [|x xs]; intros Hsmt; constructor.
-  + eauto using smt_sorted_uncons.
-  + rewrite Forall_forall.
-    unfold smt_sorted in Hsmt.
-    intros y Hy.
-    rewrite list_elem_of_lookup_total in Hy.
-    destruct Hy as (j & ? & ?). subst y.
-    change x with ((x :: xs) !!! 0).
-    change (xs !!! j) with ((x :: xs) !!! (S j)).
-    eauto with lia.
-Qed.
-
-Lemma smt_sorted_iff xs :
-  smt_sorted xs ↔ sorted xs.
-Proof.
-  split; eauto using smt_sorted_sorted, sorted_smt_sorted.
-Qed.
-
-(* A statement that allows [smt_sorted] to be more easily exploited. *)
-
-Lemma exploit_smt_sorted xs x y i j :
-  smt_sorted xs →
-  x = xs !!! i →
-  y = xs !!! j →
-  valid i xs →
-  valid j xs →
-  (i ≤ j)%nat →
-  x ≤ y.
-Proof.
-  intros Hsorted. intros; subst. eauto.
-Qed.
-
-(* An SMT-style definition of the existence of a sorted segment. *)
-
-Definition smt_sorted_seg i k xs :=
-  ∀ j1 j2,
-  valid j1 xs →
-  valid j2 xs →
-  (i ≤ j1) %nat → (j1 ≤ j2)%nat → (j2 < k)%nat →
-  xs !!! j1 ≤ xs !!! j2.
-
-Lemma smt_sorted_seg_iff i k xs :
-  smt_sorted_seg i k xs ↔
-  smt_sorted (seg i k xs).
-Proof.
-  unfold smt_sorted_seg, smt_sorted. split; intros Hsorted j1 j2; intros.
-  + list in *. list.
-    eauto with lia.
-  + replace (xs !!! j1) with (seg i k xs !!! (j1 - i)) by (list; eauto).
-    replace (xs !!! j2) with (seg i k xs !!! (j2 - i)) by (list; eauto).
-    eauto with lia.
-Qed.
-
-Lemma smt_sorted_seg_iff' i k xs :
-  smt_sorted_seg i k xs ↔
-  sorted (seg i k xs).
-Proof.
-  rewrite <- smt_sorted_iff, smt_sorted_seg_iff. tauto.
-Qed.
-
-Lemma smt_sorted_seg_variance i k i' k' xs :
-  smt_sorted_seg i k xs →
-  (i ≤ i')%nat → (k' ≤ k)%nat →
-  smt_sorted_seg i' k' xs.
-Proof.
-  unfold smt_sorted_seg, smt_sorted. eauto with lia.
-Qed.
-
-(* [smt_sorted_seg_except i k xs j] means that the segment [seg i k xs],
-   deprived of its element at index [j], is sorted. *)
-
-Definition smt_sorted_seg_except i k xs j :=
-  ∀ j1 j2,
-  valid j1 xs →
-  valid j2 xs →
-  (i ≤ j1) %nat → (j1 ≤ j2)%nat → (j2 < k)%nat →
-  j1 ≠ j → j2 ≠ j →
-  xs !!! j1 ≤ xs !!! j2.
-
-Lemma smt_sorted_seg_except_iff i k xs j :
-  i ≤ j ≤ k →
-  smt_sorted_seg_except i k xs j ↔
-  sorted (seg i j xs ++ seg (j + 1) k xs).
-Proof.
-Abort. (* TODO *)
-
-End Sortedness.
-
-Arguments smt_sorted {A H} R xs.
-Arguments smt_sorted_seg {A H} R i k xs.
-Arguments smt_sorted_seg_except {A H} R i k xs j.
-
-(* -------------------------------------------------------------------------- *)
-
 (* Three-way comparisons. *)
 
 (* This type exists in the standard library:
@@ -793,7 +506,7 @@ Proof.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
           { use_known_permutation. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
-          destruct Hseg as (j' & ? & ?).
+          destruct Hseg as (j' & Hj' & ?). list in Hj'.
           eapply exploit_smt_sorted; eauto with lia. }
     }
     (* Epilogue of the inner loop. *)
@@ -814,7 +527,8 @@ Proof.
           reflexivity. }
         (* The destination segment is sorted. *)
         { smt_reasoning.
-          + eapply transitivity; [| eassumption ]. eauto with lia. }
+          + eapply transitivity; [| eassumption ]. eauto with lia.
+          admit. (* TODO *) }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
@@ -827,7 +541,7 @@ Proof.
       }
     }
   }
-Qed.
+Admitted.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -977,7 +691,8 @@ Proof.
         (* The destination segment is sorted. [KEY] is used here. *)
         { smt_reasoning; rewrite KEY.
           + smt_reasoning.
-          + eapply transitivity; [| eauto ]. eauto with lia. }
+          + eapply transitivity; [| eauto ]. eauto with lia.
+            admit. (*TODO*) }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
@@ -992,7 +707,7 @@ Proof.
       }
     }
   }
-Qed.
+Admitted.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1148,6 +863,21 @@ Local Hint Rewrite foo using lia : nat list.
 
 Local Hint Resolve smt_sorted_seg_variance : lia.
 
+Lemma sorted_seg_cons i j x xs :
+  sorted (seg (i + 1) j xs) →
+  {[x]} = seg i (i + 1) xs →
+  {[x]} ≼ seg i j xs →
+  sorted (seg i j xs).
+Proof.
+Admitted.
+
+Lemma exploit_sorted_seg i j k1 k2 xs :
+  sorted (seg i j xs) →
+  i ≤ k1 ≤ k2 ≤ j →
+  lex (xs !!! k1) (xs !!! k2).
+Proof.
+Admitted.
+
 Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
 Proof.
   simple eapply (well_founded_ind Wf_order). clear _i1 _i2.
@@ -1162,21 +892,33 @@ Proof.
     { wp_get x'2.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      + eapply (IH (_i1, _i2 + 1)%uint63); tc; try (list; lia).
-      + clear dependent _dst. intros _dst Hpost.
-        elim_merge_aux_post.
-        intro_merge_aux_post; eauto 2.
-        (* Prove that we have a permutation. *)
-        { rewrite (split_seg (i2 + 1) src2) by lia.
-          rewrite (split_seg (k + 1) dst') by lia.
-          rewrite <- Hpost3.
-          simplify_list_permutation_goal.
-          rewrite Permutation_app_comm.
-          simplify_list_permutation_goal.
-          rewrite <- Hpost5.
-          subst x2. list. reflexivity. }
-        (* Prove that the destination segment is sorted. *)
-        { admit. }
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc; try (list; lia). }
+      clear dependent _dst. intros _dst Hpost.
+      elim_merge_aux_post.
+      intro_merge_aux_post; eauto 2.
+      (* Prove that we have a permutation. *)
+      { rewrite (split_seg (i2 + 1) src2) by lia.
+        rewrite (split_seg (k + 1) dst') by lia.
+        rewrite <- Hpost3.
+        simplify_list_permutation_goal.
+        rewrite Permutation_app_comm.
+        simplify_list_permutation_goal.
+        rewrite <- Hpost5.
+        subst x2. list. reflexivity. }
+      (* Prove that the destination segment is sorted. *)
+      { rewrite smt_sorted_seg_iff, smt_sorted_iff in *.
+        (* TODO not using smt style after all? *)
+        split_seg (k+1) dst'.
+        replace (seg k (k + 1) dst') with ({[x2]} : list A).
+        eapply Sorted_app; eauto using Sorted_singleton.
+        rewrite <- Hpost3.
+        rewrite pairwise_app_right_iff; split.
+        + apply boundary_test; eauto 2 using Sorted_singleton.
+          list. recognize_named_lookups. eauto.
+        + apply boundary_test; eauto 2 using Sorted_singleton.
+          - eapply sorted_seg_variance; eauto 2 with lia.
+          - list. subst x2. eauto using exploit_sorted_seg with lia.
+      }
     }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
@@ -1203,19 +945,19 @@ Proof.
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      + eapply (IH (_i1 + 1, _i2)%uint63); tc; try (list; lia).
-      + clear dependent _dst. intros _dst Hpost.
-        elim_merge_aux_post.
-        intro_merge_aux_post; eauto 2.
-        (* Prove that we have a permutation. *)
-        { rewrite (split_seg (i1 + 1) src1) by lia.
-          rewrite (split_seg (k + 1) dst') by lia.
-          rewrite <- Hpost3.
-          simplify_list_permutation_goal.
-          rewrite <- Hpost5.
-          subst x1. list. reflexivity. }
-        (* Prove that the destination segment is sorted. *)
-        { admit. }
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc; try (list; lia). }
+      clear dependent _dst. intros _dst Hpost.
+      elim_merge_aux_post.
+      intro_merge_aux_post; eauto 2.
+      (* Prove that we have a permutation. *)
+      { rewrite (split_seg (i1 + 1) src1) by lia.
+        rewrite (split_seg (k + 1) dst') by lia.
+        rewrite <- Hpost3.
+        simplify_list_permutation_goal.
+        rewrite <- Hpost5.
+        subst x1. list. reflexivity. }
+      (* Prove that the destination segment is sorted. *)
+      { admit. }
     }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
