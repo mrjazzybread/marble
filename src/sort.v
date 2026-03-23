@@ -526,9 +526,9 @@ Proof.
           rewrite insert_seg by (list; lia); autorewrite with nat.
           reflexivity. }
         (* The destination segment is sorted. *)
-        { smt_reasoning.
-          + eapply transitivity; [| eassumption ]. eauto with lia.
-          admit. (* TODO *) }
+        { eapply smt_sorted_seg_fill; eauto 2; intros; list; subst xi.
+          + assumption.
+          + eapply Habove. lia. }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
@@ -541,7 +541,7 @@ Proof.
       }
     }
   }
-Admitted.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -689,10 +689,10 @@ Proof.
           rewrite insert_seg by (list; lia); autorewrite with nat.
           reflexivity. }
         (* The destination segment is sorted. [KEY] is used here. *)
-        { smt_reasoning; rewrite KEY.
-          + smt_reasoning.
-          + eapply transitivity; [| eauto ]. eauto with lia.
-            admit. (*TODO*) }
+        { eapply smt_sorted_seg_fill; eauto 2; intros; list; subst xi;
+          rewrite KEY.
+          + assumption.
+          + eapply Habove. lia. }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
@@ -707,7 +707,7 @@ Proof.
       }
     }
   }
-Admitted.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -787,9 +787,6 @@ merge_aux _i1 x1 _i2 x2 _dst _k :=
 
 End Code.
 
-(* TODO prove that if the two source segments are sorted for [lex]
-   then so is the destination segment *)
-
 Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
   λ _dst,
   ∃ dst',
@@ -863,6 +860,7 @@ Local Hint Rewrite foo using lia : nat list.
 
 Local Hint Resolve smt_sorted_seg_variance : lia.
 
+(* TODO
 Lemma sorted_seg_cons i j x xs :
   sorted (seg (i + 1) j xs) →
   {[x]} = seg i (i + 1) xs →
@@ -877,6 +875,7 @@ Lemma exploit_sorted_seg i j k1 k2 xs :
   lex (xs !!! k1) (xs !!! k2).
 Proof.
 Admitted.
+ *)
 
 Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
 Proof.
