@@ -430,6 +430,18 @@ Proof.
   rewrite <- smt_sorted_iff, smt_sorted_seg_iff. tauto.
 Qed.
 
+Lemma exploit_sorted_seg {_ : Reflexive R} i k xs :
+  sorted (seg i k xs) →
+  ∀ j1 j2,
+  valid j1 xs →
+  valid j2 xs →
+  i ≤ j1 → j1 ≤ j2 → j2 < k →
+  xs !!! j1 `R` xs !!! j2.
+Proof.
+  rewrite <- smt_sorted_seg_iff'.
+  eauto using exploit_smt_sorted_seg.
+Qed.
+
 (* If a segment is sorted, then a smaller segment is sorted. *)
 
 Lemma smt_sorted_seg_variance i k i' k' xs :
@@ -623,36 +635,6 @@ Lemma sorted_app_boundary `{Inhabited A} xs ys :
 Proof.
   eauto using Sorted_app, boundary_test with typeclass_instances.
 Qed.
-
-(* Special cases of [boundary_test]. *)
-(* TODO
-Lemma boundary_test_singleton_left `{Inhabited A} x y ys :
-  sorted ys →
-  (length ys ≠ 0 → y = ys !!! 0) →
-  x ≤ y →
-  {[x]} ≼ ys.
-Proof.
-  intros. subst.
-  apply boundary_test; list; eauto using Sorted_singleton with lia.
-Qed.
-
-Lemma boundary_test_singleton_left_seg `{Inhabited A} x y i j ys :
-  sorted (seg i j ys) →
-  valid i ys →
-  y = ys !!! i →
-  x ≤ y →
-  {[x]} ≼ seg (i + 1) j ys.
-Proof.
-  intros. eapply boundary_test_singleton_left.
-  + eauto using sorted_seg_variance with lia.
-  + list. lia.
-
-sorted (seg i j ys) →
-y = ys !!! i →
-x < y →
-{[x]} ≺ seg i j ys
-
-*)
 
 End AlsoReflexive.
 
