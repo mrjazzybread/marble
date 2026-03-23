@@ -949,7 +949,7 @@ Lemma wp_iter_down_aux {S} (body : int → S → S) :
 Proof.
   intros. ITER.
   funelim (iter_down_aux _i body _j s); cleanup; clear Heqcall;
-  intros; isBool_magic; autorewrite with nat.
+  intros; isBool_magic; nat.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
@@ -976,7 +976,7 @@ Lemma wp_iter_down {S} (body : int → S → S) :
     (λ s Q, wp (iter_down _k _i s body) Q).
 Proof.
   intros. ITER. unfold iter_down.
-  wp_if; autorewrite with nat.
+  wp_if; nat.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
@@ -1029,7 +1029,7 @@ Lemma wp_xiter_down_aux {S A}
 Proof.
   intros. XITER.
   funelim (xiter_down_aux _i (@body) _j s); cleanup; clear Heqcall;
-  intros; isBool_magic; autorewrite with nat.
+  intros; isBool_magic; nat.
   (* Case [j = i]. *)
   { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
@@ -1054,7 +1054,7 @@ Lemma wp_xiter_down {S A}
     (λ s Q, wp (xiter_down _k _i s (@body)) Q).
 Proof.
   intros. XITER. unfold xiter_down.
-  wp_if; autorewrite with nat.
+  wp_if; nat.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
@@ -1106,7 +1106,7 @@ Lemma wp_uxiter_down_aux {A}
 Proof.
   intros. UXITER.
   funelim (uxiter_down_aux _i (@body) _j); cleanup; clear Heqcall;
-  intros; isBool_magic; autorewrite with nat.
+  intros; isBool_magic; nat.
   (* Case [j = i]. *)
   { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
@@ -1131,7 +1131,7 @@ Lemma wp_uxiter_down {A}
     (λ Q, wp (uxiter_down _k _i (@body)) Q).
 Proof.
   intros. UXITER. unfold uxiter_down.
-  wp_if; autorewrite with nat.
+  wp_if; nat.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
@@ -1196,7 +1196,7 @@ Lemma wp_iter_up_aux {S} (body : int → S → S) :
 Proof.
   intros. ITER.
   funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
-  isBool_magic; autorewrite with nat.
+  isBool_magic; nat.
   (* Case [i < k]. *)
   { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
@@ -1260,7 +1260,7 @@ Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. XITER.
   funelim (xiter_up_aux _k (@body) _i s); cleanup; clear Heqcall; intros;
-  isBool_magic; autorewrite with nat.
+  isBool_magic; nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
@@ -1322,7 +1322,7 @@ Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. UXITER.
   funelim (uxiter_up_aux _k (@body) _i); cleanup; clear Heqcall; intros;
-  isBool_magic; autorewrite with nat.
+  isBool_magic; nat.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)

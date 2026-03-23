@@ -1170,8 +1170,7 @@ Proof.
       (* Case: [notOK x]. *)
       + match goal with H: _ → ?goal |- ?goal => eapply H end.
         eapply one_step_up; eauto. }}
-  { autorewrite with nat.
-    intros [|] (k&?&?).
+  { nat. intros [|] (k&?&?).
     (* Subcase: the loop has ended by breaking. The loop index is an
        unknown [i]. Fortunately [find_index_inv xs k (Break i)] is
        independent of [k]. *)

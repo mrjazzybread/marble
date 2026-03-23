@@ -6,6 +6,18 @@ Set Universe Polymorphism.
 
 (* -------------------------------------------------------------------------- *)
 
+(* The tactics [nat] and [nat in h] perform simplification
+   (via rewriting) in the goal or in a hypothesis. *)
+
+Global Ltac nat :=
+  autorewrite with nat.
+
+Global Tactic Notation "nat" "in" hyp(h) :=
+  autorewrite with nat in h.
+
+Global Tactic Notation "nat" "in" "*" :=
+  autorewrite with nat in *.
+
 (* The tactics [list] and [list in h] perform simplification
    (via rewriting) in the goal or in a hypothesis. *)
 
@@ -84,9 +96,22 @@ Proof. lia. Qed.
 Lemma ab_plus_cma a b c : a ≤ c → a + b + (c - a) = b + c.
 Proof. lia. Qed.
 
+Lemma abc_plus_dma a b c d :
+  a ≤ d → a + b + c + (d - a) = b + c + d.
+Proof. lia. Qed.
+Lemma abc_plus_dmb a b c d :
+  b ≤ d → a + b + c + (d - b) = a + c + d.
+Proof. lia. Qed.
+Lemma abc_plus_dmc a b c d :
+  c ≤ d → a + b + c + (d - c) = a + b + d.
+Proof. lia. Qed.
+
 Global Hint Rewrite
   ab_plus_cmb
   ab_plus_cma
+  abc_plus_dma
+  abc_plus_dmb
+  abc_plus_dmc
   using (list; lia)
 : nat list.
 
@@ -877,7 +902,7 @@ Global Ltac split_seg j xs :=
 
 Global Ltac split_seg_singleton_l xs :=
   erewrite (split_seg_singleton_l xs) by lia;
-  autorewrite with nat.
+  nat.
     (* We do not use [list] because it would undo the splitting. *)
 
 (* The tactic [split_seg_singleton_r xs] splits off the last element
@@ -885,7 +910,7 @@ Global Ltac split_seg_singleton_l xs :=
 
 Global Ltac split_seg_singleton_r xs :=
   erewrite (split_seg_singleton_r xs) by lia;
-  autorewrite with nat.
+  nat.
     (* We do not use [list] because it would undo the splitting. *)
 
 (* Some properties of empty segments. *)
@@ -962,7 +987,7 @@ Lemma lookup_total_elem_seg_2 `{Inhabited A} i j k (xs : list A) :
   xs !!! j ∈ seg i k xs.
 Proof.
   intros.
-  rewrite (seg_valid i k xs). cbv zeta. autorewrite with nat.
+  rewrite (seg_valid i k xs). cbv zeta. nat.
   assert (valid (j - i) (seg i (k `min` length xs) xs)) by (list; lia).
   replace j with (i + (j - i)) by lia.
   erewrite <- lookup_total_seg by eauto.
@@ -1079,7 +1104,7 @@ Global Ltac simplify_list_equality_goal :=
    which, in a permutation goal, can be counter-productive. *)
 
 Ltac simplify_list_permutation_goal :=
-  autorewrite with nat;
+  nat;
   repeat rewrite app_assoc;
   repeat eapply Permutation_app_tail;
   repeat rewrite <- app_assoc;
