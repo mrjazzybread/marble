@@ -120,6 +120,18 @@ Proof.
     eauto. }
 Qed.
 
+(* In a context of the form [xs ≺ ys], one may rewrite
+   using a list permutation fact. *)
+
+Global Instance pairwise_permut :
+  Proper (Permutation ==> Permutation ==> impl) pairwise.
+Proof.
+  intros xs xs' Hxs ys ys' Hys Hpw x y Hx Hy.
+  eapply Hpw.
+  + rewrite Hxs. eauto.
+  + rewrite Hys. eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The empty list is sorted. *)
