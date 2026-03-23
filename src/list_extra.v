@@ -230,6 +230,16 @@ Proof.
   - rewrite lookup_app_r by lia. eauto.
 Qed.
 
+Lemma lookup_total_app' `{Inhabited A} (xs ys : list A) i :
+  (xs ++ ys) !!! i =
+    if decide (i < length xs) then xs !!! i
+    else ys !!! (i - length xs).
+Proof.
+  intros. case_decide.
+  - rewrite lookup_total_app_l by lia. eauto.
+  - rewrite lookup_total_app_r by lia. eauto.
+Qed.
+
 Lemma lookup_total_cons_eq_0 `{!Inhabited A} (xs : list A) x i :
   i = 0 → (x :: xs) !!! i = x.
 Proof. intros ->. reflexivity. Qed.
