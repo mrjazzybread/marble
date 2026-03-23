@@ -474,12 +474,38 @@ Proof.
   { eauto with lia. }
 Qed.
 
+(* If the segment [seg i k xs] is sorted except at index [j],
+   then once a suitable element [x] is written into this slot,
+   the whole segment is sorted. *)
+
+Lemma smt_sorted_seg_fill i k xs j x :
+  smt_sorted_seg_except i k xs j →
+  (i < j → xs !!! (j - 1) `R` x) →
+  (j + 1 < k → x `R` xs !!! (j + 1)) →
+  smt_sorted_seg i k (<[j := x]>xs).
+Proof.
+  unfold smt_sorted_seg_except, smt_sorted_seg.
+  intros Hsorted Hleft Hright.
+  intros j1 j2. intros. list in *.
+  rewrite !list_lookup_total_insert. repeat case_decide; try lia.
+  + destruct (decide (j2 = j + 1)).
+    { subst j2. eauto. }
+    { transitivity (xs !!! (j + 1)); eauto 2 with lia. }
+  + destruct (decide (j1 = j - 1)).
+    { subst j1. eauto with lia. }
+    { transitivity (xs !!! (j - 1)); eauto 2 with lia. }
+  + eapply Hsorted; lia.
+Qed.
+
+(* An alternate definition of [smt_sorted_seg_except]. *)
+
 Lemma smt_sorted_seg_except_iff i k xs j :
   i ≤ j < k →
   k ≤ length xs →
   smt_sorted_seg_except i k xs j ↔
   sorted (seg i j xs ++ seg (j + 1) k xs).
 Proof.
+  (* This proof is slow. *)
   rewrite <- smt_sorted_iff.
   unfold smt_sorted, smt_sorted_seg_except.
   split.
