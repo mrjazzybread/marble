@@ -73,6 +73,9 @@
 
 ## Documentation
 
+* Write a script that generates accurate links into the source code.
+  Use it in the documentation of the public API.
+
 * Explain the linear use discipline.
 
   While iterating on a collection (`array.iteri`, `vector.iteri`)
