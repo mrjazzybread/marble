@@ -34,6 +34,8 @@
 
 * More lemmas should be marked `Local`.
 
+* Once released (Rocq 9.2?), use `autorewrite*`.
+
 # OCaml Extraction
 
 * Set up extraction to use defensive, non-persistent arrays.
@@ -73,8 +75,7 @@
 
 ## Documentation
 
-* Write a script that generates accurate links into the source code.
-  Use it in the documentation of the public API.
+* Document the public API.
 
 * Explain the linear use discipline.
 
