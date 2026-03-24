@@ -4,7 +4,7 @@ From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
 From marble Require Import equations.
-From marble Require Import tactics list_extra iteration int wp wp_tactics array orders sorting.
+From marble Require Import tactics list_extra iteration int wp wp_tactics array orders sorting compare.
 Implicit Types _i _j _k : int.
 
 Unset Universe Minimization ToSet.
@@ -20,7 +20,7 @@ Open Scope nat_scope.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A couple local tactics. *)
+(* A few local tactics. *)
 
 (* The tactic [recognize_named_lookups] detects hypotheses of the form
    [x = xs !!! i] and uses them to replace [xs !!! i] with [x] both in
@@ -45,7 +45,7 @@ Local Ltac use_known_permutation :=
 
 (* The tactic [decompose_segment] detects a hypothesis of the form
    [seg i j xs ++ {[x]} = seg i (j + 1) ys]. It deduces the two
-   equations [seg i j xs = seg i j ys] and [{[xs]} = seg j (j + 1) ys]. *)
+   equations [seg i j xs = seg i j ys] and [{[x]} = seg j (j + 1) ys]. *)
 
 Local Ltac decompose_segment :=
   match goal with
@@ -54,77 +54,6 @@ Local Ltac decompose_segment :=
     eapply app_inj_1 in h; [| list; lia ];
     unpack in h
   end.
-
-(* -------------------------------------------------------------------------- *)
-
-(* Three-way comparisons. *)
-
-(* This type exists in the standard library:
-Inductive comparison := Eq | Lt | Gt.
- *)
-
-(* A [compare] function performs a three-way comparison. *)
-
-(* [Compare A] means that the type [A] has a [compare] function. *)
-
-Class Compare (A : Type) :=
-  { compare : A → A → comparison }.
-
-(* [Comparable A] means that the [compare] function at type [A]
-   is correct with respect to the default preorder on this type. *)
-
-Section Comparable.
-
-Open Scope element_scope.
-
-Context (A : Type) (R : relation A).
-
-(* Standard mathematical notation. *)
-
-Infix "≤" := R
-  (at level 70, no associativity) : element_scope.
-Infix "<" := (strict R)
-  (at level 70, no associativity) : element_scope.
-Notation "y ≥ x" := (x ≤ y)
-  (only parsing, at level 70, no associativity) : element_scope.
-Notation "y > x" := (x < y)
-  (only parsing, at level 70, no associativity) : element_scope.
-Infix "≡" := (equivalent R)
-  (at level 70, no associativity) : element_scope.
-
-(* Standard mathematical facts about the above definitions. *)
-
-Lemma equiv_le x y :  x ≡ y → x ≤ y.
-Proof. unfold equivalent. tauto. Qed.
-Lemma lt_le x y :  x < y → x ≤ y.
-Proof. unfold strict. tauto. Qed.
-Lemma equiv_ge x y :  x ≡ y → x ≥ y.
-Proof. unfold equivalent. tauto. Qed.
-Lemma gt_ge x y :  x > y → x ≥ y.
-Proof. eauto using lt_le. Qed.
-
-Context `{Compare A}.
-
-Class Comparable := {
-  compare_spec :
-    ∀ x y : A, CompareSpec (x ≡ y) (x < y) (x > y) (compare x y)
-}.
-
-Lemma wp_compare_Gt_Le `{Comparable} {B} (x y : A) (e1 e2 : B) (Q : B → Prop) :
-  (x > y → wp e1 Q) →
-  (x ≤ y → wp e2 Q) →
-  wp (match compare x y with Gt => e1 | _ => e2 end) Q.
-Proof.
-  intros. destruct (compare_spec x y).
-  + eauto using equiv_le.
-  + eauto using lt_le.
-  + eauto.
-Qed.
-
-End Comparable.
-
-Global Ltac wp_compare :=
-  simple eapply wp_compare_Gt_Le; [ eauto | intro | intro ].
 
 (* -------------------------------------------------------------------------- *)
 
