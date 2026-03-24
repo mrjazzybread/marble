@@ -1014,6 +1014,15 @@ Proof.
   + destruct Hx as (j & ? & ?). subst. eauto using lookup_total_elem_seg_2.
 Qed.
 
+Lemma elem_seg_variance `{Inhabited A} i' j' i j x (xs : list A) :
+  x ∈ seg i j xs →
+  i' ≤ i → j ≤ j' →
+  x ∈ seg i' j' xs.
+Proof.
+  rewrite !lookup_total_elem_seg. intros (?&?&?).
+  eexists. split; [| eauto ]. lia.
+Qed.
+
 (* [eauto with elem_of_app] can prove that [xs !!! i] is a member of
    a concatenation of lists, one of which is a segment of [xs] that
    contains the index [i]. *)
