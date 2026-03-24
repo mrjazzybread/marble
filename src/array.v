@@ -254,6 +254,23 @@ Proof.
   congruence.
 Qed.
 
+(* The tactic [arrays] looks for hypotheses of the form [isArray a xs]
+   and introduces the fact [representable (len xs)]. This fact is then
+   possibly simplified (in cases where [xs] is a complex expression).
+   Using this tactic at the beginning can help preserve information about
+   the fact that certain integers are representable. This information
+   could otherwise become obscured as the array [a] is updated and the
+   assertion [isArray a _] becomes more complex. *)
+
+Ltac arrays :=
+  repeat match goal with
+  h: isArray ?a ?xs |- _ =>
+    let h' := fresh h in
+    assert (h': representable (len xs)) by tc;
+    list in h';
+    revert h
+  end; intros.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The primitive operations on arrays are [make], [get], [set], and [length]. *)
