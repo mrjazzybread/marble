@@ -270,6 +270,19 @@ Section SMT.
 
 Context `{Inhabited A}.
 
+(* [pairwise] applied to two segments remains true if the segments are
+   shrunk. *)
+
+Lemma seg_pairwise_seg_variance i1 j1 i2 j2 i'1 j'1 i'2 j'2 xs1 xs2 :
+  seg i1 j1 xs1 ≺ seg i2 j2 xs2 →
+  i1 ≤ i'1 → j'1 ≤ j1 → i2 ≤ i'2 → j'2 ≤ j2 →
+  seg i'1 j'1 xs1 ≺ seg i'2 j'2 xs2.
+Proof.
+  (* The hypothesis [Inhabited A] should not be necessary for this
+     result to hold, but it is used in this proof. *)
+  unfold pairwise. intros. eauto using elem_seg_variance with lia.
+Qed.
+
 (* The definition of sortedness that is best suited for use with SMT
    solvers is this. *)
 
