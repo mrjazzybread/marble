@@ -686,7 +686,6 @@ Qed.
 End JustTransitive.
 
 Arguments pairwise {A} R xs ys.
-Print smt_sorted.
 Arguments smt_sorted {A} R {H} xs.
 Arguments smt_sorted_seg {A} R {H} i k xs.
 Arguments smt_sorted_seg_except {A} R {H} i k xs j.
