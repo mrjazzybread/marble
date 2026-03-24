@@ -852,10 +852,9 @@ Proof.
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
       intro_merge_aux_post; eauto 2; nat in *; list;
-        (* UGLY [list] misses this rewriting step: *)
-        try (erewrite (seg_none' _ _ dst) by lia; list).
-      + lia.
-      + reflexivity.
+      (* UGLY [list] misses this rewriting step: *)
+      try (erewrite (seg_none' _ _ dst) by lia; list);
+      eauto 2 with lia.
       + simplify_list_equality_goal. reflexivity.
       + eapply Permutation_app_comm.
       + recognize_singleton_segments. recognize_named_lookups.
@@ -902,11 +901,9 @@ Proof.
       wp_blit.
       intro_merge_aux_post; eauto 2; nat in *; list;
       (* UGLY [list] misses this rewriting step: *)
-      try (erewrite (seg_none' _ _ dst) by lia; list).
-      + lia.
-      + reflexivity.
+      try (erewrite (seg_none' _ _ dst) by lia; list);
+      eauto 2 with lia.
       + simplify_list_equality_goal. reflexivity.
-      + reflexivity.
       + recognize_singleton_segments. recognize_named_lookups.
         eapply sorted_app_boundary; eauto 2 with lia.
         intros _ _. list. recognize_named_lookups.
@@ -952,7 +949,8 @@ merge_aux_1 _i1 x1 _i2 x2 _dst _k :=
         do x2 ← get _src2 _i2 ;
         merge_aux_1 _i1 x1 _i2 x2 _dst _k
       ELSE
-        blit' _dst _i1 _k (_j1 - _i1)
+        (* There is nothing to do in this case. *)
+        _dst
   end.
 
 End MergeAux1.
@@ -1046,16 +1044,11 @@ Proof.
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       (* i1 = k + 1 *) subst i1.
-      wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list;
-        (* UGLY [list] misses this rewriting step: *)
-        try (erewrite (seg_none' _ _ dst) by lia; list).
-      + lia.
-      + reflexivity.
-      + simplify_list_equality_goal. reflexivity.
-      + eapply Permutation_app_comm.
+      wp_ret.
+      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
       + recognize_singleton_segments. recognize_named_lookups.
-        eapply sorted_app_boundary; eauto 2 with lia.
+        eapply Permutation_app_comm.
+      + eapply sorted_app_boundary; eauto 2 with lia.
         intros _ _. list. recognize_named_lookups. eauto.
     }
   }
@@ -1098,9 +1091,7 @@ Proof.
     { assert (j1 = i1 + 1) by lia. subst j1.
       (* i1 = k + (j2 - i2) *) subst i1.
       wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list.
-      + lia.
-      + reflexivity.
+      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
       + simplify_list_equality_goal. reflexivity.
       + simplify_list_permutation_goal.
         erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
