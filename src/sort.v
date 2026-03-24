@@ -623,24 +623,15 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Merging two sorted arrays: [merge]. *)
+(* The well-founded relation [order _j1 _j2] is used to justify the
+   termination of [merge_aux] and of its variants. In short, either
+   [_i1] increases without exceeding [_j1], while [_i2] remains
+   unchanged; or, symmetrically, [_i2] increases without exceeding
+   [_j2], while [_i1] remains unchanged. *)
 
-(* We begin with [merge_aux], which merges two sorted array segments
-   and writes the resulting data to a destination segment. *)
+Section MergeOrder.
 
-Section MergeAux.
-
-(* In the recursive definition of [merge_aux], the following four
-   parameters remain fixed. [_src1] and [_src2] are the source arrays.
-   [_j1] and [_j2] are the end indices of the two source segments. *)
-
-Variable _src1 _src2 : array A.
 Variable _j1 _j2 : int.
-
-(* The well-founded relation [order] is used to justify termination.
-   In short, either [_i1] increases without exceeding [_j1], while
-   [_i2] remains unchanged; or, symmetrically, [_i2] increases without
-   exceeding [_j2], while [_i1] remains unchanged. *)
 
 Local Definition order1 : relation (int * int) :=
   λ '(_i1, _i2) '(_i'1, _i'2),
@@ -675,12 +666,28 @@ Proof.
     exists (_i1, _i''2); simpl; tauto. }
 Qed.
 
-Global Instance Wf_order : WellFounded order :=
-  wf_guard 32 wf_order.
+End MergeOrder.
 
-Local Hint Extern 1 (order _ _) =>
+Local Instance Wf_order _j1 _j2 : WellFounded (order _j1 _j2) :=
+  wf_guard 32 (wf_order _j1 _j2).
+
+Local Hint Extern 1 (order _ _ _ _) =>
   unfold order, order1, order2
 : lia.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [merge_aux] merges two sorted array segments and writes the resulting
+   sorted data into an array segment. *)
+
+Section MergeAux.
+
+(* In the recursive definition of [merge_aux], the following four
+   parameters remain fixed. [_src1] and [_src2] are the source arrays.
+   [_j1] and [_j2] are the end indices of the two source segments. *)
+
+Variable _src1 _src2 : array A.
+Variable _j1 _j2 : int.
 
 (* Here is the code of [merge_aux]. *)
 
@@ -690,11 +697,10 @@ Local Hint Extern 1 (order _ _) =>
    array. [_k] is the start index of the destination segment. The end
    index of the destination segment is [k + (j1 - i1) + (j2 - i2)]. *)
 
-Section Code.
 Open Scope uint63.
 
 Equations merge_aux _i1 x1 _i2 x2 _dst _k : array A
-by wf (_i1, _i2) order :=
+by wf (_i1, _i2) (order _j1 _j2) :=
 merge_aux _i1 x1 _i2 x2 _dst _k :=
   match compare x1 x2 with
   | Lt | Eq =>
@@ -717,7 +723,7 @@ merge_aux _i1 x1 _i2 x2 _dst _k :=
         blit _src1 _i1 _dst _k (_j1 - _i1)
   end.
 
-End Code.
+End MergeAux.
 
 (* The postcondition of [merge_aux]. *)
 
@@ -755,52 +761,55 @@ Local Ltac elim_merge_aux_post :=
 
 (* The source segments must be valid, nonempty, and sorted. *)
 
-(* Furthermore, [src1] must precede [src2]. *)
+(* The first source segment must precede the second source segment. *)
 
-Definition merge_aux_spec '((_i1, _i2) : int * int) :=
-  ∀ src1 src2,
+Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+  ∀ _src1 src1 _src2 src2,
   isArray _src1 src1 →
   isArray _src2 src2 →
-  ∀ j1 j2,
-  isInt _j1 j1 →
-  isInt _j2 j2 →
   ∀ i1, isInt _i1 i1 →
+  ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
   (i1 < j1)%nat →
   ∀ x1,
   x1 = src1 !!! i1 →
   ∀ i2, isInt _i2 i2 →
+  ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
   (i2 < j2)%nat →
   ∀ x2,
   x2 = src2 !!! i2 →
   sorted (seg i1 j1 src1) →
   sorted (seg i2 j2 src2) →
-  src1 `precede` src2 →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  ∀Int _k k,
   ∀ _dst dst,
   isArray _dst dst →
-  ∀Int _k k,
   let limit := k + (j1 - i1) + (j2 - i2) in
   valid_seg k limit dst →
-  wp (merge_aux _i1 x1 _i2 x2 _dst _k)
+  wp (merge_aux _src1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
 Local Hint Resolve
   Sorted_singleton
   sorted_seg_variance
+  seg_pairwise_seg_variance
 : lia.
 
 Local Ltac tc ::=
   eauto 7 with typeclass_instances lia.
 
-Lemma wp_merge_aux _i1 _i2 : merge_aux_spec (_i1, _i2).
+Lemma wp_merge_aux _j1 _j2 _src1 _src2 _i1 _i2 :
+  merge_aux_spec _j1 _j2 (_i1, _i2).
 Proof.
-  simple eapply (well_founded_ind Wf_order). clear _i1 _i2.
+  simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
   unfold merge_aux_spec. intros.
   (* The following fact is useful. *)
   assert (x1 `precedes` x2).
   { subst x1 x2. unfold pairwise in *.
+    erewrite (lookup_total_through_seg i1 j1 i1) by eauto with lia. nat.
+    erewrite (lookup_total_through_seg i2 j2 i2) by eauto with lia. nat.
     eauto using list_elem_of_lookup_total_2 with lia. }
   (* Now examine the code. *)
   autorewrite with merge_aux.
@@ -812,7 +821,7 @@ Proof.
     { wp_get x'2.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; tc; try (list; lia). }
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
       clear dependent _dst. intros _dst Hpost.
       elim_merge_aux_post.
       intro_merge_aux_post; eauto 2.
@@ -861,7 +870,7 @@ Proof.
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; tc; try (list; lia). }
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
       clear dependent _dst. intros _dst Hpost.
       elim_merge_aux_post.
       intro_merge_aux_post; eauto 2.
@@ -907,6 +916,203 @@ Proof.
   }
 Qed.
 
-End MergeAux.
+(* -------------------------------------------------------------------------- *)
+
+(* [merge_aux_1] is identical to [merge_aux], except the first source array
+   [_src1] and the destination array [_dst] are the same array. The first
+   source segment must then form a suffix of the destination segment. This
+   implies that the data is moved left and cannot be overwritten before it
+   is read. *)
+
+Section MergeAux1.
+
+Variable _src2 : array A.
+Variable _j1 _j2 : int.
+
+Open Scope uint63.
+
+Equations merge_aux_1 _i1 x1 _i2 x2 _dst _k : array A
+by wf (_i1, _i2) (order _j1 _j2) :=
+merge_aux_1 _i1 x1 _i2 x2 _dst _k :=
+  match compare x1 x2 with
+  | Lt | Eq =>
+      do _dst ← set _dst _k x1 ;
+      let _i1 := _i1 + 1 in
+      let _k := _k + 1 in
+      IF (_i1 <? _j1) THEN
+        do x1 ← get _dst _i1 ;
+        merge_aux_1 _i1 x1 _i2 x2 _dst _k
+      ELSE
+        blit _src2 _i2 _dst _k (_j2 - _i2)
+  | Gt =>
+      do _dst ← set _dst _k x2 ;
+      let _i2 := _i2 + 1 in
+      let _k := _k + 1 in
+      IF (_i2 <? _j2) THEN
+        do x2 ← get _src2 _i2 ;
+        merge_aux_1 _i1 x1 _i2 x2 _dst _k
+      ELSE
+        blit' _dst _i1 _k (_j1 - _i1)
+  end.
+
+End MergeAux1.
+
+(* The specification of [merge_aux_1]. *)
+
+Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+  ∀ _src1 src1 _src2 src2,
+  isArray _src1 src1 →
+  isArray _src2 src2 →
+  ∀ i1, isInt _i1 i1 →
+  ∀ j1, isInt _j1 j1 →
+  valid_seg i1 j1 src1 →
+  (i1 < j1)%nat →
+  ∀ x1,
+  x1 = src1 !!! i1 →
+  ∀ i2, isInt _i2 i2 →
+  ∀ j2, isInt _j2 j2 →
+  valid_seg i2 j2 src2 →
+  (i2 < j2)%nat →
+  ∀ x2,
+  x2 = src2 !!! i2 →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  ∀Int _k k,
+  (* The destination array is the first source array. *)
+  let _dst := _src1 in
+  let dst := src1 in
+  (* The first source segment must form a suffix of the destination
+     segment. In other words, these segments must have the same end
+     index. That is, [j1] must be equal to [limit]. In other words,
+     [i1] must be equal to [k + (j2 - i2)]. *)
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  limit = j1 →
+  valid_seg k limit dst →
+  wp (merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
+     (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
+
+Lemma wp_merge_aux_1 _j1 _j2 _i1 _i2 :
+  merge_aux_1_spec _j1 _j2 (_i1, _i2).
+Proof.
+  simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
+  intros (_i1, _i2) IH.
+  unfold merge_aux_1_spec. intros.
+  assert (Hi1: i1 = k + (j2 - i2)) by lia.
+  (* The following fact is useful. *)
+  assert (x1 `precedes` x2).
+  { subst x1 x2. unfold pairwise in *.
+    erewrite (lookup_total_through_seg i1 j1 i1) by eauto with lia. nat.
+    erewrite (lookup_total_through_seg i2 j2 i2) by eauto with lia. nat.
+    eauto using list_elem_of_lookup_total_2 with lia. }
+  (* Now examine the code. *)
+  autorewrite with merge_aux_1.
+  arrays.
+  wp_compare.
+  (* Case [x2 < x1]. *)
+  { wp_set.
+    wp_if.
+    (* Subcase [i2 + 1 < j2]. *)
+    { wp_get x'2.
+      (* We are now looking at the recursive call. *)
+      eapply wp_conseq.
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
+      clear dependent _src1. intros _src1 Hpost.
+      elim_merge_aux_post.
+      intro_merge_aux_post; eauto 2.
+      (* Prove that we have a permutation. *)
+      { split_seg (i2 + 1) src2.
+        split_seg (k + 1) dst'.
+        rewrite <- Hpost3. rewrite <- Hpost5.
+        simplify_list_permutation_goal.
+        rewrite Permutation_app_comm.
+        simplify_list_permutation_goal.
+        subst x2. list. reflexivity. }
+      (* Prove that the destination segment is sorted. *)
+      { split_seg (k + 1) dst'.
+        rewrite <- Hpost5.
+        eapply Sorted_app; eauto with lia.
+        rewrite <- Hpost3.
+        (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
+        rewrite pairwise_app_right_iff; split.
+        + apply boundary_test; eauto 2 with lia.
+          intros _ _. list. recognize_named_lookups. eauto.
+        + apply boundary_test; eauto 2 with lia.
+          - eapply sorted_seg_variance; eauto 2 with lia.
+          - intros _ _. list. subst x2.
+            eapply exploit_sorted_seg; eauto with lia.
+      }
+    }
+    (* Subcase [i2 + 1 = j2]. *)
+    { assert (j2 = i2 + 1) by lia. subst j2.
+      (* i1 = k + 1 *) subst i1.
+      wp_blit.
+      intro_merge_aux_post; eauto 2; nat in *; list;
+        (* UGLY [list] misses this rewriting step: *)
+        try (erewrite (seg_none' _ _ dst) by lia; list).
+      + lia.
+      + reflexivity.
+      + simplify_list_equality_goal. reflexivity.
+      + eapply Permutation_app_comm.
+      + recognize_singleton_segments. recognize_named_lookups.
+        eapply sorted_app_boundary; eauto 2 with lia.
+        intros _ _. list. recognize_named_lookups. eauto.
+    }
+  }
+  (* Case [x1 ≤ x2]. *)
+  { wp_set.
+    wp_if.
+    (* Subcase [i1 + 1 < j1]. *)
+    { wp_get x'1.
+      match goal with h: x'1 = _ |- _ => rewrite <- Hi1 in h end.
+      (* We are now looking at the recursive call. *)
+      eapply wp_conseq.
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
+      clear dependent _src1. intros _src1 Hpost.
+      elim_merge_aux_post.
+      intro_merge_aux_post; eauto 2.
+      (* Prove that we have a permutation. *)
+      { split_seg (i1 + 1) src1.
+        split_seg (k + 1) dst'.
+        rewrite <- Hpost3. rewrite <- Hpost5.
+        simplify_list_permutation_goal.
+        subst x1. list. reflexivity. }
+      (* Prove that the destination segment is sorted. *)
+      { split_seg (k + 1) dst'.
+        rewrite <- Hpost5.
+        eapply Sorted_app; eauto with lia.
+        rewrite <- Hpost3.
+        (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
+        rewrite pairwise_app_right_iff; split.
+        + apply boundary_test; eauto 2 with lia.
+          - eapply sorted_seg_variance; eauto 2 with lia.
+          - intros _ _. list. subst x1.
+            eapply exploit_sorted_seg; eauto with lia.
+        + apply boundary_test; eauto 2 with lia.
+          intros _ _. list. recognize_named_lookups.
+          (* The fact that [x1] precedes [x2] is used here. *)
+          eauto.
+      }
+    }
+    (* Subcase [i1 + 1 = j1]. *)
+    { assert (j1 = i1 + 1) by lia. subst j1.
+      (* i1 = k + (j2 - i2) *) subst i1.
+      wp_blit.
+      intro_merge_aux_post; eauto 2; nat in *; list.
+      + lia.
+      + reflexivity.
+      + simplify_list_equality_goal. reflexivity.
+      + simplify_list_permutation_goal.
+        erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
+        reflexivity.
+      + recognize_singleton_segments. recognize_named_lookups.
+        erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
+        eapply sorted_app_boundary; eauto 2 with lia.
+        intros _ _. list. recognize_named_lookups.
+        (* The fact that [x1] precedes [x2] is used here. *)
+        eauto.
+    }
+  }
+Qed.
 
 End Sorting.
