@@ -106,12 +106,18 @@ Lemma abc_plus_dmc a b c d :
   c ≤ d → a + b + c + (d - c) = a + b + d.
 Proof. lia. Qed.
 
+Lemma a_bmcd_d a b c :
+  a + c ≤ b →
+  a + (b - a - c) + c = b.
+Proof. lia. Qed.
+
 Global Hint Rewrite
   ab_plus_cmb
   ab_plus_cma
   abc_plus_dma
   abc_plus_dmb
   abc_plus_dmc
+  a_bmcd_d
   using (list; lia)
 : nat list.
 
