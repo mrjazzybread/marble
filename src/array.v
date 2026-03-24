@@ -947,7 +947,7 @@ Global Ltac wp_blit :=
   | |- context[blit _ _ ?b _ _] =>
       wp_op_overwrite wp_blit b
   | |- context[blit' ?a _ _ _] =>
-      wp_op_overwrite wp_blit a
+      wp_op_overwrite wp_blit' a
   end.
 
 (* -------------------------------------------------------------------------- *)
