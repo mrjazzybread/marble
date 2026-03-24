@@ -9,9 +9,6 @@ Local Opaque app. (* Prevent undesired simplification. *)
 (* It complements the libraries Coq.Sorting.Sorted and stdpp.sorting,
    which seem quite poor. *)
 
-Declare Scope element_scope.
-Delimit Scope element_scope with element.
-
 (* -------------------------------------------------------------------------- *)
 
 (* We prefer {[x]} over [x] for singletons, because the former is more

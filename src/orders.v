@@ -2,6 +2,9 @@ Require Import stdpp.orders.
 
 (* This file establishes some properties of ordering relations. *)
 
+Declare Scope element_scope.
+Delimit Scope element_scope with element.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Some properties of strict orders. *)
