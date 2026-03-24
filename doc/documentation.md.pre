@@ -1,0 +1,18 @@
+# Marble
+
+## Arrays
+
+### Primitive operations
+
+There are four primitive operations on arrays:
+
+* `make n x` creates a new array of length `n`, filled with the value `x`.
+   Its [specification](array.v:Lemma wp_make)
+   has the precondition that `n` should not exceed `max_array_length`.
+   The tactic [`wp_make`](array.v:Ltac wp_make) helps reason about it.
+
+* `length`
+
+* `get`
+
+* `set`
