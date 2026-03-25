@@ -1714,4 +1714,196 @@ Proof.
   }
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
+(* [sortto _src _i _dst _k _n] sorts the source array segment described by
+   the array [_src], the start index [_i], and the length [_n]. The sorted
+   data is written into the array segment described by [_dst], [_k], and
+   [_n]. The arrays [_src] and [_dst] must be distinct. This is a merge
+   sort, with an insertion sort at the leaves. It is a stable sort. *)
+
+(* [sortto' _i _dst _k _n] is a variant where the two arrays are the same
+   array. The source and destination segments must be disjoint. *)
+
+Section SortTo'.
+
+Open Scope uint63.
+
+(* The cutoff determines where to switch from merge sort to insertion
+   sort. OCaml uses 5. *)
+
+Notation cutoff := 5.
+
+Equations sortto' _dst _i _k _n : array A
+by wf _n ilt :=
+sortto' _dst _i _k _n :=
+  IF _n ≤? cutoff THEN
+    (* Under the cutoff, use insertion sort. *)
+    isortto' _dst _i _k _n
+  ELSE
+    (* Divide the source segment into two halves. The second half may
+       be longer by one unit. *)
+    let _n1 := _n / 2 in
+    let _n2 := _n - _n1 in
+    let _dm := _k + _n1 in
+    (* Sort the second half of the source segment and move it to the
+       second half of the destination segment. *)
+    do _dst ← sortto' _dst (_i + _n1) (_k + _n1) _n2 ;
+    let _sm := _i + _n2 in
+    (* Sort the first half of the source segment and move it to the second
+       half of the source segment. This requires [n1 ≤ n2]. *)
+    do _dst ← sortto' _dst _i _sm _n1 ;
+    (* Merge the sorted halves, moving the data to the destination segment. *)
+    do _dst ← optimistic_merge_12 _dst _sm (_sm + _n1) _dm (_dm + _n2) _k ;
+    _dst.
+
+End SortTo'.
+
+(* TODO introduce disjoint_seg, overlap_seg_left, overlap_seg_right *)
+Notation disjoint_seg i1 j1 i2 j2 :=
+  (j1 ≤ i2 ∨ j2 ≤ i1)%nat.
+
+From Stdlib Require Import ZifyNat. (* TODO make this global *)
+
+(* The specification of [sortto'] is similar to that of [isortto']. *)
+
+Definition sortto_post _dst dst i k n :=
+  ∃ dst',
+  isArray _dst dst' ∧
+  len dst = len dst' ∧
+  (* Outside of the source and destination segments,
+     the destination array is unmodified. *)
+  ( ∀ a b,
+    (a ≤ b ≤ len dst)%nat →
+    disjoint_seg a b i (i + n) →
+    disjoint_seg a b k (k + n) →
+    seg a b dst' = seg a b dst
+  ) ∧
+  (* The destination segment now contains a permutation
+     of the data that was in the source segment. *)
+  seg k (k + n) dst' ≃ seg i (i + n) dst ∧
+  (* The destination segment is sorted. *)
+  sorted (seg k (k + n) dst').
+
+Local Ltac intro_sortto_post :=
+  unfold sortto_post; pack; list; tc3; list; tc3.
+
+Local Ltac elim_sortto_post dst' :=
+  match goal with h: sortto_post _ _ _ _ _ |- _ =>
+    destruct h as (dst' & h); unpack in h
+  end.
+
+Definition sortto'_spec _n :=
+  ∀ _dst dst _i i _k k n,
+  isArray _dst dst →
+  isInt _i i →
+  isInt _k k →
+  isInt _n n →
+  valid_seg i (i + n) dst →
+  valid_seg k (k + n) dst →
+  disjoint_seg i (i + n) k (k + n) →
+  Sorted R' (seg i (i + n) dst) →
+  wp (sortto' _dst _i _k _n) (λ _dst, sortto_post _dst dst i k n).
+
+Lemma wp_sortto' : ∀ _n, sortto'_spec _n.
+Proof.
+  simple eapply (well_founded_ind Wf_ilt).
+  intros _n IH.
+  unfold sortto'_spec. intros.
+  autorewrite with sortto'.
+  assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
+  assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
+  wp_if.
+  (* Case [n ≤ cutoff]. *)
+  { wp_op wp_isortto' _dst'.
+    + unfold isortto'_precondition. lia.
+    + admit. (* TODO FIXME *)
+    + elim_isortto_inv dst'.
+      rewrite smt_sorted_seg_iff' in *.
+      intro_sortto_post.
+      { symmetry.
+        assert (b ≤ k ∨ k + n ≤ a)%nat as [|] by lia.
+        - eapply seg_equality_implication. exact H18. tc. tc. tc. tc. tc. tc.
+        - eapply seg_equality_implication. exact H19. lia. lia. lia. lia. lia. lia. }
+      { symmetry. eauto. }
+  }
+  (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
+  { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
+    assert (isInt _n1 n1) by tc.
+    set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
+    assert (isInt _n2 n2) by tc.
+    (* The first recursive call. *)
+    wp_op IH _dst'.
+    clear dependent _dst. rename _dst' into _dst. (* TODO avoid *)
+    rename H18 into HpostA.
+    elim_sortto_post dst'.
+    (* This call has not affected the first half of the source segment. *)
+    assert (safe1: seg i (i + n1) dst' = seg i (i + n1) dst).
+    { eauto with lia. }
+    assert (sorted1: Sorted R' (seg i (i + n1) dst')).
+    { rewrite safe1. eauto with lia. }
+    (* The second recursive call. *)
+    wp_op IH _dst'.
+    clear dependent _dst. rename _dst' into _dst. (* TODO avoid *)
+    rename H4 into HpostB.
+    elim_sortto_post dst''.
+    (* This call has not affected the destination segment. *)
+    assert (safe2: seg k (k + n1 + n2) dst'' = seg k (k + n1 + n2) dst').
+    { eauto with lia. }
+    assert (safe2': seg (k + n1) (k + n1 + n2) dst'' =
+                    seg (k + n1) (k + n1 + n2) dst').
+    { eauto using seg_equality_implication with lia. }
+    (* Merging the sorted halves. *)
+    eapply wp_bind.
+    { eapply wp_optimistic_merge_12.
+      tc. tc. tc. tc. tc. tc. tc. tc. tc. tc.
+      rewrite safe2'. assumption.
+      rewrite safe2'. rewrite HpostB2. rewrite HpostA2. rewrite safe1.
+      match goal with h: Sorted R' (seg i (i + n) dst) |- _ => rename h into HSorted end.
+      rewrite (split_seg (i + n1)) in HSorted by lia.
+      rewrite Sorted_app_iff in HSorted.
+      replace n with (n1 + n2) in HSorted by lia. nat in HSorted.
+      tauto.
+      tc. tc. tc. tc. }
+    clear dependent _dst. intros _dst HpostC.
+    elim_merge_aux_post. rename dst'0 into dst'''.
+    wp_ret.
+    intro_sortto_post.
+    + replace (seg a b dst''') with (seg a b dst'') by admit.
+      rewrite HpostB1 by lia.
+      rewrite HpostA1 by lia.
+      reflexivity.
+    + replace n with (n1 + n2) by lia. nat.
+      rewrite <- HpostC3.
+      rewrite HpostB2, safe2'.
+      rewrite safe1, HpostA2.
+      list. reflexivity.
+  }
+Admitted.
+
+(* TODO waiting
+
+Definition sortto _src _i _dst _k _n :=
+  if _n ≤? cutoff then
+    isortto _src _i _dst _k _n
+  else
+    (* Divide the source segments into two halves. The second half may
+       be longer by one unit. *)
+    let _n1 := _n / 2 in
+    let _n2 := _n - _n1 in
+    (* Sort the second half of the source segment and move it to the
+       second half of the destination segment. *)
+    let _dm := _k + _n1 in
+    do _dst ← sortto _src (_i + _n1) _dst _dm _n2 ;
+    (* Sort the first half of the source segment and move it to the second
+       half of the source segment. This requires [n1 ≤ n2]. *)
+    let _sm := _i + _n2 in
+    do _src ← sortto' _src _i _sm _n1 ;
+    (* Merge the two sorted halves, moving the data to the destination
+       segment. *)
+    do _dst ← optimistic_merge_2 _src _sm (_sm + _n1) _dm (_dm + _n2) _dst _k ;
+    _dst
+
+ *)
+
 End Sorting.
