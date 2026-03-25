@@ -86,6 +86,21 @@ Infix "`precedes`" := R'
 Infix "`precede`" := (pairwise R')
   (at level 70, no associativity) : element_scope.
 
+(* We specialize this lemma so that [eauto] accepts to use it as a hint. *)
+
+Local Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
+  seg i1 j1 xs1 `precede` seg i2 j2 xs2 →
+  x1 = xs1 !!! k1 →
+  x2 = xs2 !!! k2 →
+  i1 ≤ k1 < j1 `min` len xs1 →
+  i2 ≤ k2 < j2 `min` len xs2 →
+  x1 `precedes` x2.
+Proof.
+  intros. eapply exploit_seg_pairwise_seg; eauto.
+Qed.
+
+Local Hint Resolve exploit_seg_pairwise_seg : lia.
+
 (* The following hints seem to be needed. I don't understand why
    reflexivity and transitivity do not work out of the box. *)
 
@@ -790,12 +805,6 @@ Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
   unfold merge_aux_spec. intros.
-  (* The following fact is useful. *)
-  assert (x1 `precedes` x2).
-  { subst x1 x2. unfold pairwise in *.
-    erewrite (lookup_total_through_seg i1 j1 i1) by eauto with lia. nat.
-    erewrite (lookup_total_through_seg i2 j2 i2) by eauto with lia. nat.
-    eauto using list_elem_of_lookup_total_2 with lia. }
   (* Now examine the code. *)
   autorewrite with merge_aux.
   wp_compare.
@@ -876,9 +885,8 @@ Proof.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize.
           (* The fact that [x1] precedes [x2] is used here. *)
-          eauto.
+          intros _ _. list. recognize. eauto with lia.
       }
     }
     (* Subcase [i1 + 1 = j1]. *)
@@ -891,9 +899,8 @@ Proof.
       + simplify_list_equality_goal. reflexivity.
       + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize.
         (* The fact that [x1] precedes [x2] is used here. *)
-        eauto.
+        intros _ _. list. recognize. eauto with lia.
     }
   }
 Qed.
@@ -989,13 +996,6 @@ Proof.
   intros (_i1, _i2) IH.
   unfold merge_aux_1_spec. intros.
   assert (Hi1: i1 = k + (j2 - i2)) by lia.
-  (* The following fact is useful. *)
-  assert (x1 `precedes` x2).
-  { subst x1 x2. unfold pairwise in *.
-    erewrite (lookup_total_through_seg i1 j1 i1) by eauto with lia. nat.
-    erewrite (lookup_total_through_seg i2 j2 i2) by eauto with lia. nat.
-    eauto using list_elem_of_lookup_total_2 with lia. }
-  (* Now examine the code. *)
   autorewrite with merge_aux_1.
   arrays.
   wp_compare.
@@ -1073,9 +1073,8 @@ Proof.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize.
           (* The fact that [x1] precedes [x2] is used here. *)
-          eauto.
+          intros _ _. list. recognize. eauto with lia.
       }
     }
     (* Subcase [i1 + 1 = j1]. *)
@@ -1090,9 +1089,8 @@ Proof.
       + recognize.
         erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize.
         (* The fact that [x1] precedes [x2] is used here. *)
-        eauto.
+        intros _ _. list. recognize. eauto with lia.
     }
   }
 Qed.
@@ -1178,13 +1176,6 @@ Proof.
   intros (_i1, _i2) IH.
   unfold merge_aux_2_spec. intros.
   assert (Hi2: i2 = k + (j1 - i1)) by lia.
-  (* The following fact is useful. *)
-  assert (x1 `precedes` x2).
-  { subst x1 x2. unfold pairwise in *.
-    erewrite (lookup_total_through_seg i1 j1 i1) by eauto with lia. nat.
-    erewrite (lookup_total_through_seg i2 j2 i2) by eauto with lia. nat.
-    eauto using list_elem_of_lookup_total_2 with lia. }
-  (* Now examine the code. *)
   autorewrite with merge_aux_2.
   arrays.
   wp_compare.
@@ -1270,9 +1261,8 @@ Proof.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize.
           (* The fact that [x1] precedes [x2] is used here. *)
-          eauto.
+          intros _ _. list. recognize. eauto with lia.
       }
     }
     (* Subcase [i1 + 1 = j1]. *)
@@ -1282,10 +1272,106 @@ Proof.
       intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
       + recognize. reflexivity.
       + eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize.
         (* The fact that [x1] precedes [x2] is used here. *)
-        eauto.
+        intros _ _. list. recognize. eauto with lia.
     }
+  }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [optimistic_merge] is a wrapper for [merge_aux]. It performs the two
+   initial reads and invokes [merge_aux]. Furthermore, it detects the
+   special case where the data in the first source segment is ordered
+   below the data in the second source segment. Then, two blits suffice;
+   thus we save a linear number of comparisons and conditional jumps. *)
+
+(* The two source segments must be nonempty. *)
+
+Section OptimisticMerge.
+
+Open Scope uint63.
+
+Definition optimistic_merge _src1 _i1 _j1 _src2 _i2 _j2 _dst _k :=
+  (* Read the last element of the first source segment. *)
+  do x1 ← get _src1 (_j1 - 1) ;
+  (* Read the first element of the second source segment. *)
+  do x2 ← get _src2 _i2 ;
+  (* Compare them. *)
+  match compare x1 x2 with
+  | Lt | Eq =>
+      (* If they are suitably ordered then two blits suffice. *)
+      let _n1 := _j1 - _i1 in
+      do _dst ← blit _src1 _i1 _dst _k _n1 ;
+      let _n2 := _j2 - _i2 in
+      do _dst ← blit _src2 _i2 _dst (_k + _n1) _n2 ;
+      _dst
+  | Gt =>
+      do x1 ← get _src1 _i1 ;
+      merge_aux _src1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k
+  end.
+
+End OptimisticMerge.
+
+Definition optimistic_merge_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+  ∀ _src1 src1 _src2 src2,
+  isArray _src1 src1 →
+  isArray _src2 src2 →
+  ∀ i1, isInt _i1 i1 →
+  ∀ j1, isInt _j1 j1 →
+  valid_seg i1 j1 src1 →
+  (i1 < j1)%nat →
+  ∀ i2, isInt _i2 i2 →
+  ∀ j2, isInt _j2 j2 →
+  valid_seg i2 j2 src2 →
+  (i2 < j2)%nat →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  ∀Int _k k,
+  ∀ _dst dst,
+  isArray _dst dst →
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  valid_seg k limit dst →
+  wp (optimistic_merge _src1 _i1 _j1 _src2  _i2 _j2 _dst _k)
+     (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
+
+Lemma wp_optimistic_merge _j1 _j2 _src1 _src2 _i1 _i2 :
+  optimistic_merge_spec _j1 _j2 (_i1, _i2).
+Proof.
+  unfold optimistic_merge_spec. intros.
+  unfold optimistic_merge.
+  wp_get x1.
+  wp_get x2.
+  wp_compare.
+  (* Case [x2 < x1]. *)
+  { clear dependent x1.
+    wp_get x1.
+    wp_op wp_merge_aux _dst'.
+    assumption. }
+  (* Case [x1 ≤ x2]. *)
+  {
+    (* This remark is the key reason with this case works. *)
+    assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
+    { apply boundary_test; eauto 2. intros _ _. list.
+      recognize. eauto with lia. }
+    wp_blit.
+    wp_blit.
+    wp_ret.
+    (* UGLY *)
+    match goal with h: isArray _ _ |- _ =>
+      rewrite* @seg_none' in h by lia; list in h end.
+    reckon (j2 - i2) in *. (* optional *)
+    reckon (len dst) in *. (* optional *)
+    (* Conclude. *)
+    intro_merge_aux_post; eauto 2; list.
+    + lia.
+    + reflexivity.
+    + simplify_list_equality_goal. reflexivity.
+    + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
+      eapply identity_permutation. reflexivity.
+    + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
+      eapply Sorted_app; eauto.
   }
 Qed.
 
