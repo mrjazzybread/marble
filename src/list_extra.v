@@ -730,11 +730,6 @@ Qed.
    fusions between segments. We offer [recognize_singleton_segments] as
    an alternative tactic. *)
 
-Global Ltac recognize_singleton_segments :=
-  repeat match goal with |- context[seg ?i ?j ?xs] =>
-    erewrite (seg_is_singleton xs) by lia
-  end.
-
 Global Hint Rewrite
   @singleton_is_seg
   using (list; lia)
