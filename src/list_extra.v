@@ -488,6 +488,12 @@ Lemma valid_valid_seg {A} i (xs : list A) :
   valid i xs ↔ valid_seg i (i+1) xs.
 Proof. lia. Qed.
 
+(* [disjoint_seg i1 j1 i2 j2] means that the segments [i1, j1) and
+   [i2, j2) are disjoint. *)
+
+Notation disjoint_seg i1 j1 i2 j2 :=
+  (j1 ≤ i2 ∨ j2 ≤ i1).
+
 (* [clip k i j] forces the index [k] into the semi-open interval [i, j). *)
 
 Global Notation clip k i j :=
