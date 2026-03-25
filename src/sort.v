@@ -1540,7 +1540,7 @@ Proof.
     + reflexivity.
     + simplify_list_equality_goal. reflexivity.
     + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
-      eapply identity_permutation. reflexivity.
+      reflexivity.
     + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
       eapply Sorted_app; eauto.
   }
@@ -1627,10 +1627,90 @@ Proof.
     + lia.
     + reflexivity.
     + simplify_list_equality_goal. reflexivity.
-    + reckon i2. reckon j2.
-      eapply identity_permutation. reflexivity.
-    + reckon i2. reckon j2.
-      eapply Sorted_app; eauto.
+    + reckon i2. reckon j2. reflexivity.
+    + reckon i2. reckon j2. eapply Sorted_app; eauto.
+  }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [optimistic_merge_12] is a variant of [optimistic_merge] where all
+   three segments inhabit the same array. The first source segment and the
+   destination segment must be disjoint. The second source segment must be
+   a suffix of the destination segment. *)
+
+(* The two source segments must be nonempty. *)
+
+Section OptimisticMerge12.
+
+Open Scope uint63.
+
+Definition optimistic_merge_12 _dst _i1 _j1 _i2 _j2 _k :=
+  do x1 ← get _dst (_j1 - 1) ;
+  do x2 ← get _dst _i2 ;
+  match compare x1 x2 with
+  | Lt | Eq =>
+      let _n1 := _j1 - _i1 in
+      do _dst ← blit' _dst _i1 _k _n1 ;
+      _dst
+  | Gt =>
+      do x1 ← get _dst _i1 ;
+      merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k
+  end.
+
+End OptimisticMerge12.
+
+Definition optimistic_merge_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+  ∀ _dst dst,
+  isArray _dst dst →
+  ∀ i1, isInt _i1 i1 →
+  ∀ j1, isInt _j1 j1 →
+  valid_seg i1 j1 dst →
+  (i1 < j1)%nat →
+  ∀ i2, isInt _i2 i2 →
+  ∀ j2, isInt _j2 j2 →
+  valid_seg i2 j2 dst →
+  (i2 < j2)%nat →
+  sorted (seg i1 j1 dst) →
+  sorted (seg i2 j2 dst) →
+  seg i1 j1 dst `precede` seg i2 j2 dst →
+  ∀Int _k k,
+  (* The second source segment must be a suffix of the destination segment. *)
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  limit = j2 →
+  (* The first source segment and the destination segment must be disjoint. *)
+  (j1 ≤ k ∨ limit ≤ i1)%nat →
+  valid_seg k limit dst →
+  wp (optimistic_merge_12 _dst _i1 _j1 _i2 _j2 _k)
+     (merge_aux_post dst dst i1 j1 i2 j2 dst k).
+
+Lemma wp_optimistic_merge_12 _j1 _j2 _i1 _i2 :
+  optimistic_merge_12_spec _j1 _j2 (_i1, _i2).
+Proof.
+  unfold optimistic_merge_12_spec. intros.
+  unfold optimistic_merge_12.
+  wp_get x1.
+  wp_get x2.
+  wp_compare.
+  (* Case [x2 < x1]. *)
+  { clear dependent x1.
+    wp_get x1.
+    wp_op wp_merge_aux_12 _dst'.
+    assumption. }
+  (* Case [x1 ≤ x2]. *)
+  {
+    (* This remark is the key reason with this case works. *)
+    assert (seg i1 j1 dst ≼ seg i2 j2 dst).
+    { apply boundary_test; eauto 2. intros _ _. list.
+      recognize. eauto with lia. }
+    wp_blit.
+    wp_ret.
+    intro_merge_aux_post; eauto 2; list.
+    + lia.
+    + reflexivity.
+    + simplify_list_equality_goal. reflexivity.
+    + reckon i2. reckon j2. reflexivity.
+    + reckon i2. reckon j2. eapply Sorted_app; eauto.
   }
 Qed.
 
