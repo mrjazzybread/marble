@@ -1229,14 +1229,13 @@ Proof.
       intro_merge_aux_post; eauto 2; nat in *; list;
       (* UGLY [list] misses this rewriting step: *)
       try (erewrite (seg_none' _ _ src2) by lia; list);
-      eauto 2 with lia.
+      eauto 2 with lia;
+      rewrite <- Hi2.
       + simplify_list_equality_goal. reflexivity.
-      + rewrite <- Hi2. (* TODO can we avoid this? *)
-        recognize.
+      + recognize.
         erewrite (seg_none' _ _ src2) by lia. list. (* UGLY *)
         eapply Permutation_app_comm.
-      + rewrite <- Hi2. (* TODO can we avoid this? *)
-        recognize.
+      + recognize.
         erewrite (seg_none' _ _ src2) by lia. list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
         intros _ _. list. recognize. eauto.
