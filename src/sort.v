@@ -825,8 +825,7 @@ Proof.
         rewrite <- Hpost3. rewrite <- Hpost5.
         simplify_list_permutation_goal.
         rewrite Permutation_app_comm.
-        simplify_list_permutation_goal.
-        subst x2. list. reflexivity. }
+        simplify_list_permutation_goal. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
@@ -871,8 +870,7 @@ Proof.
       { split_seg (i1 + 1) src1.
         split_seg (k + 1) dst'.
         rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
-        subst x1. list. reflexivity. }
+        simplify_list_permutation_goal. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
@@ -1016,8 +1014,7 @@ Proof.
         rewrite <- Hpost3. rewrite <- Hpost5.
         simplify_list_permutation_goal.
         rewrite Permutation_app_comm.
-        simplify_list_permutation_goal.
-        subst x2. list. reflexivity. }
+        simplify_list_permutation_goal. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
@@ -1059,8 +1056,7 @@ Proof.
       { split_seg (i1 + 1) src1.
         split_seg (k + 1) dst'.
         rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
-        subst x1. list. reflexivity. }
+        simplify_list_permutation_goal. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
@@ -1197,8 +1193,7 @@ Proof.
         rewrite <- Hpost3. rewrite <- Hpost5.
         simplify_list_permutation_goal.
         rewrite Permutation_app_comm.
-        simplify_list_permutation_goal.
-        subst x2. list. reflexivity. }
+        simplify_list_permutation_goal. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
@@ -1247,8 +1242,7 @@ Proof.
       { split_seg (i1 + 1) src1.
         split_seg (k + 1) dst'.
         rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
-        subst x1. list. reflexivity. }
+        simplify_list_permutation_goal. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
