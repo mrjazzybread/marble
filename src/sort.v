@@ -1,4 +1,5 @@
 From stdpp Require Import numbers list well_founded.
+From Stdlib Require Import ZifyNat. (* TODO make this global *)
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
@@ -20,9 +21,17 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
+Local Hint Resolve
+  Sorted_singleton
+  Sorted_app_inv_l
+  Sorted_app_inv_r
+  sorted_seg_variance
+  seg_pairwise_seg_variance
+: lia.
+
 (* -------------------------------------------------------------------------- *)
 
-(* Insertion sort: [isortto]. *)
+(* Setup. *)
 
 Section Sorting.
 
@@ -160,45 +169,25 @@ Local Hint Resolve lt_lex : core.
 Notation sorted xs   := (Sorted lex xs).
 Notation "xs '≼' ys" := (pairwise lex xs ys) (at level 80).
 
-(* When stating the invariants of insertion sort, we have a choice between
-   two styles: we can either reason in terms of list segments or reason in
-   terms of the elements of these segments. In other words, we can either
-   write [sorted (seg ...)] or write [smt_sorted_seg ...]. The first style
-   is somewhat higher-level and makes intermediate goals more readable; the
-   second style is somewhat lower-level and more amenable to SMT-style
-   automation. *)
-
-(* In the following, we use the low-level SMT style. This saves 10 to 15
-   lines in the main proof. The earlier high-level style is visible in
-   commit 8ecbec7bae8cb942b6e200f3e0fc719e444b87fb. *)
-
-Notation smt_sorted_seg i k xs :=
-  (smt_sorted_seg lex i k xs).
-Notation smt_sorted_seg_except i k xs j :=
-  (smt_sorted_seg_except lex i k xs j).
-
-Ltac smt_reasoning :=
-  unfold smt_sorted_seg, smt_sorted_seg_except in *;
-  intros; list in *;
-  rewrite ?list_lookup_total_insert;
-  repeat case_decide; unpack; subst;
-  (* Iterative deepening is required to avoid needless uses of
-     transitivity, which create unresolved metavariables. *)
-  eauto 2 with lia; eauto 3 with lia;
-  eauto 4 with lia; eauto 5 with lia.
-
 (* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
    a permutation of their elements. *)
 
 Local Infix "≃" := (@Permutation A)
   (at level 70, no associativity).
 
-(* Insertion sort: the code. *)
+(* Naming conventions. *)
 
 Implicit Types _src _dst : array A.
 Implicit Types src dst : list A.
 Implicit Types _srcofs _dstofs _n : int.
 Implicit Types srcofs dstofs n : nat.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Insertion sort: [isortto]. *)
+
+Section ISortTo.
+Open Scope uint63.
 
 (* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
    by [src], [_srcofs], [_n]. The resulting data is written into the array
@@ -209,10 +198,10 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
   (* Let [i] scan the source segment upwards. *)
   int.iter_up 0 _n _dst @@ λ _i _dst ,
     (* Extract [xi] at offset [i] in the source segment. *)
-    do xi ← get _src (_srcofs + _i)%uint63 ;
+    do xi ← get _src (_srcofs + _i) ;
     do (_dst, out) ← (
       (* Let [j] scan the sorted part of the destination segment, downwards. *)
-      int.xiter_down (_dstofs + _i)%uint63 _dstofs _dst @@
+      int.xiter_down (_dstofs + _i) _dstofs _dst @@
       λ _ _j _dst continue break ,
         (* Read an element [xj] at offset [j] in the destination segment.
            If [xj ≥ xi] holds then move [xj] upwards by one position and
@@ -231,6 +220,8 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
         set _dst  _dstofs xi
     end.
 
+End ISortTo.
+
 (* This is the invariant of the main loop. *)
 
 (* [src] is the content of the source array;
@@ -243,88 +234,59 @@ Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   len dst = len dst' ∧
   (* Outside of the destination segment,
      the destination array is unmodified. *)
-  initial_seg dstofs dst = initial_seg dstofs dst' ∧
-  final_seg (dstofs + i) dst = final_seg (dstofs + i) dst' ∧
-  (* Inside the destination segment,
-     we find a permutation of the data in the source segment. *)
-  seg srcofs (srcofs + i) src
-    ≃
-  seg dstofs (dstofs + i) dst' ∧
+  ( ∀ a b,
+    a ≤ b ≤ len dst →
+    disjoint_seg a b dstofs (dstofs + i) →
+    seg a b dst' = seg a b dst
+  ) ∧
+  (* The data found inside the destination segment is a permutation
+     of the data that existed in the source segment. *)
+  seg dstofs (dstofs + i) dst' ≃ seg srcofs (srcofs + i) src ∧
   (* The destination segment is sorted. *)
-  smt_sorted_seg dstofs (dstofs + i) dst'.
-  (* in high-level style: sorted (seg dstofs (dstofs + i) dst') *)
+  sorted (seg dstofs (dstofs + i) dst').
 
 Local Ltac intro_isortto_inv :=
   unfold isortto_inv; pack; list; tc3; list; tc3.
 
 Local Ltac elim_isortto_inv dst' :=
   match goal with h: isortto_inv _ _ _ _ _ _ |- _ =>
-    destruct h as (dst' & h); unpack in h
+    destruct h as (dst' & ? & ? & Hunmodified & Hdata & Hsorted)
   end.
 
-(* The invariant of the inner loop involves three auxiliary predicates,
-   which we now define. We give them short names: [transported], [punched],
-   and [above]. To find out what they mean, read on. *)
+(* The destination invariant, [dst_inv ...], is a conjunction of three
+   assertions. *)
 
 (* When we speak of an "extended source segment", we mean a source segment
    that extends up to index [srcofs + (i + 1)] in the source array.
    Similarly, an "extended destination segment" extends up to index
    [dstofs + (i + 1)] in the destination array. *)
 
-(* [transported ...] states that, after performing the last write of [xi]
-   into the destination array at offset [j], the extended source segment
-   and the extended destination segment have the same content, up to a
-   permutation. *)
-
-Local Notation transported src srcofs dst dstofs i j := (
-  let xi := src%list !!! (srcofs + i) in
-  (* the extended source segment is a permutation of *)
-  seg srcofs (srcofs + (i + 1)) src ≃
-  (* the extended destination segment, updated with [xi] at index [j]. *)
-  seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst
-) (only parsing).
-
-(* [punched ...] states that the extended destination segment,
-   deprived of the logically empty slot at index [j], is sorted. *)
-
-(* In high-level style, one would write
-   sorted (seg dstofs j dst ++ seg (j + 1) (dstofs + (i + 1)) dst *)
-
-Local Notation punched dst dstofs i j := (
-  smt_sorted_seg_except dstofs (dstofs + (i + 1)) dst (* except: *) j
-) (only parsing).
-
-(* [above ...] states that every element that lies in the second part of
-   the extended destination segment (that is, the part that follows the
-   logically empty slot at index [j]) is above [xi]. *)
-
-(* Actually, every such element is *strictly* above [xi], but this fact
-   does not seem to be needed. *)
-
-(* In high-level style, one would write:
-   sorted ({[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst) *)
-
-Local Notation above src srcofs dst dstofs i j := (
-  let xi := src !!! (srcofs + i) in
-  ∀ j', j + 1 ≤ j' ≤ dstofs + i → lex xi (dst !!! j')
-) (only parsing).
-
-(* We refer to the conjunction of these three facts as [dst_inv ...],
-   the destination invariant. *)
-
 Local Definition dst_inv src srcofs dst dstofs i j :=
-  transported src srcofs dst dstofs i j ∧
-  punched dst dstofs i j ∧
-  above src srcofs dst dstofs i j.
+  let xi := src !!! (srcofs + i) in
+  (* Assertion 1: permutation. *)
+  (* The data found in the extended destination segment, once updated
+     with [xi] at index [j], is a permutation of the data that existed
+     in the extended source segment. *)
+  seg dstofs j dst ++ {[xi]} ++ seg (j + 1) (dstofs + (i + 1)) dst ≃
+  seg srcofs (srcofs + (i + 1)) src ∧
+  (* Assertion 2: sortedness except at index [j]. *)
+  (* The extended destination segment, deprived of the logically empty
+     slot at index [j], is sorted. *)
+  sorted (seg dstofs j dst ++ seg (j + 1) (dstofs + (i + 1)) dst) ∧
+  (* Assertion 3: ordering above [xi]. *)
+  (* Every element in the second part of the extended destination
+     segment, following the logically empty slot at index [j], is
+     (strictly) above [xi]. *)
+  {[xi]} ≼ seg (j + 1) (dstofs + i + 1) dst.
 
 Local Ltac intro_dst_inv :=
   split; [| split ]; cbv zeta.
 
 Local Ltac elim_dst_inv :=
   match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
-    destruct h as (Htransported & Hpunched & Habove);
-    cbv zeta in Htransported, Habove;
-    list in Htransported; list in Hpunched
+    unfold dst_inv in h;
+    destruct h as (Hpermut & Hsortedx & Habove);
+    list in Hpermut; nat in Hsortedx
   end.
 
 (* This is the invariant of the inner loop. *)
@@ -339,8 +301,11 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   len dst' = len dst ∧
   (* Outside of the extended destination segment,
      the destination array is unmodified. *)
-  initial_seg dstofs dst = initial_seg dstofs dst' ∧
-  final_seg (dstofs + (i + 1)) dst = final_seg (dstofs + (i + 1)) dst' ∧
+  ( ∀ a b,
+    a ≤ b ≤ len dst →
+    disjoint_seg a b dstofs (dstofs + i + 1) →
+    seg a b dst' = seg a b dst
+  ) ∧
   (* The content of the extended destination segment is described by
      the destination invariant [dst_inv ...]. If [out] is [Continue]
      then the logically empty slot lies at index [j]; otherwise it lies
@@ -375,16 +340,15 @@ Lemma wp_isortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isInt _n n →
   valid_seg srcofs (srcofs + n) src →
   valid_seg dstofs (dstofs + n) dst →
-  smt_sorted R' src → (* TODO only source segment need be sorted! *)
-  wp (isortto _src _srcofs _dst _dstofs _n) (λ _dst,
-    isortto_inv src srcofs dst dstofs n _dst
-  ).
+  Sorted R' (seg srcofs (srcofs + n) src) →
+  wp (isortto _src _srcofs _dst _dstofs _n)
+     (isortto_inv src srcofs dst dstofs n).
 Proof.
   intros. unfold isortto.
   (* The outer loop. *)
   wp_iter_up (isortto_inv src srcofs dst dstofs).
   (* Initialization of the outer loop. *)
-  { intro_isortto_inv. smt_reasoning. }
+  { intro_isortto_inv. }
   (* The body of the outer loop. *)
   { clear dependent _dst. wp_up_intros i _dst. intros _i ?.
     elim_isortto_inv dst'.
@@ -395,9 +359,10 @@ Proof.
     { (* The inner loop. *)
       int.wp_xiter_down (inner_inv src srcofs dst dstofs i).
       (* Initialization of the inner loop. *)
-      { intro_inner_inv; eauto using seg_equality_implication with lia.
-        intro_dst_inv; list; recognize; smt_reasoning.
-        + split_seg_singleton_r src. use_known_permutation. list. eauto. }
+      { intro_inner_inv. intro_dst_inv; list.
+        + rewrite Hdata. list. reflexivity.
+        + assumption.
+        + recognize. rewrite pairwise_nil_right. eauto. }
       (* The body of the inner loop. *)
       clear dependent _dst.
       (* TODO need variant of [wp_down_intros] *)
@@ -410,13 +375,19 @@ Proof.
       (* Case [xi < xj]. *)
       { elim_dst_inv.
         wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
-        (* The destination segment contains a permitted permutation. *)
-        { list. use_known_permutation.
-          split_seg_singleton_r dst''.
-          recognize. simplify_list_permutation_goal.
-          (* Argue that swapping [xi] and [xj] is permitted. *)
+        intro_inner_inv. intro_dst_inv; list.
+        (* Permutation. *)
+        { rewrite <- Hpermut. simplify_list_permutation_goal.
+          rewrite (split_seg j dst'' dstofs (j + 1)) by lia.
+          simplify_list_permutation_goal. recognize.
           eapply Permutation_app_comm. }
+        (* Sortedness except at [j]. *)
+        { subst xj. list. rewrite app_assoc. list. (* UGLY *)
+          assumption. }
+        (* Ordering above [xi]. *)
+        { recognize.
+          rewrite pairwise_app_right_iff. split; [| assumption ].
+          rewrite pairwise_singleton_singleton. eauto. }
       }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
@@ -427,14 +398,15 @@ Proof.
              point where stability creates an extra proof obligation. *)
           elim_dst_inv.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
-          { use_known_permutation. subst xj. eauto with elem_of_app lia. }
+          { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
-          destruct Hseg as (j' & Hj' & ?). list in Hj'.
-          eapply exploit_smt_sorted; eauto with lia. }
+          destruct Hseg as (j' & Hj' & Hxj). nat in Hj'.
+          rewrite Hxj. subst xi.
+          eapply exploit_sorted_seg; eauto with lia. }
     }
     (* Epilogue of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
-      intros (j&Hj). list in Hj. unpack in Hj.
+      intros (j&Hj). nat in Hj. unpack in Hj.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
@@ -442,21 +414,25 @@ Proof.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv.
-        (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize.
+        (* Permutation. *)
+        { rewrite <- Hpermut. recognize.
           rewrite insert_seg by (list; lia); nat.
           reflexivity. }
-        (* The destination segment is sorted. *)
-        { eapply smt_sorted_seg_fill; eauto 2; intros; list; subst xi.
-          + assumption.
-          + eapply Habove. lia. }
+        (* Sortedness. *)
+        { rewrite insert_seg by (list; lia). nat.
+          recognize.
+          eapply Sorted_app_app; eauto.
+          eapply boundary_test; tc3; intros _ _; list.
+          assumption. }
       }
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
-        intro_isortto_inv; try solve [ smt_reasoning ].
-        (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize. list. reflexivity. }
+        intro_isortto_inv.
+        (* Permutation. *)
+        { rewrite <- Hpermut. recognize. list. reflexivity. }
+        (* Sortedness. *)
+        { recognize. eapply Sorted_app; tc. }
       }
     }
   }
@@ -789,12 +765,6 @@ Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   valid_seg k limit dst →
   wp (merge_aux _src1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
-
-Local Hint Resolve
-  Sorted_singleton
-  sorted_seg_variance
-  seg_pairwise_seg_variance
-: lia.
 
 Local Ltac tc ::=
   eauto 7 with typeclass_instances lia.
@@ -1760,10 +1730,6 @@ sortto' _dst _i _k _n :=
 End SortTo'.
 
 (* TODO introduce disjoint_seg, overlap_seg_left, overlap_seg_right *)
-Notation disjoint_seg i1 j1 i2 j2 :=
-  (j1 ≤ i2 ∨ j2 ≤ i1)%nat.
-
-From Stdlib Require Import ZifyNat. (* TODO make this global *)
 
 (* The specification of [sortto'] is similar to that of [isortto']. *)
 
