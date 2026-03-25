@@ -3,10 +3,8 @@ From Stdlib Require Import Uint63 ZifyUint63.
   (* [ZifyUint63] magically makes [lia] more powerful *)
 (* TODO why is [of_to_Z] an axiom? *)
 From Stdlib Require Import Wellfounded.Wellfounded.
-From Equations Require Import Equations.
-From Equations.Prop Require Import Logic. (* [inspect] *)
-Notation inspected x := (exist _ x _).
 From marble Require Import tactics bool wp list_extra wp_tactics iteration.
+From marble Require Import equations.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.

@@ -1,6 +1,8 @@
 From Stdlib Require Import Utf8.
 From Stdlib Require Export Wellfounded.Wellfounded.
 From Equations Require Export Equations.
+From Equations.Prop Require Export Logic. (* [inspect] *)
+Notation inspected x := (exist _ x _).
 
 (* The following notation offers syntactic sugar for a "rich"
    conditional construct. In the first branch, the hypothesis
@@ -39,3 +41,11 @@ Global Obligation Tactic :=
   CoreTactics.equations_simpl;
   try Tactics.program_solve_wf;
   eauto 6 with lia.
+
+(* The tactic [cleanup] removes an equality hypothesis that is produced
+   by [funelim] and that is usually unneeded. *)
+
+Ltac cleanup :=
+  match goal with h: sigmaI _ _ _ = sigmaI _ _ _ |- _ =>
+    clear h
+  end.
