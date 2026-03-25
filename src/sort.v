@@ -375,7 +375,7 @@ Lemma wp_isortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isInt _n n →
   valid_seg srcofs (srcofs + n) src →
   valid_seg dstofs (dstofs + n) dst →
-  smt_sorted R' src →
+  smt_sorted R' src → (* TODO only source segment need be sorted! *)
   wp (isortto _src _srcofs _dst _dstofs _n) (λ _dst,
     isortto_inv src srcofs dst dstofs n _dst
   ).
@@ -524,7 +524,7 @@ Lemma wp_isortto' a xs _srcofs srcofs _dstofs dstofs _n n :
   valid_seg srcofs (srcofs + n) xs →
   valid_seg dstofs (dstofs + n) xs →
   isortto'_precondition srcofs dstofs n →
-  smt_sorted R' xs →
+  smt_sorted R' xs → (* TODO only source segment need be sorted! *)
   wp (isortto' a _srcofs _dstofs _n) (λ a,
     isortto_inv xs srcofs xs dstofs n a
   ).
