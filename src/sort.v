@@ -921,6 +921,16 @@ Qed.
    implies that the data is moved left and cannot be overwritten before it
    is read. *)
 
+(* The first source segment must form a suffix of the destination segment:
+   that is, these segments must have the same end index. In other words, [j1]
+   must be equal to [limit]; i.e., [i1] must be equal to [k + (j2 - i2)]. *)
+
+(* We could relax this requirement by requesting just [i1 ≤ k + (j2 - i2)].
+   Then, in the last branch, an additional test would be required in order
+   to determine whether a call to [blit'] is necessary or redundant. We do
+   not need this flexibility, so we require [i1 = k + (j2 - i2)] and we are
+   able to eliminate the call to [blit'] unconditionally. *)
+
 Section MergeAux1.
 
 Variable _src2 : array A.
@@ -980,10 +990,7 @@ Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   (* The destination array is the first source array. *)
   let _dst := _src1 in
   let dst := src1 in
-  (* The first source segment must form a suffix of the destination
-     segment. In other words, these segments must have the same end
-     index. That is, [j1] must be equal to [limit]. In other words,
-     [i1] must be equal to [k + (j2 - i2)]. *)
+  (* The first source segment must form a suffix of the destination segment. *)
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j1 →
   valid_seg k limit dst →
