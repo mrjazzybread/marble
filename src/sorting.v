@@ -264,6 +264,16 @@ Proof.
     using Sorted_app_inv_l, Sorted_app_inv_c, Sorted_app_inv_r, Sorted_app.
 Qed.
 
+Lemma Sorted_app_app xs y zs :
+  sorted (xs ++ zs) →
+  xs ≺ {[y]} →
+  {[y]} ≺ zs →
+  sorted (xs ++ {[y]} ++ zs).
+Proof.
+  rewrite !Sorted_app_iff, pairwise_app_right_iff, Sorted_singleton_iff.
+  tauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 Section SMT.
