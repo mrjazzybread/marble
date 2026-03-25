@@ -1274,6 +1274,183 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* [merge_aux_12] is a variant of [merge_aux] where all three segments
+   inhabit the same array. The first source segment and the destination
+   segment must be disjoint. The second source segment must be a suffix of
+   the destination segment. *)
+
+Section MergeAux12.
+
+Variable _j1 _j2 : int.
+
+Open Scope uint63.
+
+Equations merge_aux_12 _i1 x1 _i2 x2 _dst _k : array A
+by wf (_i1, _i2) (order _j1 _j2) :=
+merge_aux_12 _i1 x1 _i2 x2 _dst _k :=
+  match compare x1 x2 with
+  | Lt | Eq =>
+      do _dst ← set _dst _k x1 ;
+      let _i1 := _i1 + 1 in
+      let _k := _k + 1 in
+      IF (_i1 <? _j1) THEN
+        do x1 ← get _dst _i1 ;
+        merge_aux_12 _i1 x1 _i2 x2 _dst _k
+      ELSE
+        _dst
+  | Gt =>
+      do _dst ← set _dst _k x2 ;
+      let _i2 := _i2 + 1 in
+      let _k := _k + 1 in
+      IF (_i2 <? _j2) THEN
+        do x2 ← get _dst _i2 ;
+        merge_aux_12 _i1 x1 _i2 x2 _dst _k
+      ELSE
+        blit' _dst _i1 _k (_j1 - _i1)
+  end.
+
+End MergeAux12.
+
+(* The specification of [merge_aux_12]. *)
+
+Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+  ∀ _dst dst,
+  isArray _dst dst →
+  ∀ i1, isInt _i1 i1 →
+  ∀ j1, isInt _j1 j1 →
+  valid_seg i1 j1 dst →
+  (i1 < j1)%nat →
+  ∀ x1,
+  x1 = dst !!! i1 →
+  ∀ i2, isInt _i2 i2 →
+  ∀ j2, isInt _j2 j2 →
+  valid_seg i2 j2 dst →
+  (i2 < j2)%nat →
+  ∀ x2,
+  x2 = dst !!! i2 →
+  sorted (seg i1 j1 dst) →
+  sorted (seg i2 j2 dst) →
+  seg i1 j1 dst `precede` seg i2 j2 dst →
+  ∀Int _k k,
+  (* The second source segment must be a suffix of the destination segment. *)
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  limit = j2 →
+  (* The first source segment and the destination segment must be disjoint. *)
+  (j1 ≤ k ∨ limit ≤ i1)%nat →
+  valid_seg k limit dst →
+  wp (merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
+     (merge_aux_post dst dst i1 j1 i2 j2 dst k).
+
+Lemma wp_merge_aux_12 _j1 _j2 _i1 _i2 :
+  merge_aux_12_spec _j1 _j2 (_i1, _i2).
+Proof.
+  simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
+  intros (_i1, _i2) IH.
+  unfold merge_aux_12_spec. intros.
+  assert (Hi2: i2 = k + (j1 - i1)) by lia.
+  autorewrite with merge_aux_12.
+  arrays.
+  wp_compare.
+  (* Case [x2 < x1]. *)
+  { wp_set.
+    wp_if.
+    (* Subcase [i2 + 1 < j2]. *)
+    { wp_get x'2.
+      match goal with h: x'2 = _ |- _ => rewrite <- Hi2 in h end.
+      (* We are now looking at the recursive call. *)
+      eapply wp_conseq.
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc3; tc. }
+      clear dependent _dst. intros _dst Hpost.
+      elim_merge_aux_post.
+      intro_merge_aux_post; eauto 2.
+      (* Prove that we have a permutation. *)
+      { rewrite (split_seg (i2 + 1) dst i2 j2) by lia.
+        split_seg (k + 1) dst'.
+        rewrite <- Hpost3. rewrite <- Hpost5.
+        simplify_list_permutation_goal.
+        rewrite Permutation_app_comm.
+        simplify_list_permutation_goal. recognize. eauto. }
+      (* Prove that the destination segment is sorted. *)
+      { split_seg (k + 1) dst'.
+        rewrite <- Hpost5.
+        eapply Sorted_app; eauto with lia.
+        rewrite <- Hpost3.
+        (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
+        rewrite pairwise_app_right_iff; split.
+        + apply boundary_test; eauto 2 with lia.
+          intros _ _. list. recognize. eauto.
+        + apply boundary_test; eauto 2 with lia.
+          - eapply sorted_seg_variance; eauto 2 with lia.
+          - intros _ _. list. subst x2.
+            eapply exploit_sorted_seg; eauto with lia.
+      }
+    }
+    (* Subcase [i2 + 1 = j2]. *)
+    { assert (j2 = i2 + 1) by lia. subst j2.
+      wp_blit.
+      intro_merge_aux_post; eauto 2; nat in *; list;
+      (* UGLY [list] misses this rewriting step: *)
+      try (erewrite (seg_none' _ _ dst) by lia; list);
+      eauto 2 with lia;
+      rewrite <- Hi2.
+      + simplify_list_equality_goal. reflexivity.
+      + recognize.
+        rewrite* @seg_none' by lia. list. (* UGLY *)
+        eapply Permutation_app_comm.
+      + recognize.
+        rewrite* sub_diag' by lia. nat. (* UGLY *)
+        rewrite seg_none. list. (* UGLY *)
+        eapply sorted_app_boundary; eauto 2 with lia.
+        intros _ _. list. recognize. eauto.
+    }
+  }
+  (* Case [x1 ≤ x2]. *)
+  { wp_set.
+    wp_if.
+    (* Subcase [i1 + 1 < j1]. *)
+    { wp_get x'1.
+      (* We are now looking at the recursive call. *)
+      eapply wp_conseq.
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
+      clear dependent _dst. intros _dst Hpost.
+      elim_merge_aux_post.
+      intro_merge_aux_post; eauto 2.
+      (* Prove that we have a permutation. *)
+      { split_seg (i1 + 1) dst.
+        split_seg (k + 1) dst'.
+        rewrite <- Hpost3. rewrite <- Hpost5.
+        simplify_list_permutation_goal. recognize. eauto. }
+      (* Prove that the destination segment is sorted. *)
+      { split_seg (k + 1) dst'.
+        rewrite <- Hpost5.
+        eapply Sorted_app; eauto with lia.
+        rewrite <- Hpost3.
+        (* {[x1]} ≼ seg (i1 + 1) j1 dst ++ seg i2 j2 dst *)
+        rewrite pairwise_app_right_iff; split.
+        + apply boundary_test; eauto 2 with lia.
+          - eapply (sorted_seg_variance i1 j1); eauto 2 with lia.
+          - intros _ _. list. subst x1.
+            eapply (exploit_sorted_seg i1 j1); eauto 2 with lia.
+        + apply boundary_test; eauto 2 with lia.
+          (* The fact that [x1] precedes [x2] is used here. *)
+          intros _ _. list. recognize. eauto with lia.
+      }
+    }
+    (* Subcase [i1 + 1 = j1]. *)
+    { assert (j1 = i1 + 1) by lia. subst j1.
+      (* i2 = k + 1 *) subst i2.
+      wp_ret.
+      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
+      + recognize. reflexivity.
+      + eapply sorted_app_boundary; eauto 2 with lia.
+        (* The fact that [x1] precedes [x2] is used here. *)
+        intros _ _. list. recognize. eauto with lia.
+    }
+  }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [optimistic_merge] is a wrapper for [merge_aux]. It performs the two
    initial reads and invokes [merge_aux]. Furthermore, it detects the
    special case where the data in the first source segment is ordered
