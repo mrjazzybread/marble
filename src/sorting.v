@@ -283,6 +283,22 @@ Proof.
   unfold pairwise. intros. eauto using elem_seg_variance with lia.
 Qed.
 
+(* [pairwise] applied to two segments can be exploited as follows. *)
+
+Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
+  seg i1 j1 xs1 ≺ seg i2 j2 xs2 →
+  x1 = xs1 !!! k1 →
+  x2 = xs2 !!! k2 →
+  i1 ≤ k1 < j1 `min` length xs1 →
+  i2 ≤ k2 < j2 `min` length xs2 →
+  x1 `R` x2.
+Proof.
+  intros. subst x1 x2. unfold pairwise in *.
+  erewrite (lookup_total_through_seg i1 j1 k1) by eauto with lia.
+  erewrite (lookup_total_through_seg i2 j2 k2) by eauto with lia.
+  eauto using list_elem_of_lookup_total_2 with lia.
+Qed.
+
 (* The definition of sortedness that is best suited for use with SMT
    solvers is this. *)
 
