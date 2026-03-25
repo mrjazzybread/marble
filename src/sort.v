@@ -499,7 +499,7 @@ Definition isortto' a _srcofs _dstofs _n :=
     end.
 
 (* This code requires the source and destination segments to either be
-   disjoint or to possibly overlap in a configuration the destination
+   disjoint or to possibly overlap in a configuration where the destination
    segment lies closer to the left end of the array than the source
    segment. The latter situation includes the case where the two segments
    coincide. In any of these situations case, the code is correct because
