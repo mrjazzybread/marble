@@ -381,8 +381,7 @@ Proof.
       int.wp_xiter_down (inner_inv src srcofs dst dstofs i).
       (* Initialization of the inner loop. *)
       { intro_inner_inv; eauto using seg_equality_implication with lia.
-        intro_dst_inv; list; recognize_singleton_segments;
-        smt_reasoning.
+        intro_dst_inv; list; recognize; smt_reasoning.
         + split_seg_singleton_r src. use_known_permutation. list. eauto. }
       (* The body of the inner loop. *)
       clear dependent _dst.
@@ -399,17 +398,14 @@ Proof.
         intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
         { list. use_known_permutation.
-          recognize_singleton_segments.
           split_seg_singleton_r dst''.
-          recognize_named_lookups.
-          simplify_list_permutation_goal.
+          recognize. simplify_list_permutation_goal.
           (* Argue that swapping [xi] and [xj] is permitted. *)
           eapply Permutation_app_comm. }
       }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
-        + recognize_named_lookups.
-          eapply le_le_lex. assumption.
+        + recognize. eapply le_le_lex. assumption.
           (* Proving [xj `precedes` xi] is the slightly tricky part.
              The argument is that [xj] comes from the extended source
              segment, whose rightmost element is [xi]. This is the only
@@ -432,9 +428,7 @@ Proof.
       { wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation.
-          recognize_singleton_segments.
-          recognize_named_lookups.
+        { use_known_permutation. recognize.
           rewrite insert_seg by (list; lia); nat.
           reflexivity. }
         (* The destination segment is sorted. *)
@@ -447,9 +441,7 @@ Proof.
         wp_set.
         intro_isortto_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation.
-          recognize_singleton_segments. recognize_named_lookups.
-          list. reflexivity. }
+        { use_known_permutation. recognize. list. reflexivity. }
       }
     }
   }
@@ -543,8 +535,7 @@ Proof.
       int.wp_xiter_down (inner_inv xs srcofs xs dstofs i).
       (* Initialization of the inner loop. *)
       { intro_inner_inv; eauto using seg_equality_implication with lia.
-        intro_dst_inv; list; recognize_singleton_segments;
-        smt_reasoning.
+        intro_dst_inv; list; recognize; smt_reasoning.
         + split_seg_singleton_r xs. use_known_permutation. list. eauto. }
       (* The body of the inner loop. *)
       clear dependent a.
@@ -561,19 +552,16 @@ Proof.
         intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
         { list. use_known_permutation.
-          recognize_singleton_segments.
           split_seg_singleton_r xs''.
-          recognize_named_lookups.
-          simplify_list_permutation_goal.
+          recognize. simplify_list_permutation_goal.
           (* Argue that swapping [xi] and [xj] is permitted. *)
           eapply Permutation_app_comm. }
         (* The destination segment is sorted. [KEY] is exploited here. *)
-        { smt_reasoning. recognize_named_lookups. eauto. }
+        { smt_reasoning. recognize. eauto. }
       }
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
-        + recognize_named_lookups.
-          eapply le_le_lex. assumption.
+        + recognize. eapply le_le_lex. assumption.
           (* Proving [xj `precedes` xi] is the slightly tricky part.
              The argument is that [xj] comes from the extended source
              segment, whose rightmost element is [xi]. This is the only
@@ -596,8 +584,7 @@ Proof.
       { wp_set.
         intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation.
-          recognize_singleton_segments. recognize_named_lookups.
+        { use_known_permutation. recognize.
           rewrite insert_seg by (list; lia); nat.
           reflexivity. }
         (* The destination segment is sorted. [KEY] is used here. *)
@@ -611,9 +598,7 @@ Proof.
         wp_set.
         intro_isortto_inv; try solve [ smt_reasoning ].
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation.
-          recognize_singleton_segments. recognize_named_lookups.
-          list. reflexivity. }
+        { use_known_permutation. recognize. list. reflexivity. }
         (* The destination segment is sorted. [KEY] is used here. *)
         { smt_reasoning. rewrite KEY. smt_reasoning. }
       }
@@ -841,7 +826,7 @@ Proof.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         rewrite pairwise_app_right_iff; split.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize_named_lookups. eauto.
+          intros _ _. list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x2.
@@ -857,9 +842,9 @@ Proof.
       eauto 2 with lia.
       + simplify_list_equality_goal. reflexivity.
       + eapply Permutation_app_comm.
-      + recognize_singleton_segments. recognize_named_lookups.
+      + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize_named_lookups. eauto.
+        intros _ _. list. recognize. eauto.
     }
   }
   (* Case [x1 ≤ x2]. *)
@@ -891,7 +876,7 @@ Proof.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize_named_lookups.
+          intros _ _. list. recognize.
           (* The fact that [x1] precedes [x2] is used here. *)
           eauto.
       }
@@ -904,9 +889,9 @@ Proof.
       try (erewrite (seg_none' _ _ dst) by lia; list);
       eauto 2 with lia.
       + simplify_list_equality_goal. reflexivity.
-      + recognize_singleton_segments. recognize_named_lookups.
+      + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize_named_lookups.
+        intros _ _. list. recognize.
         (* The fact that [x1] precedes [x2] is used here. *)
         eauto.
     }
@@ -1041,7 +1026,7 @@ Proof.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         rewrite pairwise_app_right_iff; split.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize_named_lookups. eauto.
+          intros _ _. list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x2.
@@ -1053,10 +1038,9 @@ Proof.
       (* i1 = k + 1 *) subst i1.
       wp_ret.
       intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
-      + recognize_singleton_segments. recognize_named_lookups.
-        eapply Permutation_app_comm.
+      + recognize. eapply Permutation_app_comm.
       + eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize_named_lookups. eauto.
+        intros _ _. list. recognize. eauto.
     }
   }
   (* Case [x1 ≤ x2]. *)
@@ -1089,7 +1073,7 @@ Proof.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize_named_lookups.
+          intros _ _. list. recognize.
           (* The fact that [x1] precedes [x2] is used here. *)
           eauto.
       }
@@ -1103,10 +1087,16 @@ Proof.
       + simplify_list_permutation_goal.
         erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
         reflexivity.
-      + recognize_singleton_segments. recognize_named_lookups.
+      + recognize.
         erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize_named_lookups.
+        intros _ _. list. recognize.
+        (* The fact that [x1] precedes [x2] is used here. *)
+        eauto.
+    }
+  }
+Qed.
+
         (* The fact that [x1] precedes [x2] is used here. *)
         eauto.
     }
