@@ -1120,6 +1120,10 @@ Ltac simplify_list_permutation_goal :=
   repeat rewrite <- app_assoc;
   repeat eapply Permutation_app_head.
 
+Lemma identity_permutation {A} (xs ys : list A) :
+  xs = ys → Permutation xs ys.
+Proof. intros. subst. eauto. Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 Lemma Forall2_lookup_total `{Inhabited A} P (xs ys : list A) :
