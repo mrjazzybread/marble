@@ -274,6 +274,18 @@ Proof.
   tauto.
 Qed.
 
+Lemma split_sorted_seg i j k xs :
+  sorted (seg i k xs) →
+  valid_seg i j xs →
+  valid_seg j k xs →
+  seg i j xs ≺ seg j k xs.
+Proof.
+  intros Hsorted ??.
+  rewrite (split_seg j) in Hsorted by lia.
+  rewrite Sorted_app_iff in Hsorted.
+  tauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 Section SMT.
