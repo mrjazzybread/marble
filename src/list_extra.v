@@ -1,4 +1,5 @@
 From stdpp Require Import list.
+From Stdlib Require Export ZifyNat. (* this makes [lia] more powerful *)
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -1051,6 +1052,24 @@ Global Hint Resolve
   @elem_of_app_l
   @elem_of_app_r
 : elem_of_app.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [unmodified_outside_seg xs xs' i j] is one way of expressing the fact
+   that the lists [xs] and [xs'] are equal outside of the segment [i, j).
+
+   One could express this fact also using equality of lookups, instead
+   of equality of segments. Or, instead of quantifying over an unknown
+   segment [a, b), one could express this fact by writing two equations:
+   [initial_seg i xs = initial_seg i xs' ∧
+      final_seg j xs = final_seg j xs']. *)
+
+Global Notation unmodified_outside_seg xs xs' i j :=
+  ( ∀ a b,
+    valid_seg a b xs →
+    disjoint_seg a b i j →
+    seg a b xs' = seg a b xs%list%nat (* ?? avoid warning *)
+  ).
 
 (* -------------------------------------------------------------------------- *)
 
