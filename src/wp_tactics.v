@@ -68,14 +68,10 @@ Global Ltac wp_op_nude lemma :=
    [wp_intros_overwrite x] instead of [wp_intros x]. *)
 
 Global Ltac wp_op lemma x :=
-  (* If several [bind]s are nested, normalize them. *)
-  repeat rewrite bind_bind;
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
   [ wp_op_nude lemma | wp_intros x ].
 
 Global Ltac wp_op_overwrite lemma x :=
-  (* If several [bind]s are nested, normalize them. *)
-  repeat rewrite bind_bind;
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
   [ wp_op_nude lemma | wp_intros_overwrite x ].
 
