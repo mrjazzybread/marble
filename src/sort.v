@@ -164,6 +164,11 @@ Proof. eauto. Qed.
 
 Local Hint Resolve lt_lex : core.
 
+(* [lex x y] implies [x ≤ y]. *)
+
+Lemma lex_elim x y : lex x y → x ≤ y.
+Proof. unfold lex. tauto. Qed.
+
 (* We write [sorted xs] when the list [xs] is sorted with respect to [lex]. *)
 
 (* We write [xs ≼ ys] when every element [x ∈ xs]
@@ -2000,7 +2005,7 @@ Definition sort_seg_post xs i n a :=
 Local Ltac intro_sort_seg_post :=
   unfold sort_seg_post; pack; list; tc3; list; tc3.
 
-Ltac elim_sort_seg_post xs' :=
+Local Ltac elim_sort_seg_post xs' :=
   match goal with h: sort_seg_post _ _ _ _ |- _ =>
     destruct h as (xs' & h); unpack in h
   end.
@@ -2110,4 +2115,104 @@ Proof.
   intro_sort_post.
 Qed.
 
+End Sort.
+
 End Sorting.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Repeated tactics, for our end users. *)
+
+Global Ltac elim_sort_seg_post xs' :=
+  match goal with h: sort_seg_post _ _ _ _ |- _ =>
+    destruct h as (xs' & h); unpack in h
+  end.
+
+Global Ltac elim_sort_post xs' :=
+  match goal with h: sort_post _ _ |- _ =>
+    destruct h as (xs' & h); unpack in h
+  end.
+
+Local Infix "≃" := Permutation
+  (at level 70, no associativity).
+
+(* -------------------------------------------------------------------------- *)
+
+(* A simplified specification of [sort_seg], without stability. *)
+
+Lemma wp_sort_seg' `{Inhabited A, PreOrder A R, Comparable A R} a xs _i i _n n :
+  isArray a xs →
+  isInt _i i →
+  isInt _n n →
+  valid_seg i (i + n) xs →
+  wp (sort_seg a _i _n) (λ a, ∃ xs',
+    isArray a xs' ∧
+    len xs = len xs' ∧
+    (* Outside of the designated segment, the array is unmodified. *)
+    unmodified_outside_seg xs xs' i (i + n) ∧
+    (* This segment contains a permutation of the data
+       that initially existed in this segment. *)
+    seg i (i + n) xs' ≃ seg i (i + n) xs ∧
+    (* The segment is sorted. *)
+    Sorted R (seg i (i + n) xs')
+  ).
+Proof.
+  intros.
+  (* As we does not care about stability, we let [R'] be the relation
+     that is everywhere true. This is a preorder, and the array [xs]
+     is (trivially) sorted with respect to this relation. *)
+  set (R' := λ x y : A, True).
+  assert (PreOrder R').
+  { unfold R'. constructor; eauto. }
+  assert (Sorted R' (seg i (i + n) xs)).
+  { unfold R'. eapply Sorted_top; eauto. }
+  (* Therefore we are allowed to sort with respect to [R]. *)
+  wp_op_overwrite (@wp_sort_seg A _ R _ _ _ R' _) a.
+  elim_sort_seg_post xs'.
+  (* The segment is now sorted with respect to the lexicographic ordering
+     of [R] and [R'], which is the same thing as [R]. *)
+  specialize (@lex_elim A R R'); intro.
+  eauto 7 using Sorted_covariant.
+Qed.
+
+Global Ltac wp_sort_seg a :=
+  wp_op_overwrite @wp_sort_seg' a.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A simplified specification of [sort], without stability. *)
+
+Lemma wp_sort' `{Inhabited A, PreOrder A R, Comparable A R} a xs :
+  isArray a xs →
+  wp (sort a) (λ a, ∃ xs',
+    isArray a xs' ∧
+    len xs = len xs' ∧
+    (* This array contains a permutation of the data
+       that initially existed in it. *)
+    xs' ≃ xs ∧
+    (* The array is sorted. *)
+    Sorted R xs'
+  ).
+Proof.
+  intros.
+  (* As we does not care about stability, we let [R'] be the relation
+     that is everywhere true. This is a preorder, and the array [xs]
+     is (trivially) sorted with respect to this relation. *)
+  set (R' := λ x y : A, True).
+  assert (PreOrder R').
+  { unfold R'. constructor; eauto. }
+  assert (Sorted R' xs).
+  { unfold R'. eapply Sorted_top; eauto. }
+  (* Therefore we are allowed to sort with respect to [R]. *)
+  wp_op_overwrite (@wp_sort A _ R _ _ _ R' _) a.
+  elim_sort_post xs'.
+  (* The array is now sorted with respect to the lexicographic ordering
+     of [R] and [R'], which is the same thing as [R]. *)
+  specialize (@lex_elim A R R'); intro.
+  eauto 6 using Sorted_covariant.
+Qed.
+
+Global Ltac wp_sort a :=
+  wp_op_overwrite @wp_sort' a.
+
+(* -------------------------------------------------------------------------- *)

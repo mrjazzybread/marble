@@ -755,6 +755,42 @@ Arguments smt_sorted_seg_except {A} R {H} i k xs j.
 
 (* -------------------------------------------------------------------------- *)
 
+(* [Sorted] is covariant in the relation [R]. *)
+
+Lemma HdRel_covariant {A} {R1 R2 : relation A} x xs :
+  HdRel R1 x xs →
+  (∀ x y, R1 x y → R2 x y) →
+  HdRel R2 x xs.
+Proof.
+  induction 1; intros; econstructor; eauto.
+Qed.
+
+Lemma Sorted_covariant {A} {R1 R2 : relation A} xs :
+  Sorted R1 xs →
+  (∀ x y, R1 x y → R2 x y) →
+  Sorted R2 xs.
+Proof.
+  induction 1; intros; econstructor; eauto using HdRel_covariant.
+Qed.
+
+(* If [R] is everywhere true then [Sorted R xs] is true. *)
+
+Lemma HdRel_top {A} {R : relation A} x xs :
+  (∀ x y, R x y) →
+  HdRel R x xs.
+Proof.
+  induction xs; intros; econstructor; eauto.
+Qed.
+
+Lemma Sorted_top {A} {R : relation A} xs :
+  (∀ x y, R x y) →
+  Sorted R xs.
+Proof.
+  induction xs; intros; econstructor; eauto using HdRel_top.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* We now assume that [R] is a strict order, that is, both transitive and
    irreflexive. *)
 
