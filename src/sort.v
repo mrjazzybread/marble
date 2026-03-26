@@ -192,7 +192,7 @@ Open Scope uint63.
 (* [isortto src _srcofs dst _dstofs _n] sorts the array segment described
    by [src], [_srcofs], [_n]. The resulting data is written into the array
    segment described by [dst], [_dstofs], [_n]. The source and destination
-   arrays must be distinct. *)
+   arrays must be distinct. This is a stable sort. *)
 
 Definition isortto _src _srcofs _dst _dstofs _n :=
   (* Let [i] scan the source segment upwards. *)
@@ -435,15 +435,10 @@ Qed.
 (* [isortto' a _srcofs _dstofs _n] sorts the array segment described
    by [a], [_srcofs], [_n]. The resulting data is written into the array
    segment described by [a], [_dstofs], [_n]. The source and destination
-   arrays are the same array. *)
+   arrays are the same array. This is a stable sort. *)
 
-(* The code is the same as in [isortto] except that the two arrays [src] and
-   [dst] are replaced with a single array [a]. This change is necessary in
-   order to ensure that the code always accesses the most recent version of
-   the array, with time complexity O(1). If the same array was used as the
-   source array and as the destination array in a call to [isortto] then
-   every array access would become expensive, if a persistent array is used,
-   or would fail, if a defensive non-persistent array is used (in OCaml). *)
+(* The code is the same as in [isortto] except that the two arrays [src]
+   and [dst] are replaced with a single array [a]. *)
 
 Definition isortto' a _srcofs _dstofs _n :=
   int.iter_up 0 _n a @@ λ _i a ,
@@ -473,13 +468,6 @@ Definition isortto' a _srcofs _dstofs _n :=
    other words, when [xi] is read from the current array, the same value
    is read as if [xi] had been read from the initial unmodified array. *)
 
-Definition isortto'_precondition srcofs dstofs n :=
-  (srcofs + n ≤ dstofs ∨ dstofs ≤ srcofs)%nat.
-
-Local Ltac destruct_isortto'_precondition :=
-  match goal with h: isortto'_precondition _ _ _ |- _ =>
-    destruct h end.
-
 (* The public specification of [isortto']. *)
 
 Lemma wp_isortto' a xs _srcofs srcofs _dstofs dstofs _n n :
@@ -489,57 +477,56 @@ Lemma wp_isortto' a xs _srcofs srcofs _dstofs dstofs _n n :
   isInt _n n →
   valid_seg srcofs (srcofs + n) xs →
   valid_seg dstofs (dstofs + n) xs →
-  isortto'_precondition srcofs dstofs n →
-  smt_sorted R' xs → (* TODO only source segment need be sorted! *)
-  wp (isortto' a _srcofs _dstofs _n) (λ a,
-    isortto_inv xs srcofs xs dstofs n a
-  ).
+  (srcofs + n ≤ dstofs ∨ dstofs ≤ srcofs)%nat → (* disjoint or overlap *)
+  Sorted R' (seg srcofs (srcofs + n) xs) →
+  wp (isortto' a _srcofs _dstofs _n)
+     (isortto_inv xs srcofs xs dstofs n).
 Proof.
   intros. unfold isortto'.
   (* The outer loop. *)
   wp_iter_up (isortto_inv xs srcofs xs dstofs).
   (* Initialization of the outer loop. *)
-  { intro_isortto_inv. smt_reasoning. }
+  { intro_isortto_inv. }
   (* The body of the outer loop. *)
   { clear dependent a. wp_up_intros i a. intros _i ?.
     elim_isortto_inv xs'.
-    (* [xs'] is the content of the array upon entry into the body
-       of the outer loop. *)
+    (* [xs'] is the content of the array
+       upon entry into the body of the outer loop. *)
     wp_get xi.
     (* [xi] is the same value that would have been read out of the initial
        unmodified array. This is the key reason why the proof goes through
        with almost no change. *)
     assert (KEY: xs' !!! (srcofs + i) = xs !!! (srcofs + i)).
-    { destruct_isortto'_precondition; lookup_through_seg. }
+    { eapply equal_lookups_to_equal_segs; eauto with lia. }
     eapply wp_bind.
     { (* The inner loop. *)
       int.wp_xiter_down (inner_inv xs srcofs xs dstofs i).
       (* Initialization of the inner loop. *)
-      { intro_inner_inv; eauto using seg_equality_implication with lia.
-        intro_dst_inv; list; recognize; smt_reasoning.
-        + split_seg_singleton_r xs. use_known_permutation. list. eauto. }
+      { intro_inner_inv. intro_dst_inv; list.
+        + rewrite Hdata. list. reflexivity.
+        + assumption.
+        + recognize. pairwise. tauto. }
       (* The body of the inner loop. *)
       clear dependent a.
       (* TODO need variant of [wp_down_intros] *)
       wp_loop_intros j0 j a. intros. subst j0.
       elim_inner_inv xs''.
-      (* [xs''] is the content of the array upon entry into the body of
-         the inner loop. *)
+      (* [xs''] is the content of the array
+         upon entry into the body of the inner loop. *)
       wp_get xj.
       wp_compare.
       (* Case [xi < xj]. *)
       { elim_dst_inv.
         wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv; try solve [ smt_reasoning ].
-        (* The destination segment contains a permitted permutation. *)
-        { list. use_known_permutation.
-          split_seg_singleton_r xs''.
-          recognize. simplify_list_permutation_goal.
-          (* Argue that swapping [xi] and [xj] is permitted. *)
-          eapply Permutation_app_comm. }
-        (* The destination segment is sorted. [KEY] is exploited here. *)
-        { smt_reasoning. recognize. eauto. }
-      }
+        intro_inner_inv. intro_dst_inv; list.
+        (* Permutation. *)
+        { rewrite <- Hpermut. clarify.
+          rewrite (split_seg j xs'' dstofs (j + 1)) by lia. clarify.
+          recognize. eapply Permutation_app_comm. }
+        (* Sortededness except at [j]. *)
+        { subst xj. list. rewrite app_assoc. list. (* UGLY *) assumption. }
+        (* Ordering above [xi]. KEY is used here. *)
+        { recognize. pairwise. eauto. }}
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
         + recognize. eapply le_le_lex. assumption.
@@ -549,14 +536,14 @@ Proof.
              point where stability creates an extra proof obligation. *)
           elim_dst_inv.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) xs).
-          { use_known_permutation. subst xj. eauto with elem_of_app lia. }
+          { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
-          destruct Hseg as (j' & ? & ?).
-          eapply exploit_smt_sorted; eauto with lia. }
-    }
+          destruct Hseg as (j' & Hj' & Hxj). nat in Hj'.
+          rewrite Hxj. rewrite KEY.
+          eapply exploit_sorted_seg; eauto with lia. }}
     (* Epilogue of the inner loop. *)
     { clear dependent a. intros [ a out ].
-      intros (j&Hj). list in Hj. unpack in Hj.
+      intros (j&Hj). nat in Hj. unpack in Hj.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
@@ -564,27 +551,24 @@ Proof.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv.
-        (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize.
+        (* Permutation. *)
+        { rewrite <- Hpermut. recognize.
           rewrite insert_seg by (list; lia); nat.
           reflexivity. }
-        (* The destination segment is sorted. [KEY] is used here. *)
-        { eapply smt_sorted_seg_fill; eauto 2; intros; list; subst xi;
-          rewrite KEY.
-          + assumption.
-          + eapply Habove. lia. }
-      }
+        (* Sortedness. [KEY] is used here. *)
+        { rewrite insert_seg by (list; lia). nat.
+          recognize.
+          eapply Sorted_app_app; eauto.
+          eapply boundary_test; tc3; intros _ _; list.
+          assumption. }}
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
-        intro_isortto_inv; try solve [ smt_reasoning ].
+        intro_isortto_inv.
         (* The destination segment contains a permitted permutation. *)
-        { use_known_permutation. recognize. list. reflexivity. }
-        (* The destination segment is sorted. [KEY] is used here. *)
-        { smt_reasoning. rewrite KEY. smt_reasoning. }
-      }
-    }
-  }
+        { rewrite <- Hpermut. recognize. list. reflexivity. }
+        (* Sortedness. [KEY] is used here. *)
+        { recognize. eapply Sorted_app; tc. }}}}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1775,7 +1759,6 @@ Proof.
     + unfold isortto'_precondition. lia.
     + admit. (* TODO FIXME *)
     + elim_isortto_inv dst'.
-      rewrite smt_sorted_seg_iff' in *.
       intro_sortto_post.
       { symmetry.
         assert (b ≤ k ∨ k + n ≤ a)%nat as [|] by lia.
