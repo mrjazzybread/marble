@@ -2133,7 +2133,7 @@ Global Ltac elim_sort_post xs' :=
     destruct h as (xs' & h); unpack in h
   end.
 
-Local Infix "≃" := Permutation
+Infix "≃" := Permutation
   (at level 70, no associativity).
 
 (* -------------------------------------------------------------------------- *)
