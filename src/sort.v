@@ -2000,15 +2000,14 @@ Definition sort_seg_post xs i n a :=
 Local Ltac intro_sort_seg_post :=
   unfold sort_seg_post; pack; list; tc3; list; tc3.
 
-Local Ltac elim_sort_seg_post xs' :=
+Ltac elim_sort_seg_post xs' :=
   match goal with h: sort_seg_post _ _ _ _ |- _ =>
     destruct h as (xs' & h); unpack in h
   end.
 
 (* The specification of [sort_seg]. *)
 
-Definition sort_seg_spec _n :=
-  ∀ a xs _i i n,
+Lemma wp_sort_seg : ∀ a xs _i i _n n,
   isArray a xs →
   isInt _i i →
   isInt _n n →
@@ -2016,11 +2015,8 @@ Definition sort_seg_spec _n :=
   Sorted R' (seg i (i + n) xs) →
   wp (sort_seg a _i _n)
      (sort_seg_post xs i n).
-
-Lemma wp_sort_seg : ∀ _n, sort_seg_spec _n.
 Proof.
-  unfold sort_seg_spec. intros.
-  unfold sort_seg.
+  intros. unfold sort_seg.
   assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
   assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
   wp_if.
@@ -2064,6 +2060,54 @@ Proof.
       rewrite HpostB2.
       rewrite frameA, HpostA5.
       list. reflexivity. }}
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [sort a] sorts the array [a] in place. This is a merge sort, with an
+   insertion sort at the leaves. It is a stable sort. *)
+
+Section Sort.
+Open Scope uint63.
+
+Definition sort a :=
+  do _n ← length a ;
+  sort_seg a 0 _n.
+
+(* The postcondition of [sort]. *)
+
+Definition sort_post xs a :=
+  ∃ xs',
+  isArray a xs' ∧
+  len xs = len xs' ∧
+  (* This array contains a permutation of the data
+     that initially existed in it. *)
+  xs' ≃ xs ∧
+  (* The array is sorted. *)
+  sorted xs'.
+
+Local Ltac intro_sort_post :=
+  unfold sort_post; pack; list; tc3; list; tc3.
+
+Ltac elim_sort_post xs' :=
+  match goal with h: sort_post _ _ |- _ =>
+    destruct h as (xs' & h); unpack in h
+  end.
+
+(* The specification of [sort]. *)
+
+Lemma wp_sort a xs :
+  isArray a xs →
+  Sorted R' xs →
+  wp (sort a) (sort_post xs).
+Proof.
+  intros. unfold sort.
+  wp_length _n.
+  assert (Sorted R' (initial_seg (0 + len xs) xs))
+    by (list; assumption).
+  wp_op_overwrite wp_sort_seg a. wp_last Hpost.
+  elim_sort_seg_post xs'. list in *.
+  intro_sort_post.
 Qed.
 
 End Sorting.
