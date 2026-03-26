@@ -28,6 +28,17 @@ Global Ltac wp_intros_overwrite x :=
   clear dependent x;
   rename x' into x.
 
+(* [wp_last H] renames the most recently introduced hypothesis [H]. *)
+
+(* The tactics [wp_intros] and [wp_intros_overwrite] do not allow
+   naming the hypotheses that they introduce. In case there is only
+   one such hypothesis, [wp_last] allows renaming it after the fact. *)
+
+Ltac wp_last H :=
+  match goal with h: _ |- _ =>
+    rename h into H
+  end.
+
 (* [wp_op_nude lemma] applies the lemma [lemma], which is typically a
    reasoning rule for some operation [op], then attempts to solve its
    preconditions. The goal should have the form [wp (op ...) ?Q] where
