@@ -1418,6 +1418,96 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* [optimistic_merge_1 is a variant of [optimistic_merge] where the
+   first source array and the destination array are the same array.
+   The first source segment must be a suffix of the destination segment. *)
+
+(* The two source segments must be nonempty. *)
+
+Section OptimisticMerge1.
+
+Open Scope uint63.
+
+Definition optimistic_merge_1 _i1 _j1 _src2 _i2 _j2 _dst _k :=
+  (* Read the last element of the first source segment. *)
+  do x1 ← get _dst (_j1 - 1) ;
+  (* Read the first element of the second source segment. *)
+  do x2 ← get _src2 _i2 ;
+  (* Compare them. *)
+  match compare x1 x2 with
+  | Lt | Eq =>
+      (* If they are suitably ordered then two blits suffice. *)
+      let _n1 := _j1 - _i1 in
+      do _dst ← blit' _dst _i1 _k _n1 ;
+      let _n2 := _j2 - _i2 in
+      do _dst ← blit _src2 _i2 _dst (_k + _n1) _n2 ;
+      _dst
+  | Gt =>
+      do x1 ← get _dst _i1 ;
+      merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k
+  end.
+
+End OptimisticMerge1.
+
+Definition optimistic_merge_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+  ∀ _src1 src1 _src2 src2,
+  isArray _src1 src1 →
+  isArray _src2 src2 →
+  ∀ i1, isInt _i1 i1 →
+  ∀ j1, isInt _j1 j1 →
+  valid_seg i1 j1 src1 →
+  (i1 < j1)%nat →
+  ∀ i2, isInt _i2 i2 →
+  ∀ j2, isInt _j2 j2 →
+  valid_seg i2 j2 src2 →
+  (i2 < j2)%nat →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  ∀Int _k k,
+  (* The destination array is the first source array. *)
+  let _dst := _src1 in
+  let dst := src1 in
+  (* The first source segment must form a suffix of the destination segment. *)
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  limit = j1 →
+  valid_seg k limit dst →
+  wp (optimistic_merge_1 _i1 _j1 _src2 _i2 _j2 _dst _k)
+     (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
+
+Lemma wp_optimistic_merge_1 _j1 _j2 _i1 _i2 :
+  optimistic_merge_1_spec _j1 _j2 (_i1, _i2).
+Proof.
+  unfold optimistic_merge_1_spec. intros.
+  unfold optimistic_merge_1.
+  wp_get x1.
+  wp_get x2.
+  wp_compare.
+  (* Case [x2 < x1]. *)
+  { clear dependent x1.
+    wp_get x1.
+    wp_op wp_merge_aux_1 _dst'.
+    assumption. }
+  (* Case [x1 ≤ x2]. *)
+  { (* This remark is the key reason with this case works. *)
+    assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
+    { apply boundary_test; eauto 2. intros _ _. list.
+      recognize. eauto with lia. }
+    wp_blit.
+    wp_blit.
+    (* UGLY *)
+    match goal with h: isArray _ _ |- _ =>
+      repeat rewrite* @seg_none' in h by lia; list in h end.
+    reckon (len src1) in *.
+    wp_ret.
+    intro_merge_aux_post_list.
+    + unmodified_outside_seg.
+    + clarify. reflexivity.
+    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [optimistic_merge_2] is a variant of [optimistic_merge] where the
    second source segment is a suffix of the destination segment. *)
 
