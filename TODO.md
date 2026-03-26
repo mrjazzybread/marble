@@ -2,7 +2,13 @@
 
 ## Short term
 
-* Split `sort.v` into multiple files.
+* Offer a public `merge` function, with and without stability.
+
+* `sort.v`: try to use uniform conventions regarding names and order
+   of parameters; also, regarding end offset versus length.
+
+* Instead of using insertion sort at the leaves, stick to merge sort
+  all the way?
 
 * Can the loops in `int.v` use `IF/THEN/ELSE` instead of `inspected`?
 
@@ -56,6 +62,8 @@
   so that the cost of reverting to an old version remains bounded.
   Test, and implement a new PArray module, if needed.
 
+## Partial Evaluation / Specialization
+
 * Can the extracted code be improved?
   + Specialization of higher-order functions (e.g., loops)
   + Inline all small functions
@@ -66,6 +74,11 @@
   first define an improved version of `find_index`,
   then prove that it is equivalent to `find_index`.
   If successful then try to derive this code systematically.
+
+* In insertion sort and/or merge sort, define specialized versions
+  for the base cases where the length is statically known.
+  Test and benchmark to find the best strategy at the leaves
+  and the best cutoff value.
 
 ## Running inside Rocq
 
@@ -85,6 +98,16 @@
   by clearing `isArray a xs` in the subgoal that establishes the
   initial state.]
 
+* Explain the need to avoid aliasing. Aliasing of arrays is permitted
+  only in the case where both arrays are only read.
+
+  necessary in order to ensure that the code always accesses the most
+  recent version of the array, with time complexity O(1). If the same
+  array was used as the source array and as the destination array in a
+  call to [isortto] then every array access would become expensive, if a
+  persistent array is used, or would fail, if a defensive non-persistent
+  array is used (in OCaml).
+
 * Explain the various extraction options.
 
 ## Applications.
@@ -94,6 +117,9 @@
 * HAMTs.
 * B-Trees.
 * Chunked sequences.
+* Priority queue within an array.
+* Depth-first search, SCCs and other graph algorithms.
+* Congruence closure.
 
 * Ephemeral? Persistent? Transient?
   Can we have efficient transient chunks?
