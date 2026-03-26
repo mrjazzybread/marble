@@ -766,25 +766,22 @@ Proof.
       (* Prove that we have a permutation. *)
       { split_seg (i2 + 1) src2.
         split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
-        rewrite Permutation_app_comm.
-        simplify_list_permutation_goal. recognize. eauto. }
+        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
+        rewrite Permutation_app_comm. clarify.
+        recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize. eauto.
+          intros _ _; list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia.
-      }
-    }
+          - intros _ _; list. subst x2.
+            eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
@@ -792,13 +789,11 @@ Proof.
       (* UGLY [list] misses this rewriting step: *)
       try (erewrite (seg_none' _ _ dst) by lia; list);
       eauto 2 with lia.
-      + simplify_list_equality_goal. reflexivity.
+      + clarify. reflexivity.
       + eapply Permutation_app_comm.
       + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto.
-    }
-  }
+        intros _ _. list. recognize. eauto. }}
   (* Case [x1 ≤ x2]. *)
   { wp_set.
     wp_if.
@@ -813,24 +808,22 @@ Proof.
       (* Prove that we have a permutation. *)
       { split_seg (i1 + 1) src1.
         split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal. recognize. eauto. }
+        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
+        recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
           (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia.
-      }
-    }
+          intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
@@ -838,13 +831,11 @@ Proof.
       (* UGLY [list] misses this rewriting step: *)
       try (erewrite (seg_none' _ _ dst) by lia; list);
       eauto 2 with lia.
-      + simplify_list_equality_goal. reflexivity.
+      + clarify. reflexivity.
       + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia.
-    }
-  }
+        intros _ _. list. recognize. eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -955,25 +946,22 @@ Proof.
       (* Prove that we have a permutation. *)
       { split_seg (i2 + 1) src2.
         split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
+        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
         rewrite Permutation_app_comm.
-        simplify_list_permutation_goal. recognize. eauto. }
+        clarify. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           intros _ _. list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia.
-      }
-    }
+            eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       (* i1 = k + 1 *) subst i1.
@@ -981,9 +969,7 @@ Proof.
       intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
       + recognize. eapply Permutation_app_comm.
       + eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto.
-    }
-  }
+        intros _ _. list. recognize. eauto. }}
   (* Case [x1 ≤ x2]. *)
   { wp_set.
     wp_if.
@@ -1000,39 +986,35 @@ Proof.
       { split_seg (i1 + 1) src1.
         split_seg (k + 1) dst'.
         rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal. recognize. eauto. }
+        clarify. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
           (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia.
-      }
-    }
+          intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       (* i1 = k + (j2 - i2) *) subst i1.
       wp_blit.
       intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
-      + simplify_list_equality_goal. reflexivity.
-      + simplify_list_permutation_goal.
+      + clarify. reflexivity.
+      + clarify.
         erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
         reflexivity.
       + recognize.
         erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia.
-    }
-  }
+        intros _ _. list. recognize. eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1134,25 +1116,22 @@ Proof.
       (* Prove that we have a permutation. *)
       { split_seg (i2 + 1) src2.
         split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
+        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
         rewrite Permutation_app_comm.
-        simplify_list_permutation_goal. recognize. eauto. }
+        clarify. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           intros _ _. list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia.
-      }
-    }
+            eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
@@ -1161,16 +1140,14 @@ Proof.
       try (erewrite (seg_none' _ _ src2) by lia; list);
       eauto 2 with lia;
       rewrite <- Hi2.
-      + simplify_list_equality_goal. reflexivity.
+      + clarify. reflexivity.
       + recognize.
         erewrite (seg_none' _ _ src2) by lia. list. (* UGLY *)
         eapply Permutation_app_comm.
       + recognize.
         erewrite (seg_none' _ _ src2) by lia. list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto.
-    }
-  }
+        intros _ _. list. recognize. eauto. }}
   (* Case [x1 ≤ x2]. *)
   { wp_set.
     wp_if.
@@ -1186,23 +1163,21 @@ Proof.
       { split_seg (i1 + 1) src1.
         split_seg (k + 1) dst'.
         rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal. recognize. eauto. }
+        clarify. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
           (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia.
-      }
-    }
+          intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       (* i2 = k + 1 *) subst i2.
@@ -1211,9 +1186,7 @@ Proof.
       + recognize. reflexivity.
       + eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia.
-    }
-  }
+        intros _ _. list. recognize. eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1310,25 +1283,22 @@ Proof.
       (* Prove that we have a permutation. *)
       { rewrite (split_seg (i2 + 1) dst i2 j2) by lia.
         split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal.
+        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
         rewrite Permutation_app_comm.
-        simplify_list_permutation_goal. recognize. eauto. }
+        clarify. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           intros _ _. list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
           - intros _ _. list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia.
-      }
-    }
+            eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
@@ -1337,7 +1307,7 @@ Proof.
       try (erewrite (seg_none' _ _ dst) by lia; list);
       eauto 2 with lia;
       rewrite <- Hi2.
-      + simplify_list_equality_goal. reflexivity.
+      + clarify. reflexivity.
       + recognize.
         rewrite* @seg_none' by lia. list. (* UGLY *)
         eapply Permutation_app_comm.
@@ -1345,9 +1315,7 @@ Proof.
         rewrite* sub_diag' by lia. nat. (* UGLY *)
         rewrite seg_none. list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto.
-    }
-  }
+        intros _ _. list. recognize. eauto. }}
   (* Case [x1 ≤ x2]. *)
   { wp_set.
     wp_if.
@@ -1363,23 +1331,21 @@ Proof.
       { split_seg (i1 + 1) dst.
         split_seg (k + 1) dst'.
         rewrite <- Hpost3. rewrite <- Hpost5.
-        simplify_list_permutation_goal. recognize. eauto. }
+        clarify. recognize. eauto. }
       (* Prove that the destination segment is sorted. *)
       { split_seg (k + 1) dst'.
         rewrite <- Hpost5.
         eapply Sorted_app; eauto with lia.
         rewrite <- Hpost3.
         (* {[x1]} ≼ seg (i1 + 1) j1 dst ++ seg i2 j2 dst *)
-        rewrite pairwise_app_right_iff; split.
+        pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           - eapply (sorted_seg_variance i1 j1); eauto 2 with lia.
           - intros _ _. list. subst x1.
             eapply (exploit_sorted_seg i1 j1); eauto 2 with lia.
         + apply boundary_test; eauto 2 with lia.
           (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia.
-      }
-    }
+          intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       (* i2 = k + 1 *) subst i2.
@@ -1388,9 +1354,7 @@ Proof.
       + recognize. reflexivity.
       + eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia.
-    }
-  }
+        intros _ _. list. recognize. eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1465,8 +1429,7 @@ Proof.
     wp_op wp_merge_aux _dst'.
     assumption. }
   (* Case [x1 ≤ x2]. *)
-  {
-    (* This remark is the key reason with this case works. *)
+  { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
     { apply boundary_test; eauto 2. intros _ _. list.
       recognize. eauto with lia. }
@@ -1482,12 +1445,11 @@ Proof.
     intro_merge_aux_post; eauto 2; list.
     + lia.
     + reflexivity.
-    + simplify_list_equality_goal. reflexivity.
+    + clarify. reflexivity.
     + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
       reflexivity.
     + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
-      eapply Sorted_app; eauto.
-  }
+      eapply Sorted_app; eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1560,8 +1522,7 @@ Proof.
     wp_op wp_merge_aux_2 _dst'.
     assumption. }
   (* Case [x1 ≤ x2]. *)
-  {
-    (* This remark is the key reason with this case works. *)
+  { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
     { apply boundary_test; eauto 2. intros _ _. list.
       recognize. eauto with lia. }
@@ -1570,10 +1531,9 @@ Proof.
     intro_merge_aux_post; eauto 2; list.
     + lia.
     + reflexivity.
-    + simplify_list_equality_goal. reflexivity.
+    + clarify. reflexivity.
     + reckon i2. reckon j2. reflexivity.
-    + reckon i2. reckon j2. eapply Sorted_app; eauto.
-  }
+    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1642,8 +1602,7 @@ Proof.
     wp_op wp_merge_aux_12 _dst'.
     assumption. }
   (* Case [x1 ≤ x2]. *)
-  {
-    (* This remark is the key reason with this case works. *)
+  { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 dst ≼ seg i2 j2 dst).
     { apply boundary_test; eauto 2. intros _ _. list.
       recognize. eauto with lia. }
@@ -1652,10 +1611,9 @@ Proof.
     intro_merge_aux_post; eauto 2; list.
     + lia.
     + reflexivity.
-    + simplify_list_equality_goal. reflexivity.
+    + clarify. reflexivity.
     + reckon i2. reckon j2. reflexivity.
-    + reckon i2. reckon j2. eapply Sorted_app; eauto.
-  }
+    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
