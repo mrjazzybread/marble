@@ -1,5 +1,4 @@
 From stdpp Require Import numbers list well_founded.
-From Stdlib Require Import ZifyNat. (* TODO make this global *)
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
@@ -20,6 +19,10 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/V9.1.0/corelib/Corelib.Classes.RelationClasses.html
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Local hints. *)
 
 Local Hint Resolve
   Sorted_singleton
@@ -234,11 +237,7 @@ Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   len dst = len dst' ∧
   (* Outside of the destination segment,
      the destination array is unmodified. *)
-  ( ∀ a b,
-    a ≤ b ≤ len dst →
-    disjoint_seg a b dstofs (dstofs + i) →
-    seg a b dst' = seg a b dst
-  ) ∧
+  unmodified_outside_seg dst dst' dstofs (dstofs + i) ∧
   (* The data found inside the destination segment is a permutation
      of the data that existed in the source segment. *)
   seg dstofs (dstofs + i) dst' ≃ seg srcofs (srcofs + i) src ∧
@@ -301,11 +300,7 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   len dst' = len dst ∧
   (* Outside of the extended destination segment,
      the destination array is unmodified. *)
-  ( ∀ a b,
-    a ≤ b ≤ len dst →
-    disjoint_seg a b dstofs (dstofs + i + 1) →
-    seg a b dst' = seg a b dst
-  ) ∧
+  unmodified_outside_seg dst dst' dstofs (dstofs + i + 1) ∧
   (* The content of the extended destination segment is described by
      the destination invariant [dst_inv ...]. If [out] is [Continue]
      then the logically empty slot lies at index [j]; otherwise it lies
@@ -407,14 +402,12 @@ Proof.
       destruct out as [ _j' |]; elim_inner_inv dst''; elim_dst_inv.
       (* Case: we have broken out. *)
       { wp_set.
-        intro_isortto_inv.
+        intro_isortto_inv;
+        rewrite insert_seg by (list; lia); nat.
         (* Permutation. *)
-        { rewrite <- Hpermut. recognize.
-          rewrite insert_seg by (list; lia); nat.
-          reflexivity. }
+        { rewrite <- Hpermut. recognize. reflexivity. }
         (* Sortedness. *)
-        { rewrite insert_seg by (list; lia). nat.
-          recognize.
+        { recognize.
           eapply Sorted_app_app; eauto.
           eapply boundary_test; tc3; intros _ _; list.
           assumption. }}
@@ -550,14 +543,12 @@ Proof.
       destruct out as [ _j' |]; elim_inner_inv dst''; elim_dst_inv.
       (* Case: we have broken out. *)
       { wp_set.
-        intro_isortto_inv.
+        intro_isortto_inv;
+        rewrite insert_seg by (list; lia); nat.
         (* Permutation. *)
-        { rewrite <- Hpermut. recognize.
-          rewrite insert_seg by (list; lia); nat.
-          reflexivity. }
+        { rewrite <- Hpermut. recognize. reflexivity. }
         (* Sortedness. [KEY] is used here. *)
-        { rewrite insert_seg by (list; lia). nat.
-          recognize.
+        { recognize.
           eapply Sorted_app_app; eauto.
           eapply boundary_test; tc3; intros _ _; list.
           assumption. }}
@@ -685,8 +676,7 @@ Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
   (* Outside of the destination segment [k, limit),
      the destination array is unmodified. *)
   let limit := k + (j1 - i1) + (j2 - i2) in
-  initial_seg k dst = initial_seg k dst' ∧
-  final_seg limit dst = final_seg limit dst' ∧
+  unmodified_outside_seg dst dst' k limit ∧
   (* Inside the destination segment, we find a permutation
      of the data contained in the two source segments, *)
   seg i1 j1 src1 ++ seg i2 j2 src2 ≃ seg k limit dst' ∧
@@ -694,15 +684,17 @@ Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
   sorted (seg k limit dst').
 
 Local Ltac intro_merge_aux_post :=
-  unfold merge_aux_post; pack.
+  unfold merge_aux_post; eexists;
+  split; [ eauto 2 | split; [ list; lia | pack ] ].
 
-Local Ltac elim_merge_aux_post :=
-  let dst' := fresh "dst'" in
+Local Ltac intro_merge_aux_post_list :=
+  intro_merge_aux_post; list; recognize_empty_segments; list.
+
+Local Ltac elim_merge_aux_post dst' :=
   match goal with h: merge_aux_post _ _ _ _ _ _ _ _ _ |- _ =>
     unfold merge_aux_post in h;
     destruct h as (dst' & h);
-    list in h; unpack in h;
-    repeat decompose_segment
+    list in h; unpack in h
   end.
 
 (* The specification of [merge_aux]. *)
@@ -761,19 +753,18 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
       clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { split_seg (i2 + 1) src2.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
-        rewrite Permutation_app_comm. clarify.
-        recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i2 + 1) src2. rewrite <- Hpost2. clarify.
+        recognize. eapply Permutation_app_comm. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
@@ -785,11 +776,8 @@ Proof.
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list;
-      (* UGLY [list] misses this rewriting step: *)
-      try (erewrite (seg_none' _ _ dst) by lia; list);
-      eauto 2 with lia.
-      + clarify. reflexivity.
+      intro_merge_aux_post_list.
+      + unmodified_outside_seg.
       + eapply Permutation_app_comm.
       + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
@@ -803,35 +791,32 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
       clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { split_seg (i1 + 1) src1.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
-        recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i1 + 1) src1. rewrite <- Hpost2. clarify.
+        recognize. reflexivity. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x1.
+          - intros _ _; list. subst x1.
             eapply exploit_sorted_seg; eauto with lia.
         + apply boundary_test; eauto 2 with lia.
-          (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia. }}
+          intros _ _; list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list;
-      (* UGLY [list] misses this rewriting step: *)
-      try (erewrite (seg_none' _ _ dst) by lia; list);
-      eauto 2 with lia.
-      + clarify. reflexivity.
+      intro_merge_aux_post_list.
+      + unmodified_outside_seg.
+      + reflexivity.
       + recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
@@ -941,32 +926,32 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
       clear dependent _src1. intros _src1 Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { split_seg (i2 + 1) src2.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
-        rewrite Permutation_app_comm.
-        clarify. recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i2 + 1) src2. rewrite <- Hpost2. clarify.
+        recognize. eapply Permutation_app_comm. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize. eauto.
+          intros _ _; list. recognize. eauto.
         + apply boundary_test; eauto 2 with lia.
           - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x2.
+          - intros _ _; list. subst x2.
             eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2.
+    { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
       (* i1 = k + 1 *) subst i1.
       wp_ret.
-      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
+      intro_merge_aux_post_list.
+      + reflexivity.
       + recognize. eapply Permutation_app_comm.
       + eapply sorted_app_boundary; eauto 2 with lia.
         intros _ _. list. recognize. eauto. }}
@@ -980,18 +965,18 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
       clear dependent _src1. intros _src1 Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { split_seg (i1 + 1) src1.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        clarify. recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i1 + 1) src1. rewrite <- Hpost2. clarify.
+        recognize. eauto. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
@@ -1002,16 +987,13 @@ Proof.
           (* The fact that [x1] precedes [x2] is used here. *)
           intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1.
+    { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
       (* i1 = k + (j2 - i2) *) subst i1.
       wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
-      + clarify. reflexivity.
-      + clarify.
-        erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
-        reflexivity.
+      intro_merge_aux_post_list.
+      + unmodified_outside_seg.
+      + reflexivity.
       + recognize.
-        erewrite (seg_none' _ _ src1) by lia; list. (* UGLY *)
         eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
         intros _ _. list. recognize. eauto with lia. }}
@@ -1111,19 +1093,18 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc3; tc. }
       clear dependent _src2. intros _src2 Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { split_seg (i2 + 1) src2.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
-        rewrite Permutation_app_comm.
-        clarify. recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i2 + 1) src2. rewrite <- Hpost2. clarify.
+        recognize. eapply Permutation_app_comm. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
@@ -1133,19 +1114,12 @@ Proof.
           - intros _ _. list. subst x2.
             eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2.
+    { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
       wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list;
-      (* UGLY [list] misses this rewriting step: *)
-      try (erewrite (seg_none' _ _ src2) by lia; list);
-      eauto 2 with lia;
-      rewrite <- Hi2.
-      + clarify. reflexivity.
-      + recognize.
-        erewrite (seg_none' _ _ src2) by lia. list. (* UGLY *)
-        eapply Permutation_app_comm.
-      + recognize.
-        erewrite (seg_none' _ _ src2) by lia. list. (* UGLY *)
+      intro_merge_aux_post_list.
+      + unmodified_outside_seg.
+      + rewrite <- Hi2. eapply Permutation_app_comm.
+      + rewrite <- Hi2. recognize.
         eapply sorted_app_boundary; eauto 2 with lia.
         intros _ _. list. recognize. eauto. }}
   (* Case [x1 ≤ x2]. *)
@@ -1157,18 +1131,18 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
       clear dependent _src2. intros _src2 Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { split_seg (i1 + 1) src1.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        clarify. recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i1 + 1) src1. rewrite <- Hpost2. clarify.
+        recognize. eauto. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
@@ -1179,10 +1153,11 @@ Proof.
           (* The fact that [x1] precedes [x2] is used here. *)
           intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1.
+    { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
       (* i2 = k + 1 *) subst i2.
       wp_ret.
-      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
+      intro_merge_aux_post_list.
+      + reflexivity.
       + recognize. reflexivity.
       + eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
@@ -1278,19 +1253,19 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc3; tc. }
       clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
-      (* Prove that we have a permutation. *)
-      { rewrite (split_seg (i2 + 1) dst i2 j2) by lia.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5. clarify.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
+      (* Permutation. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        rewrite (split_seg (i2 + 1) dst i2 j2) by lia. rewrite <- Hpost2. clarify.
         rewrite Permutation_app_comm.
         clarify. recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
@@ -1300,20 +1275,12 @@ Proof.
           - intros _ _. list. subst x2.
             eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2.
+    { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
       wp_blit.
-      intro_merge_aux_post; eauto 2; nat in *; list;
-      (* UGLY [list] misses this rewriting step: *)
-      try (erewrite (seg_none' _ _ dst) by lia; list);
-      eauto 2 with lia;
-      rewrite <- Hi2.
-      + clarify. reflexivity.
-      + recognize.
-        rewrite* @seg_none' by lia. list. (* UGLY *)
-        eapply Permutation_app_comm.
-      + recognize.
-        rewrite* sub_diag' by lia. nat. (* UGLY *)
-        rewrite seg_none. list. (* UGLY *)
+      intro_merge_aux_post_list.
+      + unmodified_outside_seg.
+      + rewrite <- Hi2. eapply Permutation_app_comm.
+      + rewrite <- Hi2.
         eapply sorted_app_boundary; eauto 2 with lia.
         intros _ _. list. recognize. eauto. }}
   (* Case [x1 ≤ x2]. *)
@@ -1325,18 +1292,18 @@ Proof.
       eapply wp_conseq.
       { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
       clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post.
-      intro_merge_aux_post; eauto 2.
+      elim_merge_aux_post dst'.
+      intro_merge_aux_post.
+      (* Unmodified. *)
+      { rewrite Hpost1 by lia. list. reflexivity. }
       (* Prove that we have a permutation. *)
-      { split_seg (i1 + 1) dst.
-        split_seg (k + 1) dst'.
-        rewrite <- Hpost3. rewrite <- Hpost5.
-        clarify. recognize. eauto. }
-      (* Prove that the destination segment is sorted. *)
-      { split_seg (k + 1) dst'.
-        rewrite <- Hpost5.
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+        split_seg (i1 + 1) dst. rewrite <- Hpost2. clarify.
+        recognize. eauto. }
+      (* Sortedness. *)
+      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         eapply Sorted_app; eauto with lia.
-        rewrite <- Hpost3.
+        rewrite <- Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 dst ++ seg i2 j2 dst *)
         pairwise. split.
         + apply boundary_test; eauto 2 with lia.
@@ -1347,10 +1314,11 @@ Proof.
           (* The fact that [x1] precedes [x2] is used here. *)
           intros _ _. list. recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1.
+    { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
       (* i2 = k + 1 *) subst i2.
       wp_ret.
-      intro_merge_aux_post; eauto 2; nat in *; list; eauto 2 with lia.
+      intro_merge_aux_post_list.
+      + reflexivity.
       + recognize. reflexivity.
       + eapply sorted_app_boundary; eauto 2 with lia.
         (* The fact that [x1] precedes [x2] is used here. *)
@@ -1442,14 +1410,10 @@ Proof.
     reckon (j2 - i2) in *. (* optional *)
     reckon (len dst) in *. (* optional *)
     (* Conclude. *)
-    intro_merge_aux_post; eauto 2; list.
-    + lia.
-    + reflexivity.
+    intro_merge_aux_post_list.
+    + unmodified_outside_seg.
     + clarify. reflexivity.
-    + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
-      reflexivity.
-    + rewrite* @seg_none' by lia. list. reckon i2. reckon j2.
-      eapply Sorted_app; eauto. }
+    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1528,11 +1492,9 @@ Proof.
       recognize. eauto with lia. }
     wp_blit.
     wp_ret.
-    intro_merge_aux_post; eauto 2; list.
-    + lia.
-    + reflexivity.
+    intro_merge_aux_post_list.
+    + unmodified_outside_seg.
     + clarify. reflexivity.
-    + reckon i2. reckon j2. reflexivity.
     + reckon i2. reckon j2. eapply Sorted_app; eauto. }
 Qed.
 
@@ -1608,11 +1570,9 @@ Proof.
       recognize. eauto with lia. }
     wp_blit.
     wp_ret.
-    intro_merge_aux_post; eauto 2; list.
-    + lia.
-    + reflexivity.
+    intro_merge_aux_post_list.
+    + unmodified_outside_seg.
     + clarify. reflexivity.
-    + reckon i2. reckon j2. reflexivity.
     + reckon i2. reckon j2. eapply Sorted_app; eauto. }
 Qed.
 
@@ -1650,7 +1610,7 @@ sortto' _dst _i _k _n :=
     let _dm := _k + _n1 in
     (* Sort the second half of the source segment and move it to the
        second half of the destination segment. *)
-    do _dst ← sortto' _dst (_i + _n1) (_k + _n1) _n2 ;
+    do _dst ← sortto' _dst (_i + _n1) _dm _n2 ;
     let _sm := _i + _n2 in
     (* Sort the first half of the source segment and move it to the second
        half of the source segment. This requires [n1 ≤ n2]. *)
@@ -1661,11 +1621,9 @@ sortto' _dst _i _k _n :=
 
 End SortTo'.
 
-(* TODO introduce disjoint_seg, overlap_seg_left, overlap_seg_right *)
+(* The postcondition of [sortto']. *)
 
-(* The specification of [sortto'] is similar to that of [isortto']. *)
-
-Definition sortto_post _dst dst i k n :=
+Definition sortto'_post dst i k n _dst :=
   ∃ dst',
   isArray _dst dst' ∧
   len dst = len dst' ∧
@@ -1678,18 +1636,26 @@ Definition sortto_post _dst dst i k n :=
     seg a b dst' = seg a b dst
   ) ∧
   (* The destination segment now contains a permutation
-     of the data that was in the source segment. *)
+     of the data that existed in the source segment. *)
   seg k (k + n) dst' ≃ seg i (i + n) dst ∧
   (* The destination segment is sorted. *)
   sorted (seg k (k + n) dst').
 
-Local Ltac intro_sortto_post :=
-  unfold sortto_post; pack; list; tc3; list; tc3.
+Local Ltac intro_sortto'_post :=
+  unfold sortto'_post; pack; list; tc3; list; tc3.
 
-Local Ltac elim_sortto_post dst' :=
-  match goal with h: sortto_post _ _ _ _ _ |- _ =>
+Local Ltac elim_sortto'_post dst' :=
+  match goal with h: sortto'_post _ _ _ _ _ |- _ =>
     destruct h as (dst' & h); unpack in h
   end.
+
+(* I am not sure why, but this helps; otherwise [tc] can get stuck. *)
+
+Local Hint Extern 1 (Sorted _ (seg _ _ _)) =>
+  eapply sorted_seg_variance; eauto 2 with lia
+: lia.
+
+(* The specification of [sortto']. *)
 
 Definition sortto'_spec _n :=
   ∀ _dst dst _i i _k k n,
@@ -1701,7 +1667,8 @@ Definition sortto'_spec _n :=
   valid_seg k (k + n) dst →
   disjoint_seg i (i + n) k (k + n) →
   Sorted R' (seg i (i + n) dst) →
-  wp (sortto' _dst _i _k _n) (λ _dst, sortto_post _dst dst i k n).
+  wp (sortto' _dst _i _k _n)
+     (sortto'_post dst i k n).
 
 Lemma wp_sortto' : ∀ _n, sortto'_spec _n.
 Proof.
@@ -1714,93 +1681,175 @@ Proof.
   wp_if.
   (* Case [n ≤ cutoff]. *)
   { wp_op wp_isortto' _dst'.
-    + unfold isortto'_precondition. lia.
-    + admit. (* TODO FIXME *)
-    + elim_isortto_inv dst'.
-      intro_sortto_post.
-      { symmetry.
-        assert (b ≤ k ∨ k + n ≤ a)%nat as [|] by lia.
-        - eapply seg_equality_implication. exact H18. tc. tc. tc. tc. tc. tc.
-        - eapply seg_equality_implication. exact H19. lia. lia. lia. lia. lia. lia. }
-      { symmetry. eauto. }
-  }
+    elim_isortto_inv dst'. intro_sortto'_post. }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
   { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
     assert (isInt _n1 n1) by tc.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
     assert (isInt _n2 n2) by tc.
     (* The first recursive call. *)
-    wp_op IH _dst'.
-    clear dependent _dst. rename _dst' into _dst. (* TODO avoid *)
-    rename H18 into HpostA.
-    elim_sortto_post dst'.
+    wp_op_overwrite IH _dst. wp_last HpostA.
+    elim_sortto'_post dst'.
     (* This call has not affected the first half of the source segment. *)
-    assert (safe1: seg i (i + n1) dst' = seg i (i + n1) dst).
-    { eauto with lia. }
-    assert (sorted1: Sorted R' (seg i (i + n1) dst')).
-    { rewrite safe1. eauto with lia. }
+    assert (frameA: seg i (i + n1) dst' = seg i (i + n1) dst)
+      by eauto with lia.
+    assert (Sorted R' (seg i (i + n1) dst'))
+      by (rewrite frameA; eauto with lia).
     (* The second recursive call. *)
-    wp_op IH _dst'.
-    clear dependent _dst. rename _dst' into _dst. (* TODO avoid *)
-    rename H4 into HpostB.
-    elim_sortto_post dst''.
-    (* This call has not affected the destination segment. *)
-    assert (safe2: seg k (k + n1 + n2) dst'' = seg k (k + n1 + n2) dst').
-    { eauto with lia. }
-    assert (safe2': seg (k + n1) (k + n1 + n2) dst'' =
+    wp_op_overwrite IH _dst. wp_last HpostB.
+    elim_sortto'_post dst''.
+    (* This call has not affected the destination segment.
+       In particular, its second half is unmodified. *)
+    assert (frameB: seg (k + n1) (k + n1 + n2) dst'' =
                     seg (k + n1) (k + n1 + n2) dst').
     { eauto using seg_equality_implication with lia. }
-    (* Merging the sorted halves. *)
-    eapply wp_bind.
-    { eapply wp_optimistic_merge_12.
-      tc. tc. tc. tc. tc. tc. tc. tc. tc. tc.
-      rewrite safe2'. assumption.
-      rewrite safe2'. rewrite HpostB2. rewrite HpostA2. rewrite safe1.
-      match goal with h: Sorted R' (seg i (i + n) dst) |- _ => rename h into HSorted end.
-      rewrite (split_seg (i + n1)) in HSorted by lia.
-      rewrite Sorted_app_iff in HSorted.
-      replace n with (n1 + n2) in HSorted by lia. nat in HSorted.
-      tauto.
-      tc. tc. tc. tc. }
-    clear dependent _dst. intros _dst HpostC.
-    elim_merge_aux_post. rename dst'0 into dst'''.
-    wp_ret.
-    intro_sortto_post.
-    + replace (seg a b dst''') with (seg a b dst'') by admit.
-      rewrite HpostB1 by lia.
-      rewrite HpostA1 by lia.
-      reflexivity.
-    + replace n with (n1 + n2) by lia. nat.
-      rewrite <- HpostC3.
-      rewrite HpostB2, safe2'.
-      rewrite safe1, HpostA2.
-      list. reflexivity.
-  }
-Admitted.
+    (* The following facts are needed by the next call. *)
+    assert (sorted (seg (k + n1) (k + n1 + n2) dst'')).
+    { rewrite frameB. assumption. }
+    assert (seg (i + n2) (i + n2 + n1) dst'' `precede`
+            seg (k + n1) (k + n1 + n2) dst'').
+    { rewrite frameB. rewrite HpostB2. rewrite HpostA2. rewrite frameA.
+      eapply split_sorted_seg; eauto 2 with lia. }
+    (* The third call: merging the sorted halves. *)
+    wp_op_overwrite wp_optimistic_merge_12 _dst. wp_last HpostC.
+    elim_merge_aux_post dst'''.
+    (* Conclude. *)
+    wp_ret. intro_sortto'_post.
+    (* Nothing has been modified outside of the two segments. *)
+    { rewrite HpostC1, HpostB1, HpostA1 by lia. reflexivity. }
+    (* Permutation. *)
+    { replace n with (n1 + n2) by lia. nat.
+      rewrite <- HpostC2.
+      rewrite HpostB2, frameB.
+      rewrite frameA, HpostA2.
+      list. reflexivity. }}
+Qed.
 
-(* TODO waiting
+Section SortTo.
+Open Scope uint63.
 
-Definition sortto _src _i _dst _k _n :=
-  if _n ≤? cutoff then
-    isortto _src _i _dst _k _n
-  else
-    (* Divide the source segments into two halves. The second half may
+(* The cutoff determines where to switch from merge sort to insertion
+   sort. OCaml uses 5. *)
+
+Notation cutoff := 5.
+
+Equations sortto _src _dst _i _k _n : array A * array A
+by wf _n ilt :=
+sortto _src _dst _i _k _n :=
+  IF _n ≤? cutoff THEN
+    (* Under the cutoff, use insertion sort. *)
+    do _dst ← isortto _src _i _dst _k _n ;
+    (_src, _dst)
+  ELSE
+    (* Divide the source segment into two halves. The second half may
        be longer by one unit. *)
     let _n1 := _n / 2 in
     let _n2 := _n - _n1 in
+    let _dm := _k + _n1 in
     (* Sort the second half of the source segment and move it to the
        second half of the destination segment. *)
-    let _dm := _k + _n1 in
-    do _dst ← sortto _src (_i + _n1) _dst _dm _n2 ;
+    do (_src, _dst) ← sortto _src _dst (_i + _n1) _dm _n2 ;
+    let _sm := _i + _n2 in
     (* Sort the first half of the source segment and move it to the second
        half of the source segment. This requires [n1 ≤ n2]. *)
-    let _sm := _i + _n2 in
     do _src ← sortto' _src _i _sm _n1 ;
-    (* Merge the two sorted halves, moving the data to the destination
-       segment. *)
+    (* Merge the sorted halves, moving the data to the destination segment. *)
     do _dst ← optimistic_merge_2 _src _sm (_sm + _n1) _dm (_dm + _n2) _dst _k ;
-    _dst
+    (_src, _dst).
 
- *)
+End SortTo.
+
+(* The postcondition of [sortto]. *)
+
+Definition sortto_post src dst i k n '(_src, _dst) :=
+  ∃ src' dst',
+  isArray _src src' ∧
+  len src = len src' ∧
+  isArray _dst dst' ∧
+  len dst = len dst' ∧
+  (* Outside of the source segment, the source array is unmodified. *)
+  (* And an analogous statement about the destination array. *)
+  unmodified_outside_seg src src' i (i + n) ∧
+  unmodified_outside_seg dst dst' k (k + n) ∧
+  (* The destination segment now contains a permutation
+     of the data that existed in the source segment. *)
+  seg k (k + n) dst' ≃ seg i (i + n) src ∧
+  (* The destination segment is sorted. *)
+  sorted (seg k (k + n) dst').
+
+Local Ltac intro_sortto_post :=
+  unfold sortto_post; pack; list; tc3; list; tc3.
+
+Local Ltac elim_sortto_post src' dst' :=
+  match goal with h: sortto_post _ _ _ _ _ _ |- _ =>
+    destruct h as (src' & dst' & h); unpack in h
+  end.
+
+(* The specification of [sortto]. *)
+
+Definition sortto_spec _n :=
+  ∀ _src src _dst dst _i i _k k n,
+  isArray _src src →
+  isArray _dst dst →
+  isInt _i i →
+  isInt _k k →
+  isInt _n n →
+  valid_seg i (i + n) src →
+  valid_seg k (k + n) dst →
+  disjoint_seg i (i + n) k (k + n) →
+  Sorted R' (seg i (i + n) src) →
+  wp (sortto _src _dst _i _k _n)
+     (sortto_post src dst i k n).
+
+Lemma wp_sortto : ∀ _n, sortto_spec _n.
+Proof.
+  simple eapply (well_founded_ind Wf_ilt).
+  intros _n IH.
+  unfold sortto_spec. intros.
+  autorewrite with sortto.
+  assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
+  assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
+  wp_if.
+  (* Case [n ≤ cutoff]. *)
+  {
+    wp_op wp_isortto _dst'.
+    elim_isortto_inv dst'.
+    wp_ret.
+    intro_sortto_post. }
+  (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
+  { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
+    assert (isInt _n1 n1) by tc.
+    set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
+    assert (isInt _n2 n2) by tc.
+    (* The first recursive call. *)
+    wp_op_overwrite_pair IH _src _dst. wp_last HpostA.
+    elim_sortto_post src' dst'.
+    (* This call has not affected the first half of the source segment. *)
+    assert (frameA: seg i (i + n1) src' = seg i (i + n1) src)
+      by eauto with lia.
+    assert (Sorted R' (seg i (i + n1) src'))
+      by (rewrite frameA; eauto with lia).
+    (* The second call: a call to [sortto']. *)
+    wp_op_overwrite wp_sortto' _src. wp_last HpostB.
+    elim_sortto'_post src''.
+    assert (seg (i + n2) (i + n2 + n1) src'' `precede`
+            seg (k + n1) (k + n1 + n2) dst').
+    { rewrite HpostB2. rewrite HpostA5. rewrite frameA.
+      eapply split_sorted_seg; eauto 2 with lia. }
+    (* The third call: merging the sorted halves. *)
+    wp_op_overwrite wp_optimistic_merge_2 _dst. wp_last HpostC.
+    elim_merge_aux_post dst'''.
+    (* Conclude. *)
+    wp_ret. intro_sortto_post.
+    (* Nothing has been modified outside of the two segments. *)
+    { rewrite HpostB1, HpostA3 by lia. reflexivity. }
+    { rewrite HpostC1, HpostA4 by lia. reflexivity. }
+    (* Permutation. *)
+    { replace n with (n1 + n2) by lia. nat.
+      rewrite <- HpostC2.
+      rewrite HpostB2.
+      rewrite frameA, HpostA5.
+      list. reflexivity. }}
+Qed.
 
 End Sorting.
