@@ -725,6 +725,18 @@ Qed.
 End JustTransitive.
 
 Arguments pairwise {A} R xs ys.
+
+Hint Rewrite
+  @pairwise_nil_left
+  @pairwise_nil_right
+  @pairwise_singleton_singleton
+  @pairwise_app_left_iff
+  @pairwise_app_right_iff
+  using (eauto with typeclass_instances)
+: pairwise.
+
+Ltac pairwise := autorewrite with pairwise.
+
 Arguments smt_sorted {A} R {H} xs.
 Arguments smt_sorted_seg {A} R {H} i k xs.
 Arguments smt_sorted_seg_except {A} R {H} i k xs j.

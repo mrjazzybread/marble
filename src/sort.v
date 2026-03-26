@@ -352,8 +352,8 @@ Proof.
   (* The body of the outer loop. *)
   { clear dependent _dst. wp_up_intros i _dst. intros _i ?.
     elim_isortto_inv dst'.
-    (* [dst'] is the content of the destination array upon entry into
-       the body of the outer loop. *)
+    (* [dst'] is the content of the destination array
+       upon entry into the body of the outer loop. *)
     wp_get xi.
     eapply wp_bind.
     { (* The inner loop. *)
@@ -362,14 +362,14 @@ Proof.
       { intro_inner_inv. intro_dst_inv; list.
         + rewrite Hdata. list. reflexivity.
         + assumption.
-        + recognize. rewrite pairwise_nil_right. eauto. }
+        + recognize. pairwise. tauto. }
       (* The body of the inner loop. *)
       clear dependent _dst.
       (* TODO need variant of [wp_down_intros] *)
       wp_loop_intros j0 j _dst. intros. subst j0.
       elim_inner_inv dst''.
-      (* [dst''] is the content of the destination array upon entry into
-         the body of the inner loop. *)
+      (* [dst''] is the content of the destination array
+         upon entry into the body of the inner loop. *)
       wp_get xj.
       wp_compare.
       (* Case [xi < xj]. *)
@@ -377,18 +377,13 @@ Proof.
         wp_set. wp_continue.
         intro_inner_inv. intro_dst_inv; list.
         (* Permutation. *)
-        { rewrite <- Hpermut. simplify_list_permutation_goal.
-          rewrite (split_seg j dst'' dstofs (j + 1)) by lia.
-          simplify_list_permutation_goal. recognize.
-          eapply Permutation_app_comm. }
+        { rewrite <- Hpermut. clarify.
+          rewrite (split_seg j dst'' dstofs (j + 1)) by lia. clarify.
+          recognize. eapply Permutation_app_comm. }
         (* Sortedness except at [j]. *)
-        { subst xj. list. rewrite app_assoc. list. (* UGLY *)
-          assumption. }
+        { subst xj. list. rewrite app_assoc. list. (* UGLY *) assumption. }
         (* Ordering above [xi]. *)
-        { recognize.
-          rewrite pairwise_app_right_iff. split; [| assumption ].
-          rewrite pairwise_singleton_singleton. eauto. }
-      }
+        { recognize. pairwise. eauto. }}
       (* Case [xj ≤ xi]. *)
       { wp_break. intro_inner_inv.
         + recognize. eapply le_le_lex. assumption.
@@ -402,8 +397,7 @@ Proof.
           rewrite lookup_total_elem_seg in Hseg by lia.
           destruct Hseg as (j' & Hj' & Hxj). nat in Hj'.
           rewrite Hxj. subst xi.
-          eapply exploit_sorted_seg; eauto with lia. }
-    }
+          eapply exploit_sorted_seg; eauto with lia. }}
     (* Epilogue of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
       intros (j&Hj). nat in Hj. unpack in Hj.
@@ -423,8 +417,7 @@ Proof.
           recognize.
           eapply Sorted_app_app; eauto.
           eapply boundary_test; tc3; intros _ _; list.
-          assumption. }
-      }
+          assumption. }}
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
@@ -432,10 +425,7 @@ Proof.
         (* Permutation. *)
         { rewrite <- Hpermut. recognize. list. reflexivity. }
         (* Sortedness. *)
-        { recognize. eapply Sorted_app; tc. }
-      }
-    }
-  }
+        { recognize. eapply Sorted_app; tc. }}}}
 Qed.
 
 (* -------------------------------------------------------------------------- *)

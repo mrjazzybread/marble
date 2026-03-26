@@ -2,7 +2,7 @@ From stdpp Require Import numbers list.
 Notation len := List.length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics list_extra bool iteration int wp wp_tactics.
+From marble Require Import tactics list_extra list_tactics bool iteration int wp wp_tactics.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.

@@ -32,6 +32,7 @@ Ltac recognize :=
    with [ys] in the goal. (Of course this requires the surrounding context
    to be compatible with such a rewriting step.) *)
 
+(* TODO [use_known_permutation] may be obsolete *)
 Ltac use_known_permutation :=
   match goal with h: Permutation ?xs ?ys |- context[?xs] =>
     rewrite h
@@ -47,4 +48,108 @@ Ltac decompose_segment :=
     rewrite (split_seg j ys) in h by lia;
     eapply app_inj_1 in h; [| list; lia ];
     unpack in h
+  end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [simplify_list_equality_goal] simplifies a goal of the form [xs = ys].
+   To compensate for the lack of rewriting modulo associativity, we first
+   identify and eliminate identical terms on the left-hand side and on the
+   right-hand side; then we attempt to fuse adjacent list segments. *)
+
+(* This tactic cannot fail, and does not solve the goal. *)
+
+(* The goal should be rigid. If it contains metavariables at either end
+   then they may be instantiated in incorrect ways. *)
+
+Lemma simplify_app_l {A} (xs ys zs : list A) :
+  ys = zs → xs ++ ys = xs ++ zs.
+Proof. congruence. Qed.
+
+Lemma simplify_app_r {A} (xs ys zs : list A) :
+  ys = zs → ys ++ xs = zs ++ xs.
+Proof. congruence. Qed.
+
+Lemma simplify_app_l_seg {A} i1 j1 i2 j2 (xs ys zs : list A) :
+  i1 = i2 → j1 = j2 → ys = zs → seg i1 j1 xs ++ ys = seg i2 j2 xs ++ zs.
+Proof. congruence. Qed.
+
+Lemma simplify_app_r_seg {A} i1 j1 i2 j2 (xs ys zs : list A) :
+  i1 = i2 → j1 = j2 → ys = zs → ys ++ seg i1 j1 xs = zs ++ seg i2 j2 xs.
+Proof. congruence. Qed.
+
+Lemma simplify_seg_equality {A} i1 j1 i2 j2 (xs ys : list A) :
+  i1 = i2 → j1 = j2 → xs = ys → seg i1 j1 xs = seg i2 j2 ys.
+Proof. congruence. Qed.
+
+Global Ltac simplify_seg_equality :=
+  simple eapply simplify_seg_equality; [ (list; lia) | (list; lia) |].
+
+Global Ltac simplify_list_equality_goal_left :=
+  first [
+    eapply simplify_app_l
+  | eapply simplify_app_l_seg; [ (list; lia) | (list; lia) |]
+  ].
+
+Global Ltac simplify_list_equality_goal_right :=
+  first [
+    eapply simplify_app_r
+  | eapply simplify_app_r_seg; [ (list; lia) | (list; lia) |]
+  ].
+
+Global Ltac simplify_list_equality_goal :=
+  list;
+  repeat rewrite app_assoc;
+  repeat simplify_list_equality_goal_right;
+  repeat rewrite <- app_assoc;
+  repeat simplify_list_equality_goal_left;
+  list;
+  (* In case a single equality between segments remains,
+     try to simplify it. *)
+  try simplify_seg_equality.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [simplify_list_permutation_goal] simplifies a goal of the form [xs ≃ ys],
+   that is, an obligation to prove that the lists [xs] and [ys] are equal up
+   to a permutation of their elements. *)
+
+(* We do not use the tactic [list] because it fuses adjacent segments,
+   which, in a permutation goal, can be counter-productive. *)
+
+Local Infix "≃" := (Permutation)
+  (at level 70, no associativity).
+
+Lemma identity_permutation {A} (xs ys : list A) :
+  xs = ys → xs ≃ ys.
+Proof. intros. subst. eauto. Qed.
+
+Lemma simplify_seg_permutation {A} i1 j1 i2 j2 (xs ys : list A) :
+  i1 = i2 → j1 = j2 → xs = ys → seg i1 j1 xs ≃ seg i2 j2 ys.
+Proof. eauto using identity_permutation, simplify_seg_equality. Qed.
+
+Global Ltac simplify_seg_permutation :=
+  simple eapply simplify_seg_permutation; [ (list; lia) | (list; lia) |].
+
+Ltac simplify_list_permutation_goal :=
+  nat;
+  repeat rewrite app_assoc;
+  repeat eapply Permutation_app_tail;
+  repeat rewrite <- app_assoc;
+  repeat eapply Permutation_app_head;
+  try simplify_seg_permutation.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [clarify] is a short-hand for the union of
+   [simplify_list_equality_goal] and [simplify_list_permutation_goal]. *)
+
+Ltac clarify :=
+  lazymatch goal with
+  | |- _ = _ =>
+      simplify_list_equality_goal
+  | |- _ ≃ _ =>
+      simplify_list_permutation_goal
+  | _ =>
+      idtac
   end.
