@@ -75,5 +75,18 @@ Global Ltac wp_op_overwrite lemma x :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
   [ wp_op_nude lemma | wp_intros_overwrite x ].
 
+(* [wp_op_overwrite_pair lemma x y] is an ad hoc variant of
+   [wp_op_overwrite] that should be used when the result of an
+   operation is a pair (x, y). It is needed because [clear dependent]
+   does not accept an intropattern as an argument, I believe. *)
+
+Ltac wp_op_overwrite_pair lemma x y :=
+  let p := fresh in
+  first [ simple eapply wp_bind | simple eapply wp_conseq ];
+  [ wp_op_nude lemma
+  | wp_intros p;
+    clear dependent x; clear dependent y;
+    destruct p as [x y] ].
+
 (* To see example uses of the above tactics, look at the definitions
    of the tactics [wp_get] and [wp_set] in array.v. *)
