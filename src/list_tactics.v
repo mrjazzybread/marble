@@ -135,7 +135,7 @@ Ltac unmodified_outside_seg :=
 
 Ltac recognize_singleton_segments :=
   repeat match goal with |- context[seg ?i ?j ?xs] =>
-    erewrite (seg_is_singleton xs) by lia
+    rewrite* (seg_is_singleton xs) by lia
   end.
 
 (* -------------------------------------------------------------------------- *)
