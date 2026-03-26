@@ -251,22 +251,14 @@ Proof.
     isInt _c' c' ∧ (* c ≤ c' ∧ *) representable c').
   {
     (* Lots of preliminary remarks about machine integers. *)
-    assert (isInt 2 2) by eauto using introIsInt. (* TODO *)
-    assert (isInt 512 512) by eauto using introIsInt. (* TODO *)
-
-    generalize representable_twice_max_array_length; intro.
-    assert (representable (c * 2)).
-    { rewrite representable_iff_nat in *. lia. }
-    assert (representable (c + c `div` 2)).
-    { assert (c `div` 2 ≤ c) by eauto with lia.
-      rewrite representable_iff_nat in *. lia. }
-    (* Now conclude. *)
-     wp_if; wp_ret; eexists; split; tc.
-  }
+    assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
+    assert (isInt 512 512) by eauto using introIsInt. (* UGLY *)
+    generalize representable_twice_max_array_length; intro. (* WHY? *)
+     wp_if; wp_ret; eexists; split; tc. }
   wp_intros _c'.
   wp_ret.
   (* Another remark. *)
-  assert (isInt 8 8) by eauto using introIsInt. (* TODO *)
+  assert (isInt 8 8) by eauto using introIsInt. (* UGLY *)
   (* Now conclude. *)
   eexists; split; tc.
 Qed.
