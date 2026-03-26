@@ -649,6 +649,18 @@ Ltac lookup_through_seg :=
       list; eauto
   end.
 
+(* To prove that two lookups are equal, it suffices to prove that
+   two singleton segments are equal. *)
+
+Lemma equal_lookups_to_equal_segs `{Inhabited A} (xs ys : list A) i j :
+  valid i xs →
+  valid j ys →
+  seg i (i + 1) xs = seg j (j + 1) ys →
+  xs !!! i = ys !!! j.
+Proof.
+  intros. lookup_through_seg.
+Qed.
+
 (* A segment can be split anywhere. *)
 
 Lemma split_seg {A} j (xs : list A) i k :
