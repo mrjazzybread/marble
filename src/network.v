@@ -118,8 +118,6 @@ Hint Extern 1 (_ ≃ _) =>
   match goal with h: _ ≃ _ |- _ => rewrite <- h end; econstructor
 : sort.
 
-Hint Constructors Permutation : sort.
-
 Hint Resolve Nat.le_trans : sort.
 
 Lemma wp_merge12 {A} x0 y0 y1 k (Q : A → Prop) :
@@ -314,16 +312,22 @@ Definition sort4_tuple '(x0, x1, x2, x3) :=
 Section S.
 Open Scope uint63.
 
-Definition sort4_array a :=
-  do x0 ← get a 0 ;
-  do x1 ← get a 1 ;
-  do x2 ← get a 2 ;
-  do x3 ← get a 3 ;
-  sort4 x0 x1 x2 x3 @@ λ x0 x1 x2 x3,
-  do a ← set a 0 x0 ;
-  do a ← set a 1 x1 ;
-  do a ← set a 2 x2 ;
-  do a ← set a 3 x3 ;
+Definition sort2_segment a _i _k :=
+  do x0 ← get a _i ;
+  do x1 ← get a (_i + 1) ;
+  sort2 x0 x1 @@ λ x0 x1,
+  do a ← set a _k x0 ;
+  do a ← set a (_k + 1) x1 ;
+  a.
+
+Definition sort3_segment a _i _k :=
+  do x0 ← get a _i ;
+  do x1 ← get a (_i + 1) ;
+  do x2 ← get a (_i + 2) ;
+  sort3 x0 x1 x2 @@ λ x0 x1 x2,
+  do a ← set a _k x0 ;
+  do a ← set a (_k + 1) x1 ;
+  do a ← set a (_k + 2) x2 ;
   a.
 
 Definition sort4_segment a _i _k :=
@@ -338,51 +342,92 @@ Definition sort4_segment a _i _k :=
   do a ← set a (_k + 3) x3 ;
   a.
 
-Definition sort6_segment a _i _k :=
-  do x0 ← get a _i ;
-  do x1 ← get a (_i + 1) ;
-  do x2 ← get a (_i + 2) ;
-  do x3 ← get a (_i + 3) ;
-  do x4 ← get a (_i + 4) ;
-  do x5 ← get a (_i + 5) ;
-  sort6 x0 x1 x2 x3 x4 x5 @@ λ x0 x1 x2 x3 x4 x5,
-  do a ← set a _k x0 ;
-  do a ← set a (_k + 1) x1 ;
-  do a ← set a (_k + 2) x2 ;
-  do a ← set a (_k + 3) x3 ;
-  do a ← set a (_k + 4) x4 ;
-  do a ← set a (_k + 5) x5 ;
-  a.
-
 End S.
+
+Definition sort2seg :=
+  Eval compute -[bind Nat.leb] in sort2_segment.
+
+Definition sort3seg :=
+  Eval compute -[bind Nat.leb] in sort3_segment.
 
 Definition sort4seg :=
   Eval compute -[bind Nat.leb] in sort4_segment.
 
-Definition sort6seg :=
-  Eval compute -[bind Nat.leb] in sort6_segment.
+(* Disable Notation "t .[ i ]" := (get t i). *)
+(* Disable Notation "t .[ i <- a ]" := (set t i a). *)
+(* Print sort2seg. *)
+(* Print sort3seg. *)
+(* Print sort4seg. *)
 
-Print sort4seg.
-
-Lemma wp_sort4seg a xs _i i _k k :
-  let n := 4 in
+Definition wp_sort_seg_spec sort_seg n :=
+  ∀ a xs _i i _k k,
   isArray a xs →
   isInt _i i →
   isInt _k k →
   valid_seg i (i + n) xs →
   valid_seg k (k + n) xs →
   (* Sorted R' (seg i (i + n) xs) → *) (* TODO stability *)
-  wp (sort4seg a _i _k) (λ a, ∃ xs',
+  wp (sort_seg a _i _k) (λ a, ∃ xs',
     isArray a xs' ∧
     len xs = len xs' ∧
     unmodified_outside_seg xs xs' k (k + n) ∧
     seg k (k + n) xs' ≃ seg i (i + n) xs ∧
     Sorted le (seg k (k + n) xs')
   ).
+
+Lemma wp_sort2seg :
+  wp_sort_seg_spec sort2seg 2.
 Proof.
-  intros. subst n.
-  change sort4seg with sort4_segment.
-  unfold sort4_segment.
+  unfold wp_sort_seg_spec. intros.
+  change sort2seg with sort2_segment. unfold sort2_segment.
+  wp_get x0.
+  wp_get x1.
+  eapply wp_sort2.
+  intros. wp_last Hpermut.
+  repeat wp_set.
+  wp_ret.
+  eexists. pack.
+  + eauto.
+  + list. eauto.
+  + list. eauto.
+  + list. rewrite <- Hpermut. eapply identity_permutation.
+    listx_total o.
+    assert (o = 0 ∨ o = 1) as [|] by lia;
+    subst o; simpl; list; assumption.
+  + list.
+    repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+Qed.
+
+Lemma wp_sort3seg :
+  wp_sort_seg_spec sort3seg 3.
+Proof.
+  unfold wp_sort_seg_spec. intros.
+  change sort3seg with sort3_segment. unfold sort3_segment.
+  assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
+  wp_get x0.
+  wp_get x1.
+  wp_get x2.
+  eapply wp_sort3.
+  intros. wp_last Hpermut.
+  repeat wp_set.
+  wp_ret.
+  eexists. pack.
+  + eauto.
+  + list. eauto.
+  + list. eauto.
+  + list. rewrite <- Hpermut. eapply identity_permutation.
+    listx_total o.
+    assert (o = 0 ∨ o = 1 ∨ o = 2) as [|[|]] by lia;
+    subst o; simpl; list; assumption.
+  + list.
+    repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+Qed.
+
+Lemma wp_sort4seg :
+  wp_sort_seg_spec sort4seg 4.
+Proof.
+  unfold wp_sort_seg_spec. intros.
+  change sort4seg with sort4_segment. unfold sort4_segment.
   assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
   assert (isInt 3 3) by eauto using introIsInt. (* UGLY *)
   wp_get x0.
@@ -391,7 +436,7 @@ Proof.
   wp_get x3.
   eapply wp_sort4.
   intros ???? ??? Hpermut.
-  do 4 wp_set.
+  repeat wp_set.
   wp_ret.
   eexists. pack.
   + eauto.
@@ -404,7 +449,6 @@ Proof.
   + list.
     repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
 Qed.
-
 
 (* TODO abandoned
 Lemma wp_sort4seg a xs _i i _k k :
@@ -440,36 +484,6 @@ Proof.
   ]]].
   subst;
   repeat rewrite seg_insert by (list; lia); repeat (case_decide; try lia); nat.
-Abort.
-
-Lemma wp_sort6seg a xs _i i _k k :
-  let n := 6 in
-  isArray a xs →
-  isInt _i i →
-  isInt _k k →
-  valid_seg i (i + n) xs →
-  valid_seg k (k + n) xs →
-  (* Sorted R' (seg i (i + n) xs) → *)
-  wp (sort6seg a _i _k) (λ a, ∃ xs',
-    isArray a xs' ∧
-    len xs = len xs' ∧
-    unmodified_outside_seg xs xs' k (k + n) ∧
-    seg k (k + n) xs' ≃ seg i (i + n) xs
-    (* Sorted R (seg k (k + n) xs') *)
-  ).
-Proof.
-  intros. unfold sort6seg. subst n.
-  assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
-  assert (isInt 3 3) by eauto using introIsInt. (* UGLY *)
-  assert (isInt 4 4) by eauto using introIsInt. (* UGLY *)
-  assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
-  wp_get x0.
-  wp_get x1.
-  wp_get x2.
-  wp_get x3.
-  wp_get x4.
-  wp_get x5.
-  repeat wp_if. (* 4! = 24 subgoals *)
 Abort.
 
  *)
