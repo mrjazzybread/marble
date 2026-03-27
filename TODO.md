@@ -2,6 +2,16 @@
 
 ## Short term
 
+* array.v: some operations do not have a dedicated tactic.
+  Define dedicated tactics or indicate what tactic to use,
+  e.g. `wp_loop`.
+
+* Plug the `sortto_segment` functions into merge sort,
+  instead of insertion sort.
+  Can we get rid of insertion sort entirely?
+  May need to generalize the spec of `sortto_segment`
+  to cover the case of two arrays.
+
 * Offer a public `merge` function, with and without stability.
 
 * `sort.v`: try to use uniform conventions regarding names and order
@@ -30,12 +40,8 @@
   + `map`
   + `compare`
   + `merge`
-  + `sort`
 
-* Sorting: probably we only ever use 2-way comparisons.
-  Get rid of 3-way `compare`?
-  Or, is `compare` more modular?
-  Keep `compare` and offer a generic way of obtaining a 2-way
+* Offer a generic way of obtaining a 2-way
   comparison out of a 3-way comparison?
 
 * More lemmas should be marked `Local`.
