@@ -2,17 +2,270 @@
 
 ## Arrays
 
-### Primitive operations
+An array should be viewed as an abstract data structure, which holds
+a sequence of elements.
+
+The proposition [`isArray a xs`](array.v:Definition isArray) means
+that the elements of the array `a` form the list `xs`. This
+proposition allows reasoning about the content of the array; it
+appears in the specification of every operation on arrays. This
+proposition is in fact equivalent to `to_list a = xs`
+([lemma](array.v:Lemma isArray_iff));
+nevertheless it is recommended to always prefer writing `isArray a xs`
+and to treat this proposition as abstract.
+
+### Primitive Operations
 
 There are four primitive operations on arrays:
 
-* `make n x` creates a new array of length `n`, filled with the value `x`.
-   Its [specification](array.v:Lemma wp_make)
-   has the precondition that `n` should not exceed `max_array_length`.
-   The tactic [`wp_make`](array.v:Ltac wp_make) helps reason about it.
+* `make _n x` ([specification](array.v:Lemma wp_make))
+  creates a new array of length `_n`
+  where every slot is filled with the value `x`.
+  The parameter `_n`, a machine integer,
+  must not exceed `max_array_length`.
 
-* `length`
+  To reason about this operation,
+  use the tactic [`wp_make a`](array.v:Ltac wp_make),
+  where `a` is the name under which you would like
+  the newly allocated array to be known in the proof.
 
-* `get`
+* `length a` ([specification](array.v:Lemma wp_length))
+  returns the length of the array `a`.
 
-* `set`
+  To reason about this operation,
+  use the tactic [`wp_length n`](array.v:Ltac wp_length),
+  where `n` is the name under you would like the length
+  of this array to be known in the proof.
+
+* `get a _i` ([specification](array.v:Lemma wp_get))
+  returns the element stored at index `_i` in the array `a`.
+
+  To reason about this operation,
+  use the tactic [`wp_get x`](array.v:Ltac wp_get),
+  where `x` is the name under you would like this element
+  to be known in the proof.
+
+* `set a _i x` ([specification](array.v:Lemma wp_set))
+  stores the element `x` at index `_i` in the array `a`.
+  It returns an updated array.
+  Thereafter, the previous array should no longer be used.
+  It is recommended to name the new array also `a` so as to reduce
+  the risk of accessing the previous array by mistake.
+
+  To reason about this operation,
+  use the tactic [`wp_set`](array.v:Ltac wp_set).
+  This tactic intentionally clears the previous array `a`
+  and names the new array `a` in the proof.
+
+### More Operations
+
+* [`segment_to_list a _i _k`](array.v:Definition segment_to_list)
+  [(specification)](array.v:Lemma wp_segment_to_list)
+  converts the array segment determined by the array `a`
+  and the start and end indices `_i` and `_k` into a list.
+
+* [`to_list a`](array.v:Definition to_list)
+  [(specification)](array.v:Lemma wp_to_list)
+  converts the array `a` into a list.
+
+  For this operation,
+  we provide [a second specification](array.v:Lemma wp_to_list').
+  This specification is unusual in that it does not require `isArray a _`
+  as a precondition: on the contrary, its postcondition indicates that
+  it returns a list `xs` such that `isArray a xs` holds.
+  This allows obtaining a proposition of the form `isArray a xs`
+  about an array of arbitrary provenance.
+
+  In a related vein, the lemma [`isArray_iff`](array.v:Lemma isArray_iff)
+  establishes that `isArray a xs` is equivalent to `to_list a = xs`.
+
+* [`of_list xs`](array.v:Definition of_list)
+  [(specification)](array.v:Lemma wp_of_list)
+  converts the list `xs` to an array.
+
+  This operation requires `len xs ≤ max_array_length`: that is, the
+  length of the list `xs` must not exceed `max_array_length`.
+
+  The lemma [`to_list_of_list`](array.v:Lemma to_list_of_list)
+  states that converting a list to an array, then back to a list,
+  is the identity.
+
+  The reverse round-trip property (which would state that converting
+  an array to a list, then back to an array, is the identity)
+  [is not true](array.v:The reverse round-trip property),
+  because an array is defined not only by its content
+  but also by its default value.
+
+* [`list_length xs`](array.v:Fixpoint list_length_aux)
+  ([specification](array.v:Lemma wp_list_length))
+  returns the length of the list `xs` as a machine integer.
+
+  Although this is not an operation on arrays, it can be useful.
+  It is used in the implementation of `of_list`.
+
+* [`list_iteri _i xs s @@ body`](array.v:Fixpoint list_iteri)
+  ([specification](array.v:Lemma wp_list_iteri))
+  is a loop on the list `xs`, with initial index `_i` and initial state `s`.
+  At each iteration, the loop body `body : S → int → A → S`
+  receives the current state `s`, the current index `_i`,
+  and the current list element `x`, and returns a new state.
+
+  Although this is not an operation on arrays, it can be useful.
+  It is used in the implementation of `of_list`.
+
+* [`blit a _i b _j _n`](array.v:Definition blit)
+  [(specification)](array.v:Lemma wp_blit)
+  copies the array segment determined by the array `a`,
+  the start index `_i`, and the length `_n`
+  to the array segment determined by the array `b`,
+  the start index `_j`, and the length `_n`.
+  It returns an updated version of the array `b`.
+
+  The arrays `a` and `b` must not be aliased: that is, they should be
+  two *independent* arrays. To move data within a single array, use
+  `blit'`.
+
+  To reason about this operation,
+  use the tactic [`wp_blit`](array.v:Ltac wp_blit).
+  This tactic intentionally clears the previous array `b`
+  and names the new array `b` in the proof.
+
+* [`blit' a _i _j _n`](array.v:Definition blit')
+  [(specification)](array.v:Lemma wp_blit')
+  copies the array segment determined by the array `a`,
+  the start index `_i`, and the length `_n`
+  to the array segment determined by the array `a`,
+  the start index `_j`, and the length `_n`.
+  It returns an updated version of the array `a`.
+  Thus, the array `a` is both read and written.
+  The source and destination segments may overlap.
+
+  To reason about this operation,
+  use the tactic [`wp_blit`](array.v:Ltac wp_blit).
+  This tactic intentionally clears the previous array `a`
+  and names the new array `a` in the proof.
+
+* [`copy a`](array.v:Definition copy)
+  [(specification)](array.v:Lemma wp_copy)
+  creates a fresh copy of the array `a`,
+  that is, a new array whose content
+  is the same as the content of the array `a`.
+
+  To reason about this operation,
+  use the tactic [`wp_copy b`](array.v:Ltac wp_copy)
+  where `b` is the name under which you would like
+  the new array to be known.
+
+* [`sub a _i _n`](array.v:Definition sub)
+  [(specification)](array.v:Lemma wp_sub)
+  creates a new array whose content
+  is the same as the content of the array segment
+  determined by the array `a`, the start index `_i`,
+  and the length `_n`.
+
+  To reason about this operation,
+  use the tactic [`wp_sub b`](array.v:Ltac wp_sub)
+  where `b` is the name under which you would like
+  the new array to be known.
+
+* [`append a b`](array.v:Definition append)
+  [(specification)](array.v:Lemma wp_append)
+  creates a new array whose content is the concatenation
+  of the content of the arrays `a` and `b`.
+
+  To reason about this operation,
+  use the tactic [`wp_append c`](array.v:Ltac wp_append)
+  where `c` is the name under which you would like
+  the new array to be known.
+
+* [`fill a _i _n x`](array.v:Definition fill)
+  [(specification)](array.v:Lemma wp_fill)
+  fills the array segment determined by the array `a`,
+  the start index `_i`, and the length `_n`
+  with the value `x`.
+  It returns an updated version of the array `a`.
+
+  To reason about this operation,
+  use the tactic [`wp_fill`](array.v:Ltac wp_fill).
+  This tactic intentionally clears the previous array `a`
+  and names the new array `a` in the proof.
+
+* [`find_index f a`](array.v:Definition find_index)
+  [(specification)](array.v:Lemma wp_find_index)
+  searches the array `a`, from left to right,
+  for an element `x` such that `f x` is true.
+  Its result has type [`outcome int`](iteration.v:Inductive outcome).
+
+  To reason about this operation,
+  use the tactic [`wp_find_index out`](array.v:Ltac wp_find_index)
+  where `out` is the name under which you would like
+  the result to be known.
+
+* [`exist f a`](array.v:Definition exist)
+  [(specification)](array.v:Lemma wp_exist)
+  searches the array `a`, from left to right,
+  for an element `x` such that `f x` is true.
+  Its result is `true` if such an element exists
+  and `false` otherwise.
+
+  To reason about this operation,
+  use the tactic [`wp_exist b`](array.v:Ltac wp_exist)
+  where `b` is the name under which you would like
+  the result to be known.
+
+* [`for_all f a`](array.v:Definition for_all)
+  [(specification)](array.v:Lemma wp_for_all)
+  tests whether every element `x` of the array `a`
+  is such that `f x` is true.
+  If so, its result is `true`;
+  otherwise, its result is `false`.
+
+  To reason about this operation,
+  use the tactic [`wp_for_all b`](array.v:Ltac wp_for_all)
+  where `b` is the name under which you would like
+  the result to be known.
+
+* [`equal eq a b`](array.v:Definition equal_aux)
+  ([specification](array.v:Lemma wp_equal))
+  tests whether the arrays `a` and `b` have the same length
+  and have equal elements at every index `i`.
+  The function `eq` is used to check two elements for equality.
+
+  A [simpler specification](array.v:Lemma wp_equal) is given
+  in the case where the function `eq` is an equality test.
+
+* [`segment_iteri a _i _k s @@ body`](array.v:Definition segment_iteri)
+  ([specification](array.v:Lemma wp_segment_iteri))
+  is a loop over the array segment determined by the array `a`,
+  start index `_i`, and end index `_k`,
+  with initial state `s`.
+
+  At each iteration, the loop body `body : S → int → A → S`
+  receives the current state `s`, the current index `_i`,
+  and the current list element `x`, and returns a new state.
+
+* [`iteri a s @@ body`](array.v:Definition iteri)
+  ([specification](array.v:Lemma wp_iteri))
+  is a loop over the array `a`
+  with initial state `s`.
+
+  At each iteration, the loop body `body : S → int → A → S`
+  receives the current state `s`, the current index `_i`,
+  and the current list element `x`, and returns a new state.
+
+### Tactics
+
+The tactic [`isArray`](array.v:Ltac isArray) is applicable when the
+goal has the form `isArray a ys` and there is a hypothesis of the form
+`isArray a xs`. The goal is then reduced to the equation `xs = ys` and
+this equation is simplified. If the equation is found to be true then
+the goal is solved.
+
+The tactic [`arrays`](array.v:Ltac arrays) looks for every hypothesis
+of the form `isArray a xs` and introduces the fact `representable (len
+xs)`. This fact is then possibly simplified (in cases where `xs` is a
+complex expression). Using this tactic at the beginning of a proof can
+help preserve information about the fact that certain integers are
+representable. This information could otherwise become obscured as the
+array `a` is updated and the assertion `isArray a _` becomes more
+complex.
