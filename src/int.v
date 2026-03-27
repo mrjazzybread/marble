@@ -267,6 +267,18 @@ Proof.
   eauto using introIsInt.
 Qed.
 
+Global Instance isInt2 :
+  isInt 2 2.
+Proof.
+  eauto using introIsInt.
+Qed.
+
+Global Instance isInt3 :
+  isInt 3 3.
+Proof.
+  eauto using introIsInt.
+Qed.
+
 Lemma isInt_inj_1 _i1 _i2 i :
   isInt _i1 i →
   isInt _i2 i →
