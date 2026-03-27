@@ -456,62 +456,66 @@ Qed.
 Section S.
 Open Scope uint63.
 
-Definition naive_sort_segment_2 a _i _k :=
-  do x0 ← get a _i ;
-  do x1 ← get a (_i + 1) ;
+Definition naive_sortto_segment_2 _src _i _dst _k :=
+  do x0 ← get _src _i ;
+  do x1 ← get _src (_i + 1) ;
   sort2 x0 x1 @@ λ x0 x1,
-  do a ← set a _k x0 ;
-  do a ← set a (_k + 1) x1 ;
-  a.
+  do _dst ← set _dst _k x0 ;
+  do _dst ← set _dst (_k + 1) x1 ;
+  _dst.
 
-Definition naive_sort_segment_3 a _i _k :=
-  do x0 ← get a _i ;
-  do x1 ← get a (_i + 1) ;
-  do x2 ← get a (_i + 2) ;
+Definition naive_sortto_segment_3 _src _i _dst _k :=
+  do x0 ← get _src _i ;
+  do x1 ← get _src (_i + 1) ;
+  do x2 ← get _src (_i + 2) ;
   sort3 x0 x1 x2 @@ λ x0 x1 x2,
-  do a ← set a _k x0 ;
-  do a ← set a (_k + 1) x1 ;
-  do a ← set a (_k + 2) x2 ;
-  a.
+  do _dst ← set _dst _k x0 ;
+  do _dst ← set _dst (_k + 1) x1 ;
+  do _dst ← set _dst (_k + 2) x2 ;
+  _dst.
 
-Definition naive_sort_segment_4 a _i _k :=
-  do x0 ← get a _i ;
-  do x1 ← get a (_i + 1) ;
-  do x2 ← get a (_i + 2) ;
-  do x3 ← get a (_i + 3) ;
+Definition naive_sortto_segment_4 _src _i _dst _k :=
+  do x0 ← get _src _i ;
+  do x1 ← get _src (_i + 1) ;
+  do x2 ← get _src (_i + 2) ;
+  do x3 ← get _src (_i + 3) ;
   sort4 x0 x1 x2 x3 @@ λ x0 x1 x2 x3,
-  do a ← set a _k x0 ;
-  do a ← set a (_k + 1) x1 ;
-  do a ← set a (_k + 2) x2 ;
-  do a ← set a (_k + 3) x3 ;
-  a.
+  do _dst ← set _dst _k x0 ;
+  do _dst ← set _dst (_k + 1) x1 ;
+  do _dst ← set _dst (_k + 2) x2 ;
+  do _dst ← set _dst (_k + 3) x3 ;
+  _dst.
 
 End S.
 
 (* The optimized versions. *)
 
-Definition sort_segment_2 :=
-  Eval compute -[bind leb] in naive_sort_segment_2.
+Definition sortto_segment_2 :=
+  Eval compute -[bind leb] in naive_sortto_segment_2.
 
-Definition sort_segment_3 :=
-  Eval compute -[bind leb] in naive_sort_segment_3.
+Definition sortto_segment_3 :=
+  Eval compute -[bind leb] in naive_sortto_segment_3.
 
-Definition sort_segment_4 :=
-  Eval compute -[bind leb] in naive_sort_segment_4.
+Definition sortto_segment_4 :=
+  Eval compute -[bind leb] in naive_sortto_segment_4.
 
 (* Disable Notation "t .[ i ]" := (get t i). *)
 (* Disable Notation "t .[ i <- a ]" := (set t i a). *)
-(* Print sort_segment_2. *)
-(* Print sort_segment_3. *)
-(* Print sort_segment_4. *)
+(* Print sortto_segment_2. *)
+(* Print sortto_segment_3. *)
+(* Print sortto_segment_4. *)
 
-(* The specification of the [sort_segment] functions. *)
+(* The specification of the [sortto_segment] functions. *)
+
+(* In this specification, [_src] and [_dst] are the same array.
+   Aliasing the parameters is not a problem here because all of
+   the reads take place before all of the writes. *)
 
 (* The array is unmodified outside of the segment [k, k+n). Within this
    segment, a sorted copy of the data that initially existed in the
    segment [i, i+n) is written. This is a stable sort. *)
 
-Definition wp_sort_segment_spec sort_segment n :=
+Definition wp_sortto_segment_spec sortto_segment n :=
   ∀ a xs _i i _k k,
   isArray a xs →
   isInt _i i →
@@ -519,7 +523,7 @@ Definition wp_sort_segment_spec sort_segment n :=
   valid_seg i (i + n) xs →
   valid_seg k (k + n) xs →
   Sorted R' (seg i (i + n) xs) →
-  wp (sort_segment a _i _k) (λ a, ∃ xs',
+  wp (sortto_segment a _i a _k) (λ a, ∃ xs',
     isArray a xs' ∧
     len xs = len xs' ∧
     unmodified_outside_seg xs xs' k (k + n) ∧
@@ -529,12 +533,12 @@ Definition wp_sort_segment_spec sort_segment n :=
 
 (* Each of these functions is correct. *)
 
-Lemma wp_sort_segment_2 :
-  wp_sort_segment_spec sort_segment_2 2.
+Lemma wp_sortto_segment_2 :
+  wp_sortto_segment_spec sortto_segment_2 2.
 Proof.
-  unfold wp_sort_segment_spec. intros.
-  change sort_segment_2 with naive_sort_segment_2.
-  unfold naive_sort_segment_2.
+  unfold wp_sortto_segment_spec. intros.
+  change sortto_segment_2 with naive_sortto_segment_2.
+  unfold naive_sortto_segment_2.
   wp_get x0. wp_get x1.
   eapply wp_sort2.
   { pairwise. repeat split; eauto.
@@ -552,12 +556,12 @@ Proof.
     repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
 Qed.
 
-Lemma wp_sort_segment_3 :
-  wp_sort_segment_spec sort_segment_3 3.
+Lemma wp_sortto_segment_3 :
+  wp_sortto_segment_spec sortto_segment_3 3.
 Proof.
-  unfold wp_sort_segment_spec. intros.
-  change sort_segment_3 with naive_sort_segment_3.
-  unfold naive_sort_segment_3.
+  unfold wp_sortto_segment_spec. intros.
+  change sortto_segment_3 with naive_sortto_segment_3.
+  unfold naive_sortto_segment_3.
   wp_get x0. wp_get x1. wp_get x2.
   eapply wp_sort3;
     try solve [ subst; eapply exploit_sorted_seg; eauto with lia ].
@@ -574,12 +578,12 @@ Proof.
     repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
 Qed.
 
-Lemma wp_sort_segment_4 :
-  wp_sort_segment_spec sort_segment_4 4.
+Lemma wp_sortto_segment_4 :
+  wp_sortto_segment_spec sortto_segment_4 4.
 Proof.
-  unfold wp_sort_segment_spec. intros.
-  change sort_segment_4 with naive_sort_segment_4.
-  unfold naive_sort_segment_4.
+  unfold wp_sortto_segment_spec. intros.
+  change sortto_segment_4 with naive_sortto_segment_4.
+  unfold naive_sortto_segment_4.
   wp_get x0. wp_get x1. wp_get x2. wp_get x3.
   eapply wp_sort4;
     try solve [ subst; eapply exploit_sorted_seg; eauto with lia ].
