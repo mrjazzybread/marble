@@ -24,7 +24,7 @@ while IFS= read -r line; do
     # the first match. Construct a URL for this particular file and
     # line number in the repository.
     number=$(grep -n "${pattern}" "${SRC}"/"${file}" | head -n 1 | cut -f 1 -d ':')
-    URL="${REPO}${file}?ref_type=heads#${number}"
+    URL="${REPO}${file}?ref_type=heads#L${number}"
     # Print the transformed line, where the trailing and leading material
     # is preserved and a link is printed in the middle.
     echo "${leading}(${URL})${trailing}"
