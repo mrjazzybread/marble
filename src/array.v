@@ -41,7 +41,7 @@ Definition max_array_length_def : nat :=
 
 (* These constants are related by [isInt]. *)
 
-Global Instance max_length_spec :
+Instance max_length_spec :
   isInt max_length max_array_length.
 Proof.
   introIsInt. max_array_length_def. lia.
@@ -92,7 +92,7 @@ Qed.
 
 (* Any number that is bounded by [max_array_length] is representable. *)
 
-Global Instance representable_le_max_array_length n :
+Instance representable_le_max_array_length n :
   n ≤ max_array_length → representable n.
 Proof.
   eauto using representable_max_array_length with typeclass_instances.
@@ -179,11 +179,11 @@ Proof.
   intros. destructIsArray. lia.
 Qed.
 
-Global Hint Resolve
+Hint Resolve
   isArray_bounded_length'
 : lia.
 
-Global Instance isArray_representable `{Inhabited A} (a : array A) xs :
+Instance isArray_representable `{Inhabited A} (a : array A) xs :
   isArray a xs →
   representable (len xs).
 Proof.
@@ -257,10 +257,10 @@ Qed.
 (* The tactic [arrays] looks for hypotheses of the form [isArray a xs]
    and introduces the fact [representable (len xs)]. This fact is then
    possibly simplified (in cases where [xs] is a complex expression).
-   Using this tactic at the beginning can help preserve information about
-   the fact that certain integers are representable. This information
-   could otherwise become obscured as the array [a] is updated and the
-   assertion [isArray a _] becomes more complex. *)
+   Using this tactic at the beginning of a proof can help preserve
+   information about the fact that certain integers are representable.
+   This information could otherwise become obscured as the array [a]
+   is updated and the assertion [isArray a _] becomes more complex. *)
 
 Ltac arrays :=
   repeat match goal with
@@ -355,8 +355,7 @@ Qed.
 Lemma wp_length a xs :
   isArray a xs →
   wp (length a) (λ _n,
-    isInt _n (len xs) ∧
-    representable (len xs)
+    isInt _n (len xs)
   ).
 Proof.
   intros. wp_ret.
@@ -367,18 +366,18 @@ End PrimSpec.
 
 (* The following tactics help use the above specifications. *)
 
-Global Ltac wp_length n :=
+Ltac wp_length n :=
   wp_op wp_length n.
 
-Global Ltac wp_get x :=
+Ltac wp_get x :=
   wp_op wp_get x.
 
-Global Ltac wp_set :=
+Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
     wp_op_overwrite wp_set a
   end.
 
-Global Ltac wp_make a :=
+Ltac wp_make a :=
   wp_op wp_make a.
 
 (* -------------------------------------------------------------------------- *)
@@ -388,7 +387,7 @@ Global Ltac wp_make a :=
    to the equation [xs = ys], and this equation is simplified. If the
    equation is trivial then the goal is solved. *)
 
-Global Ltac isArray :=
+Ltac isArray :=
   match goal with
   | h: isArray ?a ?xs |- isArray ?a ?ys =>
     cut (xs = ys); [
@@ -959,7 +958,7 @@ Qed.
 
 End Blit.
 
-Global Ltac wp_blit :=
+Ltac wp_blit :=
   match goal with
   | |- context[blit _ _ ?b _ _] =>
       wp_op_overwrite wp_blit b
@@ -999,6 +998,9 @@ Qed.
 
 End Copy.
 
+Ltac wp_copy b :=
+  wp_op @wp_copy b.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Extracting a segment of an array: [sub]. *)
@@ -1031,6 +1033,9 @@ Proof.
 Qed.
 
 End Sub.
+
+Ltac wp_sub b :=
+  wp_op @wp_sub b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1069,6 +1074,9 @@ Proof.
 Qed.
 
 End Append.
+
+Ltac wp_append c :=
+  wp_op @wp_append c.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1109,7 +1117,7 @@ Qed.
 
 End Fill.
 
-Global Ltac wp_fill :=
+Ltac wp_fill :=
   match goal with |- context[fill ?a _ _ _] =>
     wp_op_overwrite wp_fill a
   end.
@@ -1230,6 +1238,9 @@ Goal
   Break 0%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
+Ltac wp_find_index out :=
+  wp_op @wp_find_index out.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [exist]. *)
@@ -1263,12 +1274,15 @@ Lemma wp_exist a xs :
   ).
 Proof.
   intros. unfold exist.
-  wp_op @wp_find_index out.
+  wp_find_index out.
   destruct out as [ _i |]; unfold find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
 
 End Exist.
+
+Ltac wp_exist b :=
+  wp_op @wp_exist b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1311,6 +1325,9 @@ Proof.
 Qed.
 
 End ForAll.
+
+Ltac wp_for_all b :=
+  wp_op @wp_for_all b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1407,6 +1424,9 @@ Qed.
 
 End Equal.
 
+Ltac wp_equal b :=
+  wp_op @wp_equal b.
+
 (* As a special case, we recover a simpler specification of [equal]
    in the case where the relation [≡] is equality. *)
 
@@ -1419,8 +1439,7 @@ Lemma wp_equal_equality `{Inhabited A}
   wp (equal eq a b) (λ o, isBool1 o (xs = ys)).
 Proof.
   intros.
-  eapply wp_conseq; [ eapply wp_equal; eauto | simpl ].
-  intros o Ho. eapply isBool1_conseq; [ eauto |].
+  wp_equal o. eapply isBool1_conseq; [ eauto |].
   (* [Forall2 (@eq A)] is the same as [@eq (list A)]. *)
   symmetry. eapply list_eq_Forall2.
 Qed.
