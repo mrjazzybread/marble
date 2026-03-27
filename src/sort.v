@@ -145,6 +145,9 @@ Local Definition lex x y :=
 Local Definition lex x y :=
   x ≤ y ∧ (y ≤ x → x `precedes` y).
 
+Infix "`lex`" := lex
+  (at level 70, no associativity).
+
 Local Hint Unfold lex : core.
 
 (* [lex] is a preorder. *)
@@ -158,21 +161,21 @@ Qed.
 
 (* Our definition of [lex] implies the usual definition. *)
 
-Lemma lt_lex x y : x < y → lex x y.
+Lemma lt_lex x y : x < y → x `lex` y.
 Proof.
   split.
   + eauto.
   + intro. exfalso. unfold strict in *. tauto.
 Qed.
 
-Lemma le_le_lex x y : x ≤ y → x `precedes` y → lex x y.
+Lemma le_le_lex x y : x ≤ y → x `precedes` y → x `lex` y.
 Proof. eauto. Qed.
 
 Local Hint Resolve lt_lex : core.
 
 (* [lex x y] implies [x ≤ y]. *)
 
-Lemma lex_elim x y : lex x y → x ≤ y.
+Lemma lex_elim x y : x `lex` y → x ≤ y.
 Proof. unfold lex. tauto. Qed.
 
 (* We write [sorted xs] when the list [xs] is sorted with respect to [lex]. *)
@@ -273,7 +276,7 @@ Definition merge11 {B} x0 y0 k : B :=
 Lemma wp_merge11 {B} x0 y0 k (Q : B → Prop) :
   [x0] `precede` [y0] →
   (∀ z0 z1,
-     lex z0 z1 →
+     z0 `lex` z1 →
      [x0] ++ [y0] ≃ [z0; z1] →
      wp (k z0 z1) Q
   ) →
@@ -290,10 +293,10 @@ Definition merge12 {B} x0 y0 y1 k : B :=
     merge11 x0 y1 (k y0).
 
 Lemma wp_merge12 {B} x0 y0 y1 k (Q : B → Prop) :
-  lex y0 y1 →
+  y0 `lex` y1 →
   [x0] `precede` [y0; y1] →
   (∀ z0 z1 z2,
-     lex z0 z1 → lex z1 z2 →
+     z0 `lex` z1 → z1 `lex` z2 →
      [x0] ++ [y0; y1] ≃ [z0; z1; z2] →
      wp (k z0 z1 z2) Q
   ) →
@@ -314,10 +317,10 @@ Definition merge13 {B} x0 y0 y1 y2 k : B :=
     merge12 x0 y1 y2 (k y0).
 
 Lemma wp_merge13 {B} x0 y0 y1 y2 k (Q : B → Prop) :
-  lex y0 y1 → lex y1 y2 →
+  y0 `lex` y1 → y1 `lex` y2 →
   [x0] `precede` [y0; y1; y2] →
   (∀ z0 z1 z2 z3,
-     lex z0 z1 → lex z1 z2 → lex z2 z3 →
+     z0 `lex` z1 → z1 `lex` z2 → z2 `lex` z3 →
      [x0] ++ [y0; y1; y2] ≃ [z0; z1; z2; z3] →
      wp (k z0 z1 z2 z3) Q
   ) →
@@ -338,10 +341,10 @@ Definition merge21 {A} x0 x1 y0 k : A :=
     k y0 x0 x1.
 
 Lemma wp_merge21 {B} x0 x1 y0 k (Q : B → Prop) :
-  lex x0 x1 →
+  x0 `lex` x1 →
   [x0; x1] `precede` [y0] →
   (∀ z0 z1 z2,
-     lex z0 z1 → lex z1 z2 →
+     z0 `lex` z1 → z1 `lex` z2 →
      [x0; x1] ++ [y0] ≃ [z0; z1; z2] →
      wp (k z0 z1 z2) Q
   ) →
@@ -362,10 +365,10 @@ Definition merge22 {B} x0 x1 y0 y1 k : B :=
     merge21 x0 x1 y1 (k y0).
 
 Lemma wp_merge22 {B} x0 x1 y0 y1 k (Q : B → Prop) :
-  lex x0 x1 → lex y0 y1 →
+  x0 `lex` x1 → y0 `lex` y1 →
   [x0; x1] `precede` [y0; y1] →
   (∀ z0 z1 z2 z3,
-     lex z0 z1 → lex z1 z2 → lex z2 z3 →
+     z0 `lex` z1 → z1 `lex` z2 → z2 `lex` z3 →
      [x0; x1] ++ [y0; y1] ≃ [z0; z1; z2; z3] →
      wp (k z0 z1 z2 z3) Q
   ) →
@@ -408,7 +411,7 @@ Lemma wp_sort3 {B} x0 x1 x2 k (Q : B → Prop) :
   x0 `precedes` x1 →
   x1 `precedes` x2 →
   (∀ z0 z1 z2,
-     lex z0 z1 → lex z1 z2 →
+     z0 `lex` z1 → z1 `lex` z2 →
      [x0; x1; x2] ≃ [z0; z1; z2] →
      wp (k z0 z1 z2) Q
   ) →
@@ -430,7 +433,7 @@ Lemma wp_sort4 {B} x0 x1 x2 x3 k (Q : B → Prop) :
   x1 `precedes` x2 →
   x2 `precedes` x3 →
   (∀ z0 z1 z2 z3,
-     lex z0 z1 → lex z1 z2 → lex z2 z3 →
+     z0 `lex` z1 → z1 `lex` z2 → z2 `lex` z3 →
      [x0; x1; x2; x3] ≃ [z0; z1; z2; z3] →
      wp (k z0 z1 z2 z3) Q
   ) →
@@ -713,7 +716,7 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
   (* The content of the extended destination segment is described by
      the destination invariant [dst_inv ...]. If [out] is [Continue]
      then the logically empty slot lies at index [j]; otherwise it lies
-     at index [j + 1]. Furthermore, in the latter case, [lex xj xi]
+     at index [j + 1]. Furthermore, in the latter case, [xj `lex` xi]
      holds. *)
   match out with
   | Continue =>
@@ -723,7 +726,7 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
       let xi := src !!! (srcofs + i) in
       let xj := dst' !!! j in
       isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
-      lex xj xi
+      xj `lex` xi
   end.
 
 Local Ltac intro_inner_inv :=
