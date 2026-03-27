@@ -72,25 +72,43 @@ Notation "xs '≺' ys" := (pairwise xs ys) (at level 80).
 
 (* -------------------------------------------------------------------------- *)
 
+(* A paraphrase of the definition. *)
+
+Lemma exploit_pairwise x y xs ys :
+  xs ≺ ys → x ∈ xs → y ∈ ys → x `R` y.
+Proof. unfold pairwise. eauto. Qed.
+
 (* When an empty list appears on one side, [xs ≺ ys] is true. *)
 
-Lemma pairwise_nil_left ys :
+Lemma pairwise_nil_left_iff ys :
   [] ≺ ys ↔ True.
 Proof.
   unfold pairwise. split; [ tauto | intros _ ].
   + intros x y. rewrite elem_of_nil. tauto.
 Qed.
 
-Lemma pairwise_nil_right xs :
+Lemma pairwise_nil_right_iff xs :
   xs ≺ [] ↔ True.
 Proof.
   unfold pairwise. split; [ tauto | intros _ ].
   + intros x y. rewrite elem_of_nil. tauto.
 Qed.
 
+Lemma pairwise_nil_left ys :
+  [] ≺ ys.
+Proof.
+  rewrite pairwise_nil_left_iff. tauto.
+Qed.
+
+Lemma pairwise_nil_right xs :
+  xs ≺ [].
+Proof.
+  rewrite pairwise_nil_right_iff. tauto.
+Qed.
+
 (* When a singleton appears on one side, [xs ≺ ys] can be simplified. *)
 
-Lemma pairwise_singleton_singleton x y :
+Lemma pairwise_singleton_singleton_iff x y :
   {[x]} ≺ {[y]} ↔
   x `R` y.
 Proof.
@@ -99,7 +117,7 @@ Proof.
   + intros Hpw x' y'. rewrite !list_elem_of_singleton. congruence.
 Qed.
 
-Lemma pairwise_singleton_left x ys :
+Lemma pairwise_singleton_left_iff x ys :
   {[x]} ≺ ys ↔ ∀ y, y ∈ ys → x `R` y.
 Proof.
   rewrite singleton_def. unfold pairwise. split.
@@ -107,7 +125,7 @@ Proof.
   + intros H x' y. rewrite list_elem_of_singleton. intros. subst. eauto.
 Qed.
 
-Lemma pairwise_singleton_right xs y :
+Lemma pairwise_singleton_right_iff xs y :
   xs ≺ {[y]} ↔ ∀ x, x ∈ xs → x `R` y.
 Proof.
   rewrite singleton_def. unfold pairwise. split.
@@ -160,6 +178,28 @@ Proof.
   { intros x y. rewrite elem_of_app. firstorder. }
 Qed.
 
+(* We usually avoid using [::], as it can be expressed in terms of
+   singletons and concatenation.  *)
+
+Lemma pairwise_cons_left_iff x xs ys :
+  x :: xs ≺ ys ↔ {[x]} ++ xs ≺ ys.
+Proof. tauto. Qed.
+
+Lemma pairwise_cons_right_iff xs y ys :
+  xs ≺ y :: ys ↔ xs ≺ {[y]} ++ ys.
+Proof. tauto. Qed.
+
+(* An ad hoc combination. *)
+
+Lemma pairwise_singleton_cons x y ys :
+  x `R` y → {[x]} ≺ ys → {[x]} ≺ y :: ys.
+Proof.
+  rewrite pairwise_cons_right_iff.
+  rewrite pairwise_app_right_iff.
+  rewrite pairwise_singleton_singleton_iff.
+  tauto.
+Qed.
+
 (* [Forall (R x) ys] can be reformulated in terms of [pairwise]. *)
 
 (* This technical lemma is used below. *)
@@ -167,7 +207,7 @@ Qed.
 Local Lemma Forall_R_iff x ys :
   Forall (R x) ys ↔ {[x]} ≺ ys.
 Proof.
-  rewrite Forall_forall, pairwise_singleton_left. eauto.
+  rewrite Forall_forall, pairwise_singleton_left_iff. eauto.
 Qed.
 
 (* In a context of the form [xs ≺ ys], one may rewrite
@@ -180,6 +220,22 @@ Proof.
   eapply Hpw.
   + rewrite Hxs. eauto.
   + rewrite Hys. eauto.
+Qed.
+
+(* This lemma rephrases [exploit_pairwise], in a situation where the
+   left-hand side is a singleton, and exploits a permutation on the
+   right-hand side. *)
+
+Lemma exploit_pairwise_singleton_left_permut x y xs ys :
+  Permutation xs ys →
+  {[x]} ≺ xs →
+  y ∈ ys →
+  x `R` y.
+Proof.
+  intros Hpermut Hpairwise Hy.
+  rewrite Hpermut in Hpairwise.
+  rewrite pairwise_singleton_left_iff in Hpairwise.
+  eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -606,13 +662,13 @@ Proof.
   intros Hsorted Hlookup.
   destruct (decide (length xs = 0)) as [ Hlen | Hlen ].
   { rewrite length_zero_iff_nil in *. subst xs.
-    rewrite pairwise_nil_right. eauto. }
+    rewrite pairwise_nil_right_iff. eauto. }
   specialize (Hlookup Hlen). subst x.
   assert (Heq: xs = {[xs !!! 0]} ++ final_seg 1 xs) by (list; eauto).
   clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 2. clear Heq.
   rewrite Sorted_app_iff in Hsorted. destruct Hsorted as (?&?&?).
   rewrite pairwise_app_right_iff; split.
-  - rewrite pairwise_singleton_singleton. reflexivity.
+  - rewrite pairwise_singleton_singleton_iff. reflexivity.
   - assumption.
 Qed.
 
@@ -627,7 +683,7 @@ Proof.
   intros Hsorted Hlookup.
   destruct (decide (length xs = 0)) as [ Hlen | Hlen ].
   { rewrite length_zero_iff_nil in *. subst xs.
-    rewrite pairwise_nil_left. eauto. }
+    rewrite pairwise_nil_left_iff. eauto. }
   specialize (Hlookup Hlen). subst x.
   assert (Heq: xs = initial_seg (length xs - 1) xs
                     ++ {[xs !!! (length xs - 1)]}) by (list; eauto).
@@ -635,7 +691,7 @@ Proof.
   rewrite Sorted_app_iff in Hsorted. destruct Hsorted as (?&?&?).
   rewrite pairwise_app_left_iff; split.
   - assumption.
-  - rewrite pairwise_singleton_singleton. reflexivity.
+  - rewrite pairwise_singleton_singleton_iff. reflexivity.
 Qed.
 
 (* If [xs] and [ys] are both sorted and nonempty then, to guarantee
@@ -655,15 +711,15 @@ Proof.
   intros ? ? Hleq.
   destruct (decide (length xs = 0)) as [ Hxs | Hxs ].
   { rewrite length_zero_iff_nil in *. subst xs.
-    rewrite pairwise_nil_left. eauto. }
+    rewrite pairwise_nil_left_iff. eauto. }
   destruct (decide (length ys = 0)) as [ Hys | Hys ].
   { rewrite length_zero_iff_nil in *. subst ys.
-    rewrite pairwise_nil_right. eauto. }
+    rewrite pairwise_nil_right_iff. eauto. }
   specialize (Hleq Hxs Hys).
   eapply pairwise_transitive_singleton with (y := ys !!! 0).
   + eapply pairwise_transitive_singleton with (y := xs !!! (length xs - 1)).
     - eauto using sorted_implies_bounded_r.
-    - rewrite pairwise_singleton_singleton. assumption.
+    - rewrite pairwise_singleton_singleton_iff. assumption.
   + eauto using sorted_implies_bounded_l.
 Qed.
 
@@ -739,11 +795,13 @@ End JustTransitive.
 Arguments pairwise {A} R xs ys.
 
 Hint Rewrite
-  @pairwise_nil_left
-  @pairwise_nil_right
-  @pairwise_singleton_singleton
+  @pairwise_nil_left_iff
+  @pairwise_nil_right_iff
+  @pairwise_singleton_singleton_iff
   @pairwise_app_left_iff
   @pairwise_app_right_iff
+  @pairwise_cons_left_iff
+  @pairwise_cons_right_iff
   using (eauto with typeclass_instances)
 : pairwise.
 
