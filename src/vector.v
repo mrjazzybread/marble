@@ -446,6 +446,70 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Borrowing an array from a vector. *)
+
+(* [read_borrow] allows the array to be read by the function [body].
+   The unoccupied space has unspecified length and therefore cannot
+   be accessed. *)
+
+Definition read_borrow {B} v (body : array A → B) : B :=
+  let (_n, a) := v in
+  body a.
+
+(* The public specification of [read_borrow]. *)
+
+Lemma wp_read_borrow {B} v xs body (Q : B → Prop) :
+  isVector v xs →
+  ( ∀ a unoccupied,
+    isArray a (xs ++ unoccupied) →
+    wp (body a) Q
+  ) →
+  wp (read_borrow v body) Q.
+Proof.
+  intros. destructIsVector. destructIsVectorCap. unfold read_borrow.
+  eauto.
+Qed.
+
+(* [read_write_borrow] allows the array to be read and updated by
+   the function [body]. This function must return a pair of its
+   main result and the updated array. The unoccupied space has
+   unspecified length and therefore cannot be accessed. *)
+
+Definition read_write_borrow {B} v (body : array A → B * array A)
+: B * vector A :=
+  let (_n, a) := v in
+  do (b, a) ← body a ;
+  let v := (_n, a) in
+  (b, v).
+
+(* The public specification of [read_write_borrow]. *)
+
+Lemma wp_read_write_borrow {B} v xs body
+(Q  : B * vector A → Prop) :
+  isVector v xs →
+  ( ∀ a unoccupied,
+    isArray a (xs ++ unoccupied) →
+    wp (body a) (λ '(b, a),
+      ∃ xs' unoccupied',
+      isArray a (xs' ++ unoccupied') ∧
+      len xs = len xs' ∧
+      (∀ v, isVector v xs' → Q (b, v))
+    )
+  ) →
+  wp (read_write_borrow v body) Q.
+Proof.
+  intros ? Hbody.
+  destructIsVector. destructIsVectorCap. unfold read_write_borrow.
+  wp_op Hbody ba. wp_last Hpost.
+  clear dependent a. destruct ba as [ b a ].
+  destruct Hpost as (xs' & unoccupied' & Hpost). unpack in Hpost.
+  wp_ret.
+  eapply Hpost1. introIsVector.
+  introIsVectorCap; eauto. congruence.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 End Operations.
 
 Global Ltac wp_steal_array :=
