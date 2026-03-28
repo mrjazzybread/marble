@@ -24,13 +24,49 @@ Open Scope nat_scope.
 
 (* Local hints. *)
 
+(* [sorted_seg_variance] cannot be added as a Resolve hint because it causes
+   divergence. We introduce a limited form of it, which picks a hypothesis
+   and exploits it. This is a bit tricky, as there can be several hypotheses
+   of the form [Sorted _ (seg _ _ _)]. The [match] construct can backtrack. *)
+
+Local Hint Extern 1 (Sorted _ (seg _ _ _)) =>
+  match goal with h: Sorted _ (seg _ _ ?xs) |- Sorted _ (seg _ _?xs) =>
+    eapply sorted_seg_variance; [ exact h | lia | lia ]
+  end
+: lia.
+
+(* A similar remark applies to the following cases. *)
+
+Local Hint Extern 1 (pairwise _ (seg _ _ _) (seg _ _ _)) =>
+  match goal with h: pairwise _ (seg _ _ _) (seg _ _ _) |- _ =>
+    eapply seg_pairwise_seg_variance; [ exact h | lia | lia | lia | lia ]
+  end
+: lia.
+
+Local Hint Extern 1 (Sorted _ _) =>
+  match goal with
+  | h: Sorted ?R (?xs ++ _) |- Sorted ?R ?xs =>
+      eapply Sorted_app_inv_l; [ exact h ]
+  | h: Sorted ?R (_ ++ ?xs) |- Sorted ?R ?xs =>
+      eapply Sorted_app_inv_r; [ exact h ]
+  end
+: lia.
+
+(* This should be harmless. *)
+
 Local Hint Resolve
   Sorted_singleton
-  Sorted_app_inv_l
-  Sorted_app_inv_r
-  sorted_seg_variance
-  seg_pairwise_seg_variance
 : lia.
+
+(* The following local tactics are quite helpful. *)
+
+Local Ltac sorted_app :=
+  first [ eapply Sorted_app_app | eapply Sorted_app ];
+  tc3.
+
+Local Ltac boundary :=
+  first [ apply boundary_test | apply sorted_app_boundary ];
+  tc3; intros _ _; list.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -823,10 +859,7 @@ Proof.
         (* Permutation. *)
         { rewrite <- Hpermut. recognize. reflexivity. }
         (* Sortedness. *)
-        { recognize.
-          eapply Sorted_app_app; eauto.
-          eapply boundary_test; tc3; intros _ _; list.
-          assumption. }}
+        { recognize. sorted_app. boundary. assumption. }}
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
@@ -834,7 +867,7 @@ Proof.
         (* Permutation. *)
         { rewrite <- Hpermut. recognize. list. reflexivity. }
         (* Sortedness. *)
-        { recognize. eapply Sorted_app; tc. }}}}
+        { recognize. sorted_app. }}}}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -965,10 +998,7 @@ Proof.
         (* Permutation. *)
         { rewrite <- Hpermut. recognize. reflexivity. }
         (* Sortedness. [KEY] is used here. *)
-        { recognize.
-          eapply Sorted_app_app; eauto.
-          eapply boundary_test; tc3; intros _ _; list.
-          assumption. }}
+        { recognize. sorted_app. boundary. assumption. }}
       (* Case: the loop has finished normally. *)
       { assert (j = dstofs) by tauto. subst j.
         wp_set.
@@ -976,7 +1006,7 @@ Proof.
         (* The destination segment contains a permitted permutation. *)
         { rewrite <- Hpermut. recognize. list. reflexivity. }
         (* Sortedness. [KEY] is used here. *)
-        { recognize. eapply Sorted_app; tc. }}}}
+        { recognize. sorted_app. }}}}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1178,26 +1208,20 @@ Proof.
         recognize. reflexivity. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _; list. subst x1.
-            eapply exploit_sorted_seg; eauto with lia.
-        + apply boundary_test; eauto 2 with lia.
-          intros _ _; list. recognize. eauto with lia. }}
+        pairwise. split; boundary.
+        + subst x1. eapply exploit_sorted_seg; eauto with lia.
+        + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
       + reflexivity.
-      + recognize.
-        eapply sorted_app_boundary; eauto 2 with lia.
-        (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia. }}
+      (* The fact that [x1] precedes [x2] is used here. *)
+      + recognize. sorted_app. boundary. recognize. eauto with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
@@ -1217,25 +1241,19 @@ Proof.
         recognize. eapply Permutation_app_comm. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          intros _ _; list. recognize. eauto.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _; list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia. }}
+        pairwise. split; boundary.
+        + recognize. eauto.
+        + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
       + eapply Permutation_app_comm.
-      + recognize.
-        eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto. }}
+      + recognize. sorted_app. boundary. recognize. eauto. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1338,7 +1356,7 @@ Proof.
       match goal with h: x'1 = _ |- _ => rewrite <- Hi1 in h end.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
       clear dependent _src1. intros _src1 Hpost.
       elim_merge_aux_post dst'.
       intro_merge_aux_post.
@@ -1350,17 +1368,13 @@ Proof.
         recognize. eauto. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x1.
-            eapply exploit_sorted_seg; eauto with lia.
-        + apply boundary_test; eauto 2 with lia.
-          (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia. }}
+        pairwise. split; boundary.
+        + subst x1. eapply exploit_sorted_seg; eauto with lia.
+        (* The fact that [x1] precedes [x2] is used here. *)
+        + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
       (* i1 = k + (j2 - i2) *) subst i1.
@@ -1368,10 +1382,8 @@ Proof.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
       + reflexivity.
-      + recognize.
-        eapply sorted_app_boundary; eauto 2 with lia.
-        (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia. }}
+      (* The fact that [x1] precedes [x2] is used here. *)
+      + recognize. sorted_app. boundary. recognize. eauto with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
@@ -1391,16 +1403,12 @@ Proof.
         recognize. eapply Permutation_app_comm. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          intros _ _; list. recognize. eauto.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _; list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia. }}
+        pairwise. split; boundary.
+        + recognize. eauto.
+        + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
       (* i1 = k + 1 *) subst i1.
@@ -1408,8 +1416,7 @@ Proof.
       intro_merge_aux_post_list.
       + reflexivity.
       + recognize. eapply Permutation_app_comm.
-      + eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto. }}
+      + boundary. recognize. eauto. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1501,7 +1508,7 @@ Proof.
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
       clear dependent _src2. intros _src2 Hpost.
       elim_merge_aux_post dst'.
       intro_merge_aux_post.
@@ -1513,17 +1520,12 @@ Proof.
         recognize. eauto. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x1.
-            eapply exploit_sorted_seg; eauto with lia.
-        + apply boundary_test; eauto 2 with lia.
-          (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia. }}
+        pairwise. split; boundary.
+        + subst x1. eapply exploit_sorted_seg; eauto with lia.
+        + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
       (* i2 = k + 1 *) subst i2.
@@ -1531,9 +1533,7 @@ Proof.
       intro_merge_aux_post_list.
       + reflexivity.
       + recognize. reflexivity.
-      + eapply sorted_app_boundary; eauto 2 with lia.
-        (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia. }}
+      + boundary. recognize. eauto with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
@@ -1542,7 +1542,7 @@ Proof.
       match goal with h: x'2 = _ |- _ => rewrite <- Hi2 in h end.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc3; tc. }
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
       clear dependent _src2. intros _src2 Hpost.
       elim_merge_aux_post dst'.
       intro_merge_aux_post.
@@ -1554,25 +1554,19 @@ Proof.
         recognize. eapply Permutation_app_comm. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize. eauto.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia. }}
+        pairwise. split; boundary.
+        + recognize. eauto.
+        + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
       + rewrite <- Hi2. eapply Permutation_app_comm.
-      + rewrite <- Hi2. recognize.
-        eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto. }}
+      + rewrite <- Hi2. recognize. boundary. recognize. eauto. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1659,7 +1653,7 @@ Proof.
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc3; tc. }
+      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
       clear dependent _dst. intros _dst Hpost.
       elim_merge_aux_post dst'.
       intro_merge_aux_post.
@@ -1671,17 +1665,12 @@ Proof.
         recognize. eauto. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 dst ++ seg i2 j2 dst *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply (sorted_seg_variance i1 j1); eauto 2 with lia.
-          - intros _ _. list. subst x1.
-            eapply (exploit_sorted_seg i1 j1); eauto 2 with lia.
-        + apply boundary_test; eauto 2 with lia.
-          (* The fact that [x1] precedes [x2] is used here. *)
-          intros _ _. list. recognize. eauto with lia. }}
+        pairwise. split; boundary.
+        + subst x1. eapply (exploit_sorted_seg i1 j1); eauto 2 with lia.
+        + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
       (* i2 = k + 1 *) subst i2.
@@ -1689,9 +1678,7 @@ Proof.
       intro_merge_aux_post_list.
       + reflexivity.
       + recognize. reflexivity.
-      + eapply sorted_app_boundary; eauto 2 with lia.
-        (* The fact that [x1] precedes [x2] is used here. *)
-        intros _ _. list. recognize. eauto with lia. }}
+      + sorted_app. boundary. recognize. eauto with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
@@ -1700,7 +1687,7 @@ Proof.
       match goal with h: x'2 = _ |- _ => rewrite <- Hi2 in h end.
       (* We are now looking at the recursive call. *)
       eapply wp_conseq.
-      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc3; tc. }
+      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
       clear dependent _dst. intros _dst Hpost.
       elim_merge_aux_post dst'.
       intro_merge_aux_post.
@@ -1713,25 +1700,19 @@ Proof.
         clarify. recognize. eauto. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        eapply Sorted_app; eauto with lia.
+        sorted_app.
         rewrite Hpost2.
         (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        pairwise. split.
-        + apply boundary_test; eauto 2 with lia.
-          intros _ _. list. recognize. eauto.
-        + apply boundary_test; eauto 2 with lia.
-          - eapply sorted_seg_variance; eauto 2 with lia.
-          - intros _ _. list. subst x2.
-            eapply exploit_sorted_seg; eauto with lia. }}
+        pairwise. split; boundary.
+        + recognize. eauto.
+        + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
       + rewrite <- Hi2. eapply Permutation_app_comm.
-      + rewrite <- Hi2.
-        eapply sorted_app_boundary; eauto 2 with lia.
-        intros _ _. list. recognize. eauto. }}
+      + rewrite <- Hi2. boundary. recognize. eauto. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1801,8 +1782,7 @@ Proof.
   (* Case [x1 ≤ x2]. *)
   { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
-    { apply boundary_test; eauto 2. intros _ _. list.
-      recognize. eauto with lia. }
+    { boundary. recognize. eauto with lia. }
     wp_blit.
     wp_blit.
     wp_ret.
@@ -1815,7 +1795,7 @@ Proof.
     intro_merge_aux_post_list.
     + unmodified_outside_seg.
     + clarify. reflexivity.
-    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
+    + reckon i2. reckon j2. sorted_app. }
   (* Case [x2 < x1]. *)
   { clear dependent x1.
     wp_get x1.
@@ -1891,8 +1871,7 @@ Proof.
   (* Case [x1 ≤ x2]. *)
   { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
-    { apply boundary_test; eauto 2. intros _ _. list.
-      recognize. eauto with lia. }
+    { boundary. recognize. eauto with lia. }
     wp_blit.
     wp_blit.
     (* UGLY *)
@@ -1903,7 +1882,7 @@ Proof.
     intro_merge_aux_post_list.
     + unmodified_outside_seg.
     + clarify. reflexivity.
-    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
+    + reckon i2. reckon j2. sorted_app. }
   (* Case [x2 < x1]. *)
   { clear dependent x1.
     wp_get x1.
@@ -1976,14 +1955,13 @@ Proof.
   (* Case [x1 ≤ x2]. *)
   { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
-    { apply boundary_test; eauto 2. intros _ _. list.
-      recognize. eauto with lia. }
+    { boundary. recognize. eauto with lia. }
     wp_blit.
     wp_ret.
     intro_merge_aux_post_list.
     + unmodified_outside_seg.
     + clarify. reflexivity.
-    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
+    + reckon i2. reckon j2. sorted_app. }
   (* Case [x2 < x1]. *)
   { clear dependent x1.
     wp_get x1.
@@ -2052,14 +2030,13 @@ Proof.
   (* Case [x1 ≤ x2]. *)
   { (* This remark is the key reason with this case works. *)
     assert (seg i1 j1 dst ≼ seg i2 j2 dst).
-    { apply boundary_test; eauto 2. intros _ _. list.
-      recognize. eauto with lia. }
+    { boundary. recognize. eauto with lia. }
     wp_blit.
     wp_ret.
     intro_merge_aux_post_list.
     + unmodified_outside_seg.
     + clarify. reflexivity.
-    + reckon i2. reckon j2. eapply Sorted_app; eauto. }
+    + reckon i2. reckon j2. sorted_app. }
   (* Case [x2 < x1]. *)
   { clear dependent x1.
     wp_get x1.
@@ -2136,12 +2113,6 @@ Local Ltac elim_sortto'_post dst' :=
   match goal with h: sortto'_post _ _ _ _ _ |- _ =>
     destruct h as (dst' & h); unpack in h
   end.
-
-(* I am not sure why, but this helps; otherwise [tc] can get stuck. *)
-
-Local Hint Extern 1 (Sorted _ (seg _ _ _)) =>
-  eapply sorted_seg_variance; eauto 2 with lia
-: lia.
 
 (* The specification of [sortto']. *)
 
