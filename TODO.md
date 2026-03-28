@@ -2,9 +2,15 @@
 
 ## Short term
 
+* int.v: make `proj i` a notation for `to_nat (of_nat i)`
+  and see if this helps.
+
 * array.v: some operations do not have a dedicated tactic.
   Define dedicated tactics or indicate what tactic to use,
   e.g. `wp_loop`.
+
+* `array.v`: can we get rid of the tactic `arrays`?
+  If we cannot, then in `vector.v`, a similar tactic `vectors` is needed.
 
 * Plug the `sortto_segment` functions into merge sort,
   instead of insertion sort.
@@ -36,7 +42,7 @@
     accompanied by a tactic that performs clear-and-rename
 
 * Missing functions on arrays:
-  + `init` on lists and arrays
+  + a variant of `init` with a state
   + `map`
   + `compare`
   + `merge`
@@ -94,7 +100,7 @@
 
 ## Documentation
 
-* Document the public API.
+* Document the public API of every module.
 
 * Explain the linear use discipline.
 
