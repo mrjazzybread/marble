@@ -72,7 +72,8 @@ Local Ltac destructIsVectorCap :=
   match goal with h: isVectorCap ?v _ _ |- _ =>
     destructVector v;
     let u := fresh "unoccupied" in
-    destruct h as (u&?&?&?)
+    destruct h as (u&?&?&?);
+    arrays
   end.
 
 Local Ltac destructAndKeepIsVectorCap :=
@@ -80,16 +81,15 @@ Local Ltac destructAndKeepIsVectorCap :=
     destructVector v;
     let u := fresh "unoccupied" in
     generalize h;
-    intros (u&?&?&?)
+    intros (u&?&?&?);
+    arrays
   end.
 
 Global Instance isVector_representable `{Inhabited A} (a : vector A) xs :
   isVector a xs →
   representable (len xs).
 Proof.
-  intros. destructIsVector. destructIsVectorCap.
-  assert (representable (len (xs ++ unoccupied))) by tc.
-  list in *. tc.
+  intros. destructIsVector. destructIsVectorCap. tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
