@@ -1,5 +1,6 @@
 From stdpp Require Import list.
 From Stdlib Require Export ZifyNat. (* this makes [lia] more powerful *)
+From marble Require Export list_init.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -316,6 +317,7 @@ Global Hint Rewrite
   @length_singleton
   @length_app
   @length_insert
+  @length_init
   @length_replicate
   @length_take
   @length_drop
@@ -336,6 +338,10 @@ Global Hint Rewrite
   @list_lookup_total_insert_eq'
   @list_lookup_insert_ne
   @list_lookup_total_insert_ne
+  @lookup_init_lt
+  @lookup_init_ge
+  @lookup_total_init_lt
+  @lookup_total_init_ge
   @lookup_replicate_2
   @lookup_total_replicate_2
   using (list; lia)
@@ -598,6 +604,15 @@ Global Hint Rewrite
   @seg_all
   using (list; lia)
 : list.
+
+(* Interaction of [seg] and [init]. *)
+
+Lemma seg_init `{Inhabited A} n i j (f : nat → A) :
+  i ≤ j ≤ n →
+  seg i j (init n f) = init (j - i) (λ k, f (i + k)).
+Proof.
+  intros. listx k. list. eauto.
+Qed.
 
 (* Interaction of [lookup] and [seg], in reverse. *)
 
@@ -882,6 +897,7 @@ Proof.
 Qed.
 
 Global Hint Rewrite
+  @seg_init
   @seg_replicate
   @seg_seg
   using (list; lia)
