@@ -1,13 +1,14 @@
 From Stdlib Require Import Utf8.
+From stdpp Require Import base.
 From marble Require Import tactics.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
-(* The Rocq standard library offers two ways of relating a Boolean
-   value with a proposition: one is [reflect P b], an inductive type;
-   the other is [is_true], a function of type [bool → Prop].
+(* The Rocq standard library offers several ways of relating a Boolean
+   value with a proposition: [BoolSpec P Q b] and [reflect P b] are
+   inductive types; [is_true] is a function of type [bool → Prop].
    On a related topic, stdpp offers [decide : {P} + {¬P}]. *)
 
 (* We define [isBool b P Q] to mean that [b = true] implies [P]
@@ -27,6 +28,36 @@ Global Hint Mode isBool ! - - : typeclass_instances.
 
 Global Notation isBool1 b P :=
   (isBool b P (¬P)).
+
+(* Bridges between [BoolSpec] and [isBool]. *)
+
+Lemma BoolSpec_iff_isBool P Q b :
+  BoolSpec P Q b ↔ isBool b P Q.
+Proof.
+  split.
+  + destruct 1; simpl; tauto.
+  + destruct b; simpl; constructor; tauto.
+Qed.
+
+Global Instance BoolSpec_isBool P Q b :
+  BoolSpec P Q b → isBool b P Q.
+Proof.
+  destruct 1; simpl; tauto.
+Qed.
+
+(* Rewriting inside [isBool] and [BoolSpec]. *)
+
+Instance isBool_variance : Proper (eq ==> iff ==> iff ==> iff) isBool.
+Proof.
+  intros b b' Hb P P' HP Q Q' HQ. subst b'.
+  destruct b; simpl; tauto.
+Qed.
+
+Instance BoolSpec_variance : Proper (iff ==> iff ==> eq ==> iff) BoolSpec.
+Proof.
+  intros P P' HP Q Q' HQ b b' Hb. subst b'.
+  destruct b; split; inversion 1; constructor; tauto.
+Qed.
 
 (* The next three lemmas construct [P] and [Q] by examination of [b]. *)
 
