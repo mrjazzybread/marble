@@ -1512,3 +1512,38 @@ Proof.
 Qed.
 
 End Iteri.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [init]. *)
+
+(* This resembles [of_list]. *)
+
+Definition init `{Inhabited A} _n (f : int → A) : array A :=
+  do a ← make _n inhabitant ;
+  int.iter_up 0 _n a @@ λ _i a ,
+  do x ← f _i ;
+  set a _i x.
+
+Lemma wp_init `{Inhabited A} _n n (f : int → A) (ψ : nat → A) :
+  isInt _n n →
+  n ≤ max_array_length →
+  ( ∀IntR _i i, wp (f _i) (eq (ψ i)) ) →
+  wp (init _n f) (λ a, isArray a (list_init.init n ψ)).
+Proof.
+  intros. unfold init. wp_last Hf.
+  wp_make a.
+  int.wp_iter_up (λ k a,
+    isArray a (list_init.init k ψ ++ replicate (n - k) inhabitant)
+  ).
+  (* The loop body. *)
+  clear dependent a. wp_up_intros k a. intros _k ?. (* TODO *)
+  wp_op Hf x.
+  wp_set.
+  isArray.
+  unfold singleton, singleton_list. (* UGLY *)
+  eauto using init_app_singleton.
+Qed.
+
+Ltac wp_init a :=
+  wp_op @wp_init a.
