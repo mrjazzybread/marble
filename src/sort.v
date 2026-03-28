@@ -2073,7 +2073,7 @@ Qed.
    array [_dst], the start index [_i], and the length [_n]. The sorted data
    is written into the array segment described by [_dst], [_k], and [_n].
    The source and destination segments must be disjoint. This is a merge
-   sort, with an insertion sort at the leaves. It is a stable sort. *)
+   sort. It is stable. *)
 
 Section SortTo'.
 
@@ -2219,7 +2219,7 @@ Qed.
    the array [_src], the start index [_i], and the length [_n]. The sorted
    data is written into the array segment described by [_dst], [_k], and
    [_n]. The arrays [_src] and [_dst] must be distinct. This is a merge
-   sort, with an insertion sort at the leaves. It is a stable sort. *)
+   sort. It is stable sort. *)
 
 Section SortTo.
 Open Scope uint63.
@@ -2349,8 +2349,7 @@ Qed.
 
 (* [sort_seg a _i _n] sorts the array segment described by the array [a],
    the start index [_i], and the length [_n]. The data is sorted in place.
-   This is a merge sort, with an insertion sort at the leaves. It is a
-   stable sort. *)
+   This is a merge sort. It is stable. *)
 
 Section SortSeg.
 Open Scope uint63.
@@ -2462,8 +2461,8 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [sort a] sorts the array [a] in place. This is a merge sort, with an
-   insertion sort at the leaves. It is a stable sort. *)
+(* [sort a] sorts the array [a] in place. This is a merge sort.
+   It is stable. *)
 
 Section Sort.
 Open Scope uint63.
