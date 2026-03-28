@@ -2480,6 +2480,58 @@ Qed.
 
 End Sort.
 
+(* -------------------------------------------------------------------------- *)
+
+(* Merging two sorted arrays: [merge]. *)
+
+Section Merge.
+Open Scope uint63.
+
+Definition merge a b :=
+  do _m ← length a ;
+  do _n ← length b ;
+  if _m =? 0 then
+    copy b
+  else if _n =? 0 then
+    copy a
+  else
+    do c ← make (_m + _n) inhabitant ;
+    optimistic_merge a 0 _m b 0 _n c 0.
+
+(* The public specification of [merge]. *)
+
+Lemma wp_merge :
+  ∀ a xs,
+  isArray a xs →
+  sorted xs →
+  ∀ b ys,
+  isArray b ys →
+  sorted ys →
+  xs `precede` ys →
+  (len xs + len ys ≤ max_array_length)%nat →
+  wp (merge a b) (λ c, ∃ zs,
+    isArray c zs ∧
+    zs ≃ xs ++ ys ∧
+    sorted zs
+  ).
+Proof.
+  intros. unfold merge.
+  wp_length _m.
+  wp_length _n.
+  wp_if.
+  { rewrite length_zero_iff_nil in *. subst. list.
+    wp_copy c. eexists; pack; eauto. }
+  wp_if.
+  { rewrite length_zero_iff_nil in *. subst. list.
+    wp_copy c. eexists; pack; eauto. }
+  wp_make c.
+  wp_op_overwrite wp_optimistic_merge c.
+  elim_merge_aux_post zs.
+  eexists; pack; eauto.
+Qed.
+
+End Merge.
+
 End Sorting.
 
 (* -------------------------------------------------------------------------- *)
@@ -2499,11 +2551,69 @@ Global Ltac elim_sort_post xs' :=
 Infix "≃" := Permutation
   (at level 70, no associativity).
 
+Arguments lex {A}%_type_scope R R' x y.
+
+(* -------------------------------------------------------------------------- *)
+
+(* These lemma help get rid of the stability concern. *)
+
+Section NoStability.
+Context `{Inhabited A, PreOrder A R, LebSpec A R}.
+
+(* As we do not care about stability, we let [R'] be the relation that
+   is everywhere true. This is a preorder, and every array is sorted
+   with respect to this relation. *)
+
+Notation R' := (λ x y : A, True).
+
+Local Instance PreOrder_R' : PreOrder R'.
+Proof. constructor; eauto. Qed.
+
+Local Lemma Sorted_R' xs : Sorted R' xs.
+Proof. eapply Sorted_top; eauto. Qed.
+Local Hint Resolve Sorted_R' : core.
+
+Local Hint Unfold lex : core.
+
+(* The lexicographic ordering of [R] and [R']
+   is the same thing as [R]. *)
+
+Local Lemma Sorted_lex_R'_iff xs :
+  Sorted (lex R R') xs ↔ Sorted R xs.
+Proof.
+  specialize (@lex_elim A R R'); intro.
+  split; intros; eapply Sorted_covariant; eauto.
+Qed.
+
+Local Lemma Sorted_lex_R'_intro xs :
+  Sorted R xs → Sorted (lex R R') xs.
+Proof.
+  rewrite Sorted_lex_R'_iff. eauto.
+Qed.
+
+Local Lemma Sorted_lex_R'_elim xs :
+  Sorted (lex R R') xs → Sorted R xs.
+Proof.
+  rewrite Sorted_lex_R'_iff. eauto.
+Qed.
+
+Local Lemma pairwise_R'_intro xs ys :
+  pairwise R' xs ys.
+Proof.
+  unfold pairwise. eauto.
+Qed.
+
+Local Hint Resolve
+  Sorted_lex_R'_intro
+  Sorted_lex_R'_elim
+  pairwise_R'_intro
+: core.
+
 (* -------------------------------------------------------------------------- *)
 
 (* A simplified specification of [sort_seg], without stability. *)
 
-Lemma wp_sort_seg' `{Inhabited A, PreOrder A R, LebSpec A R} a xs _i i _n n :
+Lemma wp_sort_seg' a xs _i i _n n :
   isArray a xs →
   isInt _i i →
   isInt _n n →
@@ -2521,25 +2631,10 @@ Lemma wp_sort_seg' `{Inhabited A, PreOrder A R, LebSpec A R} a xs _i i _n n :
   ).
 Proof.
   intros.
-  (* As we does not care about stability, we let [R'] be the relation
-     that is everywhere true. This is a preorder, and the array [xs]
-     is (trivially) sorted with respect to this relation. *)
-  set (R' := λ x y : A, True).
-  assert (PreOrder R').
-  { unfold R'. constructor; eauto. }
-  assert (Sorted R' (seg i (i + n) xs)).
-  { unfold R'. eapply Sorted_top; eauto. }
-  (* Therefore we are allowed to sort with respect to [R]. *)
   wp_op_overwrite (@wp_sort_seg A _ R _ _ _ R' _) a.
   elim_sort_seg_post xs'.
-  (* The segment is now sorted with respect to the lexicographic ordering
-     of [R] and [R'], which is the same thing as [R]. *)
-  specialize (@lex_elim A R R'); intro.
   eauto 7 using Sorted_covariant.
 Qed.
-
-Global Ltac wp_sort_seg a :=
-  wp_op_overwrite @wp_sort_seg' a.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -2558,24 +2653,41 @@ Lemma wp_sort' `{Inhabited A, PreOrder A R, LebSpec A R} a xs :
   ).
 Proof.
   intros.
-  (* As we does not care about stability, we let [R'] be the relation
-     that is everywhere true. This is a preorder, and the array [xs]
-     is (trivially) sorted with respect to this relation. *)
-  set (R' := λ x y : A, True).
-  assert (PreOrder R').
-  { unfold R'. constructor; eauto. }
-  assert (Sorted R' xs).
-  { unfold R'. eapply Sorted_top; eauto. }
-  (* Therefore we are allowed to sort with respect to [R]. *)
   wp_op_overwrite (@wp_sort A _ R _ _ _ R' _) a.
   elim_sort_post xs'.
-  (* The array is now sorted with respect to the lexicographic ordering
-     of [R] and [R'], which is the same thing as [R]. *)
-  specialize (@lex_elim A R R'); intro.
   eauto 6 using Sorted_covariant.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A simplified specification of [merge], without stability. *)
+
+Lemma wp_merge' `{Inhabited A, PreOrder A R, LebSpec A R} :
+  ∀ a xs,
+  isArray a xs →
+  Sorted R xs →
+  ∀ b ys,
+  isArray b ys →
+  Sorted R ys →
+  (len xs + len ys ≤ max_array_length)%nat →
+  wp (merge a b) (λ c, ∃ zs,
+    isArray c zs ∧
+    zs ≃ xs ++ ys ∧
+    Sorted R zs
+  ).
+Proof.
+  intros.
+  wp_op (@wp_merge A _ R _ _ _ R' _) c.
+  eauto using Sorted_covariant.
+Qed.
+
+End NoStability.
+
+Global Ltac wp_sort_seg a :=
+  wp_op_overwrite @wp_sort_seg' a.
 
 Global Ltac wp_sort a :=
   wp_op_overwrite @wp_sort' a.
 
-(* -------------------------------------------------------------------------- *)
+Global Ltac wp_merge c :=
+  wp_op @wp_merge' c.
