@@ -1,5 +1,8 @@
-From stdpp Require Import base.
-From marble Require Import tactics wp wp_tactics orders sorting bool.
+From Stdlib Require Import ZArith Lia.
+From Stdlib Require Import Uint63 ZifyUint63.
+  (* [ZifyUint63] magically makes [lia] more powerful *)
+From stdpp Require Import base numbers.
+From marble Require Import tactics orders bool int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -81,7 +84,7 @@ Class LebSpec := {
 
 Global Existing Instance leb_spec.
 
-(* This is an example. *)
+(* This is an example:
 
 Local Lemma example `{LebSpec} {B} (x y : A) (e1 e2 : B) (Q : B → Prop) :
   (x ≤ y → wp e1 Q) →
@@ -92,6 +95,7 @@ Proof.
   + eauto.
   + eauto.
 Qed.
+ *)
 
 End LebSpec.
 
@@ -109,25 +113,44 @@ Class Comparable := {
     ∀ x y : A, CompareSpec (x ≡ y) (x < y) (x > y) (compare x y)
 }.
 
-(* This lemma is useful when a [compare] function is used to perform a
-   two-way comparison. It allows reasoning about each of the two
-   branches just once. However, this programming style is not
-   recommended, as Rocq will silently duplicate one of the branches. *)
-
-Lemma wp_compare_Gt_Le `{Comparable} {B} (x y : A) (e1 e2 : B) (Q : B → Prop) :
-  (x > y → wp e1 Q) →
-  (x ≤ y → wp e2 Q) →
-  wp (match compare x y with Gt => e1 | _ => e2 end) Q.
-Proof.
-  intros. destruct (compare_spec x y).
-  + eauto using equiv_le.
-  + eauto using lt_le.
-  + eauto.
-Qed.
-
 End Comparable.
 
 End Specs.
 
-Global Ltac wp_compare :=
-  simple eapply wp_compare_Gt_Le; [ eauto | intro | intro ].
+(* -------------------------------------------------------------------------- *)
+
+(* Instances. *)
+
+Open Scope Z_scope.
+
+(* A two-way comparison on binary integers (Z). *)
+
+Instance Leb_Z : Leb Z := { leb := Z.leb }.
+
+Lemma strict_Zle x y : strict Z.le x y ↔ (x < y).
+Proof. unfold strict. lia. Qed.
+
+Instance LebSpec_Z : LebSpec Z Z.le.
+Proof.
+  constructor; intros.
+  eapply BoolSpec_isBool.
+  rewrite strict_Zle.
+  eapply Z.leb_spec.
+Qed.
+
+(* A two-way comparison on machine integers (int). *)
+
+Instance Leb_int : Leb int := { leb := Uint63.leb }.
+
+Instance LebSpec_int : LebSpec int (λ _i _j : int, to_Z _i ≤ to_Z _j).
+Proof.
+  constructor; intros _i _j. simpl. unfold strict.
+  (* I am suffering more than I should. Probably there is a simpler way. *)
+  assert (H:
+    isBool1 (_i ≤? _j)%uint63
+            (proj (to_nat _i) ≤ proj (to_nat _j))%nat
+  ).
+  { eapply isBool_leb_proj; eapply introIsInt. }
+  destruct (_i ≤? _j)%uint63; simpl in *;
+    rewrite <- !to_nat_of_nat, !of_nat_to_nat in *; lia.
+Qed.
