@@ -96,6 +96,17 @@ There are four primitive operations on arrays:
   because an array is defined not only by its content
   but also by its default value.
 
+* [`init _n @@ body`](array.v:Definition init)
+  ([specification](array.v:Lemma wp_init))
+  creates an array of length `_n` whose elements
+  are computed by the function `body`.
+
+  At each iteration, the loop body `body : int → A`
+  receives the current index `_i` and returns an element.
+
+  To reason about this operation,
+  use the tactic [`wp_init`](array.v:Ltac wp_init).
+
 * [`list_length xs`](array.v:Fixpoint list_length_aux)
   ([specification](array.v:Lemma wp_list_length))
   returns the length of the list `xs` as a machine integer.
