@@ -157,4 +157,23 @@ Proof.
     repeat case_decide; congruence.
 Qed.
 
+(* Extension of [init] with one more element. *)
+
+Lemma init_segment_app_singleton i n f x :
+  f (i + n) = x →
+  init_segment i n f ++ [x] = init_segment i (n + 1) f.
+Proof.
+  revert i.
+  induction n as [| n]; simpl; intros; subst x; do 2 f_equal.
+  + lia.
+  + rewrite IHn by (f_equal; lia). eauto.
+Qed.
+
+Lemma init_app_singleton n f x :
+  f n = x →
+  init n f ++ [x] = init (n + 1) f.
+Proof.
+  intros. subst x. unfold init. eapply init_segment_app_singleton. eauto.
+Qed.
+
 End Init.
