@@ -1,0 +1,516 @@
+module Make (Parray : sig
+  type 'a t
+  val make    : Uint63.t -> 'a -> 'a t
+  val length  : 'a t -> Uint63.t
+  val get     : 'a t -> Uint63.t -> 'a
+  val set     : 'a t -> Uint63.t -> 'a -> 'a t
+end) = struct
+
+type __ = Obj.t
+let __ = let rec f _ = Obj.repr f in Obj.repr f
+
+type 'a inhabited =
+  'a
+  (* singleton inductive, whose constructor was populate *)
+
+(** val add : Uint63.t -> Uint63.t -> Uint63.t **)
+
+let add = Uint63.add
+
+(** val sub : Uint63.t -> Uint63.t -> Uint63.t **)
+
+let sub = Uint63.sub
+
+(** val div : Uint63.t -> Uint63.t -> Uint63.t **)
+
+let div = Uint63.div
+
+(** val eqb : Uint63.t -> Uint63.t -> bool **)
+
+let eqb = Uint63.equal
+
+(** val ltb : Uint63.t -> Uint63.t -> bool **)
+
+let ltb = Uint63.lt
+
+(** val leb : Uint63.t -> Uint63.t -> bool **)
+
+let leb = Uint63.le
+
+type 'a outcome =
+| Break of 'a
+| Continue
+
+(** val iter_down_aux :
+    Uint63.t -> (Uint63.t -> 'a1 -> 'a1) -> Uint63.t -> 'a1 -> 'a1 **)
+
+let iter_down_aux _i body a b =
+  let rec fix_F x =
+    let _j = let pr1,_ = x in pr1 in
+    if eqb _j _i
+    then body _j (let _,pr2 = x in pr2)
+    else let y = (sub _j (Uint63.of_int (1))),(body _j (let _,pr2 = x in pr2))
+         in
+         fix_F y
+  in fix_F (a,b)
+
+(** val xiter_down_aux :
+    Uint63.t -> (__ -> Uint63.t -> 'a1 -> ('a1 -> __) -> ('a1 -> 'a2 -> __)
+    -> __) -> Uint63.t -> 'a1 -> 'a1 * 'a2 outcome **)
+
+let xiter_down_aux _i body a b =
+  let rec fix_F x =
+    let _j = let pr1,_ = x in pr1 in
+    if eqb _j _i
+    then let continue = fun s -> (s, Continue) in
+         let break = fun s x0 -> (s, (Break x0)) in
+         Obj.magic body __ _j (let _,pr2 = x in pr2) continue break
+    else let continue = fun s ->
+           let y = (sub _j (Uint63.of_int (1))),s in fix_F y
+         in
+         let break = fun s x0 -> (s, (Break x0)) in
+         Obj.magic body __ _j (let _,pr2 = x in pr2) continue break
+  in fix_F (a,b)
+
+(** val xiter_down :
+    Uint63.t -> Uint63.t -> 'a1 -> (__ -> Uint63.t -> 'a1 -> ('a1 -> __) ->
+    ('a1 -> 'a2 -> __) -> __) -> 'a1 * 'a2 outcome **)
+
+let xiter_down _k _i s body =
+  if leb _k _i
+  then (s, Continue)
+  else xiter_down_aux _i body (sub _k (Uint63.of_int (1))) s
+
+(** val iter_up_aux :
+    Uint63.t -> (Uint63.t -> 'a1 -> 'a1) -> Uint63.t -> 'a1 -> 'a1 **)
+
+let iter_up_aux _k body a b =
+  let rec fix_F x =
+    let _i = let pr1,_ = x in pr1 in
+    if ltb _i _k
+    then let y = (add _i (Uint63.of_int (1))),(body _i (let _,pr2 = x in pr2))
+         in
+         fix_F y
+    else let _,pr2 = x in pr2
+  in fix_F (a,b)
+
+(** val make : Uint63.t -> 'a1 -> 'a1 'a Parray.t **)
+
+let make = Parray.make
+
+(** val get : 'a1 'a Parray.t -> Uint63.t -> 'a1 **)
+
+let get = Parray.get
+
+(** val set : 'a1 'a Parray.t -> Uint63.t -> 'a1 -> 'a1 'a Parray.t **)
+
+let set = Parray.set
+
+(** val length : 'a1 'a Parray.t -> Uint63.t **)
+
+let length = Parray.length
+
+(** val blit :
+    'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t ->
+    'a1 'a Parray.t **)
+
+let blit a _i b _j _n =
+  iter_up_aux (add _i _n) (fun _k b0 ->
+    set b0 (add _k (sub _j _i)) (get a _k)) _i b
+
+(** val blit' :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let blit' a _i _j _n =
+  if eqb _j _i
+  then a
+  else if leb _j _i
+       then iter_up_aux (add _i _n) (fun _k a0 ->
+              set a0 (add _k (sub _j _i)) (get a0 _k)) _i a
+       else let _k = add _i _n in
+            if leb _k _i
+            then a
+            else iter_down_aux _i (fun _k0 a0 ->
+                   set a0 (add _k0 (sub _j _i)) (get a0 _k0))
+                   (sub _k (Uint63.of_int (1))) a
+
+type 'a leb0 =
+  'a -> 'a -> bool
+  (* singleton inductive, whose constructor was Build_Leb *)
+
+(** val isortto :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
+    Uint63.t -> 'a1 'a Parray.t **)
+
+let isortto h1 _src _srcofs _dst _dstofs _n =
+  iter_up_aux _n (fun _i _dst0 ->
+    let xi = get _src (add _srcofs _i) in
+    let (_dst1, out) =
+      xiter_down (add _dstofs _i) _dstofs _dst0
+        (fun _ _j _dst1 continue break ->
+        let xj = get _dst1 _j in
+        if h1 xj xi
+        then break _dst1 _j
+        else continue (set _dst1 (add _j (Uint63.of_int (1))) xj))
+    in
+    (match out with
+     | Break _j -> set _dst1 (add _j (Uint63.of_int (1))) xi
+     | Continue -> set _dst1 _dstofs xi))
+    (Uint63.of_int (0)) _dst
+
+(** val isortto' :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1
+    'a Parray.t **)
+
+let isortto' h1 a _srcofs _dstofs _n =
+  iter_up_aux _n (fun _i a0 ->
+    let xi = get a0 (add _srcofs _i) in
+    let (a1, out) =
+      xiter_down (add _dstofs _i) _dstofs a0 (fun _ _j a1 continue break ->
+        let xj = get a1 _j in
+        if h1 xj xi
+        then break a1 _j
+        else continue (set a1 (add _j (Uint63.of_int (1))) xj))
+    in
+    (match out with
+     | Break _j -> set a1 (add _j (Uint63.of_int (1))) xi
+     | Continue -> set a1 _dstofs xi))
+    (Uint63.of_int (0)) a
+
+(** val merge_aux_1 :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 ->
+    Uint63.t -> 'a1 -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let merge_aux_1 h1 _src2 _j1 _j2 a a0 a1 a2 a3 b =
+  let rec fix_F x =
+    let x1 = let pr1,_ = let _,pr2 = x in pr2 in pr1 in
+    let _i2 = let pr1,_ = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr1 in
+    let x2 =
+      let pr1,_ = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+      in
+      pr1
+    in
+    let _k =
+      let _,pr2 =
+        let _,pr2 = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+        in
+        pr2
+      in
+      pr2
+    in
+    if h1 x1 x2
+    then let _dst =
+           set
+             (let pr1,_ =
+                let _,pr2 =
+                  let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+                in
+                pr2
+              in
+              pr1)
+             _k x1
+         in
+         let _i1 = add (let pr1,_ = x in pr1) (Uint63.of_int (1)) in
+         let _k0 = add _k (Uint63.of_int (1)) in
+         if ltb _i1 _j1
+         then let y = _i1,((get _dst _i1),(_i2,(x2,(_dst,_k0)))) in fix_F y
+         else blit _src2 _i2 _dst _k0 (sub _j2 _i2)
+    else let _i3 = add _i2 (Uint63.of_int (1)) in
+         let _k0 = add _k (Uint63.of_int (1)) in
+         if ltb _i3 _j2
+         then let y =
+                (let pr1,_ = x in pr1),(x1,(_i3,((get _src2 _i3),((set
+                                                                    (
+                                                                    let pr1,_ =
+                                                                    let _,pr2 =
+                                                                    let _,pr2 =
+                                                                    let _,pr2 =
+                                                                    let _,pr2 =
+                                                                    x
+                                                                    in
+                                                                    pr2
+                                                                    in
+                                                                    pr2
+                                                                    in
+                                                                    pr2
+                                                                    in
+                                                                    pr2
+                                                                    in
+                                                                    pr1) _k
+                                                                    x2),_k0))))
+              in
+              fix_F y
+         else set
+                (let pr1,_ =
+                   let _,pr2 =
+                     let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in
+                     pr2
+                   in
+                   pr2
+                 in
+                 pr1)
+                _k x2
+  in fix_F (a,(a0,(a1,(a2,(a3,b)))))
+
+(** val merge_aux_2 :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 ->
+    Uint63.t -> 'a1 -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let merge_aux_2 h1 _src1 _j1 _j2 a a0 a1 a2 a3 b =
+  let rec fix_F x =
+    let _i1 = let pr1,_ = x in pr1 in
+    let x1 = let pr1,_ = let _,pr2 = x in pr2 in pr1 in
+    let x2 =
+      let pr1,_ = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+      in
+      pr1
+    in
+    let _k =
+      let _,pr2 =
+        let _,pr2 = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+        in
+        pr2
+      in
+      pr2
+    in
+    if h1 x1 x2
+    then let _i2 = add _i1 (Uint63.of_int (1)) in
+         let _k0 = add _k (Uint63.of_int (1)) in
+         if ltb _i2 _j1
+         then let y =
+                _i2,((get _src1 _i2),((let pr1,_ =
+                                         let _,pr2 = let _,pr2 = x in pr2 in
+                                         pr2
+                                       in
+                                       pr1),(x2,((set
+                                                   (let pr1,_ =
+                                                      let _,pr2 =
+                                                        let _,pr2 =
+                                                          let _,pr2 =
+                                                            let _,pr2 = x in
+                                                            pr2
+                                                          in
+                                                          pr2
+                                                        in
+                                                        pr2
+                                                      in
+                                                      pr2
+                                                    in
+                                                    pr1)
+                                                   _k x1),_k0))))
+              in
+              fix_F y
+         else set
+                (let pr1,_ =
+                   let _,pr2 =
+                     let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in
+                     pr2
+                   in
+                   pr2
+                 in
+                 pr1)
+                _k x1
+    else let _dst =
+           set
+             (let pr1,_ =
+                let _,pr2 =
+                  let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+                in
+                pr2
+              in
+              pr1)
+             _k x2
+         in
+         let _i2 =
+           add (let pr1,_ = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr1)
+             (Uint63.of_int (1))
+         in
+         let _k0 = add _k (Uint63.of_int (1)) in
+         if ltb _i2 _j2
+         then let y = _i1,(x1,(_i2,((get _dst _i2),(_dst,_k0)))) in fix_F y
+         else blit _src1 _i1 _dst _k0 (sub _j1 _i1)
+  in fix_F (a,(a0,(a1,(a2,(a3,b)))))
+
+(** val merge_aux_12 :
+    'a1 leb0 -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 -> Uint63.t -> 'a1 ->
+    'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let merge_aux_12 h1 _j1 _j2 a a0 a1 a2 a3 b =
+  let rec fix_F x =
+    let _i1 = let pr1,_ = x in pr1 in
+    let x1 = let pr1,_ = let _,pr2 = x in pr2 in pr1 in
+    let x2 =
+      let pr1,_ = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+      in
+      pr1
+    in
+    let _k =
+      let _,pr2 =
+        let _,pr2 = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+        in
+        pr2
+      in
+      pr2
+    in
+    if h1 x1 x2
+    then let _dst =
+           set
+             (let pr1,_ =
+                let _,pr2 =
+                  let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+                in
+                pr2
+              in
+              pr1)
+             _k x1
+         in
+         let _i2 = add _i1 (Uint63.of_int (1)) in
+         let _k0 = add _k (Uint63.of_int (1)) in
+         if ltb _i2 _j1
+         then let y =
+                _i2,((get _dst _i2),((let pr1,_ =
+                                        let _,pr2 = let _,pr2 = x in pr2 in
+                                        pr2
+                                      in
+                                      pr1),(x2,(_dst,_k0))))
+              in
+              fix_F y
+         else _dst
+    else let _dst =
+           set
+             (let pr1,_ =
+                let _,pr2 =
+                  let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+                in
+                pr2
+              in
+              pr1)
+             _k x2
+         in
+         let _i2 =
+           add (let pr1,_ = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr1)
+             (Uint63.of_int (1))
+         in
+         let _k0 = add _k (Uint63.of_int (1)) in
+         if ltb _i2 _j2
+         then let y = _i1,(x1,(_i2,((get _dst _i2),(_dst,_k0)))) in fix_F y
+         else blit' _dst _i1 _k0 (sub _j1 _i1)
+  in fix_F (a,(a0,(a1,(a2,(a3,b)))))
+
+(** val optimistic_merge_1 :
+    'a1 leb0 -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
+    Uint63.t -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let optimistic_merge_1 h1 _i1 _j1 _src2 _i2 _j2 _dst _k =
+  let x2 = get _src2 _i2 in
+  if h1 (get _dst (sub _j1 (Uint63.of_int (1)))) x2
+  then let _n1 = sub _j1 _i1 in
+       let _n2 = sub _j2 _i2 in
+       blit _src2 _i2 (blit' _dst _i1 _k _n1) (add _k _n1) _n2
+  else merge_aux_1 h1 _src2 _j1 _j2 _i1 (get _dst _i1) _i2 x2 _dst _k
+
+(** val optimistic_merge_2 :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t ->
+    Uint63.t -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let optimistic_merge_2 h1 _src1 _i1 _j1 _i2 _j2 _dst _k =
+  let x2 = get _dst _i2 in
+  if h1 (get _src1 (sub _j1 (Uint63.of_int (1)))) x2
+  then let _n1 = sub _j1 _i1 in blit _src1 _i1 _dst _k _n1
+  else merge_aux_2 h1 _src1 _j1 _j2 _i1 (get _src1 _i1) _i2 x2 _dst _k
+
+(** val optimistic_merge_12 :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t ->
+    Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let optimistic_merge_12 h1 _dst _i1 _j1 _i2 _j2 _k =
+  let x2 = get _dst _i2 in
+  if h1 (get _dst (sub _j1 (Uint63.of_int (1)))) x2
+  then let _n1 = sub _j1 _i1 in blit' _dst _i1 _k _n1
+  else merge_aux_12 h1 _j1 _j2 _i1 (get _dst _i1) _i2 x2 _dst _k
+
+(** val sortto' :
+    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1
+    'a Parray.t **)
+
+let sortto' h1 a a0 a1 b =
+  let rec fix_F x =
+    let _i = let pr1,_ = let _,pr2 = x in pr2 in pr1 in
+    let _k = let pr1,_ = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr1 in
+    let _n = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2 in
+    let sortto'0 = fun a2 a3 a4 b0 ->
+      let y = a2,(a3,(a4,b0)) in (fun _ -> fix_F y)
+    in
+    if leb _n (Uint63.of_int (5))
+    then isortto' h1 (let pr1,_ = x in pr1) _i _k _n
+    else let _n1 = div _n (Uint63.of_int (2)) in
+         let _n2 = sub _n _n1 in
+         let _dm = add _k _n1 in
+         let _sm = add _i _n2 in
+         optimistic_merge_12 h1
+           (sortto'0
+             (sortto'0 (let pr1,_ = x in pr1) (add _i _n1) _dm _n2 __) _i _sm
+             _n1 __)
+           _sm (add _sm _n1) _dm (add _dm _n2) _k
+  in fix_F (a,(a0,(a1,b)))
+
+(** val sortto :
+    'a1 leb0 -> 'a1 'a Parray.t -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t ->
+    Uint63.t -> 'a1 'a Parray.t * 'a1 'a Parray.t **)
+
+let sortto h1 a a0 a1 a2 b =
+  let rec fix_F x =
+    let _src = let pr1,_ = x in pr1 in
+    let _i = let pr1,_ = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr1 in
+    let _k =
+      let pr1,_ = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+      in
+      pr1
+    in
+    let _n =
+      let _,pr2 = let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
+      in
+      pr2
+    in
+    if leb _n (Uint63.of_int (5))
+    then (_src,
+           (isortto h1 _src _i (let pr1,_ = let _,pr2 = x in pr2 in pr1) _k
+             _n))
+    else let _n1 = div _n (Uint63.of_int (2)) in
+         let _n2 = sub _n _n1 in
+         let _dm = add _k _n1 in
+         let (_src0, _dst) =
+           let y =
+             _src,((let pr1,_ = let _,pr2 = x in pr2 in pr1),((add _i _n1),(_dm,_n2)))
+           in
+           fix_F y
+         in
+         let _sm = add _i _n2 in
+         let _src1 = sortto' h1 _src0 _i _sm _n1 in
+         (_src1,
+         (optimistic_merge_2 h1 _src1 _sm (add _sm _n1) _dm (add _dm _n2)
+           _dst _k))
+  in fix_F (a,(a0,(a1,(a2,b))))
+
+(** val sort_seg :
+    'a1 inhabited -> 'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t ->
+    'a1 'a Parray.t **)
+
+let sort_seg h h1 a _i _n =
+  if leb _n (Uint63.of_int (5))
+  then isortto' h1 a _i _i _n
+  else let _n1 = div _n (Uint63.of_int (2)) in
+       let _n2 = sub _n _n1 in
+       let (a0, t) =
+         sortto h1 a (make _n2 h) (add _i _n1) (Uint63.of_int (0)) _n2
+       in
+       optimistic_merge_1 h1 (add _i _n2) (add _i _n) t (Uint63.of_int (0))
+         _n2 (sortto' h1 a0 _i (add _i _n2) _n1) _i
+
+(** val sort :
+    'a1 inhabited -> 'a1 leb0 -> 'a1 'a Parray.t -> 'a1 'a Parray.t **)
+
+let sort h h1 a =
+  sort_seg h h1 a (Uint63.of_int (0)) (length a)
+
+end (* Make *)

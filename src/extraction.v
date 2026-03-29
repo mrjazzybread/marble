@@ -20,3 +20,7 @@ From Stdlib Require ExtrOCamlPArray.
 From marble Require Import array.
 
 (* Recursive Extraction of_list blit blit' copy find_index equal. *)
+
+From marble Require Import sort.
+
+Recursive Extraction sort.sort.
