@@ -109,7 +109,7 @@ Lemma abc_plus_dmc a b c d :
 Proof. lia. Qed.
 
 Lemma a_bmac a b c :
-  (a + c ≤ b)%nat →
+  a + c ≤ b →
   a + (b - a - c) = b - c.
 Proof. lia. Qed.
 
@@ -162,7 +162,7 @@ Goal ∀ i j k,
 Proof. intros. list. eauto. Qed.
 
 (* We do NOT add [sub_diag'] to the rewrite hint database, because it can
-   change an informative equation [x - y = 0] into the uniformative equation
+   change an informative equation [x - y = 0] into the uninformative equation
    [0 = 0]. (The equation destroys itself, so to speak.) *)
 
 Lemma sub_diag' (x y : nat) :
