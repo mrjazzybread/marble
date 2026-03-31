@@ -1,5 +1,6 @@
 From Stdlib Require Import Utf8.
 From stdpp Require Import base.
+From marble Require Import list_extra.
 From marble Require Import tactics.
 
 Unset Universe Minimization ToSet.
@@ -200,3 +201,32 @@ Global Hint Rewrite
   negb_eq_false
   negb_eq_true
 : bool.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The following instances allow establishing [isBool _ (Forall2 _ _ _)]. *)
+
+Global Instance isBool1_true_Forall2 `{Inhabited A} P (xs ys : list A) :
+  length xs = length ys →
+  (∀ i, valid i xs → P (xs !!! i) (ys !!! i)) →
+  isBool1 true (Forall2 P xs ys).
+Proof.
+  intros. eapply isBool_intro_true. rewrite Forall2_lookup_total. firstorder.
+Qed.
+
+Global Instance isBool1_false_Forall2_witness `{Inhabited A} P (xs ys : list A) :
+  ∀ i,
+  valid i xs →
+  valid i ys →
+  ¬ P (xs !!! i) (ys !!! i) →
+  isBool1 false (Forall2 P xs ys).
+Proof.
+  intros. eapply isBool_intro_false. rewrite Forall2_lookup_total. firstorder.
+Qed.
+
+Global Instance isBool1_false_Forall2_lengths `{Inhabited A} P (xs ys : list A) :
+  length xs ≠ length ys →
+  isBool1 false (Forall2 P xs ys).
+Proof.
+  intros. eapply isBool_intro_false. rewrite Forall2_lookup_total. firstorder.
+Qed.

@@ -1124,33 +1124,3 @@ Proof.
       * eapply IHxs. split; [ lia |]. intros i ?.
         specialize (Hyp (S i)). list in Hyp. eauto with lia.
 Qed.
-
-(* The following instances allow the tactic [isBool] to exploit
-   the previous result to establish [isBool _ (Forall2 _ _ _)]. *)
-
-From marble Require Import bool.
-
-Global Instance isBool1_true_Forall2 `{Inhabited A} P (xs ys : list A) :
-  length xs = length ys →
-  (∀ i, valid i xs → P (xs !!! i) (ys !!! i)) →
-  isBool1 true (Forall2 P xs ys).
-Proof.
-  intros. eapply isBool_intro_true. rewrite Forall2_lookup_total. firstorder.
-Qed.
-
-Global Instance isBool1_false_Forall2_witness `{Inhabited A} P (xs ys : list A) :
-  ∀ i,
-  valid i xs →
-  valid i ys →
-  ¬ P (xs !!! i) (ys !!! i) →
-  isBool1 false (Forall2 P xs ys).
-Proof.
-  intros. eapply isBool_intro_false. rewrite Forall2_lookup_total. firstorder.
-Qed.
-
-Global Instance isBool1_false_Forall2_lengths `{Inhabited A} P (xs ys : list A) :
-  length xs ≠ length ys →
-  isBool1 false (Forall2 P xs ys).
-Proof.
-  intros. eapply isBool_intro_false. rewrite Forall2_lookup_total. firstorder.
-Qed.
