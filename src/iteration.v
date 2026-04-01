@@ -1,5 +1,6 @@
 From stdpp Require Import list.
-From marble Require Import tactics wp wp_tactics list_extra.
+From listz Require Import listz.
+From marble Require Import tactics wp wp_tactics.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -247,7 +248,7 @@ End Loops.
 
 Definition ITERI_LIST {S A}
   (init xs : list A)
-  (body : A → nat → S → WP S)
+  (body : A → Z → S → WP S)
   (loop : S → WP S)
 :=
   ITER
@@ -277,15 +278,17 @@ Definition ITER_LIST {S A}
 
 (* -------------------------------------------------------------------------- *)
 
-(* Iteration on a semi-open interval [i, k)
-   in the natural integers. *)
-
-(* The producer state [j] is the loop index. *)
+(* Iteration on a semi-open interval [i, k) of the integers in [nat]. *)
 
 (* To avoid duplication, we parameterize these definitions with
    a direction, which is [Up] or [Down]. *)
 
 Inductive direction := Up | Down.
+
+Section Nat.
+Open Scope nat_scope.
+
+(* The producer state [j] is the loop index. *)
 
 (* The function [nat_init i k dir] defines the initial producer state. *)
 
@@ -396,6 +399,84 @@ Definition UXITER_NAT {A}
     (nat_step i k dir body)
     loop.
 
+End Nat.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Iteration on a semi-open interval [i, k) of the integers in [Z]. *)
+
+(* The producer state [j] is the loop index. *)
+
+(* The function [z_init i k dir] defines the initial producer state. *)
+
+Definition z_init i k dir : Z :=
+  match dir with Up => i | Down => k end.
+
+(* The predicate [z_complete i k dir : z → Prop] defines which producer
+   states are final; in other words, it specifies when it is permitted for
+   iteration to finish. *)
+
+Notation z_complete i k dir  :=
+  ( λ j,
+    match dir with
+    | Up   => j = i `max` k
+    | Down => j = i `min` k
+    end
+  ).
+
+(* The predicate transformer [z_step i k dir] transforms a judgement
+   [body : Z → A] that is indexed by the current state into a judgement
+   [nat_step i k dir body : Z → Z → A] that is indexed by two states,
+   namely the previous producer state and the new producer state. *)
+
+Definition z_step i k dir `{PropLike A}
+  (body : Z → A)
+: Z → Z → A :=
+  λ j0 j1 ,
+  match dir with
+  | Up =>
+      j1 = j0 + 1 ⇝
+      i ≤ j0 < k ⇝
+      body j0
+  | Down =>
+      j0 = j1 + 1 ⇝
+      i ≤ j1 < k ⇝
+      body j1
+  end.
+
+Definition ITER_Z {S}
+  i k dir
+  (body : Z → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    (z_init i k dir)
+    (z_complete i k dir)
+    (z_step i k dir body)
+    loop.
+
+Definition XITER_Z {S A}
+  i k dir
+  (body : Z → ∀ {W}, S → (S → W) → (S → A → W) → WP W)
+  (loop : S → WP (S * outcome A))
+:=
+  XITER
+    (z_init i k dir)
+    (z_complete i k dir)
+    (z_step i k dir body)
+    loop.
+
+Definition UXITER_Z {A}
+  i k dir
+  (body : Z → ∀ {W}, (unit → W) → (A → W) → WP W)
+  (loop : WP (outcome A))
+:=
+  UXITER
+    (z_init i k dir)
+    (z_complete i k dir)
+    (z_step i k dir body)
+    loop.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Tactics. *)
@@ -409,6 +490,7 @@ Definition UXITER_NAT {A}
 Ltac expand_ITER :=
   unfold
     ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
+    ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER, XITER, UXITER;
     simpl implication.
