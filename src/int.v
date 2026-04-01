@@ -323,37 +323,26 @@ Proof.
   intros. introIsInt. repeat destructIsInt. lia.
 Qed.
 
-Class Unsigned (i : Z) :=
-  build_Unsigned : unsigned i.
-
-Global Hint Mode Unsigned ! : typeclass_instances.
-
-(* This tactic should be able to prove goals of the form [Unsigned _]
-   while exploiting hypotheses of the same form. *)
-Ltac unsigned :=
-  unfold Unsigned in *; lia.
-
 Goal unsigned 42.
-Proof. unsigned. Qed.
+Proof. lia. Qed.
 
-Goal Unsigned 42.
-Proof. unsigned. Qed.
+Goal unsigned (wB - 1).
+Proof. lia. Qed.
 
-Goal Unsigned (wB - 1).
-Proof. unsigned. Qed.
-
+(* TODO
 Global Hint Extern 1 (Unsigned _) =>
   unsigned
 : typeclass_instances.
+ *)
 
 Goal (* example *) ∀ i,
-  Unsigned i →
+  unsigned i →
   i ≠ 0 →
-  Unsigned (i - 1).
+  unsigned (i - 1).
 Proof. tc. Qed.
 
 Goal (* unsigned_down_closed *) ∀ i j,
-  Unsigned j → 0 ≤ i ≤ j → Unsigned i.
+  unsigned j → 0 ≤ i ≤ j → unsigned i.
 Proof. tc. Qed.
 
 (* TODO UNUSED
@@ -462,31 +451,33 @@ Lemma isInt_inj_2 _i i _j j :
   isInt _i i →
   isInt _j j →
   _i = _j →
-  Unsigned i →
-  Unsigned j →
+  unsigned i →
+  unsigned j →
   i = j.
 Proof.
-  unfold Unsigned. rewrite !isInt_def. lia.
+  rewrite !isInt_def. lia.
 Qed.
 
 (* π, restricted to the interval of the unsigned machine integers,
    is injective. *)
 
 Lemma of_Z_inj z1 z2 :
-  Unsigned z1 →
-  Unsigned z2 →
+  unsigned z1 →
+  unsigned z2 →
   π z1 = π z2 →
   z1 = z2.
-Proof. unfold Unsigned. lia. Qed.
+Proof. lia. Qed.
 
 Lemma of_Z_inj' z1 z2 :
-  Unsigned z1 →
-  Unsigned z2 →
+  unsigned z1 →
+  unsigned z2 →
   z1 ≠ z2 →
   π z1 ≠ π z2.
-Proof. unfold Unsigned. lia. Qed.
+Proof. lia. Qed.
 
+(* TODO
 Global Hint Resolve of_Z_inj' : lia.
+ *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -501,7 +492,7 @@ Notation "'∀Int' _i i , P" :=
 Notation "'∀IntU' _i i , P" :=
   ( ∀ _i i ,
     isInt _i i →
-    Unsigned i →
+    unsigned i →
     P
   ) (at level 200, _i name, i name).
 
@@ -530,7 +521,6 @@ Global Instance isBool_eqb :
   ∀IntU _j j ,
   isBool1 (_i =? _j)%uint63 (i = j).
 Proof.
-  unfold Unsigned.
   intros. eapply isBool1_intro. rewrite eqb_spec.
   repeat destructIsInt. lia.
 Qed.
@@ -565,7 +555,6 @@ Global Instance isBool_ltb :
   ∀IntU _j j ,
   isBool1 (_i <? _j)%uint63 (i < j).
 Proof.
-  unfold Unsigned.
   intros. eapply isBool1_intro. rewrite ltb_spec.
   repeat destructIsInt. lia.
 Qed.
@@ -590,7 +579,6 @@ Global Instance isBool_leb :
   ∀IntU _j j ,
   isBool1 (_i ≤? _j)%uint63 (i ≤ j).
 Proof.
-  unfold Unsigned.
   intros. eapply isBool1_intro. rewrite leb_spec.
   repeat destructIsInt. lia.
 Qed.
@@ -623,20 +611,21 @@ Proof.
   destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic; z; eauto.
 Qed.
 
-Global Instance Unsigned_min m n :
-  Unsigned m →
-  Unsigned n →
-  Unsigned (m `min` n).
+(* TODO unused? *)
+Local Lemma unsigned_min m n :
+  unsigned m →
+  unsigned n →
+  unsigned (m `min` n).
 Proof.
-  unfold Unsigned. lia.
+  lia.
 Qed.
 
-Global Instance Unsigned_max m n :
-  Unsigned m →
-  Unsigned n →
-  Unsigned (m `max` n).
+Local Lemma unsigned_max m n :
+  unsigned m →
+  unsigned n →
+  unsigned (m `max` n).
 Proof.
-  unfold Unsigned. lia.
+  lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -667,16 +656,15 @@ Global Hint Resolve
    condition [j ≠ 0], as this will force the user to prove that they do
    not divide by zero. *)
 
-Global Instance Unsigned_div i j :
-  Unsigned i →
-  Unsigned j →
-  j ≠ 0 →
-  Unsigned (i / j).
+(* TODO unused? *)
+Local Lemma unsigned_div i j :
+  unsigned i →
+  unsigned j →
+  unsigned (i / j).
 Proof.
-  unfold Unsigned.
   (* intros. *)
   (* assert (i `div` j ≤ i) by eauto using div_decreasing with lia. *)
-  tc.
+  lia.
 Qed.
 
 (* Division of representable integers works. *)
@@ -692,7 +680,7 @@ Global Instance div_compat :
   j ≠ 0 →
   isInt (_i/_j) (i/j).
 Proof.
-  unfold Unsigned. intros.
+  intros.
   repeat destructIsInt. introIsInt.
   eauto using div_spec'.
 Qed.
