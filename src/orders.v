@@ -4,6 +4,7 @@ Require Import stdpp.orders.
 
 Declare Scope element_scope.
 Delimit Scope element_scope with element.
+Local Open Scope element_scope.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -14,7 +15,7 @@ Section StrictOrders.
   Variable A : Type.
   Variable lt : A → A → Prop.
   Context `{Slt : StrictOrder A lt}.
-  Notation "x '<' y" := (lt x y).
+  Notation "x '<' y" := (lt x y) : element_scope.
 
   (* A strict order is irreflexive: [x < x] is a contradiction. *)
 
@@ -42,8 +43,7 @@ Section StrictConstruction.
   Variable le : A → A → Prop.
   Context `{Ple : PreOrder A le}.
 
-  Local Set Warnings "-notation-overridden".
-  Notation "x '≤' y" := (le x y).
+  Notation "x '≤' y" := (le x y) : element_scope.
 
   (* Define its irreflexive kernel by [x < y  ↔  x ≤ y ∧ ¬ y ≤ x]. *)
 
@@ -53,7 +53,7 @@ Section StrictConstruction.
   Goal ∀ x y, strict le x y ↔ x ≤ y ∧ ¬ y ≤ x.
   Proof. reflexivity. Qed.
 
-  Notation "x '<' y" := (strict le x y).
+  Notation "x '<' y" := (strict le x y) : element_scope.
 
   (* We obtain the following compatibility properties. *)
 
@@ -110,7 +110,7 @@ Section StrictConstruction.
   Definition equivalent : A → A → Prop :=
     λ x y, (x ≤ y ∧ y ≤ x).
 
-  Notation "x '≡' y" := (equivalent x y).
+  Notation "x '≡' y" := (equivalent x y) : element_scope.
 
   Global Instance : Reflexive equivalent.
   Proof.
@@ -193,7 +193,7 @@ Section LargeConstruction.
   Context {A : Type}.
   Variable lt : A → A → Prop.
   Context `{Slt : StrictOrder A lt}.
-  Notation "x '<' y" := (lt x y).
+  Notation "x '<' y" := (lt x y) : element_scope.
 
   (* Let us view [x] and [y] as equivalent, and write [x ≡ y],
      if [x] and [y] are unrelated (in either direction) by the
@@ -204,7 +204,7 @@ Section LargeConstruction.
   Definition equivalent' : A → A → Prop :=
     λ x y, ¬ x < y ∧ ¬ y < x.
 
-  Notation "x '≡' y" := (equivalent' x y).
+  Notation "x '≡' y" := (equivalent' x y) : element_scope.
 
   (* Then, let us define the preorder [x ≤ y] as the union of the
      strict order [x < y] and the equivalence relation [x ≡ y]. *)
@@ -212,8 +212,7 @@ Section LargeConstruction.
   Definition large : A → A → Prop :=
     λ x y, x < y ∨ x ≡ y.
 
-  Local Set Warnings "-notation-overridden".
-  Notation "x '≤' y" := (large x y).
+  Notation "x '≤' y" := (large x y) : element_scope.
 
   (* The composition of the constructions [large] and [strict] is the
      identity, and yields the strict order that we started with. *)
