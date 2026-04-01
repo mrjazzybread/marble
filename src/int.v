@@ -1,10 +1,12 @@
 From stdpp Require Import numbers well_founded.
+From Stdlib Require Export ZifyNat.
+  (* [ZifyNat] magically makes [lia] more powerful,
+     including on goals that involve division in Z *)
 From Stdlib Require Import Uint63 ZifyUint63.
   (* [ZifyUint63] magically makes [lia] more powerful *)
-(* TODO why is [of_to_Z] an axiom? *)
 From Stdlib Require Import Wellfounded.Wellfounded.
 From listz Require Import listz.
-From marble Require Import tactics bool wp list_extra wp_tactics iteration.
+From marble Require Import tactics bool wp wp_tactics iteration.
 From marble Require Import equations.
 
 Unset Universe Minimization ToSet.
@@ -29,6 +31,9 @@ Implicit Types  z : Z.
 
 (* [unsigned z] means that [z] lies in the interval of the unsigned
    machine integers. *)
+
+(* In our comments, we use the word "representable" as a synonym
+   for [unsigned]. *)
 
 Notation unsigned z :=
   (0 ≤ z < wB).
@@ -59,13 +64,16 @@ Proof. lia. Qed.
 
 Goal ∀ z,
   φ (π z) = z `mod` wB.
-Proof. lia. Qed. (* see also [of_Z_spec] *)
+Proof. apply of_Z_spec. Qed. (* [lia] can also prove this *)
 
 Global Hint Rewrite
   of_to_Z
-  to_of_Z
-  using lia
+  to_of_Z                    (* conflicts with [of_Z_spec] *)
+  using (eauto with lia)
 : int.
+
+(* The rewrite rules in the database [int] can be useful, but we use them
+   occasionally. We do not expect an end user to need them. *)
 
 Global Tactic Notation "int" :=
   autorewrite with int.
@@ -86,8 +94,6 @@ Lemma to_Z_inj' _i1 _i2 :
   φ _i1 ≠ φ _i2.
 Proof. lia. Qed.
 
-Global Hint Resolve to_Z_inj' : lia.
-
 (* The image of φ is the interval of the unsigned machine integers. *)
 
 Lemma to_Z_ge_0 _i :
@@ -98,40 +104,22 @@ Lemma to_Z_lt_wB _i :
   φ _i < wB.
 Proof. lia. Qed.
 
-Global Hint Resolve
-  to_Z_ge_0 to_Z_lt_wB
-: lia.
+(* π, restricted to the interval of the unsigned machine integers,
+   is injective. *)
 
-(* [to_nat] is injective. *)
-
-Lemma to_nat_inj _i1 _i2 :
-  to_nat _i1 = to_nat _i2 →
-  _i1 = _i2.
+Lemma of_Z_inj z1 z2 :
+  unsigned z1 →
+  unsigned z2 →
+  π z1 = π z2 →
+  z1 = z2.
 Proof. lia. Qed.
 
-(* TODO UNUSED
-
-Global Hint Resolve
-  to_nat_inj
-: lia.
-
-(* More round-trip properties involving [nat]. *)
-
-Global Hint Rewrite
-  Z2Nat.id (* ∀ z, 0 ≤ z → Z.of_nat (Z.to_nat z) = z *)
-  Nat2Z.id (* ∀ n, Z.to_nat (Z.of_nat n) = n *)
-  using (eauto with lia)
-: int.
-
-Lemma of_nat_to_nat _i :
-  of_nat (to_nat _i) = _i.
-Proof.
-  int. eauto.
-Qed.
-
-(* For the reverse property, see [to_nat_of_nat] below. *)
-
- *)
+Lemma of_Z_inj' z1 z2 :
+  unsigned z1 →
+  unsigned z2 →
+  z1 ≠ z2 →
+  π z1 ≠ π z2.
+Proof. lia. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -212,29 +200,63 @@ Lemma isInt_def _i i :
   isInt _i i ↔ _i = of_Z i.
 Proof. tauto. Qed.
 
+(* It is worth keeping this fact in mind. *)
+
+Lemma partial_bijection _i i :
+  to_Z _i = i  ↔  _i = of_Z i ∧ unsigned i.
+Proof. lia. Qed.
+
+Lemma partial_bijection' _i i :
+  to_Z _i = i  ↔   isInt _i i ∧ unsigned i.
+Proof. unfold isInt. apply partial_bijection. Qed.
+
+(* Tactics. *)
+
 Ltac introIsInt :=
   rewrite isInt_def.
 
 Ltac destructIsInt :=
-  match goal with h: isInt ?_i _ |- _ =>
+  repeat match goal with h: isInt ?_i _ |- _ =>
     rewrite isInt_def in h; try subst _i
   end.
 
-(* Beyond this point, [isInt] is opaque. *)
-
-(* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
-
-Global Opaque isInt.
-
-(* [liftIsIntAndClear] looks for a hypothesis [isInt _i i],
-   replaces [_i] with [of_Z i] in the goal, and clears
-   [_i] as well the hypothesis [isInt _i i]. *)
-
-Ltac liftIsIntAndClear :=
-  match goal with
-  h: isInt ?_i ?i |- context[?_i] =>
-    rewrite h; clear _i h
+Ltac destructAndKeepIsInt :=
+  match goal with h: isInt ?_i _ |- _ =>
+    generalize h;
+    rewrite isInt_def in h; try subst _i;
+    intro h
   end.
+
+Ltac destructIsIntU :=
+  repeat match goal with h: isInt ?_i ?i, h': unsigned ?i |- _ =>
+    assert (to_Z _i = i) by (rewrite partial_bijection'; eauto);
+    clear h h'; subst i
+  end.
+
+(* [isInt], restricted to the unsigned integers, is injective
+   in its first parameter. *)
+
+Lemma isInt_inj_1 _i1 _i2 i :
+  isInt _i1 i →
+  isInt _i2 i →
+  _i1 = _i2.
+Proof.
+  unfold isInt. congruence.
+Qed.
+
+(* [isInt], restricted to the unsigned integers, is injective
+   in its second parameter. *)
+
+Lemma isInt_inj_2 _i i _j j :
+  isInt _i i →
+  isInt _j j →
+  _i = _j →
+  unsigned i →
+  unsigned j →
+  i = j.
+Proof.
+  unfold isInt. lia.
+Qed.
 
 (* Making the following lemma an Instance would be very useful when we
    have a goal such as [isInt 12 12] where both parameters are known.
@@ -282,22 +304,14 @@ Proof.
   eauto using introIsInt.
 Qed.
 
-Lemma isInt_inj_1 _i1 _i2 i :
-  isInt _i1 i →
-  isInt _i2 i →
-  _i1 = _i2.
-Proof.
-  intros. repeat destructIsInt. reflexivity.
-Qed.
-
 (* Addition. *)
 
-Global Instance add_compat _i i _j j :
+Global Instance isInt_add _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i+_j) (i+j).
 Proof.
-  intros. introIsInt. repeat destructIsInt. lia.
+  intros. introIsInt. destructIsInt. lia.
 Qed.
 
 (* Subtraction. *)
@@ -305,23 +319,25 @@ Qed.
 (* Here, the side condition [j ≤ i] is NOT needed, because we work
    with integers in [Z] at the logical level. *)
 
-Global Instance sub_compat _i i _j j :
+Global Instance isInt_sub _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i-_j) (i-j).
 Proof.
-  intros. introIsInt. repeat destructIsInt. lia.
+  intros. introIsInt. destructIsInt. lia.
 Qed.
 
 (* Multiplication. *)
 
-Global Instance mul_compat _i i _j j :
+Global Instance isInt_mul _i i _j j :
   isInt _i i →
   isInt _j j →
   isInt (_i*_j) (i*j).
 Proof.
-  intros. introIsInt. repeat destructIsInt. lia.
+  intros. introIsInt. destructIsInt. lia.
 Qed.
+
+(* Tests. *)
 
 Goal unsigned 42.
 Proof. lia. Qed.
@@ -329,43 +345,21 @@ Proof. lia. Qed.
 Goal unsigned (wB - 1).
 Proof. lia. Qed.
 
-(* TODO
-Global Hint Extern 1 (Unsigned _) =>
-  unsigned
-: typeclass_instances.
- *)
-
-Goal (* example *) ∀ i,
+Goal ∀ i,
   unsigned i →
   i ≠ 0 →
   unsigned (i - 1).
-Proof. tc. Qed.
+Proof. tc3. Qed.
 
 Goal (* unsigned_down_closed *) ∀ i j,
   unsigned j → 0 ≤ i ≤ j → unsigned i.
-Proof. tc. Qed.
+Proof. tc3. Qed.
 
-(* TODO UNUSED
-
-(* If [i] is representable then going [nat → int → Z] is the same as
-   going [nat → Z] directly. *)
-
-Lemma to_Z_of_nat i :
-  representable i →
-  φ%uint63 (of_nat i) = Z.of_nat i.
-Proof.
-  rewrite representable_iff_Z. lia.
-Qed.
-
-Hint Rewrite
-  to_Z_of_nat
-  using tc
-: int.
-
-(* The lemmas that relate [Nat.modulo] and [Z.modulo] are
-   [Nat2Z.inj_mod] and [Z2Nat.inj_mod]. *)
-
- *)
+Goal ∀ _i i _j j ,
+  isInt _i i →
+  isInt _j j →
+  isInt (_i+(_j-1)) (i+(j-1)).
+Proof. tc3. Qed.
 
 (* Whereas [π] has type [Z → int],
    the projection [proj] has type [Z → Z]. *)
@@ -373,111 +367,6 @@ Hint Rewrite
 Notation proj i :=
   (i `mod` wB)
   (only parsing).
-
-(* TODO UNUSED
-Lemma Unsigned_iff_proj i :
-  Unsigned i ↔
-  proj i = i.
-Proof.
-  rewrite Unsigned_iff. lia.
-Qed.
-
-Lemma Unsigned_proj i :
-  Unsigned i →
-  proj i = i.
-Proof.
-  rewrite Unsigned_iff. lia.
-Qed.
-
-Global Hint Resolve
-  Unsigned_proj
-: lia.
-
-(* [proj], restricted to representable numbers, is injective. *)
-
-Lemma proj_inj i1 i2 :
-  Unsigned i1 →
-  Unsigned i2 →
-  proj i1 = proj i2 →
-  i1 = i2.
-Proof.
-  rewrite !Unsigned_iff. unfold proj. lia.
-Qed.
-
-Lemma proj_inj' i1 i2 :
-  Unsigned i1 →
-  Unsigned i2 →
-  i1 ≠ i2 →
-  proj i1 ≠ proj i2.
-Proof.
-  generalize (proj_inj i1 i2). tauto.
-Qed.
-
-(* [proj : Z → Z] is essentially the same as [π : Z → int]. *)
-
-Lemma to_Z_of_Z i :
-  to_Z (of_Z i) = proj i.
-Proof.
-  unfold proj. apply of_Z_spec.
-Qed.
-
- *)
-
-Hint Rewrite of_Z_spec : int.
-
-(* TODO UNUSED
-(* An alternate definition of [isInt]. *)
-
-Lemma isInt_alt _i i :
-  isInt _i i ↔ to_Z _i = proj i.
-Proof.
-  rewrite isInt_def. rewrite <- to_Z_of_Z. lia.
-Qed.
-
-(* Yet another characterization of [isInt],
-   restricted to the representable natural integers. *)
-
-Lemma isInt_repr _i i :
-  Unsigned i →
-  isInt _i i ↔ to_Z _i = i.
-Proof.
-  intros. rewrite isInt_alt, Unsigned_proj by eauto. tauto.
-Qed.
-*)
-
-(* [isInt], restricted to the unsigned integers, is injective. *)
-
-Lemma isInt_inj_2 _i i _j j :
-  isInt _i i →
-  isInt _j j →
-  _i = _j →
-  unsigned i →
-  unsigned j →
-  i = j.
-Proof.
-  rewrite !isInt_def. lia.
-Qed.
-
-(* π, restricted to the interval of the unsigned machine integers,
-   is injective. *)
-
-Lemma of_Z_inj z1 z2 :
-  unsigned z1 →
-  unsigned z2 →
-  π z1 = π z2 →
-  z1 = z2.
-Proof. lia. Qed.
-
-Lemma of_Z_inj' z1 z2 :
-  unsigned z1 →
-  unsigned z2 →
-  z1 ≠ z2 →
-  π z1 ≠ π z2.
-Proof. lia. Qed.
-
-(* TODO
-Global Hint Resolve of_Z_inj' : lia.
- *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -510,7 +399,7 @@ Lemma isBool_eqb_proj :
   isBool1 (_i =? _j)%uint63 (proj i = proj j).
 Proof.
   intros. eapply isBool1_intro. rewrite eqb_spec.
-  repeat destructIsInt. lia.
+  destructIsInt. lia.
 Qed.
 
 (* If the integers [i] and [j] are representable then an equality test on
@@ -522,18 +411,12 @@ Global Instance isBool_eqb :
   isBool1 (_i =? _j)%uint63 (i = j).
 Proof.
   intros. eapply isBool1_intro. rewrite eqb_spec.
-  repeat destructIsInt. lia.
+  destructIsInt. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
 
 (* Comparison. *)
-
-(* TODO UNUSED
-Global Hint Resolve
-  Z.mod_pos
-: lia.
- *)
 
 (* In the absence of hypotheses about the integers [i] and [j],
    the test [_i <?_j] decides the condition [proj i < proj j]. *)
@@ -544,7 +427,7 @@ Lemma isBool_ltb_proj :
   isBool1 (_i <? _j)%uint63 (proj i < proj j).
 Proof.
   intros. eapply isBool1_intro. rewrite ltb_spec.
-  repeat destructIsInt. lia.
+  destructIsInt. lia.
 Qed.
 
 (* If the integers [i] and [j] are representable then
@@ -556,7 +439,7 @@ Global Instance isBool_ltb :
   isBool1 (_i <? _j)%uint63 (i < j).
 Proof.
   intros. eapply isBool1_intro. rewrite ltb_spec.
-  repeat destructIsInt. lia.
+  destructIsInt. lia.
 Qed.
 
 (* In the absence of hypotheses about the integers [i] and [j],
@@ -568,7 +451,7 @@ Lemma isBool_leb_proj :
   isBool1 (_i ≤? _j)%uint63 (proj i ≤ proj j).
 Proof.
   intros. eapply isBool1_intro. rewrite leb_spec.
-  repeat destructIsInt. lia.
+  destructIsInt. lia.
 Qed.
 
 (* If the integers [i] and [j] are representable then
@@ -580,7 +463,7 @@ Global Instance isBool_leb :
   isBool1 (_i ≤? _j)%uint63 (i ≤ j).
 Proof.
   intros. eapply isBool1_intro. rewrite leb_spec.
-  repeat destructIsInt. lia.
+  destructIsInt. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -611,60 +494,30 @@ Proof.
   destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic; z; eauto.
 Qed.
 
-(* TODO unused? *)
-Local Lemma unsigned_min m n :
-  unsigned m →
-  unsigned n →
-  unsigned (m `min` n).
-Proof.
-  lia.
-Qed.
-
-Local Lemma unsigned_max m n :
-  unsigned m →
-  unsigned n →
-  unsigned (m `max` n).
-Proof.
-  lia.
-Qed.
-
 (* -------------------------------------------------------------------------- *)
 
 (* Division of machine integers. *)
 
 (* In the integers, [i * j] is at least [i]. *)
 
-Lemma mul_increasing i j :
+(* Unused *) Lemma mul_increasing i j :
   (0 ≤ i → 0 < j → i ≤ j * i).
 Proof. nia. Qed.
 
 (* In the integers, [i / j] is at most [i]. *)
 
-Lemma div_decreasing i j :
+(* Unused *) Lemma div_decreasing i j :
   (0 ≤ i → 0 < j → i `div` j ≤ i).
 Proof. nia. Qed.
 
-Global Hint Resolve
-  mul_increasing
-  div_decreasing
-: lia.
-
 (* If [i] and [j] are representable, then so is [i / j]. *)
 
-(* This lemma is in fact true also when [j] is zero, because (in Rocq)
-   division by zero yields zero. Nevertheless we prefer to keep the side
-   condition [j ≠ 0], as this will force the user to prove that they do
-   not divide by zero. *)
-
-(* TODO unused? *)
-Local Lemma unsigned_div i j :
+(* Unused *) Local Lemma unsigned_div i j :
   unsigned i →
   unsigned j →
   unsigned (i / j).
 Proof.
-  (* intros. *)
-  (* assert (i `div` j ≤ i) by eauto using div_decreasing with lia. *)
-  lia.
+  lia. (* [ZifyNat] is useful here *)
 Qed.
 
 (* Division of representable integers works. *)
@@ -674,16 +527,20 @@ Qed.
    condition [j ≠ 0], as this will force the user to prove that they do
    not divide by zero. *)
 
-Global Instance div_compat :
+Global Instance isInt_div :
   ∀IntU _i i ,
   ∀IntU _j j ,
   j ≠ 0 →
   isInt (_i/_j) (i/j).
 Proof.
-  intros.
-  repeat destructIsInt. introIsInt.
-  eauto using div_spec'.
+  intros. destructIsInt. introIsInt. eauto using div_spec'.
 Qed.
+
+(* Beyond this point, [isInt] is opaque. *)
+
+(* This is required, e.g., to avoid expansion of [isInt] by [funelim]. *)
+
+Global Opaque isInt.
 
 (* -------------------------------------------------------------------------- *)
 
