@@ -58,6 +58,8 @@
 
 * Once released (Rocq 9.2?), use `autorewrite*`.
 
+* Why is `of_to_Z` an axiom in the stdlib?
+
 # OCaml Extraction
 
 * Set up extraction to use defensive, non-persistent arrays.
