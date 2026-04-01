@@ -1,8 +1,10 @@
 From Stdlib Require Import Program.Equality.
 From Stdlib Require Export Sorting.Sorted.
 Require Import stdpp.sorting.
-From marble Require Import orders list_extra.
-Local Opaque app. (* Prevent undesired simplification. *)
+From listz Require Import listz.
+From marble Require Import orders.
+  (* [strict_order_irreflexive] *)
+  (* [strict_transitive_l], [strict_transitive_r] *)
 
 (* This file establishes several properties of sorted lists. *)
 
@@ -14,9 +16,24 @@ Local Opaque app. (* Prevent undesired simplification. *)
 (* We prefer {[x]} over [x] for singletons, because the former is more
    robust; it is not simplified away by [simpl]. *)
 
-Lemma singleton_def {A} (x : A) :
-  {[x]} = [x].
+Local Lemma cons_is_append {A} x (xs : list A) :
+  x :: xs = {[x]} ++ xs.
+Proof. eauto. Qed.
+
+Local Lemma intro_lookup_zero `{Inhabited A} x (xs : list A) :
+  x = ({[x]} ++ xs) !!! 0.
 Proof. reflexivity. Qed.
+
+Local Lemma intro_lookup_succ `{Inhabited A} x (xs : list A) j :
+  valid j xs →
+  xs !!! j = ({[x]} ++ xs) !!! (j + 1).
+Proof. intros. list. eauto. Qed.
+
+Local Lemma list_elem_of_singleton {A} (x y : A) :
+  x ∈ ({[y]} : list A) ↔ x = y.
+Proof.
+  change {[y]} with [y]. apply list_elem_of_singleton.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -112,7 +129,7 @@ Lemma pairwise_singleton_singleton_iff x y :
   {[x]} ≺ {[y]} ↔
   x `R` y.
 Proof.
-  rewrite !singleton_def. intros. unfold pairwise. split.
+  intros. unfold pairwise. split.
   + intros Hpw. eapply Hpw; rewrite list_elem_of_singleton; eauto.
   + intros Hpw x' y'. rewrite !list_elem_of_singleton. congruence.
 Qed.
@@ -120,7 +137,7 @@ Qed.
 Lemma pairwise_singleton_left_iff x ys :
   {[x]} ≺ ys ↔ ∀ y, y ∈ ys → x `R` y.
 Proof.
-  rewrite singleton_def. unfold pairwise. split.
+  unfold pairwise. split.
   + intros Hpw y Hy. eapply Hpw; rewrite ?list_elem_of_singleton; eauto.
   + intros H x' y. rewrite list_elem_of_singleton. intros. subst. eauto.
 Qed.
@@ -128,7 +145,7 @@ Qed.
 Lemma pairwise_singleton_right_iff xs y :
   xs ≺ {[y]} ↔ ∀ x, x ∈ xs → x `R` y.
 Proof.
-  rewrite singleton_def. unfold pairwise. split.
+  unfold pairwise. split.
   + intros Hpw x Hx. eapply Hpw; rewrite ?list_elem_of_singleton; eauto.
   + intros H x y'. rewrite list_elem_of_singleton. intros. subst. eauto.
 Qed.
@@ -139,7 +156,7 @@ Qed.
 Lemma pairwise_transitive_singleton xs y zs :
   xs ≺ {[y]} → {[y]} ≺ zs → xs ≺ zs.
 Proof.
-  rewrite singleton_def. unfold pairwise. intros Hl Hr x z.
+  unfold pairwise. intros Hl Hr x z.
   specialize (Hl x y).
   specialize (Hr y z).
   rewrite list_elem_of_singleton in *.
@@ -259,7 +276,7 @@ Qed.
 Lemma Sorted_singleton x :
   sorted {[x]}.
 Proof.
-  rewrite singleton_def. econstructor.
+  econstructor.
   + eauto using Sorted_empty.
   + econstructor.
 Qed.
@@ -307,7 +324,7 @@ Proof.
   { rewrite app_nil_l. assumption. }
   { rewrite <- app_comm_cons.
     dependent destruction Hxs. rewrite Forall_R_iff in *.
-    change (x :: xs) with ([x] ++ xs) in Hlt.
+    rewrite cons_is_append in Hlt.
     rewrite pairwise_app_left_iff in Hlt. destruct Hlt.
     econstructor; rewrite ?Forall_R_iff, ?pairwise_app_right_iff; eauto. }
 Qed.
@@ -367,18 +384,18 @@ Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
   seg i1 j1 xs1 ≺ seg i2 j2 xs2 →
   x1 = xs1 !!! k1 →
   x2 = xs2 !!! k2 →
-  i1 ≤ k1 < j1 `min` length xs1 →
-  i2 ≤ k2 < j2 `min` length xs2 →
+  i1 `max` 0 ≤ k1 < j1 `min` length xs1 →
+  i2 `max` 0 ≤ k2 < j2 `min` length xs2 →
   x1 `R` x2.
 Proof.
-  intros. subst x1 x2. unfold pairwise in *.
+  unfold pairwise. intros Hpw -> -> ??.
   erewrite (lookup_total_through_seg i1 j1 k1) by eauto with lia.
   erewrite (lookup_total_through_seg i2 j2 k2) by eauto with lia.
-  eauto using list_elem_of_lookup_total_2 with lia.
+  eapply Hpw; eapply list_elem_of_lookup_total_2; length; lia.
 Qed.
 
-(* The definition of sortedness that is best suited for use with SMT
-   solvers is this. *)
+(* The definition of sortedness that seems best suited for use
+   with SMT solvers is this. *)
 
 (* The definition uses the strict hypothesis [j1 < j2], so as to be
    usable also in a context where [R] is possibly irreflexive. In a
@@ -402,22 +419,21 @@ Qed.
 Lemma smt_sorted_cons x xs :
   smt_sorted xs →
   (∀ y, y ∈ xs → x `R` y) →
-  smt_sorted (x :: xs).
+  smt_sorted ({[x]} ++ xs).
 Proof.
   unfold smt_sorted. intros Hxs Hxy. intros.
-  destruct (decide (i = 0)); destruct (decide (j = 0));
-  subst; try lia; list in *.
+  repeat case_lookup_app; length in *.
   { eauto using list_elem_of_lookup_total_2 with lia. }
   { eauto with lia. }
 Qed.
 
 Lemma smt_sorted_uncons x xs :
-  smt_sorted (x :: xs) →
+  smt_sorted ({[x]} ++ xs) →
   smt_sorted xs.
 Proof.
-  unfold smt_sorted. intros Hsorted. intros.
-  change (xs !!! i) with ((x :: xs) !!! (S i)).
-  change (xs !!! j) with ((x :: xs) !!! (S j)).
+  unfold smt_sorted. intros Hsorted. intros. length in *.
+  rewrite (intro_lookup_succ x xs i) by lia.
+  rewrite (intro_lookup_succ x xs j) by lia.
   eauto with lia.
 Qed.
 
@@ -428,10 +444,9 @@ Lemma sorted_smt_sorted xs :
   smt_sorted xs.
 Proof.
   rewrite Sorted_iff_StronglySorted.
-  induction 1.
+  induction 1; rewrite ?cons_is_append.
   + eauto using smt_sorted_nil.
-  + rename a into x, l into xs.
-    rewrite Forall_forall in *.
+  + rewrite Forall_forall in *.
     eauto using smt_sorted_cons.
 Qed.
 
@@ -442,16 +457,17 @@ Lemma smt_sorted_sorted xs :
   sorted xs.
 Proof.
   rewrite Sorted_iff_StronglySorted.
-  induction xs as [|x xs]; intros Hsmt; constructor.
+  induction xs as [|x xs]; intros Hsmt; constructor;
+  rewrite cons_is_append in Hsmt.
   + eauto using smt_sorted_uncons.
   + rewrite Forall_forall.
     unfold smt_sorted in Hsmt.
     intros y Hy.
     rewrite list_elem_of_lookup_total in Hy.
     destruct Hy as (j & ? & ?). subst y.
-    change x with ((x :: xs) !!! 0).
-    change (xs !!! j) with ((x :: xs) !!! (S j)).
-    eauto with lia.
+    rewrite (intro_lookup_zero x xs).
+    rewrite (intro_lookup_succ x xs j) by lia.
+    eapply Hsmt; length; lia.
 Qed.
 
 Lemma smt_sorted_iff xs :
@@ -519,11 +535,13 @@ Lemma smt_sorted_seg_iff i k xs :
   smt_sorted_seg i k xs ↔
   smt_sorted (seg i k xs).
 Proof.
-  unfold smt_sorted_seg, smt_sorted. split; intros Hsorted j1 j2; intros.
-  + list in *. list.
-    eauto with lia.
-  + replace (xs !!! j1) with (seg i k xs !!! (j1 - i)) by (list; eauto).
-    replace (xs !!! j2) with (seg i k xs !!! (j2 - i)) by (list; eauto).
+  unfold smt_sorted_seg, smt_sorted. length in *.
+  split; intros Hsorted j1 j2; intros.
+  + list. eauto with lia.
+  + (* This looks like a situation that the tactic [lookup_through_seg]
+       can handle; however, here, we are dealing with `R`, not equality. *)
+    erewrite (lookup_total_through_seg i k j1) by eauto with lia.
+    erewrite (lookup_total_through_seg i k j2) by eauto with lia.
     eauto with lia.
 Qed.
 
@@ -602,8 +620,8 @@ Lemma smt_sorted_seg_fill i k xs j x :
 Proof.
   unfold smt_sorted_seg_except, smt_sorted_seg.
   intros Hsorted Hleft Hright.
-  intros j1 j2. intros. list in *.
-  rewrite !list_lookup_total_insert. repeat case_decide; try lia.
+  intros j1 j2. intros. length in *.
+  repeat case_lookup_insert.
   + destruct (decide (j2 = j + 1)).
     { subst j2. eauto. }
     { transitivity (xs !!! (j + 1)); eauto 2 with lia. }
@@ -616,29 +634,27 @@ Qed.
 (* An alternate definition of [smt_sorted_seg_except]. *)
 
 Lemma smt_sorted_seg_except_iff i k xs j :
-  i ≤ j < k →
-  k ≤ length xs →
+  0 ≤ i ≤ j →
+  j < k ≤ length xs →
   smt_sorted_seg_except i k xs j ↔
   sorted (seg i j xs ++ seg (j + 1) k xs).
 Proof.
-  (* This proof is slow. *)
+  (* This proof is a bit slow. *)
   rewrite <- smt_sorted_iff.
   unfold smt_sorted, smt_sorted_seg_except.
   split.
-  + intros HsortedExcept. intros j1 j2. intros. list in *.
-    rewrite !lookup_total_app'. repeat case_decide; try lia; list in *;
-    rewrite !@lookup_total_seg by (list; lia);
-    eauto 2 with lia.
+  + intros HsortedExcept. intros j1 j2. intros. length in *.
+    repeat case_lookup_app; eauto 2 with lia.
   + intros Hsorted. intros j1 j2. intros.
     destruct (decide (valid (j1 - i) (seg i j xs))) as [Hcase1|Hcase1];
     destruct (decide (valid (j2 - i) (seg i j xs))) as [Hcase2|Hcase2];
-    try lia; list in Hcase1; list in Hcase2.
+    try lia; length in Hcase1; length in Hcase2.
     - specialize (Hsorted (j1 - i) (j2 - i)).
-      list in Hsorted. eauto 2 with lia.
+      list in Hsorted. zring in Hsorted. eauto 2 with lia.
     - specialize (Hsorted (j1 - i) (j2 - 1 - i)).
-      list in Hsorted. eauto 2 with lia.
+      list in Hsorted. zring in Hsorted. eauto 2 with lia.
     - specialize (Hsorted (j1 - 1 - i) (j2 - 1 - i)).
-      list in Hsorted. eauto 2 with lia.
+      list in Hsorted. zring in Hsorted. eauto 2 with lia.
 Qed.
 
 End SMT.
@@ -664,7 +680,8 @@ Proof.
   { rewrite length_zero_iff_nil in *. subst xs.
     rewrite pairwise_nil_right_iff. eauto. }
   specialize (Hlookup Hlen). subst x.
-  assert (Heq: xs = {[xs !!! 0]} ++ final_seg 1 xs) by (list; eauto).
+  assert (Heq: xs = {[xs !!! 0]} ++ final_seg 1 xs)
+    by chop_list_equality_goal.
   clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 2. clear Heq.
   rewrite Sorted_app_iff in Hsorted. destruct Hsorted as (?&?&?).
   rewrite pairwise_app_right_iff; split.
@@ -686,7 +703,8 @@ Proof.
     rewrite pairwise_nil_left_iff. eauto. }
   specialize (Hlookup Hlen). subst x.
   assert (Heq: xs = initial_seg (length xs - 1) xs
-                    ++ {[xs !!! (length xs - 1)]}) by (list; eauto).
+                    ++ {[xs !!! (length xs - 1)]})
+    by chop_list_equality_goal.
   clear Hlen. rewrite Heq in Hsorted. rewrite Heq at 1. clear Heq.
   rewrite Sorted_app_iff in Hsorted. destruct Hsorted as (?&?&?).
   rewrite pairwise_app_left_iff; split.
@@ -864,10 +882,10 @@ Implicit Types xs ys zs : list A.
 
 (* -------------------------------------------------------------------------- *)
 
-(* If [[x] ≺ ys] holds then [x] cannot be an element of the list [ys]. *)
+(* If [{[x]} ≺ ys] holds then [x] cannot be an element of the list [ys]. *)
 
 Lemma pairwise_contradiction_left x ys :
-  [x] ≺ ys →
+  {[x]} ≺ ys →
   x ∈ ys →
   False.
 Proof.
@@ -879,7 +897,7 @@ Qed.
 (* A symmetric statement. *)
 
 Lemma pairwise_contradiction_right xs y :
-  xs ≺ [y] →
+  xs ≺ {[y]} →
   y ∈ xs →
   False.
 Proof.
@@ -888,11 +906,11 @@ Proof.
   eauto using strict_order_irreflexive.
 Qed.
 
-(*[x < y] implies [[x] ≺ [y]]. *)
+(*[x < y] implies [{[x]} ≺ {[y]}]. *)
 
 Lemma lt_pairwise x y :
   x < y →
-  [x] ≺ [y].
+  {[x]} ≺ {[y]}.
 Proof.
   unfold pairwise. intros ? x' y'.
   rewrite !list_elem_of_singleton. intros; subst.
@@ -901,13 +919,13 @@ Qed.
 
 (* A characteristic property of sorted lists, which is exploited in binary
    search trees: if [x] is less than [y], and if the elements of [zs] are
-   greater than [y], then searching for [x] in the list [xs ++ [y] ++ zs]
+   greater than [y], then searching for [x] in the list [xs ++ {[y]} ++ zs]
    boils down to searching for [x] in the list [xs]. *)
 
 Lemma bst_search_left x xs y zs :
   x < y →
-  [y] ≺ zs →
-  x ∈ xs ++ [y] ++ zs ↔ x ∈ xs.
+  {[y]} ≺ zs →
+  x ∈ xs ++ {[y]} ++ zs ↔ x ∈ xs.
 Proof.
   assert (Transitive R) by typeclasses eauto.
   intros.
@@ -924,8 +942,8 @@ Qed.
 
 Lemma bst_search_right x xs y zs :
   y < x →
-  xs ≺ [y] →
-  x ∈ xs ++ [y] ++ zs ↔ x ∈ zs.
+  xs ≺ {[y]} →
+  x ∈ xs ++ {[y]} ++ zs ↔ x ∈ zs.
 Proof.
   assert (Transitive R) by typeclasses eauto.
   intros.
@@ -993,7 +1011,7 @@ Implicit Type ox : option A.
    the list: it is an element of the list that is equivalent to [x], if
    there is one. *)
 
-(* Outside this section, one must write [member le x xs ox']. *)
+(* Outside of this section, one must write [member le x xs ox']. *)
 
 Definition member x xs ox' :=
   match ox' with
@@ -1030,11 +1048,11 @@ Qed.
 
 Lemma bst_member_left x xs y zs ox' :
   x < y →
-  [y] ≺ zs →
-  member x (xs ++ [y] ++ zs) ox' ↔
+  {[y]} ≺ zs →
+  member x (xs ++ {[y]} ++ zs) ox' ↔
   member x xs ox'.
 Proof.
-  intros. destruct ox' as [x'|]; simpl member.
+  intros. destruct ox' as [x'|]; unfold member.
   (* Case: [Some]. *)
   { apply share_common_conjunct; intro. destruct_equivalent.
     rewrite (@bst_search_left _ lt _) by eauto using strict_transitive_r.
@@ -1050,11 +1068,11 @@ Qed.
 
 Lemma bst_member_right x xs y zs ox' :
   y < x →
-  xs ≺ [y] →
-  member x (xs ++ [y] ++ zs) ox' ↔
+  xs ≺ {[y]} →
+  member x (xs ++ {[y]} ++ zs) ox' ↔
   member x zs ox'.
 Proof.
-  intros. destruct ox' as [x'|]; simpl member.
+  intros. destruct ox' as [x'|]; unfold member.
   (* Case: [Some]. *)
   { apply share_common_conjunct; intro. destruct_equivalent.
     rewrite (@bst_search_right _ lt _) by eauto using strict_transitive_l.
