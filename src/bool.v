@@ -7,6 +7,9 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+(* This hint can cause divergence; remove it. *)
+Global Remove Hints trans_eq_bool : core.
+
 (* The Rocq standard library offers several ways of relating a Boolean
    value with a proposition: [BoolSpec P Q b] and [reflect P b] are
    inductive types; [is_true] is a function of type [bool → Prop].
