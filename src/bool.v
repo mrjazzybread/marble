@@ -57,6 +57,14 @@ Proof.
   destruct b; simpl; tauto.
 Qed.
 
+Lemma isBool1_variance b P P' :
+  isBool1 b P →
+  (P ↔ P') →
+  isBool1 b P'.
+Proof.
+  destruct b; simpl; tauto.
+Qed.
+
 Instance BoolSpec_variance : Proper (iff ==> iff ==> eq ==> iff) BoolSpec.
 Proof.
   intros P P' HP Q Q' HQ b b' Hb. subst b'.
