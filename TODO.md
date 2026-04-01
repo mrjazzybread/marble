@@ -23,6 +23,10 @@
 * `sort.v`: try to use uniform conventions regarding names and order
    of parameters; also, regarding end offset versus length.
 
+* `sort.v`, `compare.v`: we may want to use a Hoare-style spec for
+   the comparison function, instead of `LebSpec`. E.g. think of the
+   case of a comparison function on machine integers.
+
 * Instead of using insertion sort at the leaves, stick to merge sort
   all the way?
 
