@@ -13,5 +13,6 @@ tags: [
 depends: [
   "rocq-core" { (>= "9.0") }
   "rocq-stdlib"
-  "rocq-stdpp"
+  "rocq-stdpp" { (>= "1.13.0")}
+  "rocq-listz"
 ]

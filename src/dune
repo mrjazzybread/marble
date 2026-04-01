@@ -2,5 +2,5 @@
 (rocq.theory
   (name marble)
   (package rocq-marble)
-  (theories Stdlib Equations stdpp)
+  (theories Stdlib Equations stdpp listz)
 )

@@ -3,8 +3,9 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
+From listz Require Import listz.
 From marble Require Import equations.
-From marble Require Import tactics list_extra list_tactics.
+From marble Require Import tactics list_tactics.
 From marble Require Import iteration int wp wp_tactics array.
 From marble Require Import orders sorting compare.
 Implicit Types _i _j _k : int.

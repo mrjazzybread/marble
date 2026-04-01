@@ -145,12 +145,7 @@ Instance Leb_int : Leb int := { leb := Uint63.leb }.
 Instance LebSpec_int : LebSpec int (λ _i _j : int, to_Z _i ≤ to_Z _j).
 Proof.
   constructor; intros _i _j. simpl. unfold strict.
-  (* I am suffering more than I should. Probably there is a simpler way. *)
-  assert (H:
-    isBool1 (_i ≤? _j)%uint63
-            (proj (to_nat _i) ≤ proj (to_nat _j))%nat
-  ).
-  { eapply isBool_leb_proj; eapply introIsInt. }
-  destruct (_i ≤? _j)%uint63; simpl in *;
-    rewrite <- !to_nat_of_nat, !of_nat_to_nat in *; lia.
+  eapply isBool_intro.
+  + rewrite Uint63.leb_spec. lia.
+  + lia.
 Qed.

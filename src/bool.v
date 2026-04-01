@@ -1,6 +1,6 @@
 From Stdlib Require Import Utf8.
 From stdpp Require Import base.
-From marble Require Import list_extra.
+From listz Require Import listz.
 From marble Require Import tactics.
 
 Unset Universe Minimization ToSet.
@@ -88,9 +88,18 @@ Qed.
 (* The following lemmas can prove [isBool b P Q] when [b], [P], [Q] are
    already determined. *)
 
-Lemma isBool_intro b P :
+Lemma isBool1_intro b P :
   (b = true) ↔ P →
   isBool b P (¬P).
+Proof.
+  assert (false ≠ true) by congruence.
+  unfold isBool. destruct b; simpl; tauto.
+Qed.
+
+Lemma isBool_intro b P Q :
+  (b = true) ↔ P →
+  (Q ↔ ¬P) →
+  isBool b P Q.
 Proof.
   assert (false ≠ true) by congruence.
   unfold isBool. destruct b; simpl; tauto.

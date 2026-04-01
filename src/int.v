@@ -3,6 +3,7 @@ From Stdlib Require Import Uint63 ZifyUint63.
   (* [ZifyUint63] magically makes [lia] more powerful *)
 (* TODO why is [of_to_Z] an axiom? *)
 From Stdlib Require Import Wellfounded.Wellfounded.
+From listz Require Import listz.
 From marble Require Import tactics bool wp list_extra wp_tactics iteration.
 From marble Require Import equations.
 
@@ -21,20 +22,8 @@ Set Universe Polymorphism.
 
 Open Scope Z_scope.
 Implicit Types _i _j _k : int.
-Implicit Types  i : nat.
+Implicit Types  i : Z.
 Implicit Types  z : Z.
-
-(* -------------------------------------------------------------------------- *)
-
-(* Arithmetic lemmas of general interest (in Z). *)
-
-Lemma to_nat_lt z n :
-  (0 ≤ z)%Z →
-  (z < Z.of_nat n)%Z →
-  (Z.to_nat z < n)%nat.
-Proof. lia. Qed.
-
-Hint Resolve to_nat_lt : lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -78,11 +67,14 @@ Global Hint Rewrite
   using lia
 : int.
 
-Global Ltac int :=
+Global Tactic Notation "int" :=
   autorewrite with int.
 
 Global Tactic Notation "int" "in" hyp(h) :=
   autorewrite with int in h.
+
+Global Tactic Notation "int" "in" "*" :=
+  autorewrite with int in *.
 
 (* φ is injective. *)
 
@@ -95,25 +87,6 @@ Lemma to_Z_inj' _i1 _i2 :
 Proof. lia. Qed.
 
 Global Hint Resolve to_Z_inj' : lia.
-
-(* π, restricted to the interval of the unsigned machine integers,
-   is injective. *)
-
-Lemma of_Z_inj z1 z2 :
-  unsigned z1 →
-  unsigned z2 →
-  π z1 = π z2 →
-  z1 = z2.
-Proof. lia. Qed.
-
-Lemma of_Z_inj' z1 z2 :
-  unsigned z1 →
-  unsigned z2 →
-  z1 ≠ z2 →
-  π z1 ≠ π z2.
-Proof. lia. Qed.
-
-Global Hint Resolve of_Z_inj' : lia.
 
 (* The image of φ is the interval of the unsigned machine integers. *)
 
@@ -136,6 +109,8 @@ Lemma to_nat_inj _i1 _i2 :
   _i1 = _i2.
 Proof. lia. Qed.
 
+(* TODO UNUSED
+
 Global Hint Resolve
   to_nat_inj
 : lia.
@@ -155,6 +130,8 @@ Proof.
 Qed.
 
 (* For the reverse property, see [to_nat_of_nat] below. *)
+
+ *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -176,6 +153,19 @@ Lemma mul_spec' z1 z2 :
   (π z1 * π z2)%uint63 = π (z1 * z2).
 Proof. lia. Qed.
 
+(* Division in Z commutes with projection. *)
+
+Lemma div_spec' z1 z2 :
+  unsigned z1 →
+  unsigned z2 →
+  (π z1 / π z2)%uint63 = π (z1 `div` z2).
+Proof.
+  intros.
+  replace z1 with (φ (π z1)) at 2 by (int; lia).
+  replace z2 with (φ (π z2)) at 2 by (int; lia).
+  rewrite <- div_spec. int. eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Some properties of machine integer arithmetic. *)
@@ -194,10 +184,23 @@ Proof. lia. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A relational view of the connection between [int] and [nat]. *)
+(* A relational view of the connection between [int] and [Z]. *)
 
-Class isInt (_i : int) (i : nat) :=
-  build_isInt : _i = of_nat i.
+(* It is debatable whether the logical model of an unsigned machine integer
+   should be a natural number of type [nat] or an integer of type [Z]. In
+   the beginning I have worked with [nat], but I have now come to think that
+   working with [Z] is easier. The integers form a ring; therefore they
+   support more powerful simplification tactics, such as [ring_simplify].
+   Furthermore, using [Z] as a model implies that subtraction is better
+   behaved: subtraction of machine integers corresponds to subtraction of
+   ideal integers, without a side condition. This allows verifying programs
+   that temporarily use negative machine integers (with wraparound).
+   [array.blit] offers an example. The main downside of working with [Z], as
+   opposed to [nat], is that we get many obligations to prove that an
+   integer is nonnegative. *)
+
+Class isInt (_i : int) (i : Z) :=
+  build_isInt : _i = of_Z i.
 
 Global Hint Mode isInt ! - : typeclass_instances.
   (* Instantiate the first parameter only if its head is already known,
@@ -206,7 +209,7 @@ Global Hint Mode isInt ! - : typeclass_instances.
      also be already known. *)
 
 Lemma isInt_def _i i :
-  isInt _i i ↔ _i = of_nat i.
+  isInt _i i ↔ _i = of_Z i.
 Proof. tauto. Qed.
 
 Ltac introIsInt :=
@@ -224,7 +227,7 @@ Ltac destructIsInt :=
 Global Opaque isInt.
 
 (* [liftIsIntAndClear] looks for a hypothesis [isInt _i i],
-   replaces [_i] with [of_nat i] in the goal, and clears
+   replaces [_i] with [of_Z i] in the goal, and clears
    [_i] as well the hypothesis [isInt _i i]. *)
 
 Ltac liftIsIntAndClear :=
@@ -243,7 +246,7 @@ Ltac liftIsIntAndClear :=
    impossible. *)
 
 Lemma introIsInt _i :
-  isInt _i (to_nat _i).
+  isInt _i (to_Z _i).
 Proof.
   introIsInt. int. eauto.
 Qed.
@@ -292,24 +295,20 @@ Qed.
 Global Instance add_compat _i i _j j :
   isInt _i i →
   isInt _j j →
-  isInt (_i+_j) (i+j)%nat.
+  isInt (_i+_j) (i+j).
 Proof.
   intros. introIsInt. repeat destructIsInt. lia.
 Qed.
 
 (* Subtraction. *)
 
-(* The side condition [j ≤ i] is unfortunately needed, not because machine
-   arithmetic requires it, but because the subtraction [i - j] in [nat]
-   requires it. This can be painful, and suggests that one would sometimes
-   prefer to work with integers in [Z] at the logical level. See the proof
-   of [array.blit] for a situation where we work around this problem. *)
+(* Here, the side condition [j ≤ i] is NOT needed, because we work
+   with integers in [Z] at the logical level. *)
 
 Global Instance sub_compat _i i _j j :
   isInt _i i →
   isInt _j j →
-  (j ≤ i)%nat →
-  isInt (_i-_j) (i-j)%nat.
+  isInt (_i-_j) (i-j).
 Proof.
   intros. introIsInt. repeat destructIsInt. lia.
 Qed.
@@ -319,71 +318,45 @@ Qed.
 Global Instance mul_compat _i i _j j :
   isInt _i i →
   isInt _j j →
-  isInt (_i*_j) (i*j)%nat.
+  isInt (_i*_j) (i*j).
 Proof.
   intros. introIsInt. repeat destructIsInt. lia.
 Qed.
 
-(* The representable natural integers. *)
+Class Unsigned (i : Z) :=
+  build_Unsigned : unsigned i.
 
-Definition wBN : nat :=
-  Z.to_nat wB.
+Global Hint Mode Unsigned ! : typeclass_instances.
 
-Definition representable_def (i : nat) :=
-  (i < wBN)%nat.
+(* This tactic should be able to prove goals of the form [Unsigned _]
+   while exploiting hypotheses of the same form. *)
+Ltac unsigned :=
+  unfold Unsigned in *; lia.
 
-   (* Use [seal] to prevent [eauto] from looking into this definition.
-      Otherwise, it might try to normalize [Z.to_nat wB], which does
-      not terminate. *)
-   Local Definition representable_aux : seal (@representable_def). Proof. by eexists. Qed.
+Goal unsigned 42.
+Proof. unsigned. Qed.
 
-Class representable (i : nat) :=
-  build_representable : representable_aux.(unseal) i.
+Goal Unsigned 42.
+Proof. unsigned. Qed.
 
-Global Hint Mode representable ! : typeclass_instances.
+Goal Unsigned (wB - 1).
+Proof. unsigned. Qed.
 
-Lemma representable_iff_nat i :
-  representable i ↔ (i < wBN)%nat.
-Proof.
-  unfold representable.
-  rewrite representable_aux.(seal_eq).
-  unfold representable_def.
-  tauto.
-Qed.
-
-Lemma representable_iff_Z i :
-  representable i ↔ unsigned (Z.of_nat i).
-Proof.
-  rewrite representable_iff_nat. unfold wBN. lia.
-Qed.
-
-(* This tactic should work for every sufficiently small constant. *)
-Ltac representable :=
-  rewrite representable_iff_Z; split; [lia | reflexivity].
-    (* [lia] proves [0 ≤ k] where [k] is a known constant. *)
-    (* [reflexivity] proves [k < wB] because [<] on Z is computable
-       and reduces to an equality. *)
-
-Goal representable 0.
-Proof. representable. Qed.
-
-Goal representable 1.
-Proof. representable. Qed.
-
-Global Hint Extern 1 (representable _) =>
-  representable
+Global Hint Extern 1 (Unsigned _) =>
+  unsigned
 : typeclass_instances.
 
-Global Instance representable_down_closed i j :
-  representable j →
-  (i ≤ j)%nat →
-  representable i.
-Proof.
-  rewrite !representable_iff_nat. lia.
-Qed.
-  (* I believe that this instance does not cause divergence because
-     it requires solving [representable ?j] first and checking [i ≤ j]
-     afterwards. It cannot pick [j := i] and enter a loop. *)
+Goal (* example *) ∀ i,
+  Unsigned i →
+  i ≠ 0 →
+  Unsigned (i - 1).
+Proof. tc. Qed.
+
+Goal (* unsigned_down_closed *) ∀ i j,
+  Unsigned j → 0 ≤ i ≤ j → Unsigned i.
+Proof. tc. Qed.
+
+(* TODO UNUSED
 
 (* If [i] is representable then going [nat → int → Z] is the same as
    going [nat → Z] directly. *)
@@ -400,103 +373,120 @@ Hint Rewrite
   using tc
 : int.
 
-Definition proj (i : nat) : nat :=
-  (i `mod` wBN)%nat.
-
 (* The lemmas that relate [Nat.modulo] and [Z.modulo] are
    [Nat2Z.inj_mod] and [Z2Nat.inj_mod]. *)
 
-Lemma representable_iff_proj i :
-  representable i ↔
+ *)
+
+(* Whereas [π] has type [Z → int],
+   the projection [proj] has type [Z → Z]. *)
+
+Notation proj i :=
+  (i `mod` wB)
+  (only parsing).
+
+(* TODO UNUSED
+Lemma Unsigned_iff_proj i :
+  Unsigned i ↔
   proj i = i.
 Proof.
-  rewrite representable_iff_nat. unfold proj, wBN.
-  generalize wB_pos; intro.
-  rewrite Nat.mod_small_iff by lia.
-  tauto.
+  rewrite Unsigned_iff. lia.
 Qed.
 
-Lemma representable_proj i :
-  representable i →
+Lemma Unsigned_proj i :
+  Unsigned i →
   proj i = i.
 Proof.
-  rewrite representable_iff_proj. eauto.
+  rewrite Unsigned_iff. lia.
 Qed.
 
 Global Hint Resolve
-  representable_proj
+  Unsigned_proj
 : lia.
 
-(* [of_nat], restricted to representable numbers, is injective. *)
+(* [proj], restricted to representable numbers, is injective. *)
 
-Lemma of_nat_inj i1 i2 :
-  representable i1 →
-  representable i2 →
-  of_nat i1 = of_nat i2 →
+Lemma proj_inj i1 i2 :
+  Unsigned i1 →
+  Unsigned i2 →
+  proj i1 = proj i2 →
   i1 = i2.
 Proof.
-  rewrite !representable_iff_Z. lia.
+  rewrite !Unsigned_iff. unfold proj. lia.
 Qed.
 
-Lemma of_nat_inj' i1 i2 :
-  representable i1 →
-  representable i2 →
+Lemma proj_inj' i1 i2 :
+  Unsigned i1 →
+  Unsigned i2 →
   i1 ≠ i2 →
-  of_nat i1 ≠ of_nat i2.
+  proj i1 ≠ proj i2.
 Proof.
-  generalize (of_nat_inj i1 i2). tauto.
+  generalize (proj_inj i1 i2). tauto.
 Qed.
 
-(* [proj : nat → nat] is essentially the same as [π : Z → int]. *)
+(* [proj : Z → Z] is essentially the same as [π : Z → int]. *)
 
-(* Recall that [of_nat : nat → int] is [π . Z.of_nat]. *)
-
-Lemma to_nat_of_nat i :
-  to_nat (of_nat i)       = proj i.
-(*to_nat (π (Z.of_nat i)) = proj i *)
+Lemma to_Z_of_Z i :
+  to_Z (of_Z i) = proj i.
 Proof.
-  generalize wB_pos; intro HwB.
-  rewrite of_Z_spec. unfold proj, wBN.
-  rewrite Znat.Z2Nat.inj_mod by lia.
-  int. eauto.
+  unfold proj. apply of_Z_spec.
 Qed.
 
-Hint Rewrite to_nat_of_nat : int.
+ *)
 
+Hint Rewrite of_Z_spec : int.
+
+(* TODO UNUSED
 (* An alternate definition of [isInt]. *)
 
 Lemma isInt_alt _i i :
-  isInt _i i ↔ to_nat _i = proj i.
+  isInt _i i ↔ to_Z _i = proj i.
 Proof.
-  rewrite isInt_def.
-  rewrite <- to_nat_of_nat. split.
-  + congruence.
-  + lia.
+  rewrite isInt_def. rewrite <- to_Z_of_Z. lia.
 Qed.
 
 (* Yet another characterization of [isInt],
    restricted to the representable natural integers. *)
 
 Lemma isInt_repr _i i :
-  representable i →
-  isInt _i i ↔ to_nat _i = i.
+  Unsigned i →
+  isInt _i i ↔ to_Z _i = i.
 Proof.
-  intros. rewrite isInt_alt, representable_proj by eauto. tauto.
+  intros. rewrite isInt_alt, Unsigned_proj by eauto. tauto.
 Qed.
+*)
 
-(* [isInt], restricted to the representable natural integers,
-   is injective. *)
+(* [isInt], restricted to the unsigned integers, is injective. *)
 
 Lemma isInt_inj_2 _i i _j j :
   isInt _i i →
   isInt _j j →
   _i = _j →
-  representable i →
-  representable j →
+  Unsigned i →
+  Unsigned j →
   i = j.
 Proof.
-  intros. rewrite !isInt_repr in * by eauto. congruence.
+  unfold Unsigned. rewrite !isInt_def. lia.
 Qed.
+
+(* π, restricted to the interval of the unsigned machine integers,
+   is injective. *)
+
+Lemma of_Z_inj z1 z2 :
+  Unsigned z1 →
+  Unsigned z2 →
+  π z1 = π z2 →
+  z1 = z2.
+Proof. unfold Unsigned. lia. Qed.
+
+Lemma of_Z_inj' z1 z2 :
+  Unsigned z1 →
+  Unsigned z2 →
+  z1 ≠ z2 →
+  π z1 ≠ π z2.
+Proof. unfold Unsigned. lia. Qed.
+
+Global Hint Resolve of_Z_inj' : lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -508,10 +498,10 @@ Notation "'∀Int' _i i , P" :=
     P
   ) (at level 200, _i name, i name).
 
-Notation "'∀IntR' _i i , P" :=
+Notation "'∀IntU' _i i , P" :=
   ( ∀ _i i ,
     isInt _i i →
-    representable i →
+    Unsigned i →
     P
   ) (at level 200, _i name, i name).
 
@@ -519,99 +509,90 @@ Notation "'∀IntR' _i i , P" :=
 
 (* Equality. *)
 
-(* In the absence of hypotheses about the natural integers [i] and [j], an
-   equality test on the machine integers [_i] and [_j] tests the condition
-   [proj i = proj j]. *)
+(* In the absence of hypotheses about the integers [i] and [j], an
+   equality test on the machine integers [_i] and [_j] decides the
+   condition [proj i = proj j]. *)
 
 Lemma isBool_eqb_proj :
   ∀Int _i i ,
   ∀Int _j j ,
   isBool1 (_i =? _j)%uint63 (proj i = proj j).
 Proof.
-  intros. eapply isBool_intro. rewrite eqb_spec.
-  repeat destructIsInt.
-  rewrite <- !to_nat_of_nat.
-  lia.
+  intros. eapply isBool1_intro. rewrite eqb_spec.
+  repeat destructIsInt. lia.
 Qed.
 
-(* If the natural integers [i] and [j] are representable then an equality
-   test on the machine integers [_i] and [_j] tests the condition [i = j]. *)
+(* If the integers [i] and [j] are representable then an equality test on
+   the machine integers [_i] and [_j] decides the condition [i = j]. *)
 
 Global Instance isBool_eqb :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
+  ∀IntU _i i ,
+  ∀IntU _j j ,
   isBool1 (_i =? _j)%uint63 (i = j).
 Proof.
-  intros. eapply isBool1_conseq; [ eapply isBool_eqb_proj; eauto |].
-  rewrite !representable_proj by eauto. tauto.
+  unfold Unsigned.
+  intros. eapply isBool1_intro. rewrite eqb_spec.
+  repeat destructIsInt. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
 
 (* Comparison. *)
 
+(* TODO UNUSED
 Global Hint Resolve
   Z.mod_pos
 : lia.
+ *)
 
-(* In the absence of hypotheses about the natural integers [i] and [j],
-   the test [_i <?_j] tests the condition [proj i < proj j]. *)
+(* In the absence of hypotheses about the integers [i] and [j],
+   the test [_i <?_j] decides the condition [proj i < proj j]. *)
 
 Lemma isBool_ltb_proj :
   ∀Int _i i ,
   ∀Int _j j ,
-  isBool1 (_i <? _j)%uint63 (proj i < proj j)%nat.
+  isBool1 (_i <? _j)%uint63 (proj i < proj j).
 Proof.
-  generalize wB_pos; intro HwB. intros.
-  eapply isBool_intro; rewrite ltb_spec.
-  repeat destructIsInt.
-  rewrite !of_Z_spec. unfold proj, wBN.
-  rewrite <- (Nat2Z.id i) at 2.
-  rewrite <- (Nat2Z.id j) at 2.
-  rewrite <- !Z2Nat.inj_mod by eauto with lia.
-  apply Z2Nat.inj_lt; eauto with lia.
+  intros. eapply isBool1_intro. rewrite ltb_spec.
+  repeat destructIsInt. lia.
 Qed.
 
-(* If the natural integers [i] and [j] are representable then
-   the test [_i <?_j] tests the condition [i < j]. *)
+(* If the integers [i] and [j] are representable then
+   the test [_i <?_j] decides the condition [i < j]. *)
 
 Global Instance isBool_ltb :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
-  isBool1 (_i <? _j)%uint63 (i < j)%nat.
+  ∀IntU _i i ,
+  ∀IntU _j j ,
+  isBool1 (_i <? _j)%uint63 (i < j).
 Proof.
-  intros. eapply isBool1_conseq; [ eapply isBool_ltb_proj; eauto |].
-  rewrite !representable_proj by eauto. tauto.
+  unfold Unsigned.
+  intros. eapply isBool1_intro. rewrite ltb_spec.
+  repeat destructIsInt. lia.
 Qed.
 
-(* In the absence of hypotheses about the natural integers [i] and [j],
-   the test [_i ≤?_j] tests the condition [proj i ≤ proj j]. *)
+(* In the absence of hypotheses about the integers [i] and [j],
+   the test [_i ≤?_j] decides the condition [proj i ≤ proj j]. *)
 
 Lemma isBool_leb_proj :
   ∀Int _i i ,
   ∀Int _j j ,
-  isBool1 (_i ≤? _j)%uint63 (proj i ≤ proj j)%nat.
+  isBool1 (_i ≤? _j)%uint63 (proj i ≤ proj j).
 Proof.
-  generalize wB_pos; intro HwB. intros.
-  eapply isBool_intro; rewrite leb_spec.
-  repeat destructIsInt.
-  rewrite !of_Z_spec. unfold proj, wBN.
-  rewrite <- (Nat2Z.id i) at 2.
-  rewrite <- (Nat2Z.id j) at 2.
-  rewrite <- !Z2Nat.inj_mod by eauto with lia.
-  apply Z2Nat.inj_le; eauto with lia.
+  intros. eapply isBool1_intro. rewrite leb_spec.
+  repeat destructIsInt. lia.
 Qed.
 
-(* If the natural integers [i] and [j] are representable then
-   the test [_i ≤?_j] tests the condition [i ≤ j]. *)
+(* If the integers [i] and [j] are representable then
+   the test [_i ≤?_j] decides the condition [i ≤ j]. *)
 
 Global Instance isBool_leb :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
-  isBool1 (_i ≤? _j)%uint63 (i ≤ j)%nat.
+  ∀IntU _i i ,
+  ∀IntU _j j ,
+  isBool1 (_i ≤? _j)%uint63 (i ≤ j).
 Proof.
-  intros. eapply isBool1_conseq; [ eapply isBool_leb_proj; eauto |].
-  rewrite !representable_proj by eauto. tauto.
+  unfold Unsigned.
+  intros. eapply isBool1_intro. rewrite leb_spec.
+  repeat destructIsInt. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -625,59 +606,54 @@ Definition _max _m _n : int :=
   if (_m ≤? _n)%uint63 then _n else _m.
 
 Global Instance isInt_min :
-  ∀IntR _m m ,
-  ∀IntR _n n ,
+  ∀IntU _m m ,
+  ∀IntU _n n ,
   isInt (_min _m _n) (m `min` n).
 Proof.
   intros. unfold _min.
-  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic.
-  + rewrite Nat.min_l by lia. eauto.
-  + rewrite Nat.min_r by lia. eauto.
+  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic; z; eauto.
 Qed.
 
 Global Instance isInt_max :
-  ∀IntR _m m ,
-  ∀IntR _n n ,
+  ∀IntU _m m ,
+  ∀IntU _n n ,
   isInt (_max _m _n) (m `max` n).
 Proof.
   intros. unfold _max.
-  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic.
-  + rewrite Nat.max_r by lia. eauto.
-  + rewrite Nat.max_l by lia. eauto.
+  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic; z; eauto.
 Qed.
 
-Global Instance min_representable m n :
-  representable m ∨ representable n →
-  representable (m `min` n).
+Global Instance Unsigned_min m n :
+  Unsigned m →
+  Unsigned n →
+  Unsigned (m `min` n).
 Proof.
-  rewrite !representable_iff_nat. lia.
+  unfold Unsigned. lia.
 Qed.
 
-Global Instance max_representable m n :
-  representable m →
-  representable n →
-  representable (m `max` n).
+Global Instance Unsigned_max m n :
+  Unsigned m →
+  Unsigned n →
+  Unsigned (m `max` n).
 Proof.
-  rewrite !representable_iff_nat. lia.
+  unfold Unsigned. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
 
 (* Division of machine integers. *)
 
-(* In the natural integers, [i * j] is at least [i]. *)
+(* In the integers, [i * j] is at least [i]. *)
 
 Lemma mul_increasing i j :
-  (j ≠ 0 → i ≤ j * i)%nat.
+  (0 ≤ i → 0 < j → i ≤ j * i).
 Proof. nia. Qed.
 
-(* In the natural integers, [i / j] is at most [i]. *)
+(* In the integers, [i / j] is at most [i]. *)
 
 Lemma div_decreasing i j :
-  (j ≠ 0 → i `div` j ≤ i)%nat.
-Proof.
-  intros. apply Nat.Div0.div_le_upper_bound. nia.
-Qed.
+  (0 ≤ i → 0 < j → i `div` j ≤ i).
+Proof. nia. Qed.
 
 Global Hint Resolve
   mul_increasing
@@ -686,33 +662,39 @@ Global Hint Resolve
 
 (* If [i] and [j] are representable, then so is [i / j]. *)
 
-(* No need to make this an instance, as it is already solved
-   thanks to [div_decreasing]. *)
+(* This lemma is in fact true also when [j] is zero, because (in Rocq)
+   division by zero yields zero. Nevertheless we prefer to keep the side
+   condition [j ≠ 0], as this will force the user to prove that they do
+   not divide by zero. *)
 
-Local Lemma div_representable i j :
-  representable i →
-  representable j →
-  j ≠ 0%nat →
-  representable (i / j).
+Global Instance Unsigned_div i j :
+  Unsigned i →
+  Unsigned j →
+  j ≠ 0 →
+  Unsigned (i / j).
 Proof.
-  (* assert (i `div` j ≤ i)%nat by eauto using div_decreasing. *)
+  unfold Unsigned.
+  (* intros. *)
+  (* assert (i `div` j ≤ i) by eauto using div_decreasing with lia. *)
   tc.
 Qed.
 
 (* Division of representable integers works. *)
 
+(* This lemma is in fact true also when [j] is zero, because (in Rocq)
+   division by zero yields zero. Nevertheless we prefer to keep the side
+   condition [j ≠ 0], as this will force the user to prove that they do
+   not divide by zero. *)
+
 Global Instance div_compat :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
-  j ≠ 0%nat →
-  isInt (_i/_j) (i/j)%nat.
+  ∀IntU _i i ,
+  ∀IntU _j j ,
+  j ≠ 0 →
+  isInt (_i/_j) (i/j).
 Proof.
-  intros.
-  rewrite isInt_repr by tc.
-  rewrite div_spec.
-  rewrite isInt_repr in * by eauto. subst i j.
-  rewrite Z2Nat.inj_div by eauto with lia.
-  eauto.
+  unfold Unsigned. intros.
+  repeat destructIsInt. introIsInt.
+  eauto using div_spec'.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -864,8 +846,6 @@ Qed.
 
 (* TODO I would like to split this file here *)
 
-Open Scope nat_scope.
-
 Local Obligation Tactic :=
   simpl in *;
   Tactics.program_simplify;
@@ -949,17 +929,17 @@ End IterDown.
    natural: it is required to guarantee that no underflow takes place. *)
 
 Lemma wp_iter_down_aux {S} (body : int → S → S) :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
+  ∀IntU _i i ,
+  ∀IntU _j j ,
   i ≤ j →
-  ITER_NAT
+  ITER_Z
     i (j + 1) Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_down_aux _i body _j s) Q).
 Proof.
   intros. ITER.
   funelim (iter_down_aux _i body _j s); cleanup; clear Heqcall;
-  intros; isBool_magic; nat.
+  intros; isBool_magic; z.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
@@ -979,14 +959,14 @@ Definition iter_down {S} _k _i (s : S) body :=
 (* TODO exchange _k and _i in the parameters of [iter_down]? *)
 
 Lemma wp_iter_down {S} (body : int → S → S) :
-  ∀IntR _i i ,
-  ∀IntR _k k ,
-  ITER_NAT i k Down
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  ITER_Z i k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_down _k _i s body) Q).
 Proof.
   intros. ITER. unfold iter_down.
-  wp_if; nat.
+  wp_if; z.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
@@ -1030,16 +1010,16 @@ End XIterDown.
 
 Lemma wp_xiter_down_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
+  ∀IntU _i i ,
+  ∀IntU _j j ,
   i ≤ j →
-  XITER_NAT i (j + 1) Down
+  XITER_Z i (j + 1) Down
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down_aux _i (@body) _j s) Q).
 Proof.
   intros. XITER.
   funelim (xiter_down_aux _i (@body) _j s); cleanup; clear Heqcall;
-  intros; isBool_magic; nat.
+  intros; isBool_magic; z.
   (* Case [j = i]. *)
   { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
@@ -1057,14 +1037,14 @@ Definition xiter_down {S A} _k _i (s : S)
 
 Lemma wp_xiter_down {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
-  ∀IntR _i i ,
-  ∀IntR _k k ,
-  XITER_NAT i k Down
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  XITER_Z i k Down
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down _k _i s (@body)) Q).
 Proof.
   intros. XITER. unfold xiter_down.
-  wp_if; nat.
+  wp_if; z.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
@@ -1107,16 +1087,16 @@ End UXIterDown.
 
 Lemma wp_uxiter_down_aux {A}
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
-  ∀IntR _i i ,
-  ∀IntR _j j ,
+  ∀IntU _i i ,
+  ∀IntU _j j ,
   i ≤ j →
-  UXITER_NAT i (j + 1) Down
+  UXITER_Z i (j + 1) Down
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down_aux _i (@body) _j) Q).
 Proof.
   intros. UXITER.
   funelim (uxiter_down_aux _i (@body) _j); cleanup; clear Heqcall;
-  intros; isBool_magic; nat.
+  intros; isBool_magic; z.
   (* Case [j = i]. *)
   { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
@@ -1134,14 +1114,14 @@ Definition uxiter_down {A} _k _i
 
 Lemma wp_uxiter_down {A}
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
-  ∀IntR _i i ,
-  ∀IntR _k k ,
-  UXITER_NAT i k Down
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  UXITER_Z i k Down
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down _k _i (@body)) Q).
 Proof.
   intros. UXITER. unfold uxiter_down.
-  wp_if; nat.
+  wp_if; z.
   (* Case [k ≤ i]. *)
   { wp_ret. eauto. }
   (* Case [i < k]. *)
@@ -1198,15 +1178,15 @@ End IterUp.
 (* A specification of [iter_up_aux], which also serves for [iter_up]. *)
 
 Lemma wp_iter_up_aux {S} (body : int → S → S) :
-  ∀IntR _i i ,
-  ∀IntR _k k ,
-  ITER_NAT i k Up
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  ITER_Z i k Up
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_up_aux _k body _i s) Q).
 Proof.
   intros. ITER.
   funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
-  isBool_magic; nat.
+  isBool_magic; z.
   (* Case [i < k]. *)
   { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
@@ -1261,16 +1241,16 @@ End XiterUp.
 
 Lemma wp_xiter_up_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
-  ∀IntR _i i ,
-  ∀IntR _k k ,
-  XITER_NAT i k Up
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  XITER_Z i k Up
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_up_aux _k (@body) _i s) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. XITER.
   funelim (xiter_up_aux _k (@body) _i s); cleanup; clear Heqcall; intros;
-  isBool_magic; nat.
+  isBool_magic; z.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
@@ -1323,16 +1303,16 @@ End UXIterUp.
 (* A specification of [uxiter_up_aux]. *)
 
 Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
-  ∀IntR _i i ,
-  ∀IntR _k k ,
-  UXITER_NAT i k Up
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  UXITER_Z i k Up
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_up_aux _k (@body) _i) Q).
 Proof.
   (* The spec is quite complex, but the proof is very simple. *)
   intros. UXITER.
   funelim (uxiter_up_aux _k (@body) _i); cleanup; clear Heqcall; intros;
-  isBool_magic; nat.
+  isBool_magic; z.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)

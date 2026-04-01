@@ -1,15 +1,14 @@
 From stdpp Require Import numbers list.
-Notation len := List.length.
+From listz Require Import listz.
+Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics list_extra list_tactics bool iteration int wp wp_tactics.
+From marble Require Import tactics list_tactics bool iteration int wp wp_tactics.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
-
-Open Scope nat_scope.
 
 (* Documentation:
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.PrimArray.html
@@ -17,62 +16,58 @@ Open Scope nat_scope.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
+Hint Resolve
+  Z.mod_small (*  ∀ a b : Z, 0 ≤ a < b → a `mod` b = a   *)
+              (* [lia] by itself is unable to prove this *)
+: lia.
+
+(* TODO used? *)
+Lemma test a b d :
+  0 ≤ a < b →
+  b < d →
+  a `mod` d < b `mod` d.
+Proof.
+  intros.
+  assert (a `mod` d = a) by eauto with lia.
+  assert (b `mod` d = b) by eauto with lia.
+  lia.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The maximum length of an array. *)
 
-(* We have [max_length : int]; we define [max_array_length : nat]. *)
+(* We have [max_length : int]; we define [max_array_length : Z]. *)
 
-Definition max_array_length_def : nat :=
-  to_nat max_length.
-
-  (* Without sealing, making [max_length_spec] an instance slows down
-     [eauto with typeclass_instances] in an unbearable way. *)
-
-  Local Definition max_array_length_aux : seal (@max_array_length_def).
-  Proof. by eexists. Qed.
-  Definition max_array_length := max_array_length_aux.(unseal).
-  Local Definition max_array_length_unseal :
-    @max_array_length = @max_array_length_def := max_array_length_aux.(seal_eq).
-
-  Local Ltac max_array_length_def :=
-    rewrite max_array_length_unseal;
-    unfold max_array_length_def.
+Definition max_array_length : Z :=
+  to_Z max_length.
 
 (* These constants are related by [isInt]. *)
 
 Instance max_length_spec :
   isInt max_length max_array_length.
 Proof.
-  introIsInt. max_array_length_def. lia.
+  introIsInt. unfold max_array_length. lia.
 Qed.
 
 (* [max_array_length] is representable. *)
 
-Lemma representable_max_array_length :
-  representable max_array_length.
+Lemma Unsigned_max_array_length :
+  Unsigned max_array_length.
 Proof.
-  rewrite representable_iff_Z. split; [ lia |].
-  (* (Z.of_nat max_array_length < wB)%Z *)
-  max_array_length_def. lia.
+  unfold Unsigned, max_array_length.
+  (* This proof should work for larger constants as well. *)
+  (* The goal is a conjunction of inequalities in Z. *)
+  (* To my surprise, computation in Z solves this goal. *)
+  compute. split; congruence.
 Qed.
-  (* We do not make this lemma an Instance because the more powerful
-     lemma [representable_le_max_array_length] follows. *)
 
 (* [2 * max_array_length] is still representable. *)
 
-Lemma representable_twice_max_array_length :
-  representable (2 * max_array_length).
+Lemma Unsigned_twice_max_array_length :
+  Unsigned (2 * max_array_length).
 Proof.
-  (* This proof should work for larger constants as well. *)
-  max_array_length_def.
-  assert (∀ x : Z, 0 ≤ x → 0 ≤ 2 * x)%Z by lia.
-  rewrite representable_iff_Z.
-  change 2 with (Z.to_nat 2).
-  rewrite <- Z2Nat.inj_mul by eauto with lia.
-  int.
-  (* The goal is now an inequality in Z. *)
-  (* To my surprise, computation in Z solves this goal. *)
+  unfold Unsigned, max_array_length.
   compute. split; congruence.
 Qed.
 
@@ -83,48 +78,50 @@ Lemma max_array_length_is_large :
 Proof.
   (* This proof will work for any constant that really is less
      than [max_array_length]. *)
-  max_array_length_def.
-  change 1024 with (to_nat 1024).
-  rewrite <- Z2Nat.inj_lt by eauto with lia.
-  rewrite <- ltb_spec.
-  reflexivity.
+  unfold max_array_length.
+  compute. eauto.
 Qed.
 
 (* Any number that is bounded by [max_array_length] is representable. *)
 
-Instance representable_le_max_array_length n :
-  n ≤ max_array_length → representable n.
+Instance Unsigned_le_max_array_length n :
+  0 ≤ n ≤ max_array_length → Unsigned n.
 Proof.
-  eauto using representable_max_array_length with typeclass_instances.
-  (* [eauto with typeclass_instances] would be unable to solve this goal,
-     even if we made [representable_max_array_length] an Instance, because
-     that would require guessing [?i := max_array_length] in a subgoal of
-     the form [representable ?i]. We have used [Hint Mode] to forbid such
+  generalize Unsigned_max_array_length. tc.
+  (* [tc] would be unable to solve this goal, even if we made
+     [Unsigned_max_array_length] an Instance, because that would
+     require guessing [?i := max_array_length] in a subgoal of the
+     form [Unsigned ?i]. We have used [Hint Mode] to forbid such
      guessing. *)
 Qed.
 
-(* The length of an array, converted to a natural number,
-   is bounded by [max_array_length]. *)
+(* The length of an array, converted to an integer,
+   is nonnegative, and bounded by [max_array_length]. *)
 
 Local Lemma leb_length' {A} (a : array A) :
-  to_nat (length a) <= max_array_length.
+  0 ≤ to_Z (length a) ≤ max_array_length.
 Proof.
   generalize (leb_length _ a).
   rewrite leb_spec.
   rewrite max_length_spec. (* rewriting through [isInt] *)
-  max_array_length_def.
-  rewrite of_nat_to_nat. (* [int] takes 10 seconds *)
+  unfold max_array_length.
   lia.
 Qed.
 
 (* The length of an array is representable. *)
+(* TODO why unused? *)
 
-Local Lemma representable_to_nat_length {A} (a : array A) :
-  representable (to_nat (length a)).
+Local Lemma Unsigned_to_nat_length {A} (a : array A) :
+  Unsigned (to_Z (length a)).
 Proof.
-  eapply representable_down_closed; [| eapply leb_length' ].
-  tc.
+  generalize (leb_length' a). unfold Unsigned. lia.
 Qed.
+
+(* The length of every list is nonnegative. *)
+
+Global Hint Resolve
+  length_nonneg
+: lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -143,7 +140,7 @@ Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
   let n := len xs in
   isInt (length a) n ∧
   n ≤ max_array_length ∧
-  ∀ i, valid i xs → a.[of_nat i] = xs !!! i.
+  ∀ i, valid i xs → a.[of_Z i] = xs !!! i.
 
 (* These tactics and lemmas help work with [isArray]. *)
 
@@ -165,9 +162,9 @@ Qed.
 
 Lemma isArray_bounded_length `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
-  len xs ≤ max_array_length.
+  0 ≤ len xs ≤ max_array_length.
 Proof.
-  intros. destructIsArray. eauto.
+  intros. destructIsArray. eauto with lia.
 Qed.
 
 Lemma isArray_bounded_length' `{Inhabited A} (a : array A) (xs : list A) :
@@ -176,16 +173,16 @@ Lemma isArray_bounded_length' `{Inhabited A} (a : array A) (xs : list A) :
   n ≤ len xs →
   n ≤ max_array_length.
 Proof.
-  intros. destructIsArray. lia.
+  intros. destructIsArray. eauto with lia.
 Qed.
 
 Hint Resolve
   isArray_bounded_length'
 : lia.
 
-Instance isArray_representable `{Inhabited A} (a : array A) xs :
+Instance isArray_Unsigned `{Inhabited A} (a : array A) xs :
   isArray a xs →
-  representable (len xs).
+  Unsigned (len xs).
 Proof.
   intros. destructIsArray. tc.
 Qed.
@@ -193,33 +190,64 @@ Qed.
 Local Lemma isArray_pi3 `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
   ∀ i, valid i xs →
-  a.[of_nat i] = xs !!! i.
+  a.[of_Z i] = xs !!! i.
 Proof.
   intros. destructIsArray. eauto.
 Qed.
 
 Local Lemma isArray_pi3' `{Inhabited A} (a : array A) (xs : list A) :
   isArray a xs →
-  ∀ _i, valid (to_nat _i) xs →
-  a.[_i] = xs !!! (to_nat _i).
+  ∀ _i, valid (to_Z _i) xs →
+  a.[_i] = xs !!! (to_Z _i).
 Proof.
   intros. erewrite <- isArray_pi3 by eauto. int. eauto.
 Qed.
 
-Local Lemma isArray_show_valid `{Inhabited A} (a : array A) (xs : list A) _i :
+(* TODO move *)
+Lemma partial_bijection _i i :
+  to_Z _i = i ↔ _i = of_Z i ∧ unsigned i.
+Proof. lia. Qed.
+
+Local Lemma isArray_show_valid `{Inhabited A} (a : array A) (xs : list A) _i i :
+  to_Z _i = i →
   isArray a xs →
   (_i <? length a)%uint63 = true →
-  valid (to_nat _i) xs.
+  valid i xs.
 Proof.
-  intro. rewrite ltb_spec, isArray_length_spec by eauto. lia.
+  intros ? Hxs. subst.
+  rewrite ltb_spec, isArray_length_spec by eauto. int. intro.
+  generalize (isArray_bounded_length a xs Hxs); intro.
+  lia.
 Qed.
 
-Local Lemma isArray_use_valid `{Inhabited A} (a : array A) (xs : list A) i :
+Local Lemma isArray_use_valid `{Inhabited A} (a : array A) (xs : list A) _i i :
+  _i = of_Z i →
   isArray a xs →
   valid i xs →
-  (of_nat i <? length a)%uint63 = true.
+  (_i <? length a)%uint63 = true.
 Proof.
-  intros. rewrite ltb_spec, isArray_length_spec by eauto. int. lia.
+  intros ? Hxs. subst.
+  rewrite ltb_spec, isArray_length_spec by eauto. int.  intro.
+  generalize (isArray_bounded_length a xs Hxs); intro.
+  generalize Unsigned_max_array_length; intro.
+  unfold Unsigned in *. lia.
+Qed.
+
+(* I am not sure whether it is a good idea to have this instance.
+   Perhaps it can be useful to users who do not want to write
+   [do _n ← length a ; if (_i <? _n) then ...] and prefer to write
+   [if (_i <? length a) then ...]. *)
+
+Global Instance isBool1_lt_length `{Inhabited A} (a : array A) xs :
+  isArray a xs →
+  ∀IntU _i i,
+  isBool1 (_i <? length a)%uint63 (valid i xs).
+Proof.
+  unfold Unsigned. intros. eapply isBool1_intro. destructIsInt.
+  split.
+  + intros. eapply isArray_show_valid with (_i := of_Z i);
+    eauto with lia.
+  + eauto using isArray_use_valid.
 Qed.
 
 (* [isArray _ xs] is injective, up to the side condition
@@ -250,12 +278,12 @@ Proof.
   { eauto 6 using isInt_inj_2, isArray_length_spec with typeclass_instances. }
   eapply list_eq_same_length; eauto; intros.
   rewrite !list_lookup_lookup_total_lt in * by eauto with lia.
-  erewrite <- isArray_pi3 in * by eauto with lia.
+  erewrite <- !isArray_pi3 in * by eauto with lia.
   congruence.
 Qed.
 
 (* The tactic [arrays] looks for hypotheses of the form [isArray a xs]
-   and introduces the fact [representable (len xs)]. This fact is then
+   and introduces the fact [Unsigned (len xs)]. This fact is then
    possibly simplified (in cases where [xs] is a complex expression).
    Using this tactic at the beginning of a proof can help preserve
    information about the fact that certain integers are representable.
@@ -266,8 +294,8 @@ Ltac arrays :=
   repeat match goal with
   h: isArray ?a ?xs |- _ =>
     let h' := fresh h in
-    assert (h': representable (len xs)) by tc;
-    list in h';
+    assert (h': Unsigned (len xs)) by tc;
+    length in h';
     revert h
   end; intros.
 
@@ -292,21 +320,32 @@ Implicit Types xs : list A.
    for the case where the desired length is smaller
    than [max_array_length]. *)
 
-Local Lemma length_make' _n n x :
-  isInt _n n →
-  n <= max_array_length →
+Local Lemma length_make' x :
+  ∀IntU _n n,
+  n ≤ max_array_length →
   isInt (length (make _n x)) n.
 Proof.
-  rewrite !isInt_def. intros. subst.
-  assert ((of_nat n ≤? max_length)%uint63 = true) as Hbound.
+  intros. rewrite !isInt_def in *. subst.
+  generalize Unsigned_max_array_length; intro.
+  unfold Unsigned in *.
+  assert ((of_Z n ≤? max_length)%uint63 = true) as Hbound.
   { rewrite leb_spec, max_length_spec. int. lia. }
   rewrite length_make, Hbound. eauto.
 Qed.
 
+(* TODO *)
+Lemma Unsigned_max_l n :
+  Unsigned n → n `max` 0 = n.
+Proof. unfold Unsigned. lia. Qed.
+Hint Rewrite
+  Unsigned_max_l
+  using tc
+: z length list.
+
 (* The public specification of [make]. *)
 
-Lemma wp_make _n n x :
-  isInt _n n →
+Lemma wp_make x :
+  ∀IntU _n n,
   n ≤ max_array_length →
   wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
@@ -343,7 +382,7 @@ Proof.
   destruct (decide (i = j)); [ subst j |]; list.
   + rewrite get_set_same by eauto using isArray_use_valid.
     eauto.
-  + rewrite get_set_other by eauto 10 using of_nat_inj' with typeclass_instances lia.
+  + rewrite get_set_other by eauto 8 with typeclass_instances lia.
     erewrite isArray_pi3 by eauto.
     eauto.
 Qed.
@@ -392,7 +431,9 @@ Ltac isArray :=
   | h: isArray ?a ?xs |- isArray ?a ?ys =>
     cut (xs = ys); [
       let Heq := fresh in intro Heq; try rewrite <- Heq; exact h
-    | clear h; simplify_list_equality_goal; eauto
+    | clear h;
+      simplify_list_equality_goal;
+      try solve [ chop_list_equality_goal ] (* TODO happy? *)
     ]
   end.
 
@@ -434,8 +475,8 @@ Definition to_list a :=
 
 Lemma wp_segment_to_list a xs :
   isArray a xs →
-  ∀Int _i i ,
-  ∀Int _k k ,
+  ∀IntU _i i ,
+  ∀IntU _k k ,
   valid_seg i k xs →
   wp (segment_to_list a _i _k) (λ xs', xs' = seg i k xs).
 Proof.
@@ -443,12 +484,11 @@ Proof.
      It does not need to unfold the definition of [isArray]. *)
   intros. unfold segment_to_list.
   (* The loop invariant. *)
-  int.wp_iter_down (λ j ys, ys = seg j k xs).
+  wp_iter_down (λ j ys, ys = seg j k xs).
   (* Preservation. *)
   { wp_down_intros j xs'. intros _j ?.
     wp_get x.
-    wp_ret. subst.
-    rewrite cons_is_append. list. eauto. }
+    wp_ret. subst. chop_list_equality_goal. }
 Qed.
 
 Lemma wp_to_list a xs :
@@ -481,28 +521,25 @@ Proof.
   intros. unfold to_list, segment_to_list.
   (* Obtain the length of the array. *)
   eapply wp_bind_eq. intros _n ?.
-  set (n := to_nat _n).
+  set (n := to_Z _n).
   assert (isInt _n n) by eauto using introIsInt.
-  assert (n ≤ max_array_length).
+  assert (0 ≤ n ≤ max_array_length).
   { subst n _n. simple eapply leb_length'. }
-  assert (representable n) by tc.
+  assert (Unsigned n) by tc.
   (* The loop invariant: when the loop index is [j] and the state is [ys],
      the length of [ys] is [n - j] and the elements of [ys] are the elements
      found at indices [j, n) in the array [a]. *)
-  int.wp_iter_down (λ j ys,
+  wp_iter_down (λ j ys,
     len ys = n - j ∧
-    ∀ o, j ≤ o < n → a.[of_nat o] = ys !!! (o - j)
+    ∀ o, j ≤ o < n → a.[of_Z o] = ys !!! (o - j)
   ).
   (* Preservation. *)
   { wp_down_intros j ys. intros _j ?.
     liftIsIntAndClear.
     wp_bind_eq.
-    wp_ret.
-    list; split; [ lia |].
-    rewrite cons_is_append.
-    intros o ?.
-    destruct (decide (j = o)); [ subst o |]; list.
-    { eauto. }
+    wp_ret. list. split; [ lia |].
+    intros o ?. case_lookup_app.
+    { assert (o = j) by lia. congruence. }
     { replace (o - j - 1) with (o - (j + 1)) by lia. (* painful *)
       eauto with lia. } }
   (* Completion. *)
@@ -581,8 +618,7 @@ Proof.
   (* Case: the future is empty. *)
   { wp_ret. eauto. }
   (* Case: the future begins with [x]. *)
-  { rewrite cons_is_append in *.
-    wp_op Hstep s'.
+  { wp_op Hstep s'.
     eapply IHfuture; tc; list; tc. }
 Qed.
 
@@ -620,7 +656,7 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
   xs = history ++ future →
   isInt _i i →
   i = len history →
-  ITER_NAT
+  ITER_Z
     i (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
@@ -629,8 +665,7 @@ Proof.
   induction future as [| x future ];
   intros history xs _i i ? ? ?;
   ITER;
-  simpl list_iteri; try rewrite cons_is_append in *;
-  subst; list in *.
+  simpl list_iteri; subst; list in *; lengths.
   { wp_ret. eauto. }
   { wp_op Hstep s'.
     (* The system cannot guess how we want to extend the history
@@ -650,11 +685,11 @@ Qed.
    of the lemmas [lookup_total_through_seg] and [seg_through_seg]. *)
 
 Local Lemma wp_list_iteri_aux_variant_2 xs f :
-  ∀ future _i i ,
-  isInt _i i →
-  i ≤ len xs →
+  ∀ future,
+  ∀Int _i i ,
+  0 ≤ i ≤ len xs →
   final_seg i xs = future →
-  ITER_NAT
+  ITER_Z
     i (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
@@ -663,14 +698,20 @@ Proof.
   induction future as [| x future ];
   intros _i i ? ? ?;
   ITER;
-  simpl list_iteri; try rewrite cons_is_append in *;
-  subst; list in *; lengths.
+  simpl list_iteri; subst; list in *; lengths.
   (* Case: the future is empty. We have [i = len xs]. *)
-  { assert (i = len xs) by lia. subst.
+  {
+  (* TODO [lengths] transforms
+     [final_seg i xs = []] into [0 = 0]
+     whereas we would expect [len xs - i = 0] *)
+    assert (fact: len (final_seg i xs) = len ([] : list A)) by congruence.
+    (* length in fact. TODO the self-destroying equation! *)
+    rewrite length_seg, @length_nil in fact.
+    assert (i = len xs) by lia.
     wp_ret. eauto. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
   { assert (x = xs !!! i).
-    { erewrite lookup_total_through_seg by eauto with lia. list. eauto. }
+    { erewrite lookup_total_through_seg; eauto; z; eauto with lia. } (* UGLY *)
     assert (final_seg (i + 1) xs = future).
     { erewrite seg_through_seg by eauto with lia. list. eauto. }
     wp_op Hstep s'.
@@ -856,8 +897,7 @@ Implicit Types xs ys : list A.
 (* We compute [_delta] outside of the loop so as to save one addition
    inside the loop. This is a bit subtle, as the difference [_j - _i]
    might be negative, yet we compute it as an unsigned integer. This
-   yields the correct result in the end anyway, but it creates a small
-   difficulty in the proof, which we have to work around. *)
+   yields the correct result in the end anyway. *)
 
 Definition blit a _i b _j _n :=
   do _delta ← (_j - _i)%uint63 ;
@@ -876,28 +916,33 @@ Notation blit_post xs i ys j n := (
 
 (* The public specification of [blit]. *)
 
-Lemma wp_blit a xs _i i b ys _j j _n n :
+Lemma wp_blit a xs b ys :
   isArray a xs →
-  isInt _i i →
+  ∀IntU _i i,
   isArray b ys →
-  isInt _j j →
-  isInt _n n →
+  ∀IntU _j j,
+  ∀IntU _n n,
   valid_seg i (i + n) xs →
   valid_seg j (j + n) ys →
   wp (blit a _i b _j _n) (blit_post xs i ys j n).
 Proof.
   intros. unfold blit.
   wp_bind_eq.
-  int.wp_iter_up (λ k, blit_post xs i ys j (k - i)).
+  wp_iter_up (λ k, blit_post xs i ys j (k - i)).
+  (* TODO why does [wp_iter_up] yield two unsolved subgoals? *)
+    { tc. }
+    { isArray. }
   (* Preservation. *)
   { clear dependent b.
     wp_up_intros k b. intros _k ?.
     wp_get x. subst x.
     (* The use of unsigned arithmetic in the computation of [_delta]
-       does not cause any problem. *)
-    rewrite int.add_sub_exch.
-    wp_set.
-    wp_ret. isArray. }
+       does not cause any problem. Once upon a time, this proof used
+       natural numbers as the logical model of machine integers; then
+       we had to explicitly say [rewrite int.add_sub_exch] in order to
+       pretend that we never created a negative number. Now this trick
+       is unnecessary. *)
+    wp_set. wp_ret. isArray. }
 Qed.
 
 (* Moving data within an array: [blit']. *)
@@ -922,11 +967,11 @@ Definition blit' a _i _j _n :=
 
 (* The public specification of [blit']. *)
 
-Lemma wp_blit' a xs _i i _j j _n n :
+Lemma wp_blit' a xs :
   isArray a xs →
-  isInt _i i →
-  isInt _j j →
-  isInt _n n →
+  ∀IntU _i i,
+  ∀IntU _j j,
+  ∀IntU _n n,
   valid_seg i (i + n) xs →
   valid_seg j (j + n) xs →
   wp (blit' a _i _j _n) (blit_post xs i xs j n).
@@ -938,22 +983,28 @@ Proof.
   wp_if.
   (* Case [j ≤ i]. *)
   { wp_bind_eq.
-    int.wp_iter_up (λ k, blit_post xs i xs j (k - i)).
+    wp_iter_up (λ k, blit_post xs i xs j (k - i)).
+      (* TODO *) tc. isArray.
     (* Preservation. *)
     { clear dependent a.
       wp_up_intros k a. intros _k ?.
       wp_get x. subst x.
       rewrite int.add_sub_exch. wp_set.
-      wp_ret. isArray. } }
+      wp_ret.
+      zring in *. (* TODO *)
+      isArray. } }
   (* Case [i < j]. *)
   { wp_bind_eq.
-    int.wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
+    wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
+      (* TODO *) tc. isArray.
     (* Preservation. *)
     { clear dependent a.
       wp_down_intros k a. intros _k ?.
       wp_get x. subst x.
       wp_set.
-      wp_ret. isArray. } }
+      wp_ret.
+      zring in *. (* TODO *)
+      isArray. } }
 Qed.
 
 End Blit.
