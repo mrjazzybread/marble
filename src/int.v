@@ -190,6 +190,9 @@ Proof. lia. Qed.
 Class isInt (_i : int) (i : Z) :=
   build_isInt : _i = of_Z i.
 
+Notation isIntU _i i :=
+  (isInt _i i ∧ unsigned i).
+
 Global Hint Mode isInt ! - : typeclass_instances.
   (* Instantiate the first parameter only if its head is already known,
      that is, not a metavariable. We often encounter goals of the form
