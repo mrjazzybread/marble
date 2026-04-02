@@ -1,15 +1,14 @@
 From stdpp Require Import numbers list.
+From listz Require Import listz.
+Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From listz Require Import listz.
 From marble Require Import tactics bool iteration int wp wp_tactics array.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
-
-Open Scope nat_scope.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -73,8 +72,7 @@ Local Ltac destructIsVectorCap :=
   match goal with h: isVectorCap ?v _ _ |- _ =>
     destructVector v;
     let u := fresh "unoccupied" in
-    destruct h as (u&?&?&?);
-    arrays
+    destruct h as (u&?&?&?)
   end.
 
 Local Ltac destructAndKeepIsVectorCap :=
@@ -82,16 +80,42 @@ Local Ltac destructAndKeepIsVectorCap :=
     destructVector v;
     let u := fresh "unoccupied" in
     generalize h;
-    intros (u&?&?&?);
-    arrays
+    intros (u&?&?&?)
   end.
 
-Global Instance isVector_representable `{Inhabited A} (a : vector A) xs :
+Lemma isVector_bounded_length `{Inhabited A} (a : vector A) xs :
   isVector a xs →
-  representable (len xs).
+  0 ≤ len xs ≤ max_array_length.
 Proof.
-  intros. destructIsVector. destructIsVectorCap. tc.
+  intros. destructIsVector. destructIsVectorCap. arrays. lengths. lia.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The tactic [vectors] looks for hypotheses of the form [isArray a xs]
+   and introduces the fact [0 ≤ len xs ≤ max_array_length]. Furthermore,
+   it simplifies the expression [len xs] using the tactic [length]. *)
+
+Global Ltac vectors :=
+  repeat match goal with
+  h: isVector ?a ?xs |- _ =>
+    let h' := fresh h in
+    generalize (isVector_bounded_length a xs h); intro h';
+    length in h';
+    revert h h'
+  end;
+  intros;
+  (* We also introduce [unsigned max_array_length]. *)
+  generalize unsigned_max_array_length; intro.
+
+(* We let [lia] invoke [vectors; arrays; lengths]. *)
+
+(* We do not make this a Global setting, because this might disturb or
+   surprise the user. We expect the user to reproduce and adapt this
+   setting in every file. *)
+
+Local Ltac Zify.zify_pre_hook ::=
+  vectors; arrays; lengths.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -239,22 +263,20 @@ Local Definition next_capacity _c : int :=
   (* Clip it, so that it is at least 8 and at most [max_array_length]. *)
   _min max_length (_max 8%uint63 _c).
 
-Lemma wp_next_capacity _c c :
-  isInt _c c →
+Lemma wp_next_capacity :
+  ∀IntU _c c,
   c ≤ max_array_length →
   wp (next_capacity _c) (λ _c', ∃ c',
-    isInt _c' c' ∧ (* c ≤ *) c' ≤ max_array_length
+    isIntU _c' c' ∧ (* c ≤ *) c' ≤ max_array_length
   ).
 Proof.
   intros. unfold next_capacity.
   (* First, reason about the [if] construct. *)
-  eapply wp_bind with (P := λ _c', ∃ c',
-    isInt _c' c' ∧ (* c ≤ c' ∧ *) representable c').
+  eapply wp_bind with (P := λ _c', ∃ c', isIntU _c' c'). (* c ≤ c' ∧ *)
   {
     (* Lots of preliminary remarks about machine integers. *)
-    assert (isInt 2 2) by eauto using introIsInt. (* UGLY *)
     assert (isInt 512 512) by eauto using introIsInt. (* UGLY *)
-    generalize representable_twice_max_array_length; intro. (* WHY? *)
+    generalize unsigned_twice_max_array_length; intro. (* UGLY *)
      wp_if; wp_ret; eexists; split; tc. }
   wp_intros _c'.
   wp_ret.
@@ -279,10 +301,9 @@ Definition really_ensure_capacity v _n' : array A :=
   do _c' ← _max _c' _n' ;
   grow v _c'.
 
-Lemma wp_really_ensure_capacity _n a xs c _n' n' :
+Lemma wp_really_ensure_capacity _n a xs c :
   isVectorCap (_n, a) xs c →
-  isInt _n' n' →
-  representable n' →
+  ∀Int _n' n',
   c < n' ≤ max_array_length →
   wp (really_ensure_capacity (_n, a) _n') (λ a ,
     isVectorCapLe (_n, a) xs n'
@@ -343,7 +364,6 @@ Proof.
   introIsVector.
   introIsVectorCapWithWitness (final_seg 1 unoccupied); tc.
   isArray.
-  rewrite (seg_intro unoccupied) at 1. list. eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -372,7 +392,7 @@ Lemma wp_segment_iteri v xs f :
   ∀Int _i i ,
   ∀Int _k k ,
   valid_seg i k xs →
-  ITER_NAT i k Up
+  ITER_Z i k Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri v _i _k s f) Q).
 Proof.
@@ -389,7 +409,7 @@ Qed.
 
 Lemma wp_iteri v xs f :
   isVector v xs →
-  ITER_NAT
+  ITER_Z
     0 (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri v s f) Q).
@@ -485,8 +505,7 @@ Definition read_write_borrow {B} v (body : array A → B * array A)
 
 (* The public specification of [read_write_borrow]. *)
 
-Lemma wp_read_write_borrow {B} v xs body
-(Q  : B * vector A → Prop) :
+Lemma wp_read_write_borrow {B} v xs body (Q  : B * vector A → Prop) :
   isVector v xs →
   ( ∀ a unoccupied,
     isArray a (xs ++ unoccupied) →
