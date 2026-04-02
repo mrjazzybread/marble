@@ -656,18 +656,14 @@ Proof.
   induction future as [| x future ];
   intros _i i ? ? ?;
   ITER;
-  simpl list_iteri; subst; list in *; lengths.
+  simpl list_iteri; subst.
+  (* TODO [list in *] transforms [final_seg i xs = []] into [[] = []],
+          thereby destroying information! *)
+  (* TODO and [z in *] transforms
+          [(len xs `min` len xs - i `max` 0) `max` 0 = 0] into [0 = 0]. *)
+  lengths.
   (* Case: the future is empty. We have [i = len xs]. *)
-  {
-  (* TODO [lengths] transforms
-     [final_seg i xs = []] into [0 = 0]
-     whereas we would expect [len xs - i = 0] *)
-    assert (fact: len (final_seg i xs) = len ([] : list A)) by congruence.
-    (* length in fact. TODO the self-destroying equation! *)
-    rewrite length_seg, @length_nil in fact.
-    revert fact. z. intro fact.
-    assert (i = len xs) by lia.
-    wp_ret. eauto. }
+  { assert (i = len xs) by lia. wp_ret. z in *. eauto. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
   { assert (x = xs !!! i).
     { erewrite lookup_total_through_seg; eauto; z; eauto with lia. } (* UGLY *)
