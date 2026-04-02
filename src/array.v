@@ -562,9 +562,10 @@ Qed.
    index [i], because [i] is just the length of the list [history]. *)
 
 Local Lemma wp_list_iteri_aux xs f :
-  ∀ future history _i ,
+  ∀ future history,
+  ∀Int _i i,
   xs = history ++ future →
-  isInt _i (len history) →
+  i = len history →
   ITERI_LIST
     history xs
     (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
@@ -580,7 +581,7 @@ Proof.
   { wp_ret. eauto. }
   (* Case: the future begins with [x]. *)
   { wp_op Hstep s'.
-    eapply IHfuture; tc; list; tc. }
+    eapply IHfuture; tc; length; tc. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -613,9 +614,9 @@ Implicit Types f : S → int → A → S.
 (* In this variant, we keep the decomposition [xs = history ++ future]. *)
 
 Local Lemma wp_list_iteri_aux_variant_1 f :
-  ∀ future history xs _i i ,
+  ∀ future history xs,
+  ∀Int _i i,
   xs = history ++ future →
-  isInt _i i →
   i = len history →
   ITER_Z
     i (len xs) Up
@@ -635,7 +636,7 @@ Proof.
        because any history of length [len history + 1] will do! *)
     eapply wp_conseq.
     - eapply IHfuture with (history := history ++ {[x]});
-      list; tc3; list; tc3.
+      tc3; length; tc3.
     - wp_loop_exit. }
 Qed.
 
@@ -676,7 +677,7 @@ Proof.
     { erewrite seg_through_seg by eauto with lia. list. eauto. }
     wp_op Hstep s'.
     eapply wp_conseq.
-    - eapply IHfuture; list; tc3; list; tc3.
+    - eapply IHfuture; tc3; length; tc3.
     - wp_loop_exit. }
 Qed.
 
@@ -1418,13 +1419,14 @@ Proof.
       (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
       let h := fresh "Hinv" in intros j j1 h; unpack in h.
       intros; unpack; subst.
+      z in *.
       wp_get x. wp_get y.
       wp_if; wp_bind_eq; subst.
       (* Case: [eq x y] returns [true]. *)
       { match goal with H: _ → ?goal |- ?goal => apply H end.
         eapply one_step_up; eauto. }
       (* Case: [eq x y] returns [false]. *)
-      { z in *. eauto with lia. }
+      { eauto with lia. }
     }
     z. intros [[]|]; unfold equal_inv; intros (i&?); unpack; wp_ret.
     (* Case: the loop ends by breaking. *)
