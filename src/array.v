@@ -136,28 +136,33 @@ Lemma isArray_bounded_length `{Inhabited A} (a : array A) xs :
   isArray a xs →
   0 ≤ len xs ≤ max_array_length.
 Proof.
-  intros. destructIsArray. lengths. eauto with lia.
+  intros. destructIsArray. lengths. lia.
 Qed.
 
 (* The tactic [arrays] looks for hypotheses of the form [isArray a xs]
-   and introduces the fact [0 ≤ len xs ≤ max_array_length]. Using this
-   tactic at the beginning of a proof can help preserve information
-   that could otherwise become obscured as the array [a] is updated. *)
+   and introduces the fact [0 ≤ len xs ≤ max_array_length]. Furthermore,
+   it simplifies the expression [len xs] using the tactic [length]. *)
 
 Global Ltac arrays :=
   repeat match goal with
   h: isArray ?a ?xs |- _ =>
     let h' := fresh h in
-    generalize (isArray_bounded_length a xs h);
-    revert h
+    generalize (isArray_bounded_length a xs h); intro h';
+    length in h';
+    revert h h'
   end;
   intros;
   (* We also introduce [unsigned max_array_length]. *)
   generalize unsigned_max_array_length; intro.
 
-(* We let [eauto with lia] invoke [arrays] before it runs [lia]. *)
+(* We let [lia] invoke [arrays; lengths]. *)
 
-Global Hint Extern 100 => (arrays; lia) : lia.
+(* We do not make this a Global setting, because this might disturb or
+   surprise the user. We expect the user to reproduce and adapt this
+   setting in every file. *)
+
+Local Ltac Zify.zify_pre_hook ::=
+  arrays; lengths.
 
 (* Any number that is bounded by [max_array_length] is representable. *)
 
@@ -570,7 +575,7 @@ Local Hint Resolve
 : typeclass_instances.
 Proof.
   induction future as [| x future ]; simpl list_iteri; intros;
-  ITER; subst xs; list in *; lengths.
+  ITER; subst xs; list in *.
   (* Case: the future is empty. *)
   { wp_ret. eauto. }
   (* Case: the future begins with [x]. *)
@@ -623,7 +628,7 @@ Proof.
   induction future as [| x future ];
   intros history xs _i i ? ? ?;
   ITER;
-  simpl list_iteri; subst; list in *; lengths.
+  simpl list_iteri; subst; list in *.
   { wp_ret. eauto. }
   { wp_op Hstep s'.
     (* The system cannot guess how we want to extend the history
@@ -661,7 +666,6 @@ Proof.
           thereby destroying information! *)
   (* TODO and [z in *] transforms
           [(len xs `min` len xs - i `max` 0) `max` 0 = 0] into [0 = 0]. *)
-  lengths.
   (* Case: the future is empty. We have [i = len xs]. *)
   { assert (i = len xs) by lia. wp_ret. z in *. eauto. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
@@ -746,7 +750,7 @@ Lemma wp_of_list xs :
   len xs ≤ max_array_length →
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
-  intros. unfold of_list. lengths.
+  intros. unfold of_list.
   wp_op @wp_list_length _n.
   wp_make a.
   (* The loop invariant. *)
@@ -757,7 +761,7 @@ Proof.
   { clear dependent a.
     wp_loop_intros history0 history1 a.
     intros x i _; intros. subst history1. (* TODO tactic? *)
-    lengths. wp_set. isArray. }
+    wp_set. isArray. }
 Qed.
 
 End OfList.
@@ -1071,7 +1075,7 @@ Lemma wp_append a xs b ys :
   len xs + len ys ≤ max_array_length →
   wp (append a b) (λ c, isArray c (xs ++ ys)).
 Proof.
-  intros. unfold append. arrays.
+  intros. unfold append.
   wp_length _m.
   wp_length _n.
   wp_make c.
@@ -1186,7 +1190,7 @@ Lemma wp_find_index a xs :
   isArray a xs →
   wp (find_index a) (λ out, find_index_inv xs (len xs) out).
 Proof.
-  intros. unfold find_index. arrays.
+  intros. unfold find_index.
   wp_length _n.
   eapply wp_conseq.
   { wp_uxiter_up (find_index_inv xs); tc;
@@ -1400,7 +1404,7 @@ Lemma wp_equal a xs b ys :
       isBool1 o (Forall2 EQ xs ys)
   ).
 Proof.
-  intros. unfold equal. arrays.
+  intros. unfold equal.
   wp_length _m.
   wp_length _n.
   wp_if.
