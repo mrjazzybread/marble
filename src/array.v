@@ -669,7 +669,8 @@ Proof.
   (* Case: the future is empty. We have [i = len xs]. *)
   { assert (i = len xs) by lia. wp_ret. z in *. eauto. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
-  { assert (x = xs !!! i).
+  { assert (i < len xs) by lia.
+    assert (x = xs !!! i).
     { erewrite lookup_total_through_seg; eauto; z; eauto with lia. } (* UGLY *)
     assert (final_seg (i + 1) xs = future).
     { erewrite seg_through_seg by eauto with lia. list. eauto. }
