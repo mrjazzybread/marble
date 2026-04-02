@@ -25,23 +25,30 @@ Open Scope uint63.
 Instance Inhabited_int : Inhabited int.
 Proof. constructor. exact 0. Defined.
 
+Definition data _i :=
+  (10000 - _i)%uint63.
+
 Time Definition a : array int :=
   Eval vm_compute in
-  init 2000 (λ _i, 100%uint63).
-    (* 0.2 seconds *)
+  init 2000 data.
+    (*  2000: 0.2 to 0.3 seconds *)
+    (* 10000: 1.1 seconds *)
 
 Time Definition a' : array int :=
   Eval vm_compute in
   sort a.
-    (* 6 seconds *) (* now 2.7 seconds; why? *)
-    (* native_compute: 0.9 seconds if warm *)
+    (*  2000: 2.7 seconds; (was 6 seconds; why?) *)
+    (*        native_compute: 0.9 seconds if warm *)
+    (* 10000: 39.8 seconds *)
 
 Time Definition xs : list int :=
   Eval vm_compute in
-  list_init.init 2000 (λ (i : nat), 100%uint63).
-    (* 0.07 seconds *)
+  list_init.init 2000 (λ (i : nat), data (Uint63.of_nat i)).
+    (*  2000: 0.18 seconds *)
+    (* 10000: 4.1 seconds  *)
 
 Time Definition xs' : list int :=
   Eval vm_compute in
   Sort.sort xs.
-    (* between 0.01 and 0.02 seconds *)
+    (*  2000: between 0.01 and 0.02 seconds *)
+    (* 10000: 0.08 seconds *)
