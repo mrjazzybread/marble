@@ -11,7 +11,7 @@ Global Ltac wp_intros x :=
   let Hx := fresh in
   intros x Hx;
   (* Simplify expressions that involve lists. *)
-  list in Hx;
+  list in Hx; zring in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
   unpack in Hx.
 
@@ -59,6 +59,7 @@ Global Ltac wp_op_nude lemma :=
   tc;
   list;
   tc.
+  (* TODO try to make this incantation simpler / less costly *)
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under
