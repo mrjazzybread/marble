@@ -127,7 +127,7 @@ Definition ITER :=
   (* Once the loop ends, the producer state is a certain state [k] such
      that [complete k] holds and the user state is some state [s]. Then,
      the invariant is guaranteed to hold. *)
-  loop s (λ s, ∃ k, complete k ∧ inv k s).
+  loop s (λ s, ∃ k, inv k s ∧ complete k).
 
 (* In summary, [ITER init complete body loop] means that, provided the
    loop body respects the calling convention [body], it is safe to use
@@ -203,7 +203,7 @@ Definition XITER :=
     body j0 j1 s continue break Q
   ) →
   (* Once the loop ends, we have either [complete k] or [broken out]. *)
-  loop s (λ '(s, out), ∃ k, (complete k ∨ broken out) ∧ inv k s out).
+  loop s (λ '(s, out), ∃ k, inv k s out ∧ (complete k ∨ broken out)).
 
 (* We propose a variant where the user state [s] has type [unit]. Then
    the loop body, the continuations, and the loop have slightly simpler
@@ -222,7 +222,7 @@ Definition UXITER :=
     (∀ x, inv j1 (Break x) → wp (break x   ) Q) →
     ubody j0 j1 continue break Q
   ) →
-  uloop (λ out, ∃ k, (complete k ∨ broken out) ∧ inv k out).
+  uloop (λ out, ∃ k, inv k out ∧ (complete k ∨ broken out)).
 
 End XITER.
 
