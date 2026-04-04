@@ -87,7 +87,8 @@ Lemma isVector_bounded_length `{Inhabited A} (a : vector A) xs :
   isVector a xs →
   0 ≤ len xs ≤ max_array_length.
 Proof.
-  intros. destructIsVector. destructIsVectorCap. arrays. lengths. lia.
+  intros. destructIsVector. destructIsVectorCap.
+  arrays. lengths. ulength in *. lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -101,7 +102,6 @@ Global Ltac vectors :=
   h: isVector ?a ?xs |- _ =>
     let h' := fresh h in
     generalize (isVector_bounded_length a xs h); intro h';
-    length in h';
     revert h h'
   end;
   intros;
@@ -115,7 +115,7 @@ Global Ltac vectors :=
    setting in every file. *)
 
 Local Ltac Zify.zify_pre_hook ::=
-  vectors; arrays; lengths.
+  vectors; arrays; lengths; ulength in *.
 
 (* -------------------------------------------------------------------------- *)
 
