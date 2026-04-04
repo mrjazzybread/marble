@@ -3,7 +3,8 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics list_tactics bool iteration int wp wp_tactics.
+From marble Require Import
+  tactics list_tactics bool int iteration wp wp_tactics logic.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -15,23 +16,6 @@ Set Universe Polymorphism.
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.ArrayAxioms.html
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
-
-(* -------------------------------------------------------------------------- *)
-
-(* This lemma can help prove that a loop invariant can be extended. *)
-
-(* Unfortunately, [eauto] refuses to use it as a hint, and I am also
-   unable to use it via [Hint Extern]. *)
-
-(* TODO move *)
-
-Lemma one_step_up {P : Z → Prop} i :
-  (∀ j, 0 ≤ j < i → P j) →
-  P i →
-  ∀ j, 0 ≤ j < i + 1 → P j.
-Proof.
-  intros. case (decide (j = i)); intros; try subst; eauto with lia.
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -148,7 +132,6 @@ Global Ltac arrays :=
   h: isArray ?a ?xs |- _ =>
     let h' := fresh h in
     generalize (isArray_bounded_length a xs h); intro h';
-    length in h';
     revert h h'
   end;
   intros;
@@ -162,7 +145,7 @@ Global Ltac arrays :=
    setting in every file. *)
 
 Local Ltac Zify.zify_pre_hook ::=
-  arrays; lengths.
+  arrays; lengths; ulength in *.
 
 (* Any number that is bounded by [max_array_length] is representable. *)
 
@@ -306,7 +289,7 @@ Lemma wp_make x :
   wp (make _n x) (λ a, isArray a (replicate n x)).
 Proof.
   intros. wp_ret.
-  introIsArray; list; eauto using length_make' with lia.
+  introIsArray; length; eauto using length_make' with lia.
   intros i ?.
   rewrite get_make. list. eauto.
 Qed.
@@ -388,8 +371,7 @@ Ltac isArray :=
     cut (xs = ys); [
       let Heq := fresh in intro Heq; try rewrite <- Heq; exact h
     | clear h;
-      simplify_list_equality_goal;
-      try solve [ chop_list_equality_goal ] (* TODO happy? *)
+      lego
     ]
   end.
 
@@ -444,7 +426,8 @@ Proof.
   (* Preservation. *)
   { wp_down_intros j xs'. intros _j ?.
     wp_get x.
-    wp_ret. subst. chop_list_equality_goal. }
+    wp_ret.
+    lego. }
 Qed.
 
 Lemma wp_to_list a xs :
@@ -454,7 +437,7 @@ Proof.
   intro. unfold to_list.
   wp_length _n.
   wp_op wp_segment_to_list xs'.
-  eauto.
+  assumption.
 Qed.
 
 (* A second (stronger) specification of [to_list]. *)
@@ -492,8 +475,8 @@ Proof.
   { wp_down_intros j ys. intros _j ?.
     destructIsInt.
     wp_bind_eq.
-    wp_ret. list. split; [ lia |].
-    intros o ?. case_lookup_app.
+    wp_ret. split; [ lia |].
+    intros o ?. list. case_lookup_app.
     { assert (o = j) by lia. congruence. }
     { replace (o - j - 1) with (o - (j + 1)) by lia. (* painful *)
       eauto with lia. } }
@@ -572,7 +555,7 @@ Local Lemma wp_list_iteri_aux xs f :
     (λ s Q, wp (list_iteri _i future s f) Q).
 (* Extend [tc] with hints for this proof. *)
 Local Hint Resolve
-  prefix_app_l prefix_of_app_l app_assoc
+  prefix_app_l prefix_of_app_l
 : typeclass_instances.
 Proof.
   induction future as [| x future ]; simpl list_iteri; intros;
@@ -581,7 +564,7 @@ Proof.
   { wp_ret. eauto. }
   (* Case: the future begins with [x]. *)
   { wp_op Hstep s'.
-    eapply IHfuture; tc; length; tc. }
+    eapply IHfuture; tc3; list; tc3. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -592,7 +575,7 @@ Lemma wp_list_iteri xs s f :
     (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
     (λ s Q, wp (list_iteri 0 xs s f) Q).
 Proof.
-  unfold ITERI_LIST. eapply wp_list_iteri_aux; tc.
+  unfold ITERI_LIST. eapply wp_list_iteri_aux; tc3.
 Qed.
 
 End ListIteri.
@@ -636,7 +619,7 @@ Proof.
        because any history of length [len history + 1] will do! *)
     eapply wp_conseq.
     - eapply IHfuture with (history := history ++ {[x]});
-      tc3; length; tc3.
+      tc3; list; tc3.
     - wp_loop_exit. }
 Qed.
 
@@ -662,19 +645,14 @@ Proof.
   induction future as [| x future ];
   intros _i i ? ? ?;
   ITER;
-  simpl list_iteri; subst.
-  (* TODO [list in *] transforms [final_seg i xs = []] into [[] = []],
-          thereby destroying information! *)
-  (* TODO and [z in *] transforms
-          [(len xs `min` len xs - i `max` 0) `max` 0 = 0] into [0 = 0]. *)
+  simpl list_iteri.
   (* Case: the future is empty. We have [i = len xs]. *)
-  { assert (i = len xs) by lia. wp_ret. z in *. eauto. }
+  { assert (i = len xs) by lia.
+    wp_ret. eauto. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
   { assert (i < len xs) by lia.
-    assert (x = xs !!! i).
-    { erewrite lookup_total_through_seg; eauto; z; eauto with lia. } (* UGLY *)
-    assert (final_seg (i + 1) xs = future).
-    { erewrite seg_through_seg by eauto with lia. list. eauto. }
+    assert (x = xs !!! i) by (lookup_through_seg; eauto).
+    assert (final_seg (i + 1) xs = future) by (seg_through_seg; eauto).
     wp_op Hstep s'.
     eapply wp_conseq.
     - eapply IHfuture; tc3; length; tc3.
@@ -708,7 +686,7 @@ Proof.
   induction xs as [| x xs ]; simpl list_length_aux; intros.
   { wp_ret. list. eauto. }
   { wp_op IHxs _n'.
-    list. assumption. }
+    list. tc. }
 Qed.
 
 (* The public specification of [list_length]. *)
@@ -927,6 +905,12 @@ Definition blit' a _i _j _n :=
 
 (* The public specification of [blit']. *)
 
+(* TODO *)
+Ltac lego ::=
+  zring;
+  simplify_list_equality_goal;
+  cleg.
+
 Lemma wp_blit' a xs :
   isArray a xs →
   ∀Int _i i,
@@ -950,9 +934,8 @@ Proof.
     { clear dependent a.
       wp_up_intros k a. intros _k ?.
       wp_get x. subst x.
-      rewrite int.add_sub_exch. wp_set.
+      wp_set.
       wp_ret.
-      zring in *. (* TODO *)
       isArray. } }
   (* Case [i < j]. *)
   { wp_bind_eq.
@@ -965,7 +948,6 @@ Proof.
       wp_get x. subst x.
       wp_set.
       wp_ret.
-      zring in *. (* TODO *)
       isArray. } }
 Qed.
 
@@ -1177,13 +1159,13 @@ Definition find_index_inv xs n out :=
   match out with
   | Continue =>
       (* Up to index [n], no element [x] of the list [xs] is OK. *)
-      ∀ j, 0 ≤ j < n → notOK (xs !!! j)
+      on_seg 0 n (λ j, notOK (xs !!! j))
   | Break _i =>
       (* The machine integer [_i] represents the index [i], which is a
          valid index into the list [xs]; the element [x] found at this
          index is OK; and no earlier element is OK. *)
       ∃ i , isInt _i i ∧ valid i xs ∧ OK (xs !!! i) ∧
-      ∀ j, 0 ≤ j < i → notOK (xs !!! j)
+      on_seg 0 i (λ j, notOK (xs !!! j))
   end.
 
 (* The public specification of [find_index]. *)
@@ -1198,7 +1180,7 @@ Proof.
   { wp_uxiter_up (find_index_inv xs); tc;
     unfold find_index_inv in *.
     (* Initialization. *)
-    { eauto with lia. }
+    { eauto with on_seg lia. }
     (* Preservation. *)
     { (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
       let h := fresh "Hinv" in intros j j1 h; unpack in h.
@@ -1208,8 +1190,7 @@ Proof.
       (* Case: [OK x]. *)
       + tc.
       (* Case: [notOK x]. *)
-      + match goal with H: _ → ?goal |- ?goal => eapply H end.
-        eapply one_step_up; eauto. }}
+      + eauto with on_seg. }}
   { z. intros [|] (k&?&?).
     (* Subcase: the loop has ended by breaking. The loop index is an
        unknown [i]. Fortunately [find_index_inv xs k (Break i)] is
@@ -1387,14 +1368,14 @@ Definition equal_inv xs ys i o :=
   match o with
   | Continue =>
       (* Up to index [i], the lists [xs] and [ys] agree. *)
-      ∀ j, 0 ≤ j < i → xs !!! j ≡ ys !!! j
+      on_seg 0 i (λ j, xs !!! j ≡ ys !!! j)
   | Break () =>
       (* [i - 1] is a valid index into the list [xs], the two lists
          agree up to index [i - 1], and they disagree at this index. *)
       let i := i - 1 in
       valid i xs ∧
       ¬ xs !!! i ≡ ys !!! i ∧
-      ∀ j, 0 ≤ j < i → xs !!! j ≡ ys !!! j
+      on_seg 0 i (λ j, xs !!! j ≡ ys !!! j)
   end.
 
 (* The public specification of [equal]. *)
@@ -1415,16 +1396,16 @@ Proof.
     { unfold equal_aux.
       wp_uxiter_up (equal_inv xs ys);
         tc; unfold equal_inv in *; eauto with lia.
+      (* Initialization. *)
+      { eauto with on_seg lia. }
       (* Preservation. *)
       (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
       let h := fresh "Hinv" in intros j j1 h; unpack in h.
-      intros; unpack; subst.
-      z in *.
+      intros; unpack; subst; z in *.
       wp_get x. wp_get y.
       wp_if; wp_bind_eq; subst.
       (* Case: [eq x y] returns [true]. *)
-      { match goal with H: _ → ?goal |- ?goal => apply H end.
-        eapply one_step_up; eauto. }
+      { eauto with on_seg. }
       (* Case: [eq x y] returns [false]. *)
       { eauto with lia. }
     }
