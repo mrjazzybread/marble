@@ -537,7 +537,7 @@ Ltac wp_loop_exit :=
   cbv beta;
   (* Expand the definitions that could get in the way. *)
   expand_ITER;
-  intros; unpack; try subst; list in *; eauto 3.
+  intros; unpack; try subst; list in *; eauto 3 with lia.
     (* TODO control naming of newly introduced names *)
 
 Ltac wp_loop_nude lemma I :=
