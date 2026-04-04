@@ -11,6 +11,9 @@ From marble Require Import orders.
 (* It complements the libraries Coq.Sorting.Sorted and stdpp.sorting,
    which seem quite poor. *)
 
+Local Ltac Zify.zify_pre_hook ::=
+  lengths; ulength in *.
+
 (* -------------------------------------------------------------------------- *)
 
 (* We prefer {[x]} over [x] for singletons, because the former is more
@@ -389,9 +392,9 @@ Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
   x1 `R` x2.
 Proof.
   unfold pairwise. intros Hpw -> -> ??.
-  erewrite (lookup_total_through_seg i1 j1 k1) by eauto with lia.
-  erewrite (lookup_total_through_seg i2 j2 k2) by eauto with lia.
-  eapply Hpw; eapply list_elem_of_lookup_total_2; length; lia.
+  erewrite (@lookup_total_through_seg _ _ i1 j1 k1) by eauto with lia.
+  erewrite (@lookup_total_through_seg _ _ i2 j2 k2) by eauto with lia.
+  eapply Hpw; eapply list_elem_of_lookup_total_2; ulength; lia.
 Qed.
 
 (* The definition of sortedness that seems best suited for use
@@ -535,14 +538,14 @@ Lemma smt_sorted_seg_iff i k xs :
   smt_sorted_seg i k xs ↔
   smt_sorted (seg i k xs).
 Proof.
-  unfold smt_sorted_seg, smt_sorted. length in *.
+  unfold smt_sorted_seg, smt_sorted.
   split; intros Hsorted j1 j2; intros.
-  + list. eauto with lia.
+  + rewrite !lookup_total_seg by lia. eauto 2 with lia.
   + (* This looks like a situation that the tactic [lookup_through_seg]
        can handle; however, here, we are dealing with `R`, not equality. *)
-    erewrite (lookup_total_through_seg i k j1) by eauto with lia.
-    erewrite (lookup_total_through_seg i k j2) by eauto with lia.
-    eauto with lia.
+    erewrite (@lookup_total_through_seg _ _ i k j1) by eauto with lia.
+    erewrite (@lookup_total_through_seg _ _ i k j2) by eauto with lia.
+    eauto 2 with lia.
 Qed.
 
 Lemma smt_sorted_seg_iff' i k xs :
