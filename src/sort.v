@@ -1,20 +1,23 @@
 From stdpp Require Import numbers list well_founded.
+From listz Require Import listz.
+Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
-From listz Require Import listz.
 From marble Require Import equations.
 From marble Require Import tactics list_tactics.
 From marble Require Import iteration int wp wp_tactics array.
 From marble Require Import orders sorting compare.
 Implicit Types _i _j _k : int.
 
+(* TODO *)
+(* Local Ltac Zify.zify_pre_hook ::= arrays; lengths; ulength in *. *)
+Local Ltac listz_arith ::= ulength; lia.
+
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
-
-Open Scope nat_scope.
 
 (* Documentation:
    https://rocq-prover.org/doc/V9.1.0/corelib/Corelib.Classes.RelationClasses.html
@@ -24,6 +27,29 @@ Open Scope nat_scope.
 (* -------------------------------------------------------------------------- *)
 
 (* Local hints. *)
+
+(* TODO the hints and tactics about sorting should be cleaned up and moved
+   to sorting.v *)
+(* TODO create a tactic to fully automate [pairwise] goals *)
+
+Ltac same_lookup_total :=
+  match goal with
+  | h: ?x = ?xs !!! ?i |- ?x = ?xs !!! ?j =>
+      assert (i = j) by listz_arith;
+      congruence
+  | h: ?x = ?xs !!! ?i |- ?xs !!! ?j = ?x =>
+      assert (i = j) by listz_arith;
+      congruence
+  | h: ?xs !!! ?i = ?x |- ?x = ?xs !!! ?j =>
+      assert (i = j) by listz_arith;
+      congruence
+  | h: ?xs !!! ?i = ?x |- ?xs !!! ?j = ?x =>
+      assert (i = j) by listz_arith;
+      congruence
+  end.
+
+Ltac listz_easy ::=
+  solve [ eauto 2 | same_lookup_total ].
 
 (* [sorted_seg_variance] cannot be added as a Resolve hint because it causes
    divergence. We introduce a limited form of it, which picks a hypothesis
@@ -147,8 +173,8 @@ Local Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
   seg i1 j1 xs1 `precede` seg i2 j2 xs2 →
   x1 = xs1 !!! k1 →
   x2 = xs2 !!! k2 →
-  i1 ≤ k1 < j1 `min` len xs1 →
-  i2 ≤ k2 < j2 `min` len xs2 →
+  i1 `max` 0 ≤ k1 < j1 `min` len xs1 →
+  i2 `max` 0 ≤ k2 < j2 `min` len xs2 →
   x1 `precedes` x2.
 Proof.
   intros. eapply exploit_seg_pairwise_seg; eauto.
@@ -234,7 +260,7 @@ Local Infix "≃" := (@Permutation A)
 Implicit Types _src _dst : array A.
 Implicit Types src dst : list A.
 Implicit Types _srcofs _dstofs _n : int.
-Implicit Types srcofs dstofs n : nat.
+Implicit Types srcofs dstofs n : Z.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -581,16 +607,12 @@ Proof.
   { pairwise. repeat split; eauto.
     subst. eapply exploit_sorted_seg; eauto with lia. }
   intros. wp_last Hpermut.
-  repeat wp_set. wp_ret. eexists. pack.
-  + eauto.
-  + list. eauto.
-  + list. eauto.
-  + list. rewrite <- Hpermut. eapply identity_permutation.
-    (* OK, let's use a big hammer: *)
-    listx_total o. assert (o = 0 ∨ o = 1) as [|] by lia;
-    subst o; simpl; list; assumption.
-  + list.
-    repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+  repeat wp_set. wp_ret.
+  eexists. pack; eauto 2; list; eauto 2.
+  (* Permutation. *)
+  + rewrite <- Hpermut. eapply identity_permutation. lego.
+  (* Sortedness. *)
+  + repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
 Qed.
 
 Lemma wp_sortto_segment_3 :
@@ -603,16 +625,12 @@ Proof.
   eapply wp_sort3;
     try solve [ subst; eapply exploit_sorted_seg; eauto with lia ].
   intros. wp_last Hpermut.
-  repeat wp_set. wp_ret. eexists. pack.
-  + eauto.
-  + list. eauto.
-  + list. eauto.
-  + list. rewrite <- Hpermut. eapply identity_permutation.
-    listx_total o.
-    assert (o = 0 ∨ o = 1 ∨ o = 2) as [|[|]] by lia;
-    subst o; simpl; list; assumption.
-  + list.
-    repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+  repeat wp_set. wp_ret.
+  eexists. pack; eauto 2; list in *; eauto 2.
+  (* Permutation. *)
+  + rewrite <- Hpermut. eapply identity_permutation. lego.
+  (* Sortedness. *)
+  + repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
 Qed.
 
 Lemma wp_sortto_segment_4 :
@@ -625,16 +643,12 @@ Proof.
   eapply wp_sort4;
     try solve [ subst; eapply exploit_sorted_seg; eauto with lia ].
   intros. wp_last Hpermut.
-  repeat wp_set. wp_ret. eexists. pack.
-  + eauto.
-  + list. eauto.
-  + list. eauto.
-  + list. rewrite <- Hpermut. eapply identity_permutation.
-    listx_total o.
-    assert (o = 0 ∨ o = 1 ∨ o = 2 ∨ o = 3) as [|[|[|]]] by lia;
-    subst o; simpl; list; assumption.
-  + list.
-    repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+  repeat wp_set. wp_ret.
+  eexists. pack; eauto 2; list in *; eauto 2.
+  (* Permutation. *)
+  + rewrite <- Hpermut. eapply identity_permutation. lego.
+  (* Sortedness. *)
+  + repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -738,7 +752,7 @@ Local Ltac elim_dst_inv :=
   match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
     unfold dst_inv in h;
     destruct h as (Hpermut & Hsortedx & Habove);
-    list in Hpermut; nat in Hsortedx
+    list in Hpermut; z in Hsortedx
   end.
 
 (* This is the invariant of the inner loop. *)
@@ -780,6 +794,16 @@ Local Ltac elim_inner_inv dst' :=
 
 (* The public specification of [isortto]. *)
 
+(* TODO document clean up *)
+(* if we choose the wrong hypothesis [h], we may end up with a false goal *)
+Ltac sorted_eq :=
+  match goal with h: sorted ?xs |- sorted ?ys =>
+    let Heq := fresh in
+    assert (Heq: xs = ys); [ | rewrite Heq in h; exact h ]
+  end;
+  simplify_list_equality_goal;
+  chop_list_equality_goal.
+
 Lemma wp_isortto _src src _srcofs srcofs _dst dst _dstofs dstofs _n n :
   isArray _src src →
   isInt _srcofs srcofs →
@@ -805,12 +829,14 @@ Proof.
     wp_get xi.
     eapply wp_bind.
     { (* The inner loop. *)
-      int.wp_xiter_down (inner_inv src srcofs dst dstofs i).
+      wp_xiter_down (inner_inv src srcofs dst dstofs i).
       (* Initialization of the inner loop. *)
       { intro_inner_inv. intro_dst_inv; list.
-        + rewrite Hdata. list. reflexivity.
+        + rewrite Hdata. join_segments. reflexivity.
+          (* TODO possibly [simplify_list_permutation_goal]
+                  should use [join_segments]? not sure *)
         + assumption.
-        + recognize. pairwise. tauto. }
+        + pairwise. tauto. }
       (* The body of the inner loop. *)
       clear dependent _dst.
       (* TODO need variant of [wp_down_intros] *)
@@ -831,7 +857,7 @@ Proof.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
           { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
-          destruct Hseg as (j' & Hj' & Hxj). nat in Hj'.
+          destruct Hseg as (j' & Hj' & Hxj). z in Hj'.
           rewrite Hxj. subst xi.
           eapply exploit_sorted_seg; eauto with lia. }
       (* Case [xi < xj]. *)
@@ -843,12 +869,12 @@ Proof.
           rewrite (split_seg j dst'' dstofs (j + 1)) by lia. clarify.
           recognize. eapply Permutation_app_comm. }
         (* Sortedness except at [j]. *)
-        { subst xj. list. rewrite app_assoc. list. (* UGLY *) assumption. }
+        { sorted_eq. }
         (* Ordering above [xi]. *)
         { recognize. pairwise. eauto. }}}
     (* Epilogue of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
-      intros (j&Hj). nat in Hj. unpack in Hj.
+      intros (j&Hj). z in Hj. unpack in Hj.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
@@ -856,7 +882,7 @@ Proof.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv;
-        rewrite insert_seg by (list; lia); nat.
+        rewrite insert_seg by (list; lia); z.
         (* Permutation. *)
         { rewrite <- Hpermut. recognize. reflexivity. }
         (* Sortedness. *)
@@ -869,6 +895,7 @@ Proof.
         { rewrite <- Hpermut. recognize. list. reflexivity. }
         (* Sortedness. *)
         { recognize. sorted_app. }}}}
+          (* TODO not clear why [recognize] helps [sorted_app] *)
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -921,7 +948,7 @@ Lemma wp_isortto' a xs _srcofs srcofs _dstofs dstofs _n n :
   isInt _n n →
   valid_seg srcofs (srcofs + n) xs →
   valid_seg dstofs (dstofs + n) xs →
-  (srcofs + n ≤ dstofs ∨ dstofs ≤ srcofs)%nat → (* disjoint or overlap *)
+  (srcofs + n ≤ dstofs ∨ dstofs ≤ srcofs)%Z → (* disjoint or overlap *)
   Sorted R' (seg srcofs (srcofs + n) xs) →
   wp (isortto' a _srcofs _dstofs _n)
      (isortto_inv xs srcofs xs dstofs n).
@@ -944,10 +971,10 @@ Proof.
     { eapply equal_lookups_to_equal_segs; eauto with lia. }
     eapply wp_bind.
     { (* The inner loop. *)
-      int.wp_xiter_down (inner_inv xs srcofs xs dstofs i).
+      wp_xiter_down (inner_inv xs srcofs xs dstofs i).
       (* Initialization of the inner loop. *)
       { intro_inner_inv. intro_dst_inv; list.
-        + rewrite Hdata. list. reflexivity.
+        + rewrite Hdata. join_segments. reflexivity.
         + assumption.
         + recognize. pairwise. tauto. }
       (* The body of the inner loop. *)
@@ -970,7 +997,7 @@ Proof.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) xs).
           { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
           rewrite lookup_total_elem_seg in Hseg by lia.
-          destruct Hseg as (j' & Hj' & Hxj). nat in Hj'.
+          destruct Hseg as (j' & Hj' & Hxj). z in Hj'.
           rewrite Hxj. rewrite KEY.
           eapply exploit_sorted_seg; eauto with lia. }
       (* Case [xi < xj]. *)
@@ -982,12 +1009,12 @@ Proof.
           rewrite (split_seg j xs'' dstofs (j + 1)) by lia. clarify.
           recognize. eapply Permutation_app_comm. }
         (* Sortededness except at [j]. *)
-        { subst xj. list. rewrite app_assoc. list. (* UGLY *) assumption. }
+        { sorted_eq. }
         (* Ordering above [xi]. KEY is used here. *)
         { recognize. pairwise. eauto. }}}
     (* Epilogue of the inner loop. *)
     { clear dependent a. intros [ a out ].
-      intros (j&Hj). nat in Hj. unpack in Hj.
+      intros (j&Hj). z in Hj. unpack in Hj.
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
@@ -995,7 +1022,7 @@ Proof.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv;
-        rewrite insert_seg by (list; lia); nat.
+        rewrite insert_seg by (list; lia); z.
         (* Permutation. *)
         { rewrite <- Hpermut. recognize. reflexivity. }
         (* Sortedness. [KEY] is used here. *)
@@ -1133,15 +1160,19 @@ Local Ltac intro_merge_aux_post :=
   unfold merge_aux_post; eexists;
   split; [ eauto 2 | split; [ list; lia | pack ] ].
 
+(* TODO now useless? *)
 Local Ltac intro_merge_aux_post_list :=
-  intro_merge_aux_post; list; recognize_empty_segments; list.
+  intro_merge_aux_post; list; recognize_empty_segments; zring seg.
 
 Local Ltac elim_merge_aux_post dst' :=
   match goal with h: merge_aux_post _ _ _ _ _ _ _ _ _ |- _ =>
     unfold merge_aux_post in h;
     destruct h as (dst' & h);
-    list in h; unpack in h
+    list in h;
+    zring in h;
+    unpack in h
   end.
+  (* TODO review *)
 
 (* The specification of [merge_aux]. *)
 
@@ -1158,13 +1189,13 @@ Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ x1,
   x1 = src1 !!! i1 →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   ∀ x2,
   x2 = src2 !!! i2 →
   sorted (seg i1 j1 src1) →
@@ -1180,6 +1211,10 @@ Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) :=
 
 Local Ltac tc ::=
   eauto 7 with typeclass_instances lia.
+
+(* TODO *)
+Local Ltac split_seg i xs :=
+  rewrite (split_seg i xs) by lia.
 
 Lemma wp_merge_aux _j1 _j2 _i1 _i2 :
   merge_aux_spec _j1 _j2 (_i1, _i2).
@@ -1205,8 +1240,7 @@ Proof.
       { rewrite Hpost1 by lia. list. reflexivity. }
       (* Permutation. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i1 + 1) src1. rewrite Hpost2. clarify.
-        recognize. reflexivity. }
+        split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         sorted_app.
@@ -1218,9 +1252,9 @@ Proof.
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
-      intro_merge_aux_post_list.
+      intro_merge_aux_post_list. (* TODO very slow *)
       + unmodified_outside_seg.
-      + reflexivity.
+      + recognize. reflexivity.
       (* The fact that [x1] precedes [x2] is used here. *)
       + recognize. sorted_app. boundary. recognize. eauto with lia. }}
   (* Case [x2 < x1]. *)
@@ -1253,7 +1287,7 @@ Proof.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
-      + eapply Permutation_app_comm.
+      + recognize. eapply Permutation_app_comm.
       + recognize. sorted_app. boundary. recognize. eauto. }}
 Qed.
 
@@ -1316,13 +1350,13 @@ Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ x1,
   x1 = src1 !!! i1 →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   ∀ x2,
   x2 = src2 !!! i2 →
   sorted (seg i1 j1 src1) →
@@ -1345,7 +1379,7 @@ Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
   unfold merge_aux_1_spec. intros.
-  assert (Hi1: i1 = k + (j2 - i2)) by lia.
+  assert (Hi1: i1 = k + j2 - i2) by lia.
   autorewrite with merge_aux_1.
   arrays.
   wp_if.
@@ -1365,8 +1399,7 @@ Proof.
       { rewrite Hpost1 by lia. list. reflexivity. }
       (* Permutation. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i1 + 1) src1. rewrite Hpost2. clarify.
-        recognize. eauto. }
+        split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         sorted_app.
@@ -1377,12 +1410,12 @@ Proof.
         (* The fact that [x1] precedes [x2] is used here. *)
         + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
+    { assert (j1 = i1 + 1) by lia. subst j1. z in *.
       (* i1 = k + (j2 - i2) *) subst i1.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
-      + reflexivity.
+      + recognize. reflexivity.
       (* The fact that [x1] precedes [x2] is used here. *)
       + recognize. sorted_app. boundary. recognize. eauto with lia. }}
   (* Case [x2 < x1]. *)
@@ -1411,7 +1444,7 @@ Proof.
         + recognize. eauto.
         + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
+    { assert (j2 = i2 + 1) by lia. subst j2. z in *.
       (* i1 = k + 1 *) subst i1.
       wp_ret.
       intro_merge_aux_post_list.
@@ -1469,13 +1502,13 @@ Definition merge_aux_2_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ x1,
   x1 = src1 !!! i1 →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   ∀ x2,
   x2 = src2 !!! i2 →
   sorted (seg i1 j1 src1) →
@@ -1498,7 +1531,7 @@ Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
   unfold merge_aux_2_spec. intros.
-  assert (Hi2: i2 = k + (j1 - i1)) by lia.
+  assert (Hi2: i2 = k + j1 - i1) by lia.
   autorewrite with merge_aux_2.
   arrays.
   wp_if.
@@ -1517,8 +1550,7 @@ Proof.
       { rewrite Hpost1 by lia. list. reflexivity. }
       (* Permutation. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i1 + 1) src1. rewrite Hpost2. clarify.
-        recognize. eauto. }
+        split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         sorted_app.
@@ -1528,7 +1560,7 @@ Proof.
         + subst x1. eapply exploit_sorted_seg; eauto with lia.
         + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
+    { assert (j1 = i1 + 1) by lia. subst j1. z in *.
       (* i2 = k + 1 *) subst i2.
       wp_ret.
       intro_merge_aux_post_list.
@@ -1562,11 +1594,11 @@ Proof.
         + recognize. eauto.
         + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
+    { assert (j2 = i2 + 1) by lia. subst j2. z in *.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
-      + rewrite <- Hi2. eapply Permutation_app_comm.
+      + rewrite <- Hi2. recognize. eapply Permutation_app_comm.
       + rewrite <- Hi2. recognize. boundary. recognize. eauto. }}
 Qed.
 
@@ -1615,13 +1647,13 @@ Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 dst →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ x1,
   x1 = dst !!! i1 →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 dst →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   ∀ x2,
   x2 = dst !!! i2 →
   sorted (seg i1 j1 dst) →
@@ -1632,7 +1664,7 @@ Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j2 →
   (* The first source segment and the destination segment must be disjoint. *)
-  (j1 ≤ k ∨ limit ≤ i1)%nat →
+  (j1 ≤ k ∨ limit ≤ i1)%Z →
   valid_seg k limit dst →
   wp (merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post dst dst i1 j1 i2 j2 dst k).
@@ -1643,7 +1675,7 @@ Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
   unfold merge_aux_12_spec. intros.
-  assert (Hi2: i2 = k + (j1 - i1)) by lia.
+  assert (Hi2: i2 = k + j1 - i1) by lia.
   autorewrite with merge_aux_12.
   arrays.
   wp_if.
@@ -1662,8 +1694,7 @@ Proof.
       { rewrite Hpost1 by lia. list. reflexivity. }
       (* Prove that we have a permutation. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i1 + 1) dst. rewrite Hpost2. clarify.
-        recognize. eauto. }
+        split_seg (i1 + 1) dst. rewrite Hpost2. clarify. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         sorted_app.
@@ -1673,7 +1704,7 @@ Proof.
         + subst x1. eapply (exploit_sorted_seg i1 j1); eauto 2 with lia.
         + recognize. eauto with lia. }}
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1. nat in *.
+    { assert (j1 = i1 + 1) by lia. subst j1. z in *.
       (* i2 = k + 1 *) subst i2.
       wp_ret.
       intro_merge_aux_post_list.
@@ -1697,8 +1728,7 @@ Proof.
       (* Permutation. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         rewrite (split_seg (i2 + 1) dst i2 j2) by lia. rewrite Hpost2. clarify.
-        rewrite Permutation_app_comm.
-        clarify. recognize. eauto. }
+        rewrite Permutation_app_comm. clarify. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
         sorted_app.
@@ -1708,11 +1738,11 @@ Proof.
         + recognize. eauto.
         + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2. nat in *.
+    { assert (j2 = i2 + 1) by lia. subst j2. z in *.
       wp_blit.
       intro_merge_aux_post_list.
       + unmodified_outside_seg.
-      + rewrite <- Hi2. eapply Permutation_app_comm.
+      + rewrite <- Hi2. recognize. eapply Permutation_app_comm.
       + rewrite <- Hi2. boundary. recognize. eauto. }}
 Qed.
 
@@ -1756,11 +1786,11 @@ Definition optimistic_merge_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   sorted (seg i1 j1 src1) →
   sorted (seg i2 j2 src2) →
   seg i1 j1 src1 `precede` seg i2 j2 src2 →
@@ -1771,6 +1801,10 @@ Definition optimistic_merge_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   valid_seg k limit dst →
   wp (optimistic_merge _src1 _i1 _j1 _src2  _i2 _j2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
+
+(* TODO ICI [length (final_seg _ _ _)] explodes into something complex *)
+(* consider changing the rewrite rules in [length]
+   so that they explode less badly? *)
 
 Lemma wp_optimistic_merge _j1 _j2 _i1 _i2 :
   optimistic_merge_spec _j1 _j2 (_i1, _i2).
@@ -1785,7 +1819,21 @@ Proof.
     assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
     { boundary. recognize. eauto with lia. }
     wp_blit.
-    wp_blit.
+
+    simple eapply wp_bind.
+    wp_op_nude @wp_blit.
+    cbv beta. intros x Hx.
+    z in Hx. length in Hx.
+    arrays. (* wow! *)
+    length in Hx0. (* TODO does nothing! *)
+    assert (k ≤ len dst)%Z by lia. (* TODO slow! *)
+    rewrite* Z.max_l in Hx by lia.
+    z in Hx. (* TODO does not finish! *)
+
+    wp_intros_overwrite _dst.
+
+ICI
+    wp_blit. (* TODO too slow! *)
     wp_ret.
     (* UGLY *)
     match goal with h: isArray _ _ |- _ =>
@@ -1842,11 +1890,11 @@ Definition optimistic_merge_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   sorted (seg i1 j1 src1) →
   sorted (seg i2 j2 src2) →
   seg i1 j1 src1 `precede` seg i2 j2 src2 →
@@ -1926,11 +1974,11 @@ Definition optimistic_merge_2_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 src1 →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 src2 →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   sorted (seg i1 j1 src1) →
   sorted (seg i2 j2 src2) →
   seg i1 j1 src1 `precede` seg i2 j2 src2 →
@@ -2002,11 +2050,11 @@ Definition optimistic_merge_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   ∀ i1, isInt _i1 i1 →
   ∀ j1, isInt _j1 j1 →
   valid_seg i1 j1 dst →
-  (i1 < j1)%nat →
+  (i1 < j1)%Z →
   ∀ i2, isInt _i2 i2 →
   ∀ j2, isInt _j2 j2 →
   valid_seg i2 j2 dst →
-  (i2 < j2)%nat →
+  (i2 < j2)%Z →
   sorted (seg i1 j1 dst) →
   sorted (seg i2 j2 dst) →
   seg i1 j1 dst `precede` seg i2 j2 dst →
@@ -2015,7 +2063,7 @@ Definition optimistic_merge_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j2 →
   (* The first source segment and the destination segment must be disjoint. *)
-  (j1 ≤ k ∨ limit ≤ i1)%nat →
+  (j1 ≤ k ∨ limit ≤ i1)%Z →
   valid_seg k limit dst →
   wp (optimistic_merge_12 _dst _i1 _j1 _i2 _j2 _k)
      (merge_aux_post dst dst i1 j1 i2 j2 dst k).
@@ -2096,7 +2144,7 @@ Definition sortto'_post dst i k n _dst :=
   (* Outside of the source and destination segments,
      the destination array is unmodified. *)
   ( ∀ a b,
-    (a ≤ b ≤ len dst)%nat →
+    (a ≤ b ≤ len dst)%Z →
     disjoint_seg a b i (i + n) →
     disjoint_seg a b k (k + n) →
     seg a b dst' = seg a b dst
@@ -2424,7 +2472,7 @@ Proof.
     (* Nothing has been modified outside of this segment. *)
     { rewrite HpostC1, HpostB1, HpostA3 by lia. reflexivity. }
     (* Permutation. *)
-    { replace n with (n1 + n2) in * by lia. nat in *.
+    { replace n with (n1 + n2) in * by lia. z in *.
       rewrite HpostC2.
       rewrite HpostB2.
       rewrite frameA, HpostA5.
@@ -2509,7 +2557,7 @@ Lemma wp_merge :
   isArray b ys →
   sorted ys →
   xs `precede` ys →
-  (len xs + len ys ≤ max_array_length)%nat →
+  (len xs + len ys ≤ max_array_length)%Z →
   wp (merge a b) (λ c, ∃ zs,
     isArray c zs ∧
     zs ≃ xs ++ ys ∧
@@ -2670,7 +2718,7 @@ Lemma wp_merge' `{Inhabited A, PreOrder A R, LebSpec A R} :
   ∀ b ys,
   isArray b ys →
   Sorted R ys →
-  (len xs + len ys ≤ max_array_length)%nat →
+  (len xs + len ys ≤ max_array_length)%Z →
   wp (merge a b) (λ c, ∃ zs,
     isArray c zs ∧
     zs ≃ xs ++ ys ∧
