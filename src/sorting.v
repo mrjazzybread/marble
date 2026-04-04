@@ -23,21 +23,6 @@ Local Lemma cons_is_append {A} x (xs : list A) :
   x :: xs = {[x]} ++ xs.
 Proof. eauto. Qed.
 
-Local Lemma intro_lookup_zero `{Inhabited A} x (xs : list A) :
-  x = ({[x]} ++ xs) !!! 0.
-Proof. reflexivity. Qed.
-
-Local Lemma intro_lookup_succ `{Inhabited A} x (xs : list A) j :
-  valid j xs →
-  xs !!! j = ({[x]} ++ xs) !!! (j + 1).
-Proof. intros. list. eauto. Qed.
-
-Local Lemma list_elem_of_singleton {A} (x y : A) :
-  x ∈ ({[y]} : list A) ↔ x = y.
-Proof.
-  change {[y]} with [y]. apply list_elem_of_singleton.
-Qed.
-
 (* -------------------------------------------------------------------------- *)
 
 Section JustTransitive.
@@ -435,8 +420,8 @@ Lemma smt_sorted_uncons x xs :
   smt_sorted xs.
 Proof.
   unfold smt_sorted. intros Hsorted. intros. length in *.
-  rewrite (intro_lookup_succ x xs i) by lia.
-  rewrite (intro_lookup_succ x xs j) by lia.
+  rewrite <- (lookup_total_app_singleton_succ x xs i) by lia.
+  rewrite <- (lookup_total_app_singleton_succ x xs j) by lia.
   eauto with lia.
 Qed.
 
@@ -468,8 +453,8 @@ Proof.
     intros y Hy.
     rewrite list_elem_of_lookup_total in Hy.
     destruct Hy as (j & ? & ?). subst y.
-    rewrite (intro_lookup_zero x xs).
-    rewrite (intro_lookup_succ x xs j) by lia.
+    rewrite <- (lookup_total_app_singleton_zero x xs).
+    rewrite <- (lookup_total_app_singleton_succ x xs j) by lia.
     eapply Hsmt; length; lia.
 Qed.
 
