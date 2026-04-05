@@ -688,9 +688,8 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
   wp (list_length_aux _n xs) (λ _i, isInt _i (n + len xs)).
 Proof.
   induction xs as [| x xs ]; simpl list_length_aux; list; intros.
-  { wp_ret. list. eauto. }
-  { wp_op_shadow IHxs _n.
-    tc. }
+  { wp_ret. tc. }
+  { wp_op_shadow IHxs _n. tc. }
 Qed.
 
 (* The public specification of [list_length]. *)
