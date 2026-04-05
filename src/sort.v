@@ -60,57 +60,105 @@ Ltac same_lookup_total :=
 Ltac listz_easy ::=
   solve [ eauto 2 | same_lookup_total ].
 
+(* [related] solves the goal or fails. *)
+
+(* TODO combine [related] and [same_lookup_total]? *)
+(* TODO may want to also use [exploit_sorted]? *)
 Ltac related :=
   try subst;
   match goal with
-  (* TODO may want to also use [exploit_sorted] *)
+
   | h: Sorted ?R (seg _ _?xs) |- ?R (?xs !!! ?i) (?xs !!! ?j) =>
+      (* Two lookups may be related because they hit a sorted segment. *)
       eapply exploit_sorted_seg; [
         exact h
       | listz_arith | listz_arith | listz_arith | listz_arith | listz_arith ]
-  | h: ?x ∈ seg _ _ _ |- ?R ?x _ =>
-      (* We want to prove something about [?x] and we know that [x] is
-         a member of a certain segment. This means that there exists
-         an index [j] within a certain range such that [x] is [xs !!! j].
-         Perform this replacement and continue. *)
+
+  | h: pairwise ?R (seg _ _ _) (seg _ _ _) |- ?R _ _ =>
+      (* Two lookups may be related because they hit two related segments. *)
+      eapply exploit_seg_pairwise_seg; [
+        exact h | solve [eauto] | solve [eauto] | listz_arith | listz_arith ]
+
+  | h: ?x ∈ seg _ _ _ |- ?R ?x ?y =>
+      (* We want to relate [x] with [y] and we know that [x] is a member
+         of a certain segment. This means that there exists an index [j]
+         within a certain range such that [x] is [xs !!! j]. Perform this
+         replacement and continue. *)
       rewrite lookup_total_elem_seg in h by listz_arith;
       destruct h as (? & ? & h);
       rewrite h;
       related
+
   | _ =>
-      solve [ eauto ] (* TODO combine with [same_lookup_total] *)
+      (* Perhaps other recipes are applicable. *)
+      solve [ eauto 3 with related ]
   end.
 
-Global Ltac pw :=
+(* [boundary] applies the lemma [boundary_test] to a goal of the form
+   [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves
+   the third subgoal, [xs ≼ ys], open. *)
+
+Global Ltac boundary :=
+  eapply boundary_test; [ sorted | sorted | intros ? ?; list ]
+
+(* [sorted_app] applies the lemma [Sorted_app] to a goal of the form
+   [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves
+   the third subgoal, [xs ≼ ys], open. *)
+
+with sorted_app :=
+  eapply Sorted_app; [ sorted | sorted |]
+
+(* [pw] solves a goal of the form [xs ⋅≼ ys]. *)
+
+(* [pw] solves the goal or fails. *)
+
+with pw :=
   match goal with (* can backtrack *)
+
   | |- pairwise _ [] _ =>
+      (* One side is the empty list. Easy. *)
       eapply pairwise_nil_left
   | |- pairwise _ _ [] =>
+      (* One side is the empty list. Easy. *)
       eapply pairwise_nil_right
+
   | |- pairwise _ {[_]} {[_]} =>
+      (* Both sides are singletons. The goal is transformed into
+         an obligation to prove [x < y]. *)
       rewrite pairwise_singleton_singleton_iff;
       related
+
   | h: pairwise _ {[?x]} ?zs |- pairwise _ {[?y]} ?zs =>
+      (* The goal is identical to a hypothesis up to an equation [x = y]. *)
       replace y with x by eauto; exact h
   | h: pairwise _ ?zs {[?x]} |- pairwise _ ?zs {[?y]} =>
+      (* The goal is identical to a hypothesis up to an equation [x = y]. *)
       replace y with x by eauto; exact h
+
   | h: pairwise _ (seg _ _ _) (seg _ _ _) |-
        pairwise _ (seg _ _ _) (seg _ _ _) =>
+      (* To prove that two segments are related, it suffices to show that
+         are subsegments of segments which we know are related. *)
       eapply seg_pairwise_seg_variance;
         [ exact h | listz_arith | listz_arith | listz_arith | listz_arith ]
-  (* One option is to perform a boundary test. *)
+
   | |- pairwise ?R ?xs ?ys =>
-      eapply boundary_test; [ sorted | sorted
-                            | intros _ _; list; related ]
-  (* Another option is to decompose concatenations. *)
+      (* If the lists [xs] and [ys] are sorted, then, to prove [xs ≼ ys],
+         it suffices to compare the two elements at the boundary test. *)
+      solve [boundary; related]
+
   | |- pairwise _ _ (_ ++ _) =>
+      (* Another option is to decompose concatenations. *)
       rewrite pairwise_app_right_iff; split; pw
   | |- pairwise _ (_ ++ _) _ =>
       rewrite pairwise_app_left_iff; split; pw
+
   | _ =>
       (* An assumption? *)
       solve [ eauto 2 ]
   end
+
+(* [sorted] solves the goal or fails. *)
 
 with sorted :=
   match goal with
@@ -136,11 +184,10 @@ with sorted :=
   | |- Sorted _ (?xs ++ {[?y]} ++ ?zs) =>
       (* The special case of two concatenations
          with a singleton in the middle. *)
-      eapply Sorted_app_app; [ sorted | eauto with pw | eauto with pw ]
+      eapply Sorted_app_app; [ sorted | pw | pw ]
  *)
   | |- Sorted _ (?xs ++ ?zs) =>
-      (* A concatenation. *)
-      eapply Sorted_app; [ sorted | sorted | eauto with pw ]
+      sorted_app; pw
   | h: Sorted ?R ?xs |- Sorted ?R ?ys =>
       (* Exploiting an assumption, up to an equality of lists. *)
       let Heq := fresh in
@@ -149,25 +196,6 @@ with sorted :=
       (* An assumption? *)
       solve [eauto 2]
   end.
-
-Global Hint Extern 1 (pairwise _ _ _) =>
-  pw
-: pw.
-
-Global Hint Extern 1 (Sorted _ _) =>
-  sorted
-: sorted.
-
-(* The following local tactics are quite helpful. *)
-(* TODO kill *)
-Local Ltac sorted_app :=
-  first [ eapply Sorted_app_app | eapply Sorted_app ];
-  tc3.
-
-(* TODO kill *)
-Local Ltac boundary :=
-  first [ apply boundary_test | apply sorted_app_boundary ];
-  tc3; intros _ _; list.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -243,6 +271,10 @@ Infix "`precede`" := (pairwise R')
 
 (* We specialize this lemma so that [eauto] accepts to use it as a hint. *)
 
+(* In combination with [le_le_lex], this lemma can exploit the hypotheses
+   [seg i1 j1 xs1 `precede` seg i2 j2 xs2] and [x1 ≤ x2] so as to prove
+   [x1 `lex` x2]. *)
+
 Local Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
   seg i1 j1 xs1 `precede` seg i2 j2 xs2 →
   x1 = xs1 !!! k1 →
@@ -254,7 +286,7 @@ Proof.
   intros. eapply exploit_seg_pairwise_seg; eauto.
 Qed.
 
-Local Hint Resolve exploit_seg_pairwise_seg : lia.
+Local Hint Resolve exploit_seg_pairwise_seg : related.
 
 (* The following hints seem to be needed. I don't understand why
    reflexivity and transitivity do not work out of the box. *)
@@ -305,10 +337,13 @@ Proof.
   + intro. exfalso. unfold strict in *. tauto.
 Qed.
 
+Local Hint Resolve lt_lex : core.
+
 Lemma le_le_lex x y : x ≤ y → x `precedes` y → x `lex` y.
 Proof. eauto. Qed.
 
-Local Hint Resolve lt_lex : core.
+Local Hint Resolve le_le_lex : related.
+Local Hint Extern 1 (_ `precedes` _) => related : related.
 
 (* [lex x y] implies [x ≤ y]. *)
 
@@ -819,7 +854,7 @@ Local Definition dst_inv src srcofs dst dstofs i j :=
   {[xi]} ≼ seg (j + 1) (dstofs + i + 1) dst.
 
 Local Ltac intro_dst_inv :=
-  split; [| split ]; cbv zeta.
+  split; [| split ]; cbv zeta; list.
 
 Local Ltac elim_dst_inv :=
   match goal with h: dst_inv _ _ _ _ _ _ |- _ =>
@@ -867,16 +902,6 @@ Local Ltac elim_inner_inv dst' :=
 
 (* The public specification of [isortto]. *)
 
-(* TODO kill *)
-(* if we choose the wrong hypothesis [h], we may end up with a false goal *)
-Ltac sorted_eq :=
-  match goal with h: sorted ?xs |- sorted ?ys =>
-    let Heq := fresh in
-    assert (Heq: xs = ys); [ | rewrite Heq in h; exact h ]
-  end;
-  simplify_list_equality_goal;
-  chop_list_equality_goal.
-
 Lemma wp_isortto _src src _dst dst :
   isArray _src src →
   ∀Int _srcofs srcofs,
@@ -904,8 +929,7 @@ Proof.
     { (* The inner loop. *)
       wp_xiter_down (inner_inv src srcofs dst dstofs i).
       (* Initialization of the inner loop. *)
-      { intro_inner_inv. intro_dst_inv; list; eauto 2 with pw.
-        (* Permutation. *)
+      { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
         + rewrite Hdata. join_segments. reflexivity. }
       (* The body of the inner loop. *)
       clear dependent _dst.
@@ -917,28 +941,24 @@ Proof.
       wp_get xj.
       wp_if.
       (* Case [xj ≤ xi]. *)
-      { wp_break. intro_inner_inv.
-        + recognize. eapply le_le_lex. assumption.
+      { wp_break. intro_inner_inv. elim_dst_inv.
+        + recognize.
+          eapply le_le_lex; [ assumption |].
           (* Proving [xj `precedes` xi] is the slightly tricky part.
              The argument is that [xj] comes from the extended source
              segment, whose rightmost element is [xi]. This is the only
              point where stability creates an extra proof obligation. *)
-          elim_dst_inv.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
           { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
           related. }
       (* Case [xi < xj]. *)
       { elim_dst_inv.
         wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv; list.
+        intro_inner_inv. intro_dst_inv; [| sorted | pw ].
         (* Permutation. *)
         { rewrite <- Hpermut. clarify. (* TODO slow *)
           rewrite (split_seg j dst'' dstofs (j + 1)) by lia. clarify.
-          recognize. eapply Permutation_app_comm. }
-        (* Sortedness except at [j]. *)
-        { sorted. }
-        (* Ordering above [xi]. *)
-        { recognize. pairwise. eauto. }}} (* TODO [pw] fails *)
+          recognize. eapply Permutation_app_comm. }}}
     (* Epilogue of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
       intros (j&Hj). z in Hj. unpack in Hj.
@@ -949,19 +969,15 @@ Proof.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv;
-        rewrite insert_seg by (list; lia); z.
+        rewrite insert_seg by listz_arith; z; [| sorted ].
         (* Permutation. *)
-        { rewrite <- Hpermut. recognize. reflexivity. }
-        (* Sortedness. *)
-        { sorted. }}
+        { rewrite <- Hpermut. recognize. reflexivity. }}
       (* Case: the loop has finished normally. *)
-      { assert (j = dstofs) by tauto. subst j.
+      { assert (j = dstofs) by tauto. subst j. list in Hpermut.
         wp_set.
-        intro_isortto_inv.
+        intro_isortto_inv; [| sorted ].
         (* Permutation. *)
-        { rewrite <- Hpermut. recognize. list. reflexivity. }
-        (* Sortedness. *)
-        { sorted. }}}}
+        { rewrite <- Hpermut. recognize. reflexivity. }}}}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1029,18 +1045,18 @@ Proof.
     elim_isortto_inv xs'.
     (* [xs'] is the content of the array
        upon entry into the body of the outer loop. *)
-    wp_get xi.
+    wp_get xi. wp_last Hxi.
     (* [xi] is the same value that would have been read out of the initial
        unmodified array. This is the key reason why the proof goes through
-       with almost no change. *)
+       with almost no change. This exploits [Hunmodified]. *)
     assert (KEY: xs' !!! (srcofs + i) = xs !!! (srcofs + i)).
     { eapply equal_lookups_to_equal_segs; eauto with lia. }
+    rewrite KEY in Hxi; clear KEY.
     eapply wp_bind.
     { (* The inner loop. *)
       wp_xiter_down (inner_inv xs srcofs xs dstofs i).
       (* Initialization of the inner loop. *)
-      { intro_inner_inv. intro_dst_inv; list; eauto 2 with pw.
-         (* Permutation. *)
+      { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
         + rewrite Hdata. join_segments. reflexivity. }
       (* The body of the inner loop. *)
       clear dependent a.
@@ -1052,28 +1068,24 @@ Proof.
       wp_get xj.
       wp_if.
       (* Case [xj ≤ xi]. *)
-      { wp_break. intro_inner_inv.
-        + recognize. eapply le_le_lex. assumption.
+      { wp_break. intro_inner_inv. elim_dst_inv.
+        + recognize.
+          eapply le_le_lex; [ assumption |].
           (* Proving [xj `precedes` xi] is the slightly tricky part.
              The argument is that [xj] comes from the extended source
              segment, whose rightmost element is [xi]. This is the only
              point where stability creates an extra proof obligation. *)
-          elim_dst_inv.
           assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) xs).
           { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
-          rewrite KEY. related. }
+          related. }
       (* Case [xi < xj]. *)
       { elim_dst_inv.
         wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv; list.
+        intro_inner_inv. intro_dst_inv; [| sorted | pw ].
         (* Permutation. *)
         { rewrite <- Hpermut. clarify.
           rewrite (split_seg j xs'' dstofs (j + 1)) by lia. clarify.
-          recognize. eapply Permutation_app_comm. }
-        (* Sortededness except at [j]. *)
-        { sorted. }
-        (* Ordering above [xi]. KEY is used here. *)
-        { recognize. pairwise. eauto. }}}
+          recognize. eapply Permutation_app_comm. }}}
     (* Epilogue of the inner loop. *)
     { clear dependent a. intros [ a out ].
       intros (j&Hj). z in Hj. unpack in Hj.
@@ -1084,19 +1096,15 @@ Proof.
       (* Case: we have broken out. *)
       { wp_set.
         intro_isortto_inv;
-        rewrite insert_seg by (list; lia); z.
+        rewrite insert_seg by listz_arith; z; [| sorted ].
         (* Permutation. *)
-        { rewrite <- Hpermut. recognize. reflexivity. }
-        (* Sortedness. [KEY] is used here. *)
-        { recognize. sorted. }}
+        { rewrite <- Hpermut. recognize. reflexivity. }}
       (* Case: the loop has finished normally. *)
-      { assert (j = dstofs) by tauto. subst j.
+      { assert (j = dstofs) by tauto. subst j. list in Hpermut.
         wp_set.
-        intro_isortto_inv.
+        intro_isortto_inv; [| sorted ].
         (* The destination segment contains a permitted permutation. *)
-        { rewrite <- Hpermut. recognize. list. reflexivity. }
-        (* Sortedness. [KEY] is used here. *)
-        { recognize. sorted. }}}}
+        { rewrite <- Hpermut. recognize. reflexivity. }}}}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1221,6 +1229,7 @@ Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
 Local Ltac intro_merge_aux_post :=
   unfold merge_aux_post; eexists;
   split; [ eauto 2 | split; [ list; lia | pack ] ].
+                            (* listz_arith? TODO *)
 
 (* TODO now useless? *)
 Local Ltac intro_merge_aux_post_list :=
@@ -1271,8 +1280,21 @@ Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   wp (merge_aux _src1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
+(* TODO? *)
 Local Ltac tc ::=
   eauto 7 with typeclass_instances lia.
+
+(* TODO *)
+Local Ltac wp_precondition_hook ::=
+  autorewrite with z clength wp_precondition_hook;
+  match goal with
+  | |- Sorted _ _ =>
+      sorted
+  | |- pairwise _ _ _ =>
+      pw
+  | _ =>
+      eauto 6 with lia
+  end.
 
 (* TODO *)
 Local Ltac split_seg i xs :=
@@ -1283,8 +1305,7 @@ Lemma wp_merge_aux _j1 _j2 _i1 _i2 :
 Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
-  unfold merge_aux_spec. intros.
-  (* Now examine the code. *)
+  unfold merge_aux_spec. intros. arrays.
   autorewrite with merge_aux.
   wp_if.
   (* Case [x1 ≤ x2]. *)
@@ -1293,9 +1314,7 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
-      eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
-      clear dependent _dst. intros _dst Hpost.
+      wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _dst. wp_last Hpost.
       elim_merge_aux_post dst'.
       intro_merge_aux_post.
       (* Unmodified. *)
@@ -1305,12 +1324,10 @@ Proof.
         split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
       (* Sortedness. *)
       { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        sorted_app.
+        sorted_app. sorted.
         rewrite Hpost2.
         (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        pairwise. split; boundary.
-        + subst x1. eapply exploit_sorted_seg; eauto with lia.
-        + recognize. eauto with lia. }}
+        pairwise. split; boundary. }} (* TODO [pw] works but is slow *)
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
