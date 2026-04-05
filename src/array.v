@@ -377,6 +377,7 @@ Ltac isArray :=
     cut (xs = ys); [
       let Heq := fresh in intro Heq; try rewrite <- Heq; exact h
     | clear h;
+      try subst; (* this can help *)
       lego
     ]
   end.
