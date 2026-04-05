@@ -25,13 +25,15 @@ Set Universe Polymorphism.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
-(* TODO
 Local Ltac wp_intros_hook Hx ::=
   (* Simplify expressions that involve lists and arithmetic. *)
   list in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
   unpack in Hx.
- *)
+
+(* TODO *)
+Local Ltac split_seg i xs :=
+  rewrite (split_seg i xs) by lia.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1228,8 +1230,7 @@ Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
 
 Local Ltac intro_merge_aux_post :=
   unfold merge_aux_post; eexists;
-  split; [ eauto 2 | split; [ list; lia | pack ] ].
-                            (* listz_arith? TODO *)
+  split; [ eauto 2 | split; [ listz_arith | pack ] ].
 
 (* TODO now useless? *)
 Local Ltac intro_merge_aux_post_list :=
@@ -1244,6 +1245,65 @@ Local Ltac elim_merge_aux_post dst' :=
     unpack in h
   end.
   (* TODO review *)
+
+Lemma merge_aux_post_implication_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
+  x1 = src1 !!! i1 →
+  x2 = src2 !!! i2 →
+  x1 ≤ x2 →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  valid_seg i1 j1 src1 →
+  valid_seg i2 j2 src2 →
+  valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
+  (i1 + 1 < j1)%Z →
+  (i2 < j2)%Z →
+  merge_aux_post src1 src2 (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
+  merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
+Proof.
+  intros. wp_last Hpost.
+  elim_merge_aux_post dst'.
+  intro_merge_aux_post.
+  (* Unmodified. *)
+  { rewrite Hpost1 by lia. list. reflexivity. }
+  (* Permutation. *)
+  { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+    split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
+  (* Sortedness. *)
+  { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+    sorted_app. rewrite Hpost2.
+    pairwise. split; pw. }
+Qed.
+
+Lemma merge_aux_post_implication_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
+  x1 = src1 !!! i1 →
+  x2 = src2 !!! i2 →
+  x2 < x1 →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  valid_seg i1 j1 src1 →
+  valid_seg i2 j2 src2 →
+  valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
+  (i1 < j1)%Z →
+  (i2 + 1 < j2)%Z →
+  merge_aux_post src1 src2 i1 j1 (i2 + 1) j2 (<[k:=x2]> dst) (k + 1) _dst →
+  merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
+Proof.
+  intros. wp_last Hpost.
+  elim_merge_aux_post dst'.
+  intro_merge_aux_post.
+  (* Unmodified. *)
+  { rewrite Hpost1 by lia. list. reflexivity. }
+  (* Permutation. *)
+  { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+    split_seg (i2 + 1) src2. rewrite Hpost2. clarify.
+    recognize. eapply Permutation_app_comm. }
+  (* Sortedness. *)
+  { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
+    sorted_app. rewrite Hpost2.
+    pairwise. split; pw. }
+Qed.
 
 (* The specification of [merge_aux]. *)
 
@@ -1296,10 +1356,6 @@ Local Ltac wp_precondition_hook ::=
       eauto 6 with lia
   end.
 
-(* TODO *)
-Local Ltac split_seg i xs :=
-  rewrite (split_seg i xs) by lia.
-
 Lemma wp_merge_aux _j1 _j2 _i1 _i2 :
   merge_aux_spec _j1 _j2 (_i1, _i2).
 Proof.
@@ -1314,60 +1370,34 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       (* We are now looking at the recursive call. *)
-      wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _dst. wp_last Hpost.
-      elim_merge_aux_post dst'.
-      intro_merge_aux_post.
-      (* Unmodified. *)
-      { rewrite Hpost1 by lia. list. reflexivity. }
-      (* Permutation. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
-      (* Sortedness. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        sorted_app. sorted.
-        rewrite Hpost2.
-        (* {[x1]} ≼ seg (i1 + 1) j1 src1 ++ seg i2 j2 src2 *)
-        pairwise. split; boundary. }} (* TODO [pw] works but is slow *)
+      wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _dst.
+      eauto using merge_aux_post_implication_1. }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (j1 = i1 + 1) by lia. subst j1.
       wp_blit.
-      intro_merge_aux_post_list. (* TODO very slow *)
+      (* TODO prove lemma here *)
+      intro_merge_aux_post.
       + unmodified_outside_seg.
-      + recognize. reflexivity.
+      + list. recognize. reflexivity.
       (* The fact that [x1] precedes [x2] is used here. *)
-      + recognize. sorted_app. boundary. recognize. eauto with lia. }}
+      + list. sorted. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       (* We are now looking at the recursive call. *)
-      eapply wp_conseq.
-      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
-      clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post dst'.
-      intro_merge_aux_post.
-      (* Unmodified. *)
-      { rewrite Hpost1 by lia. list. reflexivity. }
-      (* Permutation. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i2 + 1) src2. rewrite Hpost2. clarify.
-        recognize. eapply Permutation_app_comm. }
-      (* Sortedness. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        sorted_app.
-        rewrite Hpost2.
-        (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        pairwise. split; boundary.
-        + recognize. eauto.
-        + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
+      wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _dst. wp_last Hpost.
+      (* TODO prove lemma here *)
+      eauto using merge_aux_post_implication_2. }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (j2 = i2 + 1) by lia. subst j2.
       wp_blit.
-      intro_merge_aux_post_list.
+      (* TODO prove lemma here *)
+      intro_merge_aux_post.
       + unmodified_outside_seg.
-      + recognize. eapply Permutation_app_comm.
-      + recognize. sorted_app. boundary. recognize. eauto. }}
+      + list. recognize. eapply Permutation_app_comm.
+      + list. sorted. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
