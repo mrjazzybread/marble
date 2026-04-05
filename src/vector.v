@@ -317,7 +317,7 @@ Proof.
   wp_length _c.
   wp_op wp_next_capacity _c'.
   wp_bind_eq.
-  wp_op_overwrite wp_grow a.
+  wp_op_shadow wp_grow a.
   eauto with lia.
 Qed.
 
@@ -356,10 +356,10 @@ Proof.
     (* Case: there is still room. *)
     + wp_ret. eauto with lia.
     (* Case: the array must be grown. *)
-    + wp_op_overwrite wp_really_ensure_capacity a.
+    + wp_op_shadow wp_really_ensure_capacity a.
       eauto. }
   clear dependent unoccupied. (* A bit ad hoc. *)
-  wp_intros_overwrite a.
+  wp_intros_shadow a.
   destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.
@@ -536,7 +536,7 @@ End Operations.
 
 Global Ltac wp_steal_array :=
   match goal with |- context[steal_array ?a] =>
-    wp_op_overwrite wp_steal_array a
+    wp_op_shadow wp_steal_array a
   end.
 
 Global Ltac wp_of_array b :=

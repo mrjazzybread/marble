@@ -24,15 +24,15 @@ Global Ltac wp_intros x :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_intros_overwrite x] first invokes [wp_intros x'], where [x'] is
-   fresh, then forgets everything about [x] and renames [x'] into [x]. It
-   should (must) be used when [x'] represents a new array that has been
-   obtained by updating the array [x], or more generally, a new mutable data
-   structure that has been obtained by updating the data structure [x]. This
-   helps keep the goal readable and ensures mutable data structures are used
+(* [wp_intros_shadow x] first invokes [wp_intros x'], where [x'] is fresh,
+   then forgets everything about [x] and renames [x'] into [x]. It should
+   (must) be used when [x'] represents a new array that has been obtained by
+   updating the array [x], or more generally, a new mutable data structure
+   that has been obtained by updating the data structure [x]. This helps
+   keep the goal readable and ensures mutable data structures are used
    linearly. *)
 
-Global Ltac wp_intros_overwrite x :=
+Global Ltac wp_intros_shadow x :=
   let x' := fresh in
   wp_intros x';
   clear dependent x;
@@ -66,23 +66,23 @@ Global Ltac wp_op_nude lemma :=
    the name [x] in the second subgoal. The goal should have the form
    [wp (op ...) Q] or [wp (do x ← op ... ; ...) Q]. *)
 
-(* [wp_op_overwrite lemma x] is identical, except it uses
-   [wp_intros_overwrite x] instead of [wp_intros x]. *)
+(* [wp_op_shadow lemma x] is identical, except it uses
+   [wp_intros_shadow x] instead of [wp_intros x]. *)
 
 Global Ltac wp_op lemma x :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
   [ wp_op_nude lemma | wp_intros x ].
 
-Global Ltac wp_op_overwrite lemma x :=
+Global Ltac wp_op_shadow lemma x :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
-  [ wp_op_nude lemma | wp_intros_overwrite x ].
+  [ wp_op_nude lemma | wp_intros_shadow x ].
 
-(* [wp_op_overwrite_pair lemma x y] is an ad hoc variant of
-   [wp_op_overwrite] that should be used when the result of an
-   operation is a pair (x, y). It is needed because [clear dependent]
-   does not accept an intropattern as an argument, I believe. *)
+(* [wp_op_shadow_pair lemma x y] is an ad hoc variant of [wp_op_shadow] that
+   should be used when the result of an operation is a pair (x, y). It is
+   needed because [clear dependent] does not accept an intropattern as an
+   argument, I believe. *)
 
-Ltac wp_op_overwrite_pair lemma x y :=
+Ltac wp_op_shadow_pair lemma x y :=
   let p := fresh in
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
   [ wp_op_nude lemma
@@ -97,9 +97,9 @@ Ltac wp_op_overwrite_pair lemma x y :=
 
 (* [wp_last H] renames the most recently introduced hypothesis [H]. *)
 
-(* The tactics [wp_intros] and [wp_intros_overwrite] do not allow
-   naming the hypotheses that they introduce. In case there is only
-   one such hypothesis, [wp_last] allows renaming it after the fact. *)
+(* The tactics [wp_intros] and [wp_intros_shadow] do not allow naming the
+   hypotheses that they introduce. In case there is only one such
+   hypothesis, [wp_last] allows renaming it after the fact. *)
 
 Ltac wp_last H :=
   match goal with h: _ |- _ =>

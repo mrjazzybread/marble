@@ -358,7 +358,7 @@ Ltac wp_get x :=
 
 Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
-    wp_op_overwrite wp_set a
+    wp_op_shadow wp_set a
   end.
 
 Ltac wp_make a :=
@@ -569,8 +569,8 @@ Proof.
   (* Case: the future is empty. *)
   { wp_ret. eauto. }
   (* Case: the future begins with [x]. *)
-  { wp_op_overwrite Hstep s.
-    wp_op_overwrite IHfuture s.
+  { wp_op_shadow Hstep s.
+    wp_op_shadow IHfuture s.
     eauto. }
 Qed.
 
@@ -619,10 +619,10 @@ Proof.
   ITER;
   simpl list_iteri; subst; list in *.
   { wp_ret. eauto. }
-  { wp_op_overwrite Hstep s.
+  { wp_op_shadow Hstep s.
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
-    wp_op_overwrite (IHfuture (history ++ {[x]})) s.
+    wp_op_shadow (IHfuture (history ++ {[x]})) s.
     eauto with lia. }
 Qed.
 
@@ -656,8 +656,8 @@ Proof.
   { assert (i < len xs) by lia.
     assert (x = xs !!! i) by (lookup_through_seg; eauto).
     assert (final_seg (i + 1) xs = future) by (seg_through_seg; eauto).
-    wp_op_overwrite Hstep s.
-    wp_op_overwrite IHfuture s.
+    wp_op_shadow Hstep s.
+    wp_op_shadow IHfuture s.
     eauto with lia. }
 Qed.
 
@@ -687,7 +687,7 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
 Proof.
   induction xs as [| x xs ]; simpl list_length_aux; list; intros.
   { wp_ret. list. eauto. }
-  { wp_op_overwrite IHxs _n.
+  { wp_op_shadow IHxs _n.
     tc. }
 Qed.
 
@@ -953,9 +953,9 @@ End Blit.
 Ltac wp_blit :=
   match goal with
   | |- context[blit _ _ ?b _ _] =>
-      wp_op_overwrite wp_blit b
+      wp_op_shadow wp_blit b
   | |- context[blit' ?a _ _ _] =>
-      wp_op_overwrite wp_blit' a
+      wp_op_shadow wp_blit' a
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -1113,7 +1113,7 @@ End Fill.
 
 Ltac wp_fill :=
   match goal with |- context[fill ?a _ _ _] =>
-    wp_op_overwrite wp_fill a
+    wp_op_shadow wp_fill a
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -1487,7 +1487,7 @@ Proof.
   (* The loop body. *)
   { wp_up_intros j s. intros _j ?.
     wp_get x.
-    wp_op_overwrite Hstep s.
+    wp_op_shadow Hstep s.
     wp_ret. eauto. }
 Qed.
 

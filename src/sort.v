@@ -24,6 +24,14 @@ Set Universe Polymorphism.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
+(* TODO
+Local Ltac wp_intros_hook Hx ::=
+  (* Simplify expressions that involve lists and arithmetic. *)
+  list in Hx;
+  (* Decompose existential quantifiers and conjunctions. *)
+  unpack in Hx.
+ *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* Local hints. *)
@@ -1830,7 +1838,7 @@ Proof.
     rewrite* Z.max_l in Hx by lia.
     z in Hx. (* TODO does not finish! *)
 
-    wp_intros_overwrite _dst.
+    wp_intros_shadow _dst.
 
 ICI
     wp_blit. (* TODO too slow! *)
@@ -2184,10 +2192,9 @@ Proof.
   intros _n IH.
   unfold sortto'_spec. intros.
   autorewrite with sortto'.
-  assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
   wp_if.
   (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto' _dst'. (* TODO wp_op_overwrite? *)
+  { wp_op wp_isortto' _dst'. (* TODO wp_op_shadow? *)
     clear dependent _dst. rename _dst' into _dst.
     elim_isortto_inv dst'. intro_sortto'_post. }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
@@ -2196,7 +2203,7 @@ Proof.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
     assert (isInt _n2 n2) by tc.
     (* The first recursive call. *)
-    wp_op_overwrite IH _dst. wp_last HpostA.
+    wp_op_shadow IH _dst. wp_last HpostA.
     elim_sortto'_post dst'.
     (* This call has not affected the first half of the source segment. *)
     assert (frameA: seg i (i + n1) dst' = seg i (i + n1) dst)
@@ -2204,7 +2211,7 @@ Proof.
     assert (Sorted R' (seg i (i + n1) dst'))
       by (rewrite frameA; eauto with lia).
     (* The second recursive call. *)
-    wp_op_overwrite IH _dst. wp_last HpostB.
+    wp_op_shadow IH _dst. wp_last HpostB.
     elim_sortto'_post dst''.
     (* This call has not affected the destination segment.
        In particular, its second half is unmodified. *)
@@ -2219,7 +2226,7 @@ Proof.
     { rewrite frameB. rewrite HpostB2. rewrite HpostA2. rewrite frameA.
       eapply split_sorted_seg; eauto 2 with lia. }
     (* The third call: merging the sorted halves. *)
-    wp_op_overwrite wp_optimistic_merge_12 _dst. wp_last HpostC.
+    wp_op_shadow wp_optimistic_merge_12 _dst. wp_last HpostC.
     elim_merge_aux_post dst'''.
     (* Conclude. *)
     wp_ret. intro_sortto'_post.
@@ -2322,10 +2329,9 @@ Proof.
   intros _n IH.
   unfold sortto_spec. intros.
   autorewrite with sortto.
-  assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
   wp_if.
   (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto _dst'. (* TODO wp_op_overwrite? *)
+  { wp_op wp_isortto _dst'. (* TODO wp_op_shadow? *)
     clear dependent _dst. rename _dst' into _dst.
     elim_isortto_inv dst'.
     wp_ret. intro_sortto_post. }
@@ -2335,7 +2341,7 @@ Proof.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
     assert (isInt _n2 n2) by tc.
     (* The first recursive call. *)
-    wp_op_overwrite_pair IH _src _dst. wp_last HpostA.
+    wp_op_shadow_pair IH _src _dst. wp_last HpostA.
     elim_sortto_post src' dst'.
     (* This call has not affected the first half of the source segment. *)
     assert (frameA: seg i (i + n1) src' = seg i (i + n1) src)
@@ -2343,14 +2349,14 @@ Proof.
     assert (Sorted R' (seg i (i + n1) src'))
       by (rewrite frameA; eauto with lia).
     (* The second call: a call to [sortto']. *)
-    wp_op_overwrite wp_sortto' _src. wp_last HpostB.
+    wp_op_shadow wp_sortto' _src. wp_last HpostB.
     elim_sortto'_post src''.
     assert (seg (i + n2) (i + n2 + n1) src'' `precede`
             seg (k + n1) (k + n1 + n2) dst').
     { rewrite HpostB2. rewrite HpostA5. rewrite frameA.
       eapply split_sorted_seg; eauto 2 with lia. }
     (* The third call: merging the sorted halves. *)
-    wp_op_overwrite wp_optimistic_merge_2 _dst. wp_last HpostC.
+    wp_op_shadow wp_optimistic_merge_2 _dst. wp_last HpostC.
     elim_merge_aux_post dst'''.
     (* Conclude. *)
     wp_ret. intro_sortto_post.
@@ -2435,10 +2441,9 @@ Lemma wp_sort_seg : ∀ a xs _i i _n n,
      (sort_seg_post xs i n).
 Proof.
   intros. unfold sort_seg.
-  assert (isInt 5 5) by eauto using introIsInt. (* UGLY *)
   wp_if.
   (* Case [n ≤ cutoff]. *)
-  { wp_op_overwrite wp_isortto' a.
+  { wp_op_shadow wp_isortto' a.
     elim_isortto_inv xs'.
     intro_sort_seg_post. }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
@@ -2449,7 +2454,7 @@ Proof.
     (* Allocation of an array. *)
     wp_make t.
     (* The first call. *)
-    wp_op_overwrite_pair wp_sortto a t. wp_last HpostA.
+    wp_op_shadow_pair wp_sortto a t. wp_last HpostA.
     elim_sortto_post xs' dst'. list in *.
     (* This call has not affected the first half of [a]. *)
     assert (frameA: seg i (i + n1) xs' = seg i (i + n1) xs)
@@ -2457,7 +2462,7 @@ Proof.
     assert (Sorted R' (seg i (i + n1) xs'))
       by (rewrite frameA; eauto with lia).
     (* The second call. *)
-    wp_op_overwrite wp_sortto' a. wp_last HpostB.
+    wp_op_shadow wp_sortto' a. wp_last HpostB.
     elim_sortto'_post xs''.
     replace (i + n2 + n1) with (i + n1 + n2) in * by lia.
     assert (seg (i + n2) (i + n1 + n2) xs'' `precede`
@@ -2465,7 +2470,7 @@ Proof.
     { rewrite HpostB2. rewrite HpostA5. rewrite frameA.
       eapply split_sorted_seg; eauto 2 with lia. }
     (* The third call: merging the sorted halves. *)
-    wp_op_overwrite wp_optimistic_merge_1 a. wp_last HpostC.
+    wp_op_shadow wp_optimistic_merge_1 a. wp_last HpostC.
     elim_merge_aux_post xs'''.
     (* Conclude. *)
     wp_ret. intro_sort_seg_post.
@@ -2522,7 +2527,7 @@ Proof.
   wp_length _n.
   assert (Sorted R' (initial_seg (0 + len xs) xs))
     by (list; assumption).
-  wp_op_overwrite wp_sort_seg a. wp_last Hpost.
+  wp_op_shadow wp_sort_seg a. wp_last Hpost.
   elim_sort_seg_post xs'. list in *.
   intro_sort_post.
 Qed.
@@ -2574,7 +2579,7 @@ Proof.
   { rewrite length_zero_iff_nil in *. subst. list.
     wp_copy c. eexists; pack; eauto. }
   wp_make c.
-  wp_op_overwrite wp_optimistic_merge c.
+  wp_op_shadow wp_optimistic_merge c.
   elim_merge_aux_post zs.
   eexists; pack; eauto.
 Qed.
@@ -2680,7 +2685,7 @@ Lemma wp_sort_seg' a xs _i i _n n :
   ).
 Proof.
   intros.
-  wp_op_overwrite (@wp_sort_seg A _ R _ _ _ R' _) a.
+  wp_op_shadow (@wp_sort_seg A _ R _ _ _ R' _) a.
   elim_sort_seg_post xs'.
   eauto 7 using Sorted_covariant.
 Qed.
@@ -2702,7 +2707,7 @@ Lemma wp_sort' `{Inhabited A, PreOrder A R, LebSpec A R} a xs :
   ).
 Proof.
   intros.
-  wp_op_overwrite (@wp_sort A _ R _ _ _ R' _) a.
+  wp_op_shadow (@wp_sort A _ R _ _ _ R' _) a.
   elim_sort_post xs'.
   eauto 6 using Sorted_covariant.
 Qed.
@@ -2733,10 +2738,10 @@ Qed.
 End NoStability.
 
 Global Ltac wp_sort_seg a :=
-  wp_op_overwrite @wp_sort_seg' a.
+  wp_op_shadow @wp_sort_seg' a.
 
 Global Ltac wp_sort a :=
-  wp_op_overwrite @wp_sort' a.
+  wp_op_shadow @wp_sort' a.
 
 Global Ltac wp_merge c :=
   wp_op @wp_merge' c.
