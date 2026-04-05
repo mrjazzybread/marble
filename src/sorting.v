@@ -464,7 +464,7 @@ Proof.
   split; eauto using smt_sorted_sorted, sorted_smt_sorted.
 Qed.
 
-(* Two statements that allow [smt_sorted] to be more easily exploited. *)
+(* These lemmas allow [sorted] and [smt_sorted] to be easily exploited. *)
 
 Lemma exploit_smt_sorted_strict xs x y i j :
   smt_sorted xs →
@@ -491,6 +491,32 @@ Proof.
   destruct (decide (i = j)).
   { subst j. eauto. }
   { eauto with lia. }
+Qed.
+
+Lemma exploit_sorted_strict xs x y i j :
+  sorted xs →
+  x = xs !!! i →
+  y = xs !!! j →
+  valid i xs →
+  valid j xs →
+  i < j →
+  x `R` y.
+Proof.
+  rewrite <- smt_sorted_iff.
+  eauto using exploit_smt_sorted_strict.
+Qed.
+
+Lemma exploit_sorted {_ : Reflexive R} xs x y i j :
+  sorted xs →
+  x = xs !!! i →
+  y = xs !!! j →
+  valid i xs →
+  valid j xs →
+  i ≤ j →
+  x `R` y.
+Proof.
+  rewrite <- smt_sorted_iff.
+  eauto using exploit_smt_sorted.
 Qed.
 
 (* An SMT-style definition of the existence of a sorted segment. *)
