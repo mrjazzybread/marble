@@ -32,7 +32,8 @@
 
 * Can the loops in `int.v` use `IF/THEN/ELSE` instead of `inspected`?
 
-* `isInt 12 12` still does not work. Ask for help on Zulip.
+* In `proveIsInt`, how can one test whether a term is a primitive integer
+  literal? Ask for help on Zulip.
 
 * In anticipation of vectors, many operations on arrays should also
   work on array segments.
