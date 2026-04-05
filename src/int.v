@@ -261,50 +261,15 @@ Proof.
   unfold isInt. lia.
 Qed.
 
-(* Making the following lemma an Instance would be very useful when we
-   have a goal such as [isInt 12 12] where both parameters are known.
-   However, when we have a goal such as [isInt (_i + 12) ?k],
-   [introIsInt] is a bad choice; we want [add_compat] to be used in
-   this case. Unfortunately, assigning a high cost to [introIsInt]
-   cannot help: if [a] is the cost of [add_compat] and [c] is the cost
-   of [introIsInt], we would need to have [a + c ≤ c], which is
-   impossible. *)
+(* This lemma allows solving every goal of the form [isInt _i ?i]
+   where [?i] is a metavariable. However, this is not always a good
+   idea; see below. *)
 
-Lemma introIsInt _i :
-  isInt _i (to_Z _i).
+Lemma introIsInt _i i :
+  to_Z _i = i →
+  isInt _i i.
 Proof.
-  introIsInt. int. eauto.
-Qed.
-
-Goal isInt 12 12.
-Proof.
-  tc. (* does not work, for now; TODO *)
-  eauto using introIsInt.
-Qed.
-
-(* TODO special cases while waiting for the general case *)
-Global Instance isInt0 :
-  isInt 0 0.
-Proof.
-  eauto using introIsInt.
-Qed.
-
-Global Instance isInt1 :
-  isInt 1 1.
-Proof.
-  eauto using introIsInt.
-Qed.
-
-Global Instance isInt2 :
-  isInt 2 2.
-Proof.
-  eauto using introIsInt.
-Qed.
-
-Global Instance isInt3 :
-  isInt 3 3.
-Proof.
-  eauto using introIsInt.
+  intros. subst. introIsInt. int. eauto.
 Qed.
 
 (* Addition. *)
@@ -339,30 +304,6 @@ Global Instance isInt_mul _i i _j j :
 Proof.
   intros. introIsInt. destructIsInt. lia.
 Qed.
-
-(* Tests. *)
-
-Goal unsigned 42.
-Proof. lia. Qed.
-
-Goal unsigned (wB - 1).
-Proof. lia. Qed.
-
-Goal ∀ i,
-  unsigned i →
-  i ≠ 0 →
-  unsigned (i - 1).
-Proof. tc3. Qed.
-
-Goal (* unsigned_down_closed *) ∀ i j,
-  unsigned j → 0 ≤ i ≤ j → unsigned i.
-Proof. tc3. Qed.
-
-Goal ∀ _i i _j j ,
-  isInt _i i →
-  isInt _j j →
-  isInt (_i+(_j-1)) (i+(j-1)).
-Proof. tc3. Qed.
 
 (* Whereas [π] has type [Z → int],
    the projection [proj] has type [Z → Z]. *)
@@ -547,6 +488,117 @@ Global Opaque isInt.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Set up a tactic to prove [isInt _ _]. *)
+
+(* I cannot rely purely on type class search because I don't know how
+   to teach it this rule: apply [introIsInt] only if the left-hand
+   side is a primitive integer literal. *)
+
+Global Ltac proveIsIntCore :=
+  lazymatch goal with (* do not backtrack *)
+  | |- isInt (_ + _) _ =>
+      eapply isInt_add; proveIsInt
+  | |- isInt (_ - _) _ =>
+      eapply isInt_sub; proveIsInt
+  | |- isInt (_ * _) _ =>
+      eapply isInt_mul; proveIsInt
+  | |- isInt (_ / _) _ =>
+      eapply isInt_div; proveIsInt
+  | |- isInt (_max _ _) _ =>
+      eapply isInt_max; [ proveIsInt | listz_arith | proveIsInt | listz_arith ]
+  | |- isInt (_min _ _) _ =>
+      eapply isInt_min; [ proveIsInt | listz_arith | proveIsInt | listz_arith ]
+  | |- isInt (_ _ _) _ =>
+      (* Unknown binary operator. *)
+      fail
+  | |- isInt (_ _) _ =>
+      (* Unknown unary operator. *)
+      fail
+  | |- isInt ?lhs _ =>
+      (* If all of the above have failed, then (maybe/probably) the
+         left-hand is a primitive integer literal. (I don't know of a
+         way of testing this with certainty.) So the goal could be
+         [isInt 1 ?i] or [isInt 1 1]. Then, we want to apply
+         [introIsInt]. Or, the goal could be [isInt _i ?i], in which
+         case we do not want to apply this lemma. We use [is_var] to
+         distinguish these situations. *)
+      (* In the premise of [introIsInt], we use [compute] so as to
+         replace [to_Z 12%uint63] with [12]. *)
+      first [ is_var lhs | eapply introIsInt; compute; eauto 2 with lia ]
+  end
+
+with proveIsInt :=
+  match goal with (* backtrack *)
+  | h: isInt ?_i ?i1 |- isInt ?_i ?i2 =>
+      (* Exploit a hypothesis. *)
+      replace i2 with i1 by lia;
+      exact h
+  | _ =>
+      proveIsIntCore
+  end.
+
+Global Hint Extern 1 (isInt _ _) =>
+  proveIsInt
+: typeclass_instances.
+
+(* Tests: proving [isInt _ _]. *)
+
+Goal ∀ _i i, isInt _i i → isInt _i (1 + i - 1).
+Proof. tc. Qed.
+
+Goal ∀ _i i, isInt _i i → isInt (_i + 1) (i + 1).
+Proof. tc. Qed.
+
+Goal ∀ _i i, isInt _i i → unsigned i → isInt (_max _i 22) (i `max` 22).
+Proof. tc. Qed.
+
+Goal ∀ _i i, isInt _i i → unsigned i → isInt (_min 0 _i) (0 `min` i).
+Proof. tc. Qed.
+
+Goal isInt 12 12.
+Proof. tc. Qed.
+
+Goal ∃ i, isInt 512 i ∧ i = 512.
+Proof. tc. Qed.
+
+Goal ∃ i, isInt 512 i ∧ i = 512.
+Proof.
+  (* Same example, interactively. *)
+  eexists. split. tc. tc.
+Qed.
+
+Goal ∀ _i, ∃ i, isInt _i i.
+Proof.
+  (* We do not want [tc] to solve this goal. *)
+  intro. eexists. Fail solve [tc].
+Abort.
+
+Goal ∀ _i i _j j ,
+  isInt _i i →
+  isInt _j j →
+  isInt (_i+(_j-1)) (i+(j-1)).
+Proof. tc3. Qed.
+
+(* Test: proving [unsigned _]. *)
+
+Goal unsigned 42.
+Proof. lia. Qed.
+
+Goal unsigned (wB - 1).
+Proof. lia. Qed.
+
+Goal ∀ i,
+  unsigned i →
+  i ≠ 0 →
+  unsigned (i - 1).
+Proof. tc3. Qed.
+
+Goal (* unsigned_down_closed *) ∀ i j,
+  unsigned j → 0 ≤ i ≤ j → unsigned i.
+Proof. tc3. Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Well-foundedness of the orderings on machine integers. *)
 
 (* [ilt] is the ordering [<] on machine integers. *)
@@ -701,6 +753,12 @@ Local Obligation Tactic :=
   try Tactics.program_solve_wf;
   eauto 3 with lia.
 
+Local Ltac wp_intros_hook Hx ::=
+  (* Perform arithmetic simplification. *)
+  z in Hx;
+  (* Decompose existential quantifiers and conjunctions. *)
+  unpack in Hx.
+
 (* -------------------------------------------------------------------------- *)
 
 (* A loop, counting down, using machine integers. *)
@@ -791,7 +849,10 @@ Proof.
   (* Case [j = i]. *)
   { subst j. wp_op Hstep s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
-  { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
+  { rename H into IH.
+    wp_op Hstep s'.
+    wp_op IH s''.
+    eauto with lia. }
 Qed.
 
 (* [iter_down _k _i s body] applies the loop body [body] to every machine
