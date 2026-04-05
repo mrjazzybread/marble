@@ -17,6 +17,12 @@ Set Universe Polymorphism.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
+Local Ltac wp_intros_hook Hx ::=
+  (* Simplify expressions that involve lists and arithmetic. *)
+  list in Hx;
+  (* Decompose existential quantifiers and conjunctions. *)
+  unpack in Hx.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The maximum length of an array. *)
@@ -563,8 +569,9 @@ Proof.
   (* Case: the future is empty. *)
   { wp_ret. eauto. }
   (* Case: the future begins with [x]. *)
-  { wp_op Hstep s'.
-    eapply IHfuture; tc3; list; tc3. }
+  { wp_op_overwrite Hstep s.
+    wp_op_overwrite IHfuture s.
+    eauto. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -605,8 +612,6 @@ Local Lemma wp_list_iteri_aux_variant_1 f :
     i (len xs) Up
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f s _j x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
-(* A local hint for this proof. *)
-Local Hint Extern 1 (_ = _) => (list in *; assumption) : core.
 Proof.
   expand_ITER.
   induction future as [| x future ];
@@ -614,13 +619,11 @@ Proof.
   ITER;
   simpl list_iteri; subst; list in *.
   { wp_ret. eauto. }
-  { wp_op Hstep s'.
+  { wp_op_overwrite Hstep s.
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
-    eapply wp_conseq.
-    - eapply IHfuture with (history := history ++ {[x]});
-      tc3; list; tc3.
-    - wp_loop_exit. }
+    wp_op_overwrite (IHfuture (history ++ {[x]})) s.
+    eauto with lia. }
 Qed.
 
 (* In this variant, we get rid of [history] and we keep track only
@@ -648,15 +651,14 @@ Proof.
   simpl list_iteri.
   (* Case: the future is empty. We have [i = len xs]. *)
   { assert (i = len xs) by lia.
-    wp_ret. eauto. }
+    wp_ret. eauto with lia. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
   { assert (i < len xs) by lia.
     assert (x = xs !!! i) by (lookup_through_seg; eauto).
     assert (final_seg (i + 1) xs = future) by (seg_through_seg; eauto).
-    wp_op Hstep s'.
-    eapply wp_conseq.
-    - eapply IHfuture; tc3; length; tc3.
-    - wp_loop_exit. }
+    wp_op_overwrite Hstep s.
+    wp_op_overwrite IHfuture s.
+    eauto with lia. }
 Qed.
 
 End Attic.
@@ -683,10 +685,10 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
   isInt _n n →
   wp (list_length_aux _n xs) (λ _i, isInt _i (n + len xs)).
 Proof.
-  induction xs as [| x xs ]; simpl list_length_aux; intros.
+  induction xs as [| x xs ]; simpl list_length_aux; list; intros.
   { wp_ret. list. eauto. }
-  { wp_op IHxs _n'.
-    list. tc. }
+  { wp_op_overwrite IHxs _n.
+    tc. }
 Qed.
 
 (* The public specification of [list_length]. *)
@@ -738,9 +740,10 @@ Proof.
     isArray a (history ++ replicate (len xs - len history) inhabitant)
   ).
   (* Preservation. *)
-  { clear dependent a.
+  { (* TODO tactic to clean up the next three lines? *)
+    clear dependent a.
     wp_loop_intros history0 history1 a.
-    intros x i _; intros. subst history1. (* TODO tactic? *)
+    intros x i _; intros. subst history1.
     wp_set. isArray. }
 Qed.
 
@@ -904,12 +907,6 @@ Definition blit' a _i _j _n :=
     a.
 
 (* The public specification of [blit']. *)
-
-(* TODO *)
-Ltac lego ::=
-  zring;
-  simplify_list_equality_goal;
-  cleg.
 
 Lemma wp_blit' a xs :
   isArray a xs →
@@ -1488,9 +1485,9 @@ Proof.
   wp_iter_up inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_up_intros j xs'. intros _j ?.
+  { wp_up_intros j s. intros _j ?.
     wp_get x.
-    wp_op Hstep s'.
+    wp_op_overwrite Hstep s.
     wp_ret. eauto. }
 Qed.
 

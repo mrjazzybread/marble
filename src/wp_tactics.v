@@ -1,27 +1,36 @@
 From listz Require Import listz.
 From marble Require Import tactics wp.
 
+(* -------------------------------------------------------------------------- *)
+
 (* [wp_intros x] introduces [x] and a hypothesis [Hx] and simplifies this
    hypothesis. It is typically used in the second subgoal of [wp_bind] and
    [wp_conseq]. *)
+
+(* TODO decide whether the default definition of [wp_intros_hook]
+   should include [list in Hx; zring in Hx]. *)
+
+Global Ltac wp_intros_hook Hx :=
+  (* Decompose existential quantifiers and conjunctions. *)
+  unpack in Hx.
 
 Global Ltac wp_intros x :=
   (* Eliminate a beta redex, if there is one. *)
   cbv beta;
   let Hx := fresh in
   intros x Hx;
-  (* Simplify expressions that involve lists. *)
-  list in Hx; zring in Hx;
-  (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx.
+  (* Perform simplification. *)
+  wp_intros_hook Hx.
 
-(* [wp_intros x] first invokes [wp_intros x'], where [x'] is fresh,
-   then forgets everything about [x] and renames [x'] into [x]. It
-   should (must) be used when [x'] represents a new array that has
-   been obtained by updating the array [x], or more generally,
-   a new mutable data structure that has been obtained by updating
-   the data structure [x]. This helps keep the goal readable and
-   ensures mutable data structures are used linearly. *)
+(* -------------------------------------------------------------------------- *)
+
+(* [wp_intros_overwrite x] first invokes [wp_intros x'], where [x'] is
+   fresh, then forgets everything about [x] and renames [x'] into [x]. It
+   should (must) be used when [x'] represents a new array that has been
+   obtained by updating the array [x], or more generally, a new mutable data
+   structure that has been obtained by updating the data structure [x]. This
+   helps keep the goal readable and ensures mutable data structures are used
+   linearly. *)
 
 Global Ltac wp_intros_overwrite x :=
   let x' := fresh in
@@ -29,16 +38,7 @@ Global Ltac wp_intros_overwrite x :=
   clear dependent x;
   rename x' into x.
 
-(* [wp_last H] renames the most recently introduced hypothesis [H]. *)
-
-(* The tactics [wp_intros] and [wp_intros_overwrite] do not allow
-   naming the hypotheses that they introduce. In case there is only
-   one such hypothesis, [wp_last] allows renaming it after the fact. *)
-
-Ltac wp_last H :=
-  match goal with h: _ |- _ =>
-    rename h into H
-  end.
+(* -------------------------------------------------------------------------- *)
 
 (* [wp_op_nude lemma] applies the lemma [lemma], which is typically a
    reasoning rule for some operation [op], then attempts to solve its
@@ -92,3 +92,16 @@ Ltac wp_op_overwrite_pair lemma x y :=
 
 (* To see example uses of the above tactics, look at the definitions
    of the tactics [wp_get] and [wp_set] in array.v. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* [wp_last H] renames the most recently introduced hypothesis [H]. *)
+
+(* The tactics [wp_intros] and [wp_intros_overwrite] do not allow
+   naming the hypotheses that they introduce. In case there is only
+   one such hypothesis, [wp_last] allows renaming it after the fact. *)
+
+Ltac wp_last H :=
+  match goal with h: _ |- _ =>
+    rename h into H
+  end.

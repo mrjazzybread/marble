@@ -10,6 +10,12 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
+Local Ltac wp_intros_hook Hx ::=
+  (* Simplify expressions that involve lists and arithmetic. *)
+  list in Hx;
+  (* Decompose existential quantifiers and conjunctions. *)
+  unpack in Hx.
+
 (* -------------------------------------------------------------------------- *)
 
 (* A vector is a pair of a logical length [_n] and an array [a]. *)
@@ -275,14 +281,10 @@ Proof.
   eapply wp_bind with (P := λ _c', ∃ c', isIntU _c' c'). (* c ≤ c' ∧ *)
   {
     (* Lots of preliminary remarks about machine integers. *)
-    assert (isInt 512 512) by eauto using introIsInt. (* UGLY *)
     generalize unsigned_twice_max_array_length; intro. (* UGLY *)
      wp_if; wp_ret; eexists; split; tc. }
   wp_intros _c'.
   wp_ret.
-  (* Another remark. *)
-  assert (isInt 8 8) by eauto using introIsInt. (* UGLY *)
-  (* Now conclude. *)
   eexists; split; tc.
 Qed.
 
