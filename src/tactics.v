@@ -21,6 +21,7 @@ Ltac unpack_in h :=
   | _ ∧ _ =>
       let h' := fresh h in
       destruct h as [ h h' ];
+      unpack_in h;
       unpack_in h'
   | ∃ x, _ =>
       destruct h as [ ? h ];
