@@ -620,6 +620,7 @@ Proof.
   simpl list_iteri; subst; list in *.
   { wp_ret. eauto. }
   { wp_op_shadow Hstep s.
+    { list. eauto. }
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
     wp_op_shadow (IHfuture (history ++ {[x]})) s.
@@ -744,7 +745,8 @@ Proof.
     clear dependent a.
     wp_loop_intros history0 history1 a.
     intros x i _; intros. subst history1.
-    wp_set. isArray. }
+    wp_set.
+    isArray. }
 Qed.
 
 End OfList.

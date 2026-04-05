@@ -3,9 +3,9 @@ From marble Require Import tactics wp.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_intros x] introduces [x] and a hypothesis [Hx] and simplifies this
-   hypothesis. It is typically used in the second subgoal of [wp_bind] and
-   [wp_conseq]. *)
+(* The hook [wp_intros_hook] simplifies a hypothesis that has just been
+   introduced. This hypothesis is typically the postcondition of an
+   operation that we have just stepped over. *)
 
 (* TODO decide whether the default definition of [wp_intros_hook]
    should include [list in Hx; zring in Hx]. *)
@@ -13,6 +13,12 @@ From marble Require Import tactics wp.
 Global Ltac wp_intros_hook Hx :=
   (* Decompose existential quantifiers and conjunctions. *)
   unpack in Hx.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [wp_intros x] introduces [x] and a hypothesis [Hx] and simplifies this
+   hypothesis. It is typically used in the second subgoal of [wp_bind] and
+   [wp_conseq]. *)
 
 Global Ltac wp_intros x :=
   (* Eliminate a beta redex, if there is one. *)
@@ -40,6 +46,25 @@ Global Ltac wp_intros_shadow x :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* The hook [wp_precondition_hook] attempts to prove a precondition. It
+   does not fail: if it is unable to prove the goal, it leaves it open. *)
+
+Global Hint Rewrite
+  <- List.app_assoc
+: wp_precondition_hook.
+
+Global Ltac wp_precondition_hook :=
+  (* Arithmetic simplification is cheap and can be useful in loops,
+     e.g., when we have [inv j s] and the goal is [inv (j - 1 + 1) s]. *)
+  (* [length] is more expensive but is also useful, e.g., when an
+     arithmetic side condition involves applications of the [length]
+     function. *)
+  autorewrite with z clength wp_precondition_hook;
+  (* This can solve arithmetic side conditions. *)
+  eauto 3 with lia.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [wp_op_nude lemma] applies the lemma [lemma], which is typically a
    reasoning rule for some operation [op], then attempts to solve its
    preconditions. The goal should have the form [wp (op ...) ?Q] where
@@ -48,18 +73,17 @@ Global Ltac wp_intros_shadow x :=
 Global Ltac wp_op_nude lemma :=
   (* Apply the reasoning rule for this operation. *)
   simple eapply lemma;
-  (* Attempt to solve the preconditions. *)
-  (* This incantation is not very elegant, but seems effective,
-     so good enough for now. Note that the semi-colon in Ltac
-     is left-associative, so each tactic in the sequence below
-     is applied to *all* preconditions before the next tactic
-     in the sequence is applied. *)
-  list;
-  intros; unpack; try subst;
-  tc;
-  list;
-  tc.
-  (* TODO try to make this incantation simpler / less costly *)
+  (* Attempt to solve the preconditions. Because the semi-colon in Ltac is
+     left-associative, each tactic in the sequence below is applied to ALL
+     preconditions before the next tactic in the sequence is applied. *)
+  (* [tc3] can solve many preconditions cheaply, e.g., [isInt _ _]. This
+     instantiates many metavariables, which (in the next round) allows
+     [lia] to prove arithmetic side conditions. *)
+  tc3;
+  (* This tactic is user-configurable. *)
+  wp_precondition_hook.
+
+(* -------------------------------------------------------------------------- *)
 
 (* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
    the lemma [lemma] in the first subgoal and introduces the result under
