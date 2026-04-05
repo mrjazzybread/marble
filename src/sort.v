@@ -59,46 +59,92 @@ Ltac same_lookup_total :=
 Ltac listz_easy ::=
   solve [ eauto 2 | same_lookup_total ].
 
-(* [sorted_seg_variance] cannot be added as a Resolve hint because it causes
-   divergence. We introduce a limited form of it, which picks a hypothesis
-   and exploits it. This is a bit tricky, as there can be several hypotheses
-   of the form [Sorted _ (seg _ _ _)]. The [match] construct can backtrack. *)
-
-Local Hint Extern 1 (Sorted _ (seg _ _ _)) =>
-  match goal with h: Sorted _ (seg _ _ ?xs) |- Sorted _ (seg _ _?xs) =>
-    eapply sorted_seg_variance; [ exact h | lia | lia ]
-  end
-: lia.
-
-(* A similar remark applies to the following cases. *)
-
-Local Hint Extern 1 (pairwise _ (seg _ _ _) (seg _ _ _)) =>
-  match goal with h: pairwise _ (seg _ _ _) (seg _ _ _) |- _ =>
-    eapply seg_pairwise_seg_variance; [ exact h | lia | lia | lia | lia ]
-  end
-: lia.
-
-Local Hint Extern 1 (Sorted _ _) =>
+Ltac related :=
+  try subst;
   match goal with
+  (* TODO may want to also use [exploit_sorted] *)
+  | h: Sorted ?R (seg _ _?xs) |- ?R (?xs !!! ?i) (?xs !!! ?j) =>
+      eapply exploit_sorted_seg; [
+        exact h
+      | listz_arith | listz_arith | listz_arith | listz_arith | listz_arith ]
+  | _ =>
+      eauto
+  end.
+
+Global Ltac pw :=
+  match goal with (* can backtrack *)
+  | |- pairwise _ [] _ =>
+      eapply pairwise_nil_left
+  | |- pairwise _ _ [] =>
+      eapply pairwise_nil_right
+  | |- pairwise _ {[_]} {[_]} =>
+      rewrite pairwise_singleton_singleton_iff;
+      related
+  (* Omitting the cases where we have a singleton on one side only. *)
+  | h: pairwise _ (seg _ _ _) (seg _ _ _) |-
+       pairwise _ (seg _ _ _) (seg _ _ _) =>
+      eapply seg_pairwise_seg_variance;
+        [ exact h | listz_arith | listz_arith | listz_arith | listz_arith ]
+  (* One option is to perform a boundary test. *)
+  | |- pairwise ?R ?xs ?ys =>
+      eapply boundary_test; [ sorted | sorted
+                            | intros _ _; list; related ]
+  (* Another option is to decompose concatenations. *)
+  | |- pairwise _ _ (_ ++ _) =>
+      rewrite pairwise_app_right_iff; split; pw
+  | |- pairwise _ (_ ++ _) _ =>
+      rewrite pairwise_app_left_iff; split; pw
+  | _ =>
+      (* An assumption? *)
+      eauto 2
+  end
+
+with sorted :=
+  match goal with
+  | |- Sorted _ [] =>
+      (* The empty list is sorted. *)
+      eapply Sorted_empty
+  | |- Sorted _ {[_]} =>
+      (* A singleton list is sorted. *)
+      eapply Sorted_singleton
   | h: Sorted ?R (?xs ++ _) |- Sorted ?R ?xs =>
+      (* A segment of a sorted list is sorted. *)
       eapply Sorted_app_inv_l; [ exact h ]
   | h: Sorted ?R (_ ++ ?xs) |- Sorted ?R ?xs =>
+      (* A segment of a sorted list is sorted. *)
       eapply Sorted_app_inv_r; [ exact h ]
-  end
-: lia.
+  | h: Sorted _ (seg _ _ ?xs) |- Sorted _ (seg _ _?xs) =>
+      (* A subsegment of a sorted segment is sorted. *)
+      eapply sorted_seg_variance; [ exact h | listz_arith | listz_arith ]
+(* TODO
+  | |- Sorted _ (?xs ++ {[?y]} ++ ?zs) =>
+      (* The special case of two concatenations
+         with a singleton in the middle. *)
+      eapply Sorted_app_app; [ sorted | eauto with pw | eauto with pw ]
+ *)
+  | |- Sorted _ (?xs ++ ?zs) =>
+      (* A concatenation. *)
+      eapply Sorted_app; [ sorted | sorted | eauto with pw ]
+  | _ =>
+      (* An assumption? *)
+      eauto 2
+  end.
 
-(* This should be harmless. *)
+Global Hint Extern 1 (pairwise _ _ _) =>
+  pw
+: pw.
 
-Local Hint Resolve
-  Sorted_singleton
-: lia.
+Global Hint Extern 1 (Sorted _ _) =>
+  sorted
+: sorted.
 
 (* The following local tactics are quite helpful. *)
-
+(* TODO kill *)
 Local Ltac sorted_app :=
   first [ eapply Sorted_app_app | eapply Sorted_app ];
   tc3.
 
+(* TODO kill *)
 Local Ltac boundary :=
   first [ apply boundary_test | apply sorted_app_boundary ];
   tc3; intros _ _; list.
@@ -612,15 +658,14 @@ Proof.
   unfold naive_sortto_segment_2.
   wp_get x0. wp_get x1.
   eapply wp_sort2.
-  { pairwise. repeat split; eauto.
-    subst. eapply exploit_sorted_seg; eauto with lia. }
+  { pw. }
   intros. wp_last Hpermut.
   repeat wp_set. wp_ret.
   eexists. pack; eauto 2; list; eauto 2.
   (* Permutation. *)
   + rewrite <- Hpermut. eapply identity_permutation. lego.
   (* Sortedness. *)
-  + repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+  + sorted.
 Qed.
 
 Lemma wp_sortto_segment_3 :
@@ -638,7 +683,7 @@ Proof.
   (* Permutation. *)
   + rewrite <- Hpermut. eapply identity_permutation. lego.
   (* Sortedness. *)
-  + repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+  + sorted.
 Qed.
 
 Lemma wp_sortto_segment_4 :
@@ -656,7 +701,7 @@ Proof.
   (* Permutation. *)
   + rewrite <- Hpermut. eapply identity_permutation. lego.
   (* Sortedness. *)
-  + repeat (eapply sorted_app_boundary; eauto using Sorted_singleton).
+  + sorted.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
