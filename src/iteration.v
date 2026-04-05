@@ -566,7 +566,7 @@ Ltac wp_loop lemma I :=
   | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
   ].
 
-(* TODO comment; combine with [wp_loop_nude]? *)
+(* TODO comment; combine with [wp_loop_nude]? use [wp_intros_hook]? *)
 
 Ltac wp_loop_intros j0 j1 s :=
   let h := fresh "Hinv" in

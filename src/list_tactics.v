@@ -28,6 +28,8 @@ Ltac simplify_list_permutation_goal :=
 (* [clarify] is a short-hand for the union of
    [simplify_list_equality_goal] and [simplify_list_permutation_goal]. *)
 
+(* TODO maybe rename; it can actually solve the goal *)
+
 Ltac clarify :=
   lazymatch goal with
   | |- _ = _ =>
