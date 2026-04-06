@@ -1444,6 +1444,32 @@ Proof.
     case (decide (i1 = j1)); intros; subst; list; pw. }
 Qed.
 
+(* The following lemma is exploited by [optimistic_merge]. *)
+
+Lemma merge_aux_post_init_optimistic src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
+  x1 = src1 !!! (j1 - 1) →
+  x2 = src2 !!! i2 →
+  x1 ≤ x2 →
+  sorted (seg i1 j1 src1) →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  valid_seg i1 j1 src1 →
+  valid_seg i2 j2 src2 →
+  valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
+  isArray _dst (
+    initial_seg k dst ++
+    seg i1 j1 src1 ++
+    seg i2 j2 src2 ++
+    final_seg (k + j1 - i1 + j2 - i2) dst
+  ) →
+  merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
+Proof.
+  intros. intro_merge_aux_post.
+  { unmodified_outside_seg. }
+  { clarify. }
+  { list. zring. rewrite seg_seg by lia. z. sorted. }
+Qed.
+
 (* The specification of [merge_aux]. *)
 
 (* Because this function has 10 parameters, it is a bit verbose. *)
@@ -1910,53 +1936,32 @@ Definition optimistic_merge_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   wp (optimistic_merge _src1 _i1 _j1 _src2  _i2 _j2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
-(* TODO ICI [length (final_seg _ _ _)] explodes into something complex *)
-(* consider changing the rewrite rules in [length]
-   so that they explode less badly? *)
+(* TODO does not work *)
+Tactic Notation "shadow" tactic(cont) ident(x) :=
+  let x' := fresh x in
+  cont x';
+  clear dependent x;
+  rename x' into x.
 
 Lemma wp_optimistic_merge _j1 _j2 _i1 _i2 :
   optimistic_merge_spec _j1 _j2 (_i1, _i2).
 Proof.
-  unfold optimistic_merge_spec. intros.
+  unfold optimistic_merge_spec. intros. arrays.
   unfold optimistic_merge.
   wp_get x1.
   wp_get x2.
   wp_if.
   (* Case [x1 ≤ x2]. *)
-  { (* This remark is the key reason with this case works. *)
-    assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
-    { boundary. recognize. eauto with lia. }
+  { wp_blit.
     wp_blit.
-
-    simple eapply wp_bind.
-    wp_op_nude @wp_blit.
-    cbv beta. intros x Hx.
-    z in Hx. length in Hx.
-    arrays. (* wow! *)
-    length in Hx0. (* TODO does nothing! *)
-    assert (k ≤ len dst)%Z by lia. (* TODO slow! *)
-    rewrite* Z.max_l in Hx by lia.
-    z in Hx. (* TODO does not finish! *)
-
-    wp_intros_shadow _dst.
-
-ICI
-    wp_blit. (* TODO too slow! *)
+    wp_last Hdst.
+    (* Automatic simplification does not quite work here. *)
+    rewrite !seg_seg in Hdst by lia. z in Hdst. zring in Hdst.
     wp_ret.
-    (* UGLY *)
-    match goal with h: isArray _ _ |- _ =>
-      rewrite* @seg_none' in h by lia; list in h end.
-    reckon (j2 - i2) in *. (* optional *)
-    reckon (len dst) in *. (* optional *)
-    (* Conclude. *)
-    intro_merge_aux_post_list.
-    + unmodified_outside_seg.
-    + clarify. reflexivity.
-    + reckon i2. reckon j2. sorted_app. }
+    eapply merge_aux_post_init_optimistic; eauto. }}
   (* Case [x2 < x1]. *)
-  { clear dependent x1.
-    wp_get x1.
-    wp_op wp_merge_aux _dst'.
+  { clear dependent x1. wp_get x1.
+    wp_op_shadow wp_merge_aux _dst.
     assumption. }
 Qed.
 
@@ -2026,18 +2031,17 @@ Proof.
   wp_get x2.
   wp_if.
   (* Case [x1 ≤ x2]. *)
-  { (* This remark is the key reason with this case works. *)
-    assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
-    { boundary. recognize. eauto with lia. }
+  { wp_blit.
     wp_blit.
-    wp_blit.
-    (* UGLY *)
-    match goal with h: isArray _ _ |- _ =>
-      repeat rewrite* @seg_none' in h by lia; list in h end.
-    reckon (len src1) in *.
+    wp_last Hdst.
+    (* Automatic simplification does not quite work here. *)
+    rewrite !seg_seg in Hdst by lia. z in Hdst. zring in Hdst.
     wp_ret.
-    intro_merge_aux_post_list.
-    + unmodified_outside_seg.
+    intro_merge_aux_post.
+    { unmodified_outside_seg. }
+    { clarify. }
+    { list. zring. rewrite seg_seg by lia. z. sorted. }}
+    unmodified_outside_seg.
     + clarify. reflexivity.
     + reckon i2. reckon j2. sorted_app. }
   (* Case [x2 < x1]. *)
