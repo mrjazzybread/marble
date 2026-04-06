@@ -62,12 +62,31 @@ Ltac same_lookup_total :=
 Ltac listz_easy ::=
   solve [ eauto 2 | same_lookup_total ].
 
+(* When the goal has the form [?R ?lhs ?rhs], the tactic [derecognize]
+   substitutes away [lhs] and [rhs], if they are variables, and
+   substitutes away any variables that are known to be equal to
+   [lhs] and [rhs]. It is used as a preparatory step in [related]. *)
+
+(* Possibly one could adopt the opposite approach and use [recognize]
+   as a preparatory step. *)
+
+Global Ltac derecognize :=
+  match goal with |- ?R ?lhs ?rhs =>
+    try subst lhs; try subst rhs
+  end;
+  try match goal with h: ?x = ?lhs |- ?R ?lhs _ =>
+    try subst x
+  end;
+  try match goal with h: ?y = ?rhs |- ?R _ ?rhs =>
+    try subst y
+  end.
+
 (* [related] solves the goal or fails. *)
 
 (* TODO combine [related] and [same_lookup_total]? *)
 (* TODO may want to also use [exploit_sorted]? *)
 Ltac related :=
-  try subst;
+  derecognize;
   match goal with
 
   | h: Sorted ?R (seg _ _?xs) |- ?R (?xs !!! ?i) (?xs !!! ?j) =>
