@@ -11,11 +11,6 @@ From marble Require Import iteration int wp wp_tactics array.
 From marble Require Import orders sorting compare.
 Implicit Types _i _j _k : int.
 
-(* TODO *)
-(* Local Ltac Zify.zify_pre_hook ::= arrays; lengths; ulength in *. *)
-
-Local Ltac listz_arith ::= ulength; lia.
-
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
@@ -25,19 +20,15 @@ Set Universe Polymorphism.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Sorting.Sorted.html
  *)
 
-Local Ltac wp_intros_hook Hx ::=
-  (* Simplify expressions that involve lists and arithmetic. *)
-  list in Hx;
-  (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx.
-
-(* TODO *)
-Local Ltac split_seg i xs :=
-  rewrite (split_seg i xs) by lia.
-
 (* -------------------------------------------------------------------------- *)
 
-(* Local hints. *)
+(* Local settings. *)
+
+Local Ltac listz_arith ::=
+  ulength; lia.
+
+Local Ltac wp_intros_hook Hx ::=
+  list in Hx; unpack in Hx.
 
 (* TODO the hints and tactics about sorting should be cleaned up and moved
    to sorting.v *)
@@ -84,7 +75,6 @@ Global Ltac derecognize :=
 (* [related] solves the goal or fails. *)
 
 (* TODO combine [related] and [same_lookup_total]? *)
-(* TODO may want to also use [exploit_sorted]? *)
 Ltac related :=
   derecognize;
   match goal with
@@ -201,12 +191,6 @@ with sorted :=
   | h: Sorted _ (seg _ _ ?xs) |- Sorted _ (seg _ _?xs) =>
       (* A subsegment of a sorted segment is sorted. *)
       eapply sorted_seg_variance; [ exact h | listz_arith | listz_arith ]
-(* TODO
-  | |- Sorted _ (?xs ++ {[?y]} ++ ?zs) =>
-      (* The special case of two concatenations
-         with a singleton in the middle. *)
-      eapply Sorted_app_app; [ sorted | pw | pw ]
- *)
   | |- Sorted _ (?xs ++ ?zs) =>
       sorted_app; pw
   | h: Sorted ?R ?xs |- Sorted ?R ?ys =>
@@ -1954,7 +1938,7 @@ Proof.
     (* Automatic simplification does not quite work here. *)
     rewrite !seg_seg in Hdst by lia. z in Hdst. zring in Hdst.
     wp_ret.
-    eapply merge_aux_post_init_optimistic; eauto. }}
+    eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
     wp_op_shadow wp_merge_aux _dst.
