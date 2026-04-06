@@ -1246,6 +1246,9 @@ Local Ltac elim_merge_aux_post dst' :=
   end.
   (* TODO review *)
 
+(* The following two lemmas represent the reasoning that must be performed
+   after [merge_aux] calls itself. *)
+
 Lemma merge_aux_post_implication_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   x1 = src1 !!! i1 →
   x2 = src2 !!! i2 →
@@ -1257,7 +1260,7 @@ Lemma merge_aux_post_implication_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   valid_seg i2 j2 src2 →
   valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
   (i1 < j1)%Z →
-  (i2 < j2)%Z →
+  (i2 ≤ j2)%Z →
   merge_aux_post src1 src2 (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
@@ -1272,9 +1275,11 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    case (decide (i1 + 1 = j1)); intros; subst.
-    { list. pw. }
-    { pairwise. split; pw. }}
+    (* The proof would be easier if we had required [i1 + 1 < j1] and
+       [i2 < j2], and these stronger conditions would be sufficient at
+       the use site of this lemma. Let's prove a stronger lemma anyway. *)
+    case (decide (i1 + 1 = j1));
+    case (decide (i2 = j2)); intros; list; pw. }
 Qed.
 
 Lemma merge_aux_post_implication_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
@@ -1287,7 +1292,7 @@ Lemma merge_aux_post_implication_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   valid_seg i1 j1 src1 →
   valid_seg i2 j2 src2 →
   valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
-  (i1 < j1)%Z →
+  (i1 ≤ j1)%Z →
   (i2 < j2)%Z →
   merge_aux_post src1 src2 i1 j1 (i2 + 1) j2 (<[k:=x2]> dst) (k + 1) _dst →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
@@ -1304,9 +1309,59 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    case (decide (i2 + 1 = j2)); intros; subst.
-    { list. pw. }
-    { pairwise. split; pw. }}
+    case (decide (i1 = j1));
+    case (decide (i2 + 1 = j2)); intros; list; pw. }
+Qed.
+
+(* The following two lemmas represent the reasoning that must be performed
+   after [merge_aux] has used [blit]. *)
+
+Lemma merge_aux_post_init_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
+  x1 = src1 !!! i1 →
+  x2 = src2 !!! i2 →
+  x1 ≤ x2 →
+  i1 + 1 = j1 →
+  sorted (seg i2 j2 src2) →
+  seg i1 j1 src1 `precede` seg i2 j2 src2 →
+  valid i1 src1 →
+  valid_seg i2 j2 src2 →
+  valid_seg k (k + 1 + j2 - i2) dst →
+  isArray _dst (
+    initial_seg k dst ++
+    {[x1]} ++ seg i2 j2 src2 ++
+    final_seg (k + 1 + j2 - i2) dst
+  ) →
+  merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
+Proof.
+  intros. intro_merge_aux_post.
+  { unmodified_outside_seg. }
+  { list. recognize. reflexivity. }
+  { list. sorted_app.
+    case (decide (i2 = j2)); intros; subst; list; pw. }
+Qed.
+
+Lemma merge_aux_post_init_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
+  x1 = src1 !!! i1 →
+  x2 = src2 !!! i2 →
+  x2 < x1 →
+  sorted (seg i1 j1 src1) →
+  i2 + 1 = j2 →
+  (* seg i1 j1 src1 `precede` seg i2 j2 src2 → *)
+  valid_seg i1 j1 src1 →
+  valid i2 src2 →
+  valid_seg k (k + 1 + j1 - i1) dst →
+  isArray _dst (
+    initial_seg k dst ++
+    {[x2]} ++ seg i1 j1 src1 ++
+    final_seg (k + 1 + j1 - i1) dst
+  ) →
+  merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
+Proof.
+  intros. intro_merge_aux_post.
+  { unmodified_outside_seg. }
+  { list. zring. recognize. eapply Permutation_app_comm. }
+  { list. sorted_app.
+    case (decide (i1 = j1)); intros; subst; list; pw. }
 Qed.
 
 (* The specification of [merge_aux]. *)
@@ -1373,35 +1428,21 @@ Proof.
     wp_if.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
-      (* We are now looking at the recursive call. *)
       wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _dst.
-      eauto using merge_aux_post_implication_1. }
+      eauto using merge_aux_post_implication_1 with lia. }
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1.
-      wp_blit.
-      (* TODO prove lemma here *)
-      intro_merge_aux_post.
-      + unmodified_outside_seg.
-      + list. recognize. reflexivity.
-      (* The fact that [x1] precedes [x2] is used here. *)
-      + list. sorted. }}
+    { wp_blit.
+      eauto using merge_aux_post_init_1 with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
-      (* We are now looking at the recursive call. *)
       wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _dst. wp_last Hpost.
-      (* TODO prove lemma here *)
-      eauto using merge_aux_post_implication_2. }
+      eauto using merge_aux_post_implication_2 with lia. }
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2.
-      wp_blit.
-      (* TODO prove lemma here *)
-      intro_merge_aux_post.
-      + unmodified_outside_seg.
-      + list. recognize. eapply Permutation_app_comm.
-      + list. sorted. }}
+    { wp_blit.
+      eauto using merge_aux_post_init_2 with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
