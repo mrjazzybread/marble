@@ -1256,7 +1256,7 @@ Lemma merge_aux_post_implication_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   valid_seg i1 j1 src1 →
   valid_seg i2 j2 src2 →
   valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
-  (i1 + 1 < j1)%Z →
+  (i1 < j1)%Z →
   (i2 < j2)%Z →
   merge_aux_post src1 src2 (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
@@ -1272,7 +1272,9 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    pairwise. split; pw. }
+    case (decide (i1 + 1 = j1)); intros; subst.
+    { list. pw. }
+    { pairwise. split; pw. }}
 Qed.
 
 Lemma merge_aux_post_implication_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
@@ -1286,7 +1288,7 @@ Lemma merge_aux_post_implication_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   valid_seg i2 j2 src2 →
   valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
   (i1 < j1)%Z →
-  (i2 + 1 < j2)%Z →
+  (i2 < j2)%Z →
   merge_aux_post src1 src2 i1 j1 (i2 + 1) j2 (<[k:=x2]> dst) (k + 1) _dst →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
@@ -1302,7 +1304,9 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    pairwise. split; pw. }
+    case (decide (i2 + 1 = j2)); intros; subst.
+    { list. pw. }
+    { pairwise. split; pw. }}
 Qed.
 
 (* The specification of [merge_aux]. *)
