@@ -59,10 +59,6 @@
 * Set up extraction to use defensive, non-persistent arrays.
   + Can offer more than just the 4 primitive operations,
     e.g., `blit` should use OCaml's `Array.blit`.
-  + Safety in the face of concurrent usage requires CAS or a lock.
-  + A straightforward approach involves an option on an array,
-    but it is possible to get rid of the option by using an empty array
-    and by relying the bounds checks. (The failure message will be less clear.)
 
 * Also set up extraction to use persistent arrays
   and to use ordinary (non-persistent, non-defensive) arrays.
