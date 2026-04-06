@@ -1278,10 +1278,6 @@ Local Ltac intro_merge_aux_post :=
   unfold merge_aux_post; eexists;
   split; [ eauto 2 | split; [ listz_arith | pack ] ].
 
-(* TODO now useless? *)
-Local Ltac intro_merge_aux_post_list :=
-  intro_merge_aux_post; list; recognize_empty_segments; zring seg.
-
 Local Ltac elim_merge_aux_post dst' :=
   match goal with h: merge_aux_post _ _ _ _ _ _ _ _ _ |- _ =>
     unfold merge_aux_post in h;
@@ -2235,7 +2231,7 @@ Definition sortto'_post dst i k n _dst :=
   (* Outside of the source and destination segments,
      the destination array is unmodified. *)
   ( ∀ a b,
-    (a ≤ b ≤ len dst)%Z →
+    valid_seg a b dst →
     disjoint_seg a b i (i + n) →
     disjoint_seg a b k (k + n) →
     seg a b dst' = seg a b dst
@@ -2247,7 +2243,10 @@ Definition sortto'_post dst i k n _dst :=
   sorted (seg k (k + n) dst').
 
 Local Ltac intro_sortto'_post :=
-  unfold sortto'_post; pack; list; tc3; list; tc3.
+  unfold sortto'_post; eexists;
+  split; [ eauto 2 | split; [ listz_arith | pack ] ];
+  (* 3 subgoals remain: *)
+  [ try solve [unmodified_outside_seg] | eauto | sorted ].
 
 Local Ltac elim_sortto'_post dst' :=
   match goal with h: sortto'_post _ _ _ _ _ |- _ =>
@@ -2273,18 +2272,19 @@ Lemma wp_sortto' : ∀ _n, sortto'_spec _n.
 Proof.
   simple eapply (well_founded_ind Wf_ilt).
   intros _n IH.
-  unfold sortto'_spec. intros.
+  unfold sortto'_spec. intros. arrays.
   autorewrite with sortto'.
   wp_if.
   (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto' _dst'. (* TODO wp_op_shadow? *)
-    clear dependent _dst. rename _dst' into _dst.
+  { wp_op_shadow wp_isortto' _dst.
     elim_isortto_inv dst'. intro_sortto'_post. }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
-  { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
+  {
+    set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
     assert (isInt _n1 n1) by tc.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
     assert (isInt _n2 n2) by tc.
+    replace n with (n1 + n2) in * by lia.
     (* The first recursive call. *)
     wp_op_shadow IH _dst. wp_last HpostA.
     elim_sortto'_post dst'.
@@ -2292,7 +2292,7 @@ Proof.
     assert (frameA: seg i (i + n1) dst' = seg i (i + n1) dst)
       by eauto with lia.
     assert (Sorted R' (seg i (i + n1) dst'))
-      by (rewrite frameA; eauto with lia).
+      by (rewrite frameA; sorted).
     (* The second recursive call. *)
     wp_op_shadow IH _dst. wp_last HpostB.
     elim_sortto'_post dst''.
@@ -2307,7 +2307,7 @@ Proof.
     assert (seg (i + n2) (i + n2 + n1) dst'' `precede`
             seg (k + n1) (k + n1 + n2) dst'').
     { rewrite frameB. rewrite HpostB2. rewrite HpostA2. rewrite frameA.
-      eapply split_sorted_seg; eauto 2 with lia. }
+      eapply split_sorted_seg; eauto 2 with lia; sorted. }
     (* The third call: merging the sorted halves. *)
     wp_op_shadow wp_optimistic_merge_12 _dst. wp_last HpostC.
     elim_merge_aux_post dst'''.
@@ -2316,11 +2316,11 @@ Proof.
     (* Nothing has been modified outside of the two segments. *)
     { rewrite HpostC1, HpostB1, HpostA1 by lia. reflexivity. }
     (* Permutation. *)
-    { replace n with (n1 + n2) by lia. nat.
+    { z.
       rewrite HpostC2.
       rewrite HpostB2, frameB.
       rewrite frameA, HpostA2.
-      list. reflexivity. }}
+      join_segments. reflexivity. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
