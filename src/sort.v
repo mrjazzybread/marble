@@ -396,6 +396,31 @@ Implicit Types srcofs dstofs n : Z.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Handy lemmas about permutations. *)
+
+Lemma perm_xys xs xs' ys ys' zs zs' :
+  xs' ≃ xs →
+  ys' ≃ ys →
+  zs' ≃ zs →
+  xs' ++ ys' ++ zs' ≃ xs ++ ys ++ zs.
+Proof.
+  intros Hxs Hys Hzs. rewrite Hxs, Hys, Hzs. reflexivity.
+Qed.
+
+Lemma perm_yxs xs xs' ys ys' zs zs' :
+  xs' ≃ xs →
+  ys' ≃ ys →
+  zs' ≃ zs →
+  ys' ++ xs' ++ zs' ≃ xs ++ ys ++ zs.
+Proof.
+  intros Hxs Hys Hzs. rewrite Hxs, Hys, Hzs.
+  rewrite !app_assoc.
+  eapply Permutation_app_tail.
+  eapply Permutation_app_comm.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* What can one do, at the leaves, to speed up a merge sort? Three approaches
    come to mind:
    1. Just use merge sort all the way down to size 0, 1, or 2.
@@ -1280,28 +1305,6 @@ Local Ltac elim_merge_aux_post dst' :=
    means that the second source segment forms a suffix of the destination
    segment. *)
 
-(* TODO move *)
-Lemma perm_xys (xs xs' ys ys' zs zs' : list A) :
-  xs' ≃ xs →
-  ys' ≃ ys →
-  zs' ≃ zs →
-  xs' ++ ys' ++ zs' ≃ xs ++ ys ++ zs.
-Proof.
-  intros Hxs Hys Hzs. rewrite Hxs, Hys, Hzs. reflexivity.
-Qed.
-
-Lemma perm_yxs (xs xs' ys ys' zs zs' : list A) :
-  xs' ≃ xs →
-  ys' ≃ ys →
-  zs' ≃ zs →
-  ys' ++ xs' ++ zs' ≃ xs ++ ys ++ zs.
-Proof.
-  intros Hxs Hys Hzs. rewrite Hxs, Hys, Hzs.
-  rewrite !app_assoc.
-  eapply Permutation_app_tail.
-  eapply Permutation_app_comm.
-Qed.
-
 Lemma merge_aux_post_implication_1 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _dst dst :
   x1 = src1 !!! i1 →
   x2 = src2 !!! i2 →
@@ -1367,8 +1370,7 @@ Lemma merge_aux_post_implication_2 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _ds
   ) →
   (
     src2' = src2 ∨
-    src2' = <[k:=x2]> src2 ∧ limit = j2 ∨
-    src2' = <[k:=x2]> src2 ∧ limit = j1 ∧ disjoint_seg i2 j2 k limit
+    src2' = <[k:=x2]> src2 ∧ limit = j2
   ) →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
@@ -1382,13 +1384,13 @@ Proof.
     split_seg (i2 + 1) src2. rewrite Hpost2. recognize.
     eapply perm_yxs; [| eauto |].
     { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; reflexivity. }
-    { destruct Hcases2 as [|[|]]; unpack; subst src2'; list; reflexivity. }}
+    { destruct Hcases2; unpack; subst src2'; list; reflexivity. }}
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
     pairwise. split.
     { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; pw. }
-    { destruct Hcases2 as [|[|]]; unpack; subst src2'; list; pw. }}
+    { destruct Hcases2; unpack; subst src2'; list; pw. }}
 Qed.
 
 (* The following two lemmas represent the reasoning that must be performed
@@ -1815,7 +1817,7 @@ Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j2 →
   (* The first source segment and the destination segment must be disjoint. *)
-  (j1 ≤ k ∨ limit ≤ i1)%Z →
+  disjoint_seg i1 j1 k limit →
   valid_seg k limit dst →
   wp (merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post dst dst i1 j1 i2 j2 dst k).
@@ -2169,7 +2171,7 @@ Definition optimistic_merge_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j2 →
   (* The first source segment and the destination segment must be disjoint. *)
-  (j1 ≤ k ∨ limit ≤ i1)%Z →
+  disjoint_seg i1 j1 k limit →
   valid_seg k limit dst →
   wp (optimistic_merge_12 _dst _i1 _j1 _i2 _j2 _k)
      (merge_aux_post dst dst i1 j1 i2 j2 dst k).
