@@ -307,6 +307,7 @@ Proof.
   intros. eapply exploit_seg_pairwise_seg; eauto.
 Qed.
 
+(* TODO still used? *)
 Local Hint Resolve exploit_seg_pairwise_seg : related.
 
 (* The following hints seem to be needed. I don't understand why
@@ -363,6 +364,7 @@ Local Hint Resolve lt_lex : core.
 Lemma le_le_lex x y : x ≤ y → x `precedes` y → x `lex` y.
 Proof. eauto. Qed.
 
+(* TODO still used? *)
 Local Hint Resolve le_le_lex : related.
 Local Hint Extern 1 (_ `precedes` _) => related : related.
 
