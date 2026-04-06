@@ -1946,7 +1946,7 @@ Tactic Notation "shadow" tactic(cont) ident(x) :=
 Lemma wp_optimistic_merge _j1 _j2 _i1 _i2 :
   optimistic_merge_spec _j1 _j2 (_i1, _i2).
 Proof.
-  unfold optimistic_merge_spec. intros. arrays.
+  unfold optimistic_merge_spec. intros.
   unfold optimistic_merge.
   wp_get x1.
   wp_get x2.
@@ -2037,16 +2037,9 @@ Proof.
     (* Automatic simplification does not quite work here. *)
     rewrite !seg_seg in Hdst by lia. z in Hdst. zring in Hdst.
     wp_ret.
-    intro_merge_aux_post.
-    { unmodified_outside_seg. }
-    { clarify. }
-    { list. zring. rewrite seg_seg by lia. z. sorted. }}
-    unmodified_outside_seg.
-    + clarify. reflexivity.
-    + reckon i2. reckon j2. sorted_app. }
+    eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
-  { clear dependent x1.
-    wp_get x1.
+  { clear dependent x1. wp_get x1.
     wp_op wp_merge_aux_1 _dst'.
     assumption. }
 Qed.
@@ -2114,18 +2107,11 @@ Proof.
   wp_get x2.
   wp_if.
   (* Case [x1 ≤ x2]. *)
-  { (* This remark is the key reason with this case works. *)
-    assert (seg i1 j1 src1 ≼ seg i2 j2 src2).
-    { boundary. recognize. eauto with lia. }
-    wp_blit.
+  { wp_blit.
     wp_ret.
-    intro_merge_aux_post_list.
-    + unmodified_outside_seg.
-    + clarify. reflexivity.
-    + reckon i2. reckon j2. sorted_app. }
+    eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
-  { clear dependent x1.
-    wp_get x1.
+  { clear dependent x1. wp_get x1.
     wp_op wp_merge_aux_2 _dst'.
     assumption. }
 Qed.
@@ -2189,18 +2175,11 @@ Proof.
   wp_get x2.
   wp_if.
   (* Case [x1 ≤ x2]. *)
-  { (* This remark is the key reason with this case works. *)
-    assert (seg i1 j1 dst ≼ seg i2 j2 dst).
-    { boundary. recognize. eauto with lia. }
-    wp_blit.
+  { wp_blit.
     wp_ret.
-    intro_merge_aux_post_list.
-    + unmodified_outside_seg.
-    + clarify. reflexivity.
-    + reckon i2. reckon j2. sorted_app. }
+    eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
-  { clear dependent x1.
-    wp_get x1.
+  { clear dependent x1. wp_get x1.
     wp_op wp_merge_aux_12 _dst'.
     assumption. }
 Qed.
