@@ -1608,7 +1608,6 @@ Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
   unfold merge_aux_1_spec. intros. arrays.
-  assert (Hi1: i1 = k + j2 - i2) by lia. (* TODO *)
   autorewrite with merge_aux_1.
   wp_if.
   (* Case [x1 ≤ x2]. *)
@@ -1619,13 +1618,8 @@ Proof.
       wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _src1.
       eauto using merge_aux_post_implication_1 with lia. }
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1. z in *.
-      (* i1 = k + (j2 - i2) *) subst i1.
-      wp_blit.
-      intro_merge_aux_post_list.
-      + unmodified_outside_seg.
-      + recognize. reflexivity.
-      + recognize. sorted. }}
+    { wp_blit.
+      eauto using merge_aux_post_init_1 with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
@@ -1634,13 +1628,10 @@ Proof.
       wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _src1.
       eauto using merge_aux_post_implication_2 with lia. }
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2. z in *.
-      (* i1 = k + 1 *) subst i1.
+    { assert (i1 = k + 1) by lia. subst i1.
       wp_ret.
-      intro_merge_aux_post_list.
-      + reflexivity.
-      + recognize. eapply Permutation_app_comm.
-      + sorted. }}
+      eapply merge_aux_post_init_2; eauto with lia.
+      join_segments. rewrite <- insert_seg_all by lia. assumption. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
