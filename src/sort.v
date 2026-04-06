@@ -1270,7 +1270,7 @@ Local Ltac elim_merge_aux_post dst' :=
 (* The following two lemmas represent the reasoning that must be performed
    after [merge_aux] calls itself. *)
 
-Lemma merge_aux_post_implication_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
+Lemma merge_aux_post_implication_1 src1 src1' src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   x1 = src1 !!! i1 →
   x2 = src2 !!! i2 →
   x1 ≤ x2 →
@@ -1279,28 +1279,33 @@ Lemma merge_aux_post_implication_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   seg i1 j1 src1 `precede` seg i2 j2 src2 →
   valid_seg i1 j1 src1 →
   valid_seg i2 j2 src2 →
-  valid_seg k (k + (j1 - i1) + (j2 - i2)) dst →
+  let limit := k + (j1 - i1) + (j2 - i2) in
+  valid_seg k limit dst →
   (i1 < j1)%Z →
   (i2 ≤ j2)%Z →
-  merge_aux_post src1 src2 (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
+  (* The next hypothesis allows this lemma to be used in several situations:
+     either 1- the source segment is unaffected by the write [k := x1], or
+     2- it is affected and we have [limit = j1], that is, the source segment
+     forms a suffix of the destination segment. *)
+  (src1' = src1 ∨ limit = j1 ∧ src1' = <[k:=x1]> src1) →
+  merge_aux_post src1' src2 (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
   intros. wp_last Hpost.
+  match goal with h: _ ∨ _ |- _ => rename h into Hcases end.
   elim_merge_aux_post dst'.
   intro_merge_aux_post.
   (* Unmodified. *)
   { rewrite Hpost1 by lia. list. reflexivity. }
   (* Permutation. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-    split_seg (i1 + 1) src1. rewrite Hpost2. clarify. }
+    split_seg (i1 + 1) src1. rewrite Hpost2. recognize.
+    destruct Hcases; unpack; subst src1'; clarify. }
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    (* The proof would be easier if we had required [i1 + 1 < j1] and
-       [i2 < j2], and these stronger conditions would be sufficient at
-       the use site of this lemma. Let's prove a stronger lemma anyway. *)
-    case (decide (i1 + 1 = j1));
-    case (decide (i2 = j2)); intros; list; pw. }
+    pairwise. split; [| pw ].
+    destruct Hcases; unpack; subst src1'; list; pw. }
 Qed.
 
 Lemma merge_aux_post_implication_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
@@ -1330,8 +1335,7 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    case (decide (i1 = j1));
-    case (decide (i2 + 1 = j2)); intros; list; pw. }
+    pairwise; split; pw. }
 Qed.
 
 (* The following two lemmas represent the reasoning that must be performed
