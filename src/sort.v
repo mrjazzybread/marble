@@ -120,7 +120,7 @@ Ltac related :=
    the third subgoal, [xs ≼ ys], open. *)
 
 Global Ltac boundary :=
-  eapply boundary_test; [ sorted | sorted | intros ? ?; list ]
+  eapply boundary_test; [ sorted | sorted | length; intros ? ?; list ]
 
 (* [sorted_app] applies the lemma [Sorted_app] to a goal of the form
    [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves
