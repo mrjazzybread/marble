@@ -1315,12 +1315,19 @@ Lemma merge_aux_post_implication_1 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _ds
   valid_seg k limit dst →
   (i1 < j1)%Z →
   (i2 ≤ j2)%Z →
-  (src1' = src1 ∨ limit = j1 ∧ src1' = <[k:=x1]> src1) →
-  (src2' = src2 ∨ limit = j2 ∧ src2' = <[k:=x1]> src2) →
   merge_aux_post src1' src2' (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
+  (
+    src1' = src1 ∨
+    src1' = <[k:=x1]> src1 ∧ limit = j1 ∨
+    src1' = <[k:=x1]> src1 ∧ limit = j2 ∧ disjoint_seg i1 j1 k limit
+  ) →
+  (
+    src2' = src2 ∨
+    src2' = <[k:=x1]> src2 ∧ limit = j2
+  ) →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
-  intros ??? ??? ???? ?? Hcases1 Hcases2 Hpost.
+  intros ??? ??? ???? ?? Hpost Hcases1 Hcases2.
   elim_merge_aux_post dst'.
   intro_merge_aux_post.
   (* Unmodified. *)
@@ -1329,13 +1336,13 @@ Proof.
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     split_seg (i1 + 1) src1. rewrite Hpost2. recognize.
     rewrite <- app_assoc. eapply perm_xys; [ eauto | |].
-    { destruct Hcases1; unpack; subst src1'; list; reflexivity. }
+    { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; reflexivity. }
     { destruct Hcases2; unpack; subst src2'; list; reflexivity. }}
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
     pairwise. split.
-    { destruct Hcases1; unpack; subst src1'; list; pw. }
+    { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; pw. }
     { destruct Hcases2; unpack; subst src2'; list; pw. }}
 Qed.
 
@@ -1352,12 +1359,20 @@ Lemma merge_aux_post_implication_2 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _ds
   valid_seg k limit dst →
   (i1 ≤ j1)%Z →
   (i2 < j2)%Z →
-  (src1' = src1 ∨ limit = j1 ∧ src1' = <[k:=x2]> src1) →
-  (src2' = src2 ∨ limit = j2 ∧ src2' = <[k:=x2]> src2) →
   merge_aux_post src1' src2' i1 j1 (i2 + 1) j2 (<[k:=x2]> dst) (k + 1) _dst →
+  (
+    src1' = src1 ∨
+    src1' = <[k:=x2]> src1 ∧ limit = j1 ∨
+    src1' = <[k:=x2]> src1 ∧ limit = j2 ∧ disjoint_seg i1 j1 k limit
+  ) →
+  (
+    src2' = src2 ∨
+    src2' = <[k:=x2]> src2 ∧ limit = j2 ∨
+    src2' = <[k:=x2]> src2 ∧ limit = j1 ∧ disjoint_seg i2 j2 k limit
+  ) →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
-  intros ??? ??? ???? ?? Hcases1 Hcases2 Hpost.
+  intros ??? ??? ???? ?? Hpost Hcases1 Hcases2.
   elim_merge_aux_post dst'.
   intro_merge_aux_post.
   (* Unmodified. *)
@@ -1366,14 +1381,14 @@ Proof.
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     split_seg (i2 + 1) src2. rewrite Hpost2. recognize.
     eapply perm_yxs; [| eauto |].
-    { destruct Hcases1; unpack; subst src1'; list; reflexivity. }
-    { destruct Hcases2; unpack; subst src2'; list; reflexivity. }}
+    { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; reflexivity. }
+    { destruct Hcases2 as [|[|]]; unpack; subst src2'; list; reflexivity. }}
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
     pairwise. split.
-    { destruct Hcases1; unpack; subst src1'; list; pw. }
-    { destruct Hcases2; unpack; subst src2'; list; pw. }}
+    { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; pw. }
+    { destruct Hcases2 as [|[|]]; unpack; subst src2'; list; pw. }}
 Qed.
 
 (* The following two lemmas represent the reasoning that must be performed
@@ -1493,20 +1508,20 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _dst.
-      eauto using merge_aux_post_implication_1 with lia. }
+      eapply merge_aux_post_implication_1; eauto with lia. }
     (* Subcase [i1 + 1 = j1]. *)
     { wp_blit.
-      eauto using merge_aux_post_init_1 with lia. }}
+      eapply merge_aux_post_init_1; eauto with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _dst.
-      eauto using merge_aux_post_implication_2 with lia. }
+      eapply merge_aux_post_implication_2; eauto with lia. }
     (* Subcase [i2 + 1 = j2]. *)
     { wp_blit.
-      eauto using merge_aux_post_init_2 with lia. }}
+      eapply merge_aux_post_init_2; eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1616,17 +1631,17 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _src1.
-      eauto using merge_aux_post_implication_1 with lia. }
+      eapply merge_aux_post_implication_1; eauto with lia. }
     (* Subcase [i1 + 1 = j1]. *)
     { wp_blit.
-      eauto using merge_aux_post_init_1 with lia. }}
+      eapply merge_aux_post_init_1; eauto with lia. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _src1.
-      eauto using merge_aux_post_implication_2 with lia. }
+      eapply merge_aux_post_implication_2; eauto with lia. }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (i1 = k + 1) by lia. subst i1.
       wp_ret.
@@ -1720,7 +1735,7 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _src2.
-      eauto using merge_aux_post_implication_1 with lia. }
+      eapply merge_aux_post_implication_1; eauto with lia. }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (i2 = k + 1) by lia. subst i2.
       wp_ret.
@@ -1732,10 +1747,10 @@ Proof.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _src2.
-      eauto using merge_aux_post_implication_2 with lia. }
+      eapply merge_aux_post_implication_2; eauto with lia. }
     (* Subcase [i2 + 1 = j2]. *)
     { wp_blit.
-      eauto using merge_aux_post_init_2 with lia. }}
+      eapply merge_aux_post_init_2; eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1810,76 +1825,31 @@ Lemma wp_merge_aux_12 _j1 _j2 _i1 _i2 :
 Proof.
   simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
   intros (_i1, _i2) IH.
-  unfold merge_aux_12_spec. intros.
-  assert (Hi2: i2 = k + j1 - i1) by lia.
+  unfold merge_aux_12_spec. intros. arrays.
   autorewrite with merge_aux_12.
-  arrays.
   wp_if.
   (* Case [x1 ≤ x2]. *)
   { wp_set.
     wp_if.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
-      (* We are now looking at the recursive call. *)
-      eapply wp_conseq.
-      { eapply (IH (_i1 + 1, _i2)%uint63); tc3; list; tc. }
-      clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post dst'.
-      intro_merge_aux_post.
-      (* Unmodified. *)
-      { rewrite Hpost1 by lia. list. reflexivity. }
-      (* Prove that we have a permutation. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        split_seg (i1 + 1) dst. rewrite Hpost2. clarify. }
-      (* Sortedness. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        sorted_app.
-        rewrite Hpost2.
-        (* {[x1]} ≼ seg (i1 + 1) j1 dst ++ seg i2 j2 dst *)
-        pairwise. split; boundary.
-        + subst x1. eapply (exploit_sorted_seg i1 j1); eauto 2 with lia.
-        + recognize. eauto with lia. }}
+      wp_op_shadow (IH (_i1 + 1, _i2)%uint63) _dst.
+      eapply merge_aux_post_implication_1; eauto with lia. }
     (* Subcase [i1 + 1 = j1]. *)
-    { assert (j1 = i1 + 1) by lia. subst j1. z in *.
-      (* i2 = k + 1 *) subst i2.
+    { assert (i2 = k + 1) by lia. subst i2.
       wp_ret.
-      intro_merge_aux_post_list.
-      + reflexivity.
-      + recognize. reflexivity.
-      + sorted_app. boundary. recognize. eauto with lia. }}
+      eapply merge_aux_post_init_1; eauto with lia.
+      join_segments. rewrite <- insert_seg_all by lia. assumption. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
-      match goal with h: x'2 = _ |- _ => rewrite <- Hi2 in h end.
-      (* We are now looking at the recursive call. *)
-      eapply wp_conseq.
-      { eapply (IH (_i1, _i2 + 1)%uint63); tc3; list; tc. }
-      clear dependent _dst. intros _dst Hpost.
-      elim_merge_aux_post dst'.
-      intro_merge_aux_post.
-      (* Unmodified. *)
-      { rewrite Hpost1 by lia. list. reflexivity. }
-      (* Permutation. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        rewrite (split_seg (i2 + 1) dst i2 j2) by lia. rewrite Hpost2. clarify.
-        rewrite Permutation_app_comm. clarify. }
-      (* Sortedness. *)
-      { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
-        sorted_app.
-        rewrite Hpost2.
-        (* {[x2]} ≼ seg i1 j1 src1 ++ seg (i2 + 1) j2 src2 *)
-        pairwise. split; boundary.
-        + recognize. eauto.
-        + subst x2. eapply exploit_sorted_seg; eauto with lia. }}
+      wp_op_shadow (IH (_i1, _i2 + 1)%uint63) _dst.
+      eapply merge_aux_post_implication_2; eauto with lia. }
     (* Subcase [i2 + 1 = j2]. *)
-    { assert (j2 = i2 + 1) by lia. subst j2. z in *.
-      wp_blit.
-      intro_merge_aux_post_list.
-      + unmodified_outside_seg.
-      + rewrite <- Hi2. recognize. eapply Permutation_app_comm.
-      + rewrite <- Hi2. boundary. recognize. eauto. }}
+    { wp_blit.
+      eapply merge_aux_post_init_2; eauto with lia. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
