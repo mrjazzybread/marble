@@ -2384,7 +2384,7 @@ Definition sortto_post src dst i k n '(_src, _dst) :=
   sorted (seg k (k + n) dst').
 
 Local Ltac intro_sortto_post :=
-  unfold sortto_post; pack; list; tc3; list; tc3.
+  unfold sortto_post; pack; tc3; length; tc3.
 
 Local Ltac elim_sortto_post src' dst' :=
   match goal with h: sortto_post _ _ _ _ _ _ |- _ =>
@@ -2410,12 +2410,11 @@ Lemma wp_sortto : ∀ _n, sortto_spec _n.
 Proof.
   simple eapply (well_founded_ind Wf_ilt).
   intros _n IH.
-  unfold sortto_spec. intros.
+  unfold sortto_spec. intros. arrays.
   autorewrite with sortto.
   wp_if.
   (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto _dst'. (* TODO wp_op_shadow? *)
-    clear dependent _dst. rename _dst' into _dst.
+  { wp_op_shadow wp_isortto _dst.
     elim_isortto_inv dst'.
     wp_ret. intro_sortto_post. }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
@@ -2423,6 +2422,7 @@ Proof.
     assert (isInt _n1 n1) by tc.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
     assert (isInt _n2 n2) by tc.
+    replace n with (n1 + n2) in * by lia.
     (* The first recursive call. *)
     wp_op_shadow_pair IH _src _dst. wp_last HpostA.
     elim_sortto_post src' dst'.
@@ -2430,14 +2430,14 @@ Proof.
     assert (frameA: seg i (i + n1) src' = seg i (i + n1) src)
       by eauto with lia.
     assert (Sorted R' (seg i (i + n1) src'))
-      by (rewrite frameA; eauto with lia).
+      by (rewrite frameA; sorted).
     (* The second call: a call to [sortto']. *)
     wp_op_shadow wp_sortto' _src. wp_last HpostB.
     elim_sortto'_post src''.
     assert (seg (i + n2) (i + n2 + n1) src'' `precede`
             seg (k + n1) (k + n1 + n2) dst').
     { rewrite HpostB2. rewrite HpostA5. rewrite frameA.
-      eapply split_sorted_seg; eauto 2 with lia. }
+      eapply split_sorted_seg; eauto 2 with lia; sorted. }
     (* The third call: merging the sorted halves. *)
     wp_op_shadow wp_optimistic_merge_2 _dst. wp_last HpostC.
     elim_merge_aux_post dst'''.
@@ -2447,11 +2447,10 @@ Proof.
     { rewrite HpostB1, HpostA3 by lia. reflexivity. }
     { rewrite HpostC1, HpostA4 by lia. reflexivity. }
     (* Permutation. *)
-    { replace n with (n1 + n2) by lia. nat.
-      rewrite HpostC2.
+    { rewrite HpostC2.
       rewrite HpostB2.
       rewrite frameA, HpostA5.
-      list. reflexivity. }}
+      join_segments. reflexivity. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -2505,7 +2504,7 @@ Definition sort_seg_post xs i n a :=
   sorted (seg i (i + n) xs').
 
 Local Ltac intro_sort_seg_post :=
-  unfold sort_seg_post; pack; list; tc3; list; tc3.
+  unfold sort_seg_post; pack; tc3; length; tc3.
 
 Local Ltac elim_sort_seg_post xs' :=
   match goal with h: sort_seg_post _ _ _ _ |- _ =>
@@ -2523,7 +2522,7 @@ Lemma wp_sort_seg : ∀ a xs _i i _n n,
   wp (sort_seg a _i _n)
      (sort_seg_post xs i n).
 Proof.
-  intros. unfold sort_seg.
+  intros. unfold sort_seg. arrays.
   wp_if.
   (* Case [n ≤ cutoff]. *)
   { wp_op_shadow wp_isortto' a.
@@ -2534,16 +2533,17 @@ Proof.
     assert (isInt _n1 n1) by tc.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
     assert (isInt _n2 n2) by tc.
+    replace n with (n1 + n2) in * by lia.
     (* Allocation of an array. *)
     wp_make t.
     (* The first call. *)
     wp_op_shadow_pair wp_sortto a t. wp_last HpostA.
-    elim_sortto_post xs' dst'. list in *.
+    elim_sortto_post xs' dst'. length in *.
     (* This call has not affected the first half of [a]. *)
     assert (frameA: seg i (i + n1) xs' = seg i (i + n1) xs)
       by eauto with lia.
     assert (Sorted R' (seg i (i + n1) xs'))
-      by (rewrite frameA; eauto with lia).
+      by (rewrite frameA; sorted).
     (* The second call. *)
     wp_op_shadow wp_sortto' a. wp_last HpostB.
     elim_sortto'_post xs''.
@@ -2560,11 +2560,10 @@ Proof.
     (* Nothing has been modified outside of this segment. *)
     { rewrite HpostC1, HpostB1, HpostA3 by lia. reflexivity. }
     (* Permutation. *)
-    { replace n with (n1 + n2) in * by lia. z in *.
-      rewrite HpostC2.
+    { rewrite HpostC2.
       rewrite HpostB2.
       rewrite frameA, HpostA5.
-      list. reflexivity. }}
+      join_segments. reflexivity. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -2592,7 +2591,7 @@ Definition sort_post xs a :=
   sorted xs'.
 
 Local Ltac intro_sort_post :=
-  unfold sort_post; pack; list; tc3; list; tc3.
+  unfold sort_post; pack; tc3; length; tc3.
 
 Ltac elim_sort_post xs' :=
   match goal with h: sort_post _ _ |- _ =>
@@ -2606,7 +2605,7 @@ Lemma wp_sort a xs :
   Sorted R' xs →
   wp (sort a) (sort_post xs).
 Proof.
-  intros. unfold sort.
+  intros. unfold sort. arrays.
   wp_length _n.
   assert (Sorted R' (initial_seg (0 + len xs) xs))
     by (list; assumption).
@@ -2652,7 +2651,7 @@ Lemma wp_merge :
     sorted zs
   ).
 Proof.
-  intros. unfold merge.
+  intros. unfold merge. arrays.
   wp_length _m.
   wp_length _n.
   wp_if.
