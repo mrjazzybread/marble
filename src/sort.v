@@ -1241,7 +1241,7 @@ Qed.
 (* A stronger local setting is needed for the proofs that follow. *)
 
 Local Ltac wp_precondition_hook ::=
-  autorewrite with z clength wp_precondition_hook;
+  list;
   match goal with
   | |- Sorted _ _ =>
       sorted
@@ -1445,17 +1445,6 @@ Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   valid_seg k limit dst →
   wp (merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
-
-Local Ltac wp_precondition_hook ::=
-  list;
-  match goal with
-  | |- Sorted _ _ =>
-      sorted
-  | |- pairwise _ _ _ =>
-      pw
-  | _ =>
-      eauto 6 with lia
-  end.
 
 Lemma wp_merge_aux_1 _j1 _j2 _i1 _i2 :
   merge_aux_1_spec _j1 _j2 (_i1, _i2).
@@ -1747,13 +1736,6 @@ Definition optimistic_merge_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   valid_seg k limit dst →
   wp (optimistic_merge _src1 _i1 _j1 _src2  _i2 _j2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
-
-(* TODO does not work *)
-Tactic Notation "shadow" tactic(cont) ident(x) :=
-  let x' := fresh x in
-  cont x';
-  clear dependent x;
-  rename x' into x.
 
 Lemma wp_optimistic_merge _j1 _j2 _i1 _i2 :
   optimistic_merge_spec _j1 _j2 (_i1, _i2).
