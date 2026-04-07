@@ -16,7 +16,7 @@ Set Universe Polymorphism.
    https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
  *)
 
-Local Ltac wp_intros_hook Hx ::=
+Local Ltac wp_intro_hook Hx ::=
   (* Simplify expressions that involve lists and arithmetic. *)
   list in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
@@ -114,7 +114,7 @@ Local Ltac destructIsArray :=
 (* This lemma can be viewed as a specification of [length],
    viewed as a "pure function", so [wp] is not used. *)
 
-Global Instance isInt_length `{Inhabited A} (a : array A) xs :
+Instance isInt_length `{Inhabited A} (a : array A) xs :
   isArray a xs →
   isInt (length a) (len xs).
 Proof.
@@ -132,7 +132,7 @@ Qed.
    and introduces the fact [0 ≤ len xs ≤ max_array_length]. Furthermore,
    it simplifies the expression [len xs] using the tactic [length]. *)
 
-Global Ltac arrays :=
+Ltac arrays :=
   repeat match goal with
   h: isArray ?a ?xs |- _ =>
     let h' := fresh h in
@@ -145,7 +145,7 @@ Global Ltac arrays :=
 
 (* We let [lia] invoke [arrays; lengths]. *)
 
-(* We do not make this a Global setting, because this might disturb or
+(* We do not make this a setting, because this might disturb or
    surprise the user. We expect the user to reproduce and adapt this
    setting in every file. *)
 
@@ -212,7 +212,7 @@ Qed.
    [do _n ← length a ; if (_i <? _n) then ...] and prefer to write
    [if (_i <? length a) then ...]. *)
 
-Global Instance isBool1_lt_length `{Inhabited A} (a : array A) xs :
+Instance isBool1_lt_length `{Inhabited A} (a : array A) xs :
   isArray a xs →
   ∀IntU _i i,
   isBool1 (_i <? length a)%uint63 (valid i xs).
@@ -350,10 +350,10 @@ End PrimSpec.
 (* The following tactics help use the above specifications. *)
 
 Ltac wp_length n :=
-  wp_op wp_length n.
+  wp_op_intro wp_length n.
 
 Ltac wp_get x :=
-  wp_op wp_get x.
+  wp_op_intro wp_get x.
 
 Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
@@ -361,7 +361,7 @@ Ltac wp_set :=
   end.
 
 Ltac wp_make a :=
-  wp_op wp_make a.
+  wp_op_intro wp_make a.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -442,7 +442,7 @@ Lemma wp_to_list a xs :
 Proof.
   intro. unfold to_list.
   wp_length _n.
-  wp_op wp_segment_to_list xs'.
+  wp_op_intro wp_segment_to_list xs'.
   assumption.
 Qed.
 
@@ -697,7 +697,7 @@ Lemma wp_list_length xs :
   wp (list_length xs) (λ _i, isInt _i (len xs)).
 Proof.
   unfold list_length.
-  wp_op wp_list_length_aux _i.
+  wp_op_intro wp_list_length_aux _i.
   eauto.
 Qed.
 
@@ -733,7 +733,7 @@ Lemma wp_of_list xs :
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
-  wp_op @wp_list_length _n.
+  wp_op_intro @wp_list_length _n.
   wp_make a.
   (* The loop invariant. *)
   wp_loop @wp_list_iteri (λ history a,
@@ -769,8 +769,8 @@ Proof.
     ) (λ ys, xs = ys)
   ).
   { rewrite wp_iff. eauto. }
-  wp_op @wp_of_list a.
-  wp_op @wp_to_list ys.
+  wp_op_intro @wp_of_list a.
+  wp_op_intro @wp_to_list ys.
   wp_ret. eauto.
 Qed.
 
@@ -1002,7 +1002,7 @@ Qed.
 End Copy.
 
 Ltac wp_copy b :=
-  wp_op @wp_copy b.
+  wp_op_intro @wp_copy b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1038,7 +1038,7 @@ Qed.
 End Sub.
 
 Ltac wp_sub b :=
-  wp_op @wp_sub b.
+  wp_op_intro @wp_sub b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1084,7 +1084,7 @@ Qed.
 End Append.
 
 Ltac wp_append c :=
-  wp_op @wp_append c.
+  wp_op_intro @wp_append c.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1253,7 +1253,7 @@ Goal
 Proof. vm_compute. reflexivity. Qed.
 
 Ltac wp_find_index out :=
-  wp_op @wp_find_index out.
+  wp_op_intro @wp_find_index out.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1296,7 +1296,7 @@ Qed.
 End Exist.
 
 Ltac wp_exist b :=
-  wp_op @wp_exist b.
+  wp_op_intro @wp_exist b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1333,7 +1333,7 @@ Lemma wp_for_all a xs :
   ).
 Proof.
   intros. unfold for_all.
-  wp_op @wp_find_index out.
+  wp_find_index out.
   destruct out as [ _i |]; unfold find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
@@ -1341,7 +1341,7 @@ Qed.
 End ForAll.
 
 Ltac wp_for_all b :=
-  wp_op @wp_for_all b.
+  wp_op_intro @wp_for_all b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1445,7 +1445,7 @@ Qed.
 End Equal.
 
 Ltac wp_equal b :=
-  wp_op @wp_equal b.
+  wp_op_intro @wp_equal b.
 
 (* As a special case, we recover a simpler specification of [equal]
    in the case where the relation [≡] is equality. *)
@@ -1558,10 +1558,10 @@ Proof.
   ).
   (* The loop body. *)
   clear dependent a. wp_up_intros k a. intros _k ?. (* TODO *)
-  wp_op Hf x.
+  wp_op_intro Hf x.
   wp_set.
   isArray.
 Qed.
 
 Ltac wp_init a :=
-  wp_op @wp_init a.
+  wp_op_intro @wp_init a.

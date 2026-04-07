@@ -530,7 +530,7 @@ Ltac wp_break :=
 
 (* [wp_loop lemma I] applies the lemma [lemma], which is typically a
    reasoning rule for a loop, with the invariant (inv := I).
-   It is essentially a special case of [wp_op_nude] where we want to
+   It is essentially a special case of [wp_apply] where we want to
    specialize the lemma. *)
 
 Ltac wp_loop_exit :=
@@ -566,7 +566,7 @@ Ltac wp_loop lemma I :=
   | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
   ].
 
-(* TODO comment; combine with [wp_loop_nude]? use [wp_intros_hook]? *)
+(* TODO comment; combine with [wp_loop_nude]? use [wp_intro_hook]? *)
 
 Ltac wp_loop_intros j0 j1 s :=
   let h := fresh "Hinv" in

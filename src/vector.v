@@ -10,7 +10,7 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
-Local Ltac wp_intros_hook Hx ::=
+Local Ltac wp_intro_hook Hx ::=
   (* Simplify expressions that involve lists and arithmetic. *)
   list in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
@@ -103,7 +103,7 @@ Qed.
    and introduces the fact [0 ≤ len xs ≤ max_array_length]. Furthermore,
    it simplifies the expression [len xs] using the tactic [length]. *)
 
-Global Ltac vectors :=
+Ltac vectors :=
   repeat match goal with
   h: isVector ?a ?xs |- _ =>
     let h' := fresh h in
@@ -116,7 +116,7 @@ Global Ltac vectors :=
 
 (* We let [lia] invoke [vectors; arrays; lengths]. *)
 
-(* We do not make this a Global setting, because this might disturb or
+(* We do not make this a setting, because this might disturb or
    surprise the user. We expect the user to reproduce and adapt this
    setting in every file. *)
 
@@ -298,7 +298,7 @@ Proof.
     (* Lots of preliminary remarks about machine integers. *)
     generalize unsigned_twice_max_array_length; intro. (* UGLY *)
      wp_if; wp_ret; eexists; split; tc. }
-  wp_intros _c'.
+  wp_intro _c'.
   wp_ret.
   eexists; split; tc.
 Qed.
@@ -330,7 +330,7 @@ Proof.
   assert (isVector (_n, a) xs). { introIsVector. eauto. }
   destructIsVectorCap.
   wp_length _c.
-  wp_op wp_next_capacity _c'.
+  wp_op_intro wp_next_capacity _c'.
   wp_bind_eq.
   wp_op_shadow wp_grow a.
   eauto with lia.
@@ -379,7 +379,7 @@ Proof.
     + wp_op_shadow wp_really_ensure_capacity a.
       eauto. }
   clear dependent unoccupied. (* A bit ad hoc. *)
-  wp_intros_shadow a.
+  wp_shadow a.
   destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.
@@ -423,8 +423,8 @@ Proof.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?. wp_intros x.
-    wp_op Hstep s'.
+  { wp_up_intros j s. intros _j ?. wp_intro x.
+    wp_op_shadow Hstep s.
     assumption. }
 Qed.
 
@@ -442,8 +442,8 @@ Proof.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?. wp_intros x.
-    wp_op Hstep s'.
+  { wp_up_intros j s. intros _j ?. wp_intro x.
+    wp_op_shadow Hstep s.
     assumption. }
 Qed.
 
@@ -484,7 +484,7 @@ Lemma wp_of_array a xs :
   wp (of_array a) (λ v, isVector v xs).
 Proof.
   intros. unfold of_array.
-  wp_op @wp_copy b.
+  wp_copy b.
   eapply wp_steal_array.
   eauto.
 Qed.
@@ -544,7 +544,7 @@ Lemma wp_read_write_borrow {B} v xs body (Q  : B * vector A → Prop) :
 Proof.
   intros ? Hbody.
   destructIsVector. destructIsVectorCap. unfold read_write_borrow.
-  wp_op Hbody ba. wp_last Hpost.
+  wp_op_intro Hbody ba. wp_last Hpost.
   clear dependent a. destruct ba as [ b a ].
   destruct Hpost as (xs' & unoccupied' & Hpost). unpack in Hpost.
   wp_ret.
@@ -556,13 +556,13 @@ Qed.
 
 End Operations.
 
-Global Ltac wp_steal_array :=
+Ltac wp_steal_array :=
   match goal with |- context[steal_array ?a] =>
     wp_op_shadow wp_steal_array a
   end.
 
-Global Ltac wp_of_array b :=
-  wp_op wp_of_array b.
+Ltac wp_of_array b :=
+  wp_op_intro wp_of_array b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -583,12 +583,12 @@ Lemma wp_of_list xs :
   wp (of_list xs) (λ v, isVector v xs).
 Proof.
   intros. unfold of_list.
-  wp_op @array.wp_of_list a.
+  wp_op_intro @array.wp_of_list a.
   wp_steal_array.
   eauto.
 Qed.
 
 End OfList.
 
-Global Ltac wp_of_list v :=
-  wp_op wp_of_list v.
+Ltac wp_of_list v :=
+  wp_op_intro wp_of_list v.

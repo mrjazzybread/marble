@@ -50,7 +50,7 @@ Local Ltac listz_easy ::=
 
 (* After stepping over an operation, simplify the postcondition. *)
 
-Local Ltac wp_intros_hook Hx ::=
+Local Ltac wp_intro_hook Hx ::=
   list in Hx; unpack in Hx.
 
 (* -------------------------------------------------------------------------- *)
@@ -1835,7 +1835,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op wp_merge_aux_1 _dst'.
+    wp_op_shadow wp_merge_aux_1 _src1.
     assumption. }
 Qed.
 
@@ -1907,7 +1907,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op wp_merge_aux_2 _dst'.
+    wp_op_shadow wp_merge_aux_2 _src2.
     assumption. }
 Qed.
 
@@ -1975,7 +1975,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op wp_merge_aux_12 _dst'.
+    wp_op_shadow wp_merge_aux_12 _dst.
     assumption. }
 Qed.
 
@@ -2612,7 +2612,7 @@ Lemma wp_merge' `{Inhabited A, PreOrder A R, LebSpec A R} :
   ).
 Proof.
   intros.
-  wp_op (@wp_merge A _ R _ _ _ R' _) c.
+  wp_op_intro (@wp_merge A _ R _ _ _ R' _) c.
   eauto using Sorted_covariant.
 Qed.
 
@@ -2625,4 +2625,4 @@ Global Ltac wp_sort a :=
   wp_op_shadow @wp_sort' a.
 
 Global Ltac wp_merge c :=
-  wp_op @wp_merge' c.
+  wp_op_intro @wp_merge' c.

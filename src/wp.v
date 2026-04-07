@@ -216,51 +216,51 @@ Ltac wp_bind_eq :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* The hook [wp_intros_hook] simplifies a hypothesis that has just been
-   introduced. It is invoked by [wp_intros] below. *)
+(* The tactic [wp_intro_hook] simplifies a hypothesis that has just been
+   introduced. It is invoked by [wp_intro] below. *)
 
-(* The default definition of this hook is cheap. We expect users to redefine
-   this hook if they need more expensive / aggressive simplification. *)
+(* The default definition of this tactic is cheap. We expect users to
+   redefine it if they need more expensive / aggressive simplification. *)
 
-Ltac wp_intros_hook Hx :=
+Ltac wp_intro_hook Hx :=
   unpack in Hx.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_intros x] first introduces a variable [x] and a hypothesis [Hx], then
+(* [wp_intro x] first introduces a variable [x] and a hypothesis [Hx], then
    simplifies this hypothesis by invoking [wp_intro_hook Hx]. It is
    typically used in the second subgoal of [wp_bind] and [wp_conseq]. *)
 
-Ltac wp_intros x :=
+Ltac wp_intro x :=
   (* Eliminate beta redexes. (There is often one.) *)
   cbv beta;
   let Hx := fresh in
   intros x Hx;
   (* Perform simplification. *)
-  wp_intros_hook Hx.
+  wp_intro_hook Hx.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_intros_shadow x] first invokes [wp_intros x'], where [x'] is fresh,
-   then forgets everything about [x] and renames [x'] into [x]. It should be
-   used when [x'] represents a new array that has been obtained by updating
-   the array [x], or more generally, a new mutable data structure that has
-   been obtained by updating the data structure [x]. This helps keep the
-   goal readable and ensures mutable data structures are used linearly. *)
+(* [wp_shadow x] forgets everything about [x] before invoking [wp_intro x].
+   Thus, the newly introduced [x] shadows the earlier [x]. *)
 
-Ltac wp_intros_shadow x :=
-  let x' := fresh in
-  wp_intros x';
+(* This tactic should be used when a new array is obtained by updating an
+   existing array, or more generally, when a new mutable data structure is
+   obtained by updating an existing mutable data structure [x]. This helps
+   keep the goal readable and ensures that mutable data structures are used
+   linearly. *)
+
+Ltac wp_shadow x :=
   clear dependent x;
-  rename x' into x.
-
-(* TODO it would be nice if [shadow] could somehow be a modifier
-   that wraps an arbitrary tactic *)
+  wp_intro x.
 
 (* -------------------------------------------------------------------------- *)
 
-(* The hook [wp_precondition_hook] attempts to prove a precondition. It
+(* The tactic [wp_precondition_hook] attempts to prove a precondition. It
    does not fail: if it is unable to prove the goal, it leaves it open. *)
+
+(* The default definition of this tactic is cheap. We expect users to
+   redefine it if they need more expensive / aggressive simplification. *)
 
 Global Hint Rewrite
   <- List.app_assoc
@@ -278,12 +278,12 @@ Ltac wp_precondition_hook :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_op_nude lemma] applies the lemma [lemma], which is typically a
+(* [wp_apply lemma] applies the lemma [lemma], which is typically a
    reasoning rule for some operation [op], then attempts to solve its
    preconditions. The goal should have the form [wp (op ...) ?Q] where
    [?Q] is a metavariable. *)
 
-Ltac wp_op_nude lemma :=
+Ltac wp_apply lemma :=
   (* Apply the reasoning rule for this operation. *)
   simple eapply lemma;
   (* Attempt to solve the preconditions. Because the semi-colon in Ltac is
@@ -298,43 +298,51 @@ Ltac wp_op_nude lemma :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_op lemma x] applies either [wp_bind] or [wp_conseq], then applies
-   the lemma [lemma] in the first subgoal and introduces the result under
-   the name [x] in the second subgoal. The goal should have the form
-   [wp (op ...) Q] or [wp (do x ← op ... ; ...) Q]. *)
+(* [wp_op lemma] applies either [wp_bind] or [wp_conseq], then applies
+   the lemma [lemma] in the first subgoal and leaves the second subgoal
+   untouched. *)
 
-(* [wp_op_shadow lemma x] is identical, except it uses
-   [wp_intros_shadow x] instead of [wp_intros x]. *)
+(* The goal should have the form [wp (op ...) Q] or
+   [wp (do x ← op ... ; ...) Q]. *)
 
-Ltac wp_op lemma x :=
+(* The first subgoal is changed by [wp_apply lemma] into an arbitrary
+   number of subgoals (preconditions). *)
+
+Ltac wp_op lemma :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
-  [ wp_op_nude lemma | wp_intros x ].
+    [ wp_apply lemma | ].
+
+(* In the last subgoal of [wp_op], one should typically use [wp_intro x] or
+   [wp_shadow x]. The following tactics are abbreviations for these common
+   practices. *)
+
+Ltac wp_op_intro lemma x :=
+  wp_op lemma; last wp_intro x.
 
 Ltac wp_op_shadow lemma x :=
-  first [ simple eapply wp_bind | simple eapply wp_conseq ];
-  [ wp_op_nude lemma | wp_intros_shadow x ].
+  wp_op lemma; last wp_shadow x.
 
-(* [wp_op_shadow_pair lemma x y] is an ad hoc variant of [wp_op_shadow] that
-   should be used when the result of an operation is a pair (x, y). It is
-   needed because [clear dependent] does not accept an intropattern as an
-   argument, I believe. *)
+(* -------------------------------------------------------------------------- *)
+
+(* [wp_shadow_pair x y] is an ad hoc variant of [wp_shadow] that should be
+   used when the result of an operation is a pair (x, y). It is needed
+   because [clear dependent] does not accept an intropattern as an argument,
+   I believe. *)
+
+Ltac wp_shadow_pair x y :=
+  let p := fresh in
+  wp_intro p;
+  clear dependent x; clear dependent y;
+  destruct p as [x y].
 
 Ltac wp_op_shadow_pair lemma x y :=
-  let p := fresh in
-  first [ simple eapply wp_bind | simple eapply wp_conseq ];
-  [ wp_op_nude lemma
-  | wp_intros p;
-    clear dependent x; clear dependent y;
-    destruct p as [x y] ].
-
-(* To see example uses of the above tactics, look at the definitions
-   of the tactics [wp_get] and [wp_set] in array.v. *)
+  wp_op lemma; last wp_shadow_pair x y.
 
 (* -------------------------------------------------------------------------- *)
 
 (* [wp_last H] renames the most recently introduced hypothesis [H]. *)
 
-(* The tactics [wp_intros] and [wp_intros_shadow] do not allow naming the
+(* The tactics [wp_intro] and [wp_shadow] do not allow naming the
    hypotheses that they introduce. In case there is only one such
    hypothesis, [wp_last] allows renaming it after the fact. *)
 

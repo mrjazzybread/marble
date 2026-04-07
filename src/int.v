@@ -753,7 +753,7 @@ Local Obligation Tactic :=
   try Tactics.program_solve_wf;
   eauto 3 with lia.
 
-Local Ltac wp_intros_hook Hx ::=
+Local Ltac wp_intro_hook Hx ::=
   (* Perform arithmetic simplification. *)
   z in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
@@ -852,12 +852,15 @@ Proof.
   funelim (iter_down_aux _i body _j s); cleanup; clear Heqcall;
   intros; isBool_magic; z.
   (* Case [j = i]. *)
-  { subst j. wp_op Hstep s'. wp_ret. eauto. }
+  { subst j.
+    wp_op_shadow Hstep s.
+    wp_ret.
+    eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH.
-    wp_op Hstep s'.
-    wp_op IH s''.
-    eauto with lia. }
+    wp_op_shadow Hstep s.
+    wp_op_shadow IH s.
+    eauto. }
 Qed.
 
 (* [iter_down _k _i s body] applies the loop body [body] to every machine
@@ -944,10 +947,10 @@ Proof.
   funelim (xiter_down_aux _i (@body) _j s); cleanup; clear Heqcall;
   intros; isBool_magic; z.
   (* Case [j = i]. *)
-  { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
+  { subst j. eapply Hbody; pack; tc; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH. eapply Hbody; pack; tc.
-    + wp_op IH s'. assumption.
+    + wp_op_shadow IH s. assumption.
     + wp_ret. eauto. }
 Qed.
 
@@ -1030,10 +1033,10 @@ Proof.
   funelim (uxiter_down_aux _i (@body) _j); cleanup; clear Heqcall;
   intros; isBool_magic; z.
   (* Case [j = i]. *)
-  { subst j. eapply Hbody; pack; tc; intros; wp_ret; eauto. }
+  { subst j. eapply Hbody; pack; tc; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH. eapply Hbody; pack; tc.
-    + wp_op (IH()) s'. eauto.
+    + wp_op_intro (IH()) out. eauto.
     + wp_ret. eauto. }
 Qed.
 
@@ -1129,7 +1132,9 @@ Proof.
   funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
   isBool_magic; z.
   (* Case [i < k]. *)
-  { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
+  { wp_op_shadow Hstep s.
+    wp_op_shadow H s.
+    wp_ret. eauto. }
   (* Case [¬ i < k]. *)
   { wp_ret. eauto. }
 Qed.
@@ -1199,7 +1204,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
-    + wp_op H sout. assumption.
+    + wp_op_intro H sout. assumption.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)
@@ -1265,7 +1270,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
-    + wp_op (H()) out. eauto.
+    + wp_op_intro (H()) out. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)
