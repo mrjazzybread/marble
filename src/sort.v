@@ -179,7 +179,11 @@ Local Hint Resolve lt_lex : core.
 Lemma le_le_lex x y : x ≤ y → x `precedes` y → x `lex` y.
 Proof. eauto. Qed.
 
-(* TODO still used? *)
+(* The following hints allows the tactic [related] to prove a goal of
+   the form [x `lex` y] by applying [le_le_lex] and by using [related]
+   again in the second subgoal. This is not super elegant, but works
+   and is good enough for now. *)
+
 Local Hint Resolve le_le_lex : related.
 Local Hint Extern 1 (_ `precedes` _) => related : related.
 
