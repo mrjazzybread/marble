@@ -421,10 +421,9 @@ Lemma wp_segment_iteri v xs f :
 Proof.
   intros. ITER. unfold segment_iteri.
   destructIsVector. destructIsVectorCap.
-  wp_loop @array.wp_segment_iteri inv.
-  clear dependent s.
+  wp_op array.wp_segment_iteri; last wp_intro ?.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?. wp_intro x. }
+  { clear dependent s. wp_up_intros j s. intros _j ?. wp_intro x. }
 Qed.
 
 (* The public specification of [iteri]. *)
@@ -438,10 +437,9 @@ Lemma wp_iteri v xs f :
 Proof.
   intros. ITER. unfold iteri.
   destructIsVector. destructIsVectorCap.
-  wp_loop @array.wp_segment_iteri inv.
-  clear dependent s.
+  wp_op array.wp_segment_iteri; last wp_intro ?.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?. wp_intro x. }
+  { clear dependent s. wp_up_intros j s. intros _j ?. wp_intro x. }
 Qed.
 
 End Iteri.

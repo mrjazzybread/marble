@@ -288,6 +288,14 @@ Ltac wp_precondition_hook :=
   (* This can solve arithmetic side conditions. *)
   eauto 3 with lia.
 
+(* The tactic [wp_loop_precondition_hook] prepares a precondition
+   before [wp_precondition_hook] is invoked. It is invoked only by
+   [wp_apply ... with invariant: ...], that is, only when reasoning
+   about a loop. *)
+
+Ltac wp_loop_precondition_hook :=
+  idtac.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [wp_apply lemma] applies the lemma [lemma], which is typically a
@@ -295,7 +303,7 @@ Ltac wp_precondition_hook :=
    preconditions. The goal should have the form [wp (op ...) ?Q] where
    [?Q] is a metavariable. *)
 
-Ltac wp_apply lemma :=
+Tactic Notation "wp_apply" uconstr(lemma) :=
   (* Apply the reasoning rule for this operation. *)
   simple eapply lemma;
   (* Attempt to solve the preconditions. Because the semi-colon in Ltac is
@@ -306,6 +314,16 @@ Ltac wp_apply lemma :=
      [lia] to prove arithmetic side conditions. *)
   tc3;
   (* This tactic is user-configurable. *)
+  wp_precondition_hook.
+
+(* [wp_apply lemma with invariant: I] is analogous to [wp_apply lemma],
+   but specifies that the lemma [lemma] should be instantiated with
+   [inv := I]. This is typically exploited to provide a loop invariant. *)
+
+Tactic Notation "wp_apply" uconstr(lemma) "with" "invariant:" constr(I) :=
+  simple eapply lemma with (inv := I);
+  wp_loop_precondition_hook;
+  tc3;
   wp_precondition_hook.
 
 (* -------------------------------------------------------------------------- *)
@@ -320,18 +338,26 @@ Ltac wp_apply lemma :=
 (* The first subgoal is changed by [wp_apply lemma] into an arbitrary
    number of subgoals (preconditions). *)
 
-Ltac wp_op lemma :=
+Tactic Notation "wp_op" uconstr(lemma) :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
     [ wp_apply lemma | ].
+
+(* [wp_op lemma with invariant: I] is analogous to [wp_op lemma],
+   but specifies that the lemma [lemma] should be instantiated with
+   [inv := I]. This is typically exploited to provide a loop invariant. *)
+
+Tactic Notation "wp_op" uconstr(lemma) "with" "invariant:" constr(I) :=
+  first [ simple eapply wp_bind | simple eapply wp_conseq ];
+    [ wp_apply lemma with invariant: I | ].
 
 (* In the last subgoal of [wp_op], one should typically use [wp_intro x] or
    [wp_shadow x]. The following tactics are abbreviations for these common
    practices. *)
 
-Tactic Notation "wp_op_intro" constr(lemma) simple_intropattern(x) :=
+Tactic Notation "wp_op_intro" uconstr(lemma) simple_intropattern(x) :=
   wp_op lemma; last wp_intro x.
 
-Ltac wp_op_shadow lemma x :=
+Tactic Notation "wp_op_shadow" uconstr(lemma) simple_intropattern(x) :=
   wp_op lemma; last wp_shadow x.
 
 (* -------------------------------------------------------------------------- *)

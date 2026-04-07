@@ -495,6 +495,12 @@ Ltac expand_ITER :=
     ITER, XITER, UXITER;
     simpl implication.
 
+(* Updating this hook (which is defined in wp.v) lets us to call [expand_ITER]
+   in every precondition of a loop, before [wp_precondition_hook] is called. *)
+
+Global Ltac wp_loop_precondition_hook ::=
+  expand_ITER.
+
 (* The tactic [ITER] should be used when the goal is [ITER ...]. *)
 
 Ltac ITER :=
@@ -528,38 +534,7 @@ Ltac wp_break :=
     simple eapply Hbreak; clear Hcontinue Hbreak
   end.
 
-(* [wp_loop lemma I] applies the lemma [lemma], which is typically a
-   reasoning rule for a loop, with the invariant (inv := I).
-   It is essentially a special case of [wp_apply] where we want to
-   specialize the lemma. *)
-
-Ltac wp_loop_nude lemma I :=
-  (* Apply the reasoning rule for this operation. *)
-  first [
-    simple eapply lemma with (inv := I)
-  |
-    (* We may need to infer the type [S]
-       from the type of the invariant [I]. *)
-    match type of I with ?P -> ?S -> Prop =>
-    simple eapply (@lemma S) with (inv := I) end
-  |
-    (* We may need to infer the type [S]
-       from the type of the invariant [I]. *)
-    match type of I with ?P -> ?S -> ?Out -> Prop =>
-    simple eapply (@lemma S) with (inv := I) end
-  ];
-  (* Expand the definitions that could get in the way. *)
-  expand_ITER;
-  list; tc3; list in *; tc3.
-    (* [tc] is often inexplicably slow here, so we have to use [tc3] *)
-
-Ltac wp_loop lemma I :=
-  first [
-    wp_loop_nude lemma I
-  | simple eapply wp_conseq; [ wp_loop_nude lemma I | (* leave this subgoal open *) ]
-  ].
-
-(* TODO comment; combine with [wp_loop_nude]? use [wp_intro_hook]? *)
+(* TODO clean up *)
 
 Ltac wp_loop_intros j0 j1 s :=
   let h := fresh "Hinv" in

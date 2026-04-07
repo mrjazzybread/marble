@@ -353,18 +353,18 @@ End PrimSpec.
 (* The following tactics help use the above specifications. *)
 
 Ltac wp_length n :=
-  wp_op_intro @wp_length n.
+  wp_op_intro wp_length n.
 
 Ltac wp_get x :=
-  wp_op_intro @wp_get x.
+  wp_op_intro wp_get x.
 
 Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
-    wp_op_shadow @wp_set a
+    wp_op_shadow wp_set a
   end.
 
 Ltac wp_make a :=
-  wp_op_intro @wp_make a.
+  wp_op_intro wp_make a.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -431,7 +431,10 @@ Proof.
      It does not need to unfold the definition of [isArray]. *)
   intros. unfold segment_to_list.
   (* The loop invariant. *)
-  wp_iter_down (λ j ys, ys = seg j k xs); last wp_intro ?.
+  wp_op wp_iter_down with invariant: (λ j ys, ys = seg j k xs);
+  last wp_intro ?.
+  (* Initialization. *)
+  { lego. }
   (* Preservation. *)
   { wp_down_intros j xs'. intros _j ?.
     wp_get x.
@@ -475,7 +478,7 @@ Proof.
   (* The loop invariant: when the loop index is [j] and the state is
      [ys], the length of [ys] is [n - j] and the elements of [ys] are
      the elements found at indices [j, n) in the array [a]. *)
-  wp_iter_down (λ j ys,
+  wp_op wp_iter_down with invariant: (λ j ys,
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_Z o] = ys !!! (o - j)
   ).
@@ -731,10 +734,10 @@ Lemma wp_of_list xs :
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
-  wp_op_intro @wp_list_length _n.
+  wp_op_intro wp_list_length _n.
   wp_make a.
   (* The loop invariant. *)
-  wp_loop @wp_list_iteri (λ history a,
+  wp_op wp_list_iteri with invariant: (λ history a,
     isArray a (history ++ replicate (len xs - len history) inhabitant)
   ).
   (* Preservation. *)
@@ -769,8 +772,8 @@ Proof.
     ) (λ ys, xs = ys)
   ).
   { rewrite wp_iff. eauto. }
-  wp_op_intro @wp_of_list a.
-  wp_op_intro @wp_to_list ys.
+  wp_op_intro wp_of_list a.
+  wp_op_intro wp_to_list ys.
   wp_ret.
 Qed.
 
@@ -876,7 +879,7 @@ Lemma wp_blit a xs b ys :
 Proof.
   intros. unfold blit.
   wp_bind_eq.
-  wp_iter_up (λ k, blit_post xs i ys j (k - i)).
+  wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i)).
   (* Initialization. *)
   { isArray. }
   (* Preservation. *)
@@ -937,7 +940,8 @@ Proof.
   wp_if.
   (* Case [j ≤ i]. *)
   { wp_bind_eq.
-    wp_iter_up (λ k, blit_post xs i xs j (k - i)).
+    wp_op wp_iter_up
+      with invariant: (λ k, blit_post xs i xs j (k - i)).
     (* Initialization. *)
     { isArray. }
     (* Preservation. *)
@@ -951,7 +955,8 @@ Proof.
     { wp_shadow a. isArray. }}
   (* Case [i < j]. *)
   { wp_bind_eq.
-    wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
+    wp_op wp_iter_down
+      with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
     (* Initialization. *)
     { isArray. }
     (* Preservation. *)
@@ -1006,7 +1011,7 @@ Qed.
 End Copy.
 
 Ltac wp_copy b :=
-  wp_op_intro @wp_copy b.
+  wp_op_intro wp_copy b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1040,7 +1045,7 @@ Qed.
 End Sub.
 
 Ltac wp_sub b :=
-  wp_op_intro @wp_sub b.
+  wp_op_intro wp_sub b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1085,7 +1090,7 @@ Qed.
 End Append.
 
 Ltac wp_append c :=
-  wp_op_intro @wp_append c.
+  wp_op_intro wp_append c.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1120,7 +1125,7 @@ Lemma wp_fill a xs _i i _n n  x :
   ).
 Proof.
   intros. unfold fill.
-  wp_iter_up (λ k a, isArray a
+  wp_op wp_iter_up with invariant: (λ k a, isArray a
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
   (* Initialization. *)
@@ -1198,7 +1203,7 @@ Proof.
   intros. unfold find_index.
   wp_length _n.
   eapply wp_conseq.
-  { wp_uxiter_up (find_index_inv xs); tc;
+  { wp_op wp_uxiter_up with invariant: (find_index_inv xs); tc;
     unfold find_index_inv in *.
     (* Initialization. *)
     { eauto with on_seg lia. }
@@ -1256,7 +1261,7 @@ Goal
 Proof. vm_compute. reflexivity. Qed.
 
 Ltac wp_find_index out :=
-  wp_op_intro @wp_find_index out.
+  wp_op_intro wp_find_index out.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1299,7 +1304,7 @@ Qed.
 End Exist.
 
 Ltac wp_exist b :=
-  wp_op_intro @wp_exist b.
+  wp_op_intro wp_exist b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1344,7 +1349,7 @@ Qed.
 End ForAll.
 
 Ltac wp_for_all b :=
-  wp_op_intro @wp_for_all b.
+  wp_op_intro wp_for_all b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1420,7 +1425,7 @@ Proof.
   (* First branch: the lengths of the arrays coincide. *)
   { eapply wp_bind.
     { unfold equal_aux.
-      wp_uxiter_up (equal_inv xs ys);
+      wp_op wp_uxiter_up with invariant: (equal_inv xs ys);
         tc; unfold equal_inv in *; eauto with lia.
       (* Initialization. *)
       { eauto with on_seg lia. }
@@ -1448,7 +1453,7 @@ Qed.
 End Equal.
 
 Ltac wp_equal b :=
-  wp_op_intro @wp_equal b.
+  wp_op_intro wp_equal b.
 
 (* As a special case, we recover a simpler specification of [equal]
    in the case where the relation [≡] is equality. *)
@@ -1511,7 +1516,7 @@ Lemma wp_segment_iteri a xs f :
     (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
   intros. ITER. unfold segment_iteri.
-  wp_iter_up inv.
+  wp_op wp_iter_up; last wp_intro ?.
   (* The loop body. *)
   { clear dependent s.
     wp_up_intros j s. intros _j ?.
@@ -1529,7 +1534,7 @@ Lemma wp_iteri a xs f :
 Proof.
   intros. ITER. unfold iteri.
   wp_length _n.
-  wp_loop @wp_segment_iteri inv.
+  wp_op wp_segment_iteri; last wp_intro ?.
 Qed.
 
 End Iteri.
@@ -1554,7 +1559,7 @@ Lemma wp_init `{Inhabited A} _n n (f : int → A) (ψ : Z → A) :
 Proof.
   intros. unfold init. wp_last Hf.
   wp_make a.
-  wp_iter_up (λ k a,
+  wp_op wp_iter_up with invariant: (λ k a,
     isArray a (listz.init k ψ ++ replicate (n - k) inhabitant)
   ).
   (* The loop body. *)
@@ -1567,4 +1572,4 @@ Proof.
 Qed.
 
 Ltac wp_init a :=
-  wp_op_intro @wp_init a.
+  wp_op_intro wp_init a.

@@ -866,12 +866,9 @@ Proof.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
-  { wp_loop @wp_iter_down_aux inv; wp_shadow s.
+  { wp_op wp_iter_down_aux; wp_shadow s.
     eauto. }
 Qed.
-
-Global Ltac wp_iter_down I :=
-  wp_loop @wp_iter_down I.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -954,13 +951,10 @@ Proof.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
-  { wp_loop @wp_xiter_down_aux inv.
+  { wp_op wp_xiter_down_aux.
     clear dependent s. wp_intro sout. destruct sout as [s out]. (* TODO *)
     assumption. }
 Qed.
-
-Global Ltac wp_xiter_down I :=
-  wp_loop @wp_xiter_down I.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1042,12 +1036,9 @@ Proof.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
-  { wp_loop @wp_uxiter_down_aux inv; wp_intro out.
+  { wp_op wp_uxiter_down_aux; wp_intro out.
     eauto. }
 Qed.
-
-Global Ltac wp_uxiter_down I :=
-  wp_loop @wp_uxiter_down I.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1097,7 +1088,7 @@ iter_up_aux _i s with inspect (_i <? _k) => {
 End Code.
 End IterUp.
 
-(* A specification of [iter_up_aux], which also serves for [iter_up]. *)
+(* A specification of [iter_up_aux]. *)
 
 Lemma wp_iter_up_aux {S} (body : int → S → S) :
   ∀IntU _i i ,
@@ -1126,9 +1117,17 @@ Qed.
 Definition iter_up {S} _i _k s (body : int → S → S) :=
   iter_up_aux _k body _i s.
 
-Global Ltac wp_iter_up I :=
-  unfold iter_up at 1;
-  wp_loop @wp_iter_up_aux I.
+(* A specification of [iter_up]. *)
+
+Lemma wp_iter_up {S} (body : int → S → S) :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  ITER_Z i k Up
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_up _i _k s body) Q).
+Proof.
+  unfold iter_up. eauto using wp_iter_up_aux.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1197,8 +1196,16 @@ Definition xiter_up {S A} _i _k s
 
 (* The specification of [xiter_up]. *)
 
-Definition wp_xiter_up :=
-  @wp_xiter_up_aux.
+Lemma wp_xiter_up {S A}
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  XITER_Z i k Up
+    (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
+    (λ s Q, wp (xiter_up _i _k s (@body)) Q).
+Proof.
+  unfold xiter_up. eauto using wp_xiter_up_aux.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1261,6 +1268,14 @@ Definition uxiter_up {A} _i _k
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
   uxiter_up_aux _k (@body) _i.
 
-Global Ltac wp_uxiter_up I :=
-  unfold uxiter_up at 1;
-  wp_loop @wp_uxiter_up_aux I.
+(* The specification of [uxiter_up]. *)
+
+Lemma wp_uxiter_up {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  UXITER_Z i k Up
+    (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
+    (λ Q, wp (uxiter_up _i _k (@body)) Q).
+Proof.
+  unfold uxiter_up. eauto using wp_uxiter_up_aux.
+Qed.

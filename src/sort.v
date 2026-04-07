@@ -783,7 +783,9 @@ Lemma wp_isortto _src src _dst dst :
 Proof.
   intros. unfold isortto. arrays.
   (* The outer loop. *)
-  wp_iter_up (isortto_inv src srcofs dst dstofs); last wp_intro ?.
+  wp_op wp_iter_up
+    with invariant: (isortto_inv src srcofs dst dstofs);
+    last wp_intro ?.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. }
   (* The body of the outer loop. *)
@@ -792,14 +794,15 @@ Proof.
     (* [dst'] is the content of the destination array
        upon entry into the body of the outer loop. *)
     wp_get xi.
-    eapply wp_bind.
-    { (* The inner loop. *)
-      wp_xiter_down (inner_inv src srcofs dst dstofs i).
-      (* Initialization of the inner loop. *)
-      { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
-        + rewrite Hdata. join_segments. reflexivity. }
-      (* The body of the inner loop. *)
-      clear dependent _dst.
+    eapply wp_bind_unary.
+    (* The inner loop. *)
+    wp_op wp_xiter_down
+      with invariant: (inner_inv src srcofs dst dstofs i).
+    (* Initialization of the inner loop. *)
+    { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
+      + rewrite Hdata. join_segments. reflexivity. }
+    (* Body of the inner loop. *)
+    { clear dependent _dst.
       (* TODO need variant of [wp_down_intros] *)
       wp_loop_intros j0 j _dst. intros. subst j0.
       elim_inner_inv dst''.
@@ -827,8 +830,8 @@ Proof.
           rewrite (split_seg j dst'' dstofs (j + 1)) by lia. recognize.
           simplify_list_permutation_goal. eapply Permutation_app_comm. }}}
     (* Epilogue of the inner loop. *)
-    { clear dependent _dst. intros [ _dst out ].
-      intros (j&Hj). z in Hj. unpack in Hj.
+    { clear dependent _dst. intros (_dst & out).
+      z. intros (j & ? & ?).
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
@@ -909,7 +912,9 @@ Lemma wp_isortto' a xs :
 Proof.
   intros. unfold isortto'. arrays.
   (* The outer loop. *)
-  wp_iter_up (isortto_inv xs srcofs xs dstofs); last wp_intro ?.
+  wp_op wp_iter_up
+    with invariant: (isortto_inv xs srcofs xs dstofs);
+    last wp_intro ?.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. }
   (* The body of the outer loop. *)
@@ -924,14 +929,15 @@ Proof.
     assert (KEY: xs' !!! (srcofs + i) = xs !!! (srcofs + i)).
     { eapply equal_lookups_to_equal_segs; eauto with lia. }
     rewrite KEY in Hxi; clear KEY.
-    eapply wp_bind.
-    { (* The inner loop. *)
-      wp_xiter_down (inner_inv xs srcofs xs dstofs i).
-      (* Initialization of the inner loop. *)
-      { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
-        + rewrite Hdata. join_segments. reflexivity. }
-      (* The body of the inner loop. *)
-      clear dependent a.
+    eapply wp_bind_unary.
+    (* The inner loop. *)
+    wp_op wp_xiter_down
+      with invariant: (inner_inv xs srcofs xs dstofs i).
+    (* Initialization of the inner loop. *)
+    { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
+      + rewrite Hdata. join_segments. reflexivity. }
+    (* Body of the inner loop. *)
+    { clear dependent a.
       (* TODO need variant of [wp_down_intros] *)
       wp_loop_intros j0 j a. intros. subst j0.
       elim_inner_inv xs''.
@@ -959,8 +965,8 @@ Proof.
           rewrite (split_seg j xs'' dstofs (j + 1)) by lia. recognize.
           simplify_list_permutation_goal. eapply Permutation_app_comm. }}}
     (* Epilogue of the inner loop. *)
-    { clear dependent a. intros [ a out ].
-      intros (j&Hj). z in Hj. unpack in Hj.
+    { clear dependent a. intros (a & out).
+      z. intros (j & ? & ?).
       (* Perform a case analysis on [out], so as to separately analyze
          the case where the loop has been stopped early and the case
          where it has finished normally. *)
@@ -2613,10 +2619,10 @@ Qed.
 End NoStability.
 
 Global Ltac wp_sort_seg a :=
-  wp_op_shadow @wp_sort_seg' a.
+  wp_op_shadow wp_sort_seg' a.
 
 Global Ltac wp_sort a :=
-  wp_op_shadow @wp_sort' a.
+  wp_op_shadow wp_sort' a.
 
 Global Ltac wp_merge c :=
-  wp_op_intro @wp_merge' c.
+  wp_op_intro wp_merge' c.
