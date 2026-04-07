@@ -7,7 +7,7 @@ From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
 From marble Require Import equations.
 From marble Require Import tactics.
-From marble Require Import iteration int wp wp_tactics array.
+From marble Require Import iteration int wp array.
 From marble Require Import orders sorting compare.
 Implicit Types _i _j _k : int.
 

@@ -6,7 +6,7 @@ From Stdlib Require Import Uint63 ZifyUint63.
   (* [ZifyUint63] magically makes [lia] more powerful *)
 From Stdlib Require Import Wellfounded.Wellfounded.
 From listz Require Import listz.
-From marble Require Import tactics bool wp wp_tactics iteration.
+From marble Require Import tactics bool wp iteration.
 From marble Require Import equations.
 
 Unset Universe Minimization ToSet.

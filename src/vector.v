@@ -3,7 +3,7 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics bool iteration int wp wp_tactics array.
+From marble Require Import tactics bool iteration int wp array.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
