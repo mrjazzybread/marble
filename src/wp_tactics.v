@@ -44,6 +44,9 @@ Global Ltac wp_intros_shadow x :=
   clear dependent x;
   rename x' into x.
 
+(* TODO it would be nice if [shadow] could somehow be a modifier
+   that wraps an arbitrary tactic *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* The hook [wp_precondition_hook] attempts to prove a precondition. It
