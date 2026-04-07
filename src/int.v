@@ -795,15 +795,18 @@ Variable body : int → S → S.
    be unnatural and inconvenient to propose a specification that allows
    underflow to take place. *)
 
+Section Code.
+Open Scope uint63.
+
 Equations iter_down_aux _j s : S
 by wf _j (rilt _i) :=
-iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
+iter_down_aux _j s with inspect (_j =? _i) => {
 | inspected true :=
     do s ← body _j s ;
     s ;
 | inspected false :=
     do s ← body _j s ;
-    iter_down_aux (_j - 1)%uint63 s
+    iter_down_aux (_j - 1) s
 }.
 
 (* For the record, here is a direct definition of [iter_down_aux], which
@@ -814,17 +817,19 @@ iter_down_aux _j s with inspect (_j =? _i)%uint63 => {
 Goal int → S → S.
 Proof.
   eapply (Fix (Wf_rilt _i) (λ _, S → S)). intros _j self s.
-  destruct (_j =? _i)%uint63 eqn:Heq.
+  destruct (_j =? _i) eqn:Heq.
   + refine (
       do s ← body _j s ;
       s
     ).
   + refine (
       do s ← body _j s ;
-      self (_j - 1)%uint63 _ s
+      self (_j - 1) _ s
     ).
     eauto using safe_decrement_relative.
 Defined.
+
+End Code.
 
 End IterDown.
 
@@ -859,9 +864,14 @@ Qed.
    integer from [_k], excluded, down to [_i], included. A state of type [S]
    is carried, whose initial value is [s]. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition iter_down {S} _k _i (s : S) body :=
-  if (_k ≤? _i)%uint63 then s
+  if _k ≤? _i then s
   else iter_down_aux _i body (_k - 1) s.
+
+End Code.
 
 (* A specification of [iter_down]. *)
 
@@ -900,19 +910,23 @@ Variable _i : int.
 Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
 
 (* The code. *)
+Section Code.
+Open Scope uint63.
+
 Equations xiter_down_aux _j s : S * outcome A
 by wf _j (rilt _i) :=
-xiter_down_aux _j s with inspect (_j =? _i)%uint63 => {
+xiter_down_aux _j s with inspect (_j =? _i) => {
 | inspected true :=
     let continue s := (s, Continue) in
     let break s x := (s, Break x) in
     body _j s continue break
 | inspected false :=
-    let continue s := xiter_down_aux (_j - 1)%uint63 s in
+    let continue s := xiter_down_aux (_j - 1) s in
     let break s x := (s, Break x) in
     body _j s continue break
 }.
 
+End Code.
 End XIterDown.
 
 (* A specification of [xiter_down_aux]. *)
@@ -937,10 +951,15 @@ Proof.
     + wp_ret. eauto. }
 Qed.
 
+Section Code.
+Open Scope uint63.
+
 Definition xiter_down {S A} _k _i (s : S)
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :=
-  if (_k ≤? _i)%uint63 then (s, Continue)
+  if _k ≤? _i then (s, Continue)
   else xiter_down_aux _i (@body) (_k - 1) s.
+
+End Code.
 
 (* A specification of [xiter_down]. *)
 
@@ -977,19 +996,23 @@ Variable _i : int.
 Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
 
 (* The code. *)
+Section Code.
+Open Scope uint63.
+
 Equations uxiter_down_aux _j : outcome A
 by wf _j (rilt _i) :=
-uxiter_down_aux _j with inspect (_j =? _i)%uint63 => {
+uxiter_down_aux _j with inspect (_j =? _i) => {
 | inspected true :=
     let continue '() := Continue in
     let break x := Break x in
     body _j continue break
 | inspected false :=
-    let continue '() := uxiter_down_aux (_j - 1)%uint63 in
+    let continue '() := uxiter_down_aux (_j - 1) in
     let break x := Break x in
     body _j continue break
 }.
 
+End Code.
 End UXIterDown.
 
 (* A specification of [uxiter_down_aux]. *)
@@ -1014,10 +1037,15 @@ Proof.
     + wp_ret. eauto. }
 Qed.
 
+Section Code.
+Open Scope uint63.
+
 Definition uxiter_down {A} _k _i
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
-  if (_k ≤? _i)%uint63 then Continue
+  if _k ≤? _i then Continue
   else uxiter_down_aux _i (@body) (_k - 1).
+
+End Code.
 
 (* A specification of [uxiter_down]. *)
 
@@ -1071,17 +1099,21 @@ Variable body : int → S → S.
    that [_i + 1] is less than [_i], a fact which itself is required by the
    termination argument. *)
 
+Section Code.
+Open Scope uint63.
+
 Equations iter_up_aux _i s : S
 by wf _i igt :=
-iter_up_aux _i s with inspect (_i <? _k)%uint63 => {
+iter_up_aux _i s with inspect (_i <? _k) => {
 | inspected true :=
     do s ← body _i s ;
-    do s ← iter_up_aux (_i + 1)%uint63 s ;
+    do s ← iter_up_aux (_i + 1) s ;
     s ;
 | inspected false :=
     s
 }.
 
+End Code.
 End IterUp.
 
 (* A specification of [iter_up_aux], which also serves for [iter_up]. *)
@@ -1132,18 +1164,22 @@ Variable _k : int.
 Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
 
 (* The code. *)
+Section Code.
+Open Scope uint63.
+
 Equations xiter_up_aux _i s : S * outcome A
 by wf _i igt :=
 xiter_up_aux _i s
-with inspect (_i <? _k)%uint63 => {
+with inspect (_i <? _k) => {
 | inspected true :=
-    let continue s := xiter_up_aux (_i + 1)%uint63 s in
+    let continue s := xiter_up_aux (_i + 1) s in
     let break s x := (s, Break x) in
     body _i s continue break
 | inspected false :=
     (s, Continue)
 }.
 
+End Code.
 End XiterUp.
 
 (* A specification of [xiter_up_aux]. *)
@@ -1195,18 +1231,22 @@ Variable _k : int.
 Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
 
 (* The code. *)
+Section Code.
+Open Scope uint63.
+
 Equations uxiter_up_aux _i : outcome A
 by wf _i igt :=
 uxiter_up_aux _i
-with inspect (_i <? _k)%uint63 => {
+with inspect (_i <? _k) => {
 | inspected true :=
-    let continue '() := uxiter_up_aux (_i + 1)%uint63 in
+    let continue '() := uxiter_up_aux (_i + 1) in
     let break x := Break x in
     body _i continue break
 | inspected false :=
     Continue
 }.
 
+End Code.
 End UXIterUp.
 
 (* A specification of [uxiter_up_aux]. *)

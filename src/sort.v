@@ -859,11 +859,14 @@ Qed.
 (* The code is the same as in [isortto] except that the two arrays [src]
    and [dst] are replaced with a single array [a]. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition isortto' a _srcofs _dstofs _n :=
   int.iter_up 0 _n a @@ λ _i a ,
-    do xi ← get a (_srcofs + _i)%uint63 ;
+    do xi ← get a (_srcofs + _i) ;
     do (a, out) ← (
-      int.xiter_down (_dstofs + _i)%uint63 _dstofs a @@
+      int.xiter_down (_dstofs + _i) _dstofs a @@
       λ _ _j a continue break ,
         do xj ← get a _j ;
         if (xj ≤? xi)%element then
@@ -878,6 +881,8 @@ Definition isortto' a _srcofs _dstofs _n :=
     | Continue =>
         set a _dstofs xi
     end.
+
+End Code.
 
 (* This code requires the source and destination segments to either be
    disjoint or to possibly overlap in a configuration where the destination

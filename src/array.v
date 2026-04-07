@@ -842,12 +842,17 @@ Implicit Types xs ys : list A.
    might be negative, yet we compute it as an unsigned integer. This
    yields the correct result in the end anyway. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition blit a _i b _j _n :=
-  do _delta ← (_j - _i)%uint63 ;
-  int.iter_up _i (_i + _n)%uint63 b @@ λ _k b,
+  do _delta ← _j - _i ;
+  int.iter_up _i (_i + _n) b @@ λ _k b,
   do x ← get a _k ;
-  do b ← set b (_k + _delta)%uint63 x ;
+  do b ← set b (_k + _delta) x ;
   b.
+
+End Code.
 
 (* The postcondition. *)
 
@@ -891,21 +896,26 @@ Qed.
 
 (* The source and destination segments may overlap. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition blit' a _i _j _n :=
-  if (_j =? _i)%uint63 then
+  if _j =? _i then
     a
-  else if (_j <=? _i)%uint63 then
-    do _delta ← (_j - _i)%uint63 ;
-    int.iter_up _i (_i + _n)%uint63 a @@ λ _k a,
+  else if _j <=? _i then
+    do _delta ← _j - _i ;
+    int.iter_up _i (_i + _n) a @@ λ _k a,
     do x ← get a _k ;
-    do a ← set a (_k + _delta)%uint63 x ;
+    do a ← set a (_k + _delta) x ;
     a
   else
-    do _delta ← (_j - _i)%uint63 ;
-    int.iter_down (_i + _n)%uint63 _i a @@ λ _k a,
+    do _delta ← _j - _i ;
+    int.iter_down (_i + _n) _i a @@ λ _k a,
     do x ← get a _k ;
-    do a ← set a (_k + _delta)%uint63 x ;
+    do a ← set a (_k + _delta) x ;
     a.
+
+End Code.
 
 (* The public specification of [blit']. *)
 
@@ -1041,13 +1051,18 @@ Implicit Types xs ys : list A.
 
 (* The code. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition append a b :=
   do _m ← length a ;
   do _n ← length b ;
-  do c ← make (_m + _n)%uint63 inhabitant ;
+  do c ← make (_m + _n) inhabitant ;
   do c ← blit a 0 c 0 _m ;
   do c ← blit b 0 c _m _n ;
   c.
+
+End Code.
 
 (* The public specification of [append]. *)
 
@@ -1082,10 +1097,15 @@ Implicit Types xs ys : list A.
 
 (* The code. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition fill a _i _n x :=
-  int.iter_up _i (_i + _n)%uint63 a @@ λ _k a,
+  int.iter_up _i (_i + _n) a @@ λ _k a,
   do a ← set a _k x ;
   a.
+
+End Code.
 
 (* The public specification of [fill]. *)
 
@@ -1336,6 +1356,9 @@ Variable eq : A → A → bool.
 
 (* The code. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition equal_aux _m a b : outcome unit :=
   int.uxiter_up 0 _m @@ λ _ _i continue break ,
   do x ← get a _i ;
@@ -1345,11 +1368,13 @@ Definition equal_aux _m a b : outcome unit :=
 Definition equal a b : bool :=
   do _m ← length a ;
   do _n ← length b ;
-  if (_m =? _n)%uint63 then
+  if _m =? _n then
     do out ← equal_aux _m a b ;
     did_not_break out
   else
     false.
+
+End Code.
 
 (* Our hypothesis about [eq]. *)
 

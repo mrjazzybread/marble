@@ -145,10 +145,15 @@ Local Definition capacity v : int :=
 
 (* A new vector has logical length 0 and physical capacity 0. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition create (_ : unit) : vector A :=
-  let _n := 0%uint63 in
+  let _n := 0 in
   do a ← make _n inhabitant ;
   (_n, a).
+
+End Code.
 
 Lemma wp_create :
   wp (create ()) (λ v, isVector v []).
@@ -199,11 +204,16 @@ Qed.
 
 (* The newly emptied slot is not overwritten with a default value. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition pop v : A * vector A :=
   let (_n, a) := v in
-  let _i := (_n - 1)%uint63 in
+  let _i := _n - 1 in
   do x ← a.[_i] ;
   (x, (_i, a)).
+
+End Code.
 
 Lemma wp_pop v xs :
   isVector v xs →
@@ -259,15 +269,20 @@ Qed.
    [max_array_length] and (in practice) at least as great as [_c], but
    this fact is not used in the proof.  *)
 
+Section Code.
+Open Scope uint63.
+
 Local Definition next_capacity _c : int :=
   (* If the current capacity [_c] is small, multiply it by 2;
      otherwise multiply it by 3/2.  *)
   do _c ← (
-    if (_c ≤? 512)%uint63 then (_c * 2)%uint63
-    else (_c + _c / 2)%uint63
+    if _c ≤? 512 then _c * 2
+    else _c + _c / 2
   ) ;
   (* Clip it, so that it is at least 8 and at most [max_array_length]. *)
-  _min max_length (_max 8%uint63 _c).
+  _min max_length (_max 8 _c).
+
+End Code.
 
 Lemma wp_next_capacity :
   ∀IntU _c c,
@@ -325,18 +340,23 @@ Qed.
 
 (* Pushing an element onto the end of a vector: [push]. *)
 
+Section Code.
+Open Scope uint63.
+
 Definition push v x : vector A :=
   let (_n, a) := v in
   (* Ensure that sufficient space exists. *)
-  let _n' := (_n + 1)%uint63 in
+  let _n' := _n + 1 in
   do _c ← length a ;
   do a ← (
-    if (_n' ≤? _c)%uint63 then a
+    if _n' ≤? _c then a
     else really_ensure_capacity v _n'
   ) ;
   (* A free slot now exists. *)
   do a ← a.[_n <- x] ;
   (_n', a).
+
+End Code.
 
 Lemma wp_push v xs x :
   isVector v xs →
