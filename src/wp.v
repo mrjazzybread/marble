@@ -193,10 +193,20 @@ Opaque wp.
 
 (* Tactics. *)
 
+(* The tactic [wp_ret_hook] attempts to prove the goal that remains after
+   the lemma [wp_ret] has been applied. It is invoked by [wp_ret] below. *)
+
+(* The default definition of this tactic is cheap. We expect users to
+   redefine it if they need more expensive / aggressive simplification. *)
+
+Ltac wp_ret_hook :=
+  try solve [ subst; tc3 ].
+
 (* Reasoning about a trivial computation (return). *)
 
 Ltac wp_ret :=
-  eapply wp_ret.
+  eapply wp_ret;
+  wp_ret_hook.
 
 (* Reasoning about a conditional construct. *)
 
@@ -223,7 +233,9 @@ Ltac wp_bind_eq :=
    redefine it if they need more expensive / aggressive simplification. *)
 
 Ltac wp_intro_hook Hx :=
-  unpack in Hx.
+  unpack in Hx;
+  (* Attempt to cheaply solve the goal. *)
+  wp_ret_hook.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -231,7 +243,7 @@ Ltac wp_intro_hook Hx :=
    simplifies this hypothesis by invoking [wp_intro_hook Hx]. It is
    typically used in the second subgoal of [wp_bind] and [wp_conseq]. *)
 
-Ltac wp_intro x :=
+Tactic Notation "wp_intro" simple_intropattern(x) :=
   (* Eliminate beta redexes. (There is often one.) *)
   cbv beta;
   let Hx := fresh in
@@ -316,7 +328,7 @@ Ltac wp_op lemma :=
    [wp_shadow x]. The following tactics are abbreviations for these common
    practices. *)
 
-Ltac wp_op_intro lemma x :=
+Tactic Notation "wp_op_intro" constr(lemma) simple_intropattern(x) :=
   wp_op lemma; last wp_intro x.
 
 Ltac wp_op_shadow lemma x :=

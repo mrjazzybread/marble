@@ -20,7 +20,10 @@ Local Ltac wp_intro_hook Hx ::=
   (* Simplify expressions that involve lists and arithmetic. *)
   list in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx.
+  unpack in Hx;
+  (* Attempt to (cheaply) solve the goal. *)
+  (* This can kill some proof obligations, e.g., at loop exits. *)
+  wp_ret_hook.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -308,7 +311,7 @@ Lemma wp_get _i i a xs :
   wp a.[_i] (λ x, x = xs !!! i).
 Proof.
   (* Easy, because the definition of [isArray] relies on [get]. *)
-  intros. destructIsArray. repeat destructIsInt. wp_ret. eauto.
+  intros. destructIsArray. repeat destructIsInt. wp_ret.
 Qed.
 
 (* The public specification of [set]. *)
@@ -342,7 +345,7 @@ Lemma wp_length a xs :
     isInt _n (len xs)
   ).
 Proof.
-  intros. wp_ret. tc.
+  intros. wp_ret.
 Qed.
 
 End PrimSpec.
@@ -350,18 +353,18 @@ End PrimSpec.
 (* The following tactics help use the above specifications. *)
 
 Ltac wp_length n :=
-  wp_op_intro wp_length n.
+  wp_op_intro @wp_length n.
 
 Ltac wp_get x :=
-  wp_op_intro wp_get x.
+  wp_op_intro @wp_get x.
 
 Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
-    wp_op_shadow wp_set a
+    wp_op_shadow @wp_set a
   end.
 
 Ltac wp_make a :=
-  wp_op_intro wp_make a.
+  wp_op_intro @wp_make a.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -428,7 +431,7 @@ Proof.
      It does not need to unfold the definition of [isArray]. *)
   intros. unfold segment_to_list.
   (* The loop invariant. *)
-  wp_iter_down (λ j ys, ys = seg j k xs).
+  wp_iter_down (λ j ys, ys = seg j k xs); last wp_intro ?.
   (* Preservation. *)
   { wp_down_intros j xs'. intros _j ?.
     wp_get x.
@@ -442,8 +445,7 @@ Lemma wp_to_list a xs :
 Proof.
   intro. unfold to_list.
   wp_length _n.
-  wp_op_intro wp_segment_to_list xs'.
-  assumption.
+  wp_op_intro wp_segment_to_list ?.
 Qed.
 
 (* A second (stronger) specification of [to_list]. *)
@@ -465,7 +467,7 @@ Proof.
      It does not rely on the lemmas [wp_length] and [wp_get]. *)
   intros. unfold to_list, segment_to_list.
   (* Obtain the length of the array. *)
-  eapply wp_bind_eq. intros _n ?.
+  eapply wp_bind_eq. intros _n Hn.
   set (n := to_Z _n).
   assert (isInt _n n) by eauto using introIsInt.
   assert (0 ≤ n ≤ max_array_length).
@@ -487,9 +489,9 @@ Proof.
     { replace (o - j - 1) with (o - (j + 1)) by lia. (* painful *)
       eauto with lia. } }
   (* Completion. *)
-  { match goal with h: len ?s = _ |- _ =>
-      rename s into xs; rename h into Hxs end.
-    introIsArray; rewrite ?Hxs; try assumption.
+  { wp_intro xs. subst. z in *.
+    introIsArray;
+      match goal with h: len xs = _ |- _ => rewrite ?h end; tc3.
     intros o ?.
     replace o with (o - 0) at 2 by lia. (* painful *)
     eauto with lia. }
@@ -567,11 +569,10 @@ Proof.
   induction future as [| x future ]; simpl list_iteri; intros;
   ITER; subst xs; list in *.
   (* Case: the future is empty. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
   (* Case: the future begins with [x]. *)
   { wp_op_shadow Hstep s.
-    wp_op_shadow IHfuture s.
-    eauto. }
+    wp_op_shadow IHfuture s. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -618,13 +619,12 @@ Proof.
   intros history xs _i i ? ? ?;
   ITER;
   simpl list_iteri; subst; list in *.
-  { wp_ret. eauto. }
+  { wp_ret. }
   { wp_op_shadow Hstep s.
     { list. eauto. }
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
-    wp_op_shadow (IHfuture (history ++ {[x]})) s.
-    eauto with lia. }
+    wp_op_shadow (IHfuture (history ++ {[x]})) s. }
 Qed.
 
 (* In this variant, we get rid of [history] and we keep track only
@@ -652,14 +652,13 @@ Proof.
   simpl list_iteri.
   (* Case: the future is empty. We have [i = len xs]. *)
   { assert (i = len xs) by lia.
-    wp_ret. eauto with lia. }
+    wp_ret. }
   (* Case: the future begins with [x]. We have [i < len xs]. *)
   { assert (i < len xs) by lia.
     assert (x = xs !!! i) by (lookup_through_seg; eauto).
     assert (final_seg (i + 1) xs = future) by (seg_through_seg; eauto).
     wp_op_shadow Hstep s.
-    wp_op_shadow IHfuture s.
-    eauto with lia. }
+    wp_op_shadow IHfuture s. }
 Qed.
 
 End Attic.
@@ -687,8 +686,8 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
   wp (list_length_aux _n xs) (λ _i, isInt _i (n + len xs)).
 Proof.
   induction xs as [| x xs ]; simpl list_length_aux; list; intros.
-  { wp_ret. tc. }
-  { wp_op_shadow IHxs _n. tc. }
+  { wp_ret. }
+  { wp_op_shadow IHxs _n. }
 Qed.
 
 (* The public specification of [list_length]. *)
@@ -698,7 +697,6 @@ Lemma wp_list_length xs :
 Proof.
   unfold list_length.
   wp_op_intro wp_list_length_aux _i.
-  eauto.
 Qed.
 
 End ListLength.
@@ -746,6 +744,8 @@ Proof.
     intros x i _; intros. subst history1.
     wp_set.
     isArray. }
+  (* Completion. *)
+  { wp_shadow a. isArray. }
 Qed.
 
 End OfList.
@@ -771,7 +771,7 @@ Proof.
   { rewrite wp_iff. eauto. }
   wp_op_intro @wp_of_list a.
   wp_op_intro @wp_to_list ys.
-  wp_ret. eauto.
+  wp_ret.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -890,6 +890,8 @@ Proof.
        pretend that we never created a negative number. Now this trick
        is unnecessary. *)
     wp_set. wp_ret. isArray. }
+  (* Completion. *)
+  { wp_shadow b. isArray. }
 Qed.
 
 (* Moving data within an array: [blit']. *)
@@ -944,7 +946,9 @@ Proof.
       wp_get x. subst x.
       wp_set.
       wp_ret.
-      isArray. } }
+      isArray. }
+    (* Completion. *)
+    { wp_shadow a. isArray. }}
   (* Case [i < j]. *)
   { wp_bind_eq.
     wp_iter_down (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
@@ -956,7 +960,9 @@ Proof.
       wp_get x. subst x.
       wp_set.
       wp_ret.
-      isArray. } }
+      isArray. }
+    (* Completion. *)
+    { wp_shadow a. isArray. }}
 Qed.
 
 End Blit.
@@ -983,8 +989,7 @@ Implicit Types xs ys : list A.
 Definition copy a :=
   do _n ← length a ;
   do b ← make _n inhabitant ;
-  do b ← blit a 0 b 0 _n ;
-  b.
+  blit a 0 b 0 _n.
 
 (* The public specification of [copy]. *)
 
@@ -996,7 +1001,6 @@ Proof.
   wp_length n.
   wp_make b.
   wp_blit.
-  wp_ret. isArray.
 Qed.
 
 End Copy.
@@ -1017,8 +1021,7 @@ Implicit Types xs ys : list A.
 
 Definition sub a _i _n :=
   do b ← make _n inhabitant ;
-  do b ← blit a _i b 0 _n ;
-  b.
+  blit a _i b 0 _n.
 
 (* The public specification of [sub]. *)
 
@@ -1032,7 +1035,6 @@ Proof.
   intros. unfold sub.
   wp_make b.
   wp_blit.
-  wp_ret. isArray.
 Qed.
 
 End Sub.
@@ -1078,7 +1080,6 @@ Proof.
   wp_make c.
   wp_blit.
   wp_blit.
-  wp_ret. isArray.
 Qed.
 
 End Append.
@@ -1128,6 +1129,8 @@ Proof.
   { clear dependent a. wp_up_intros k a. intros _k ?.
     wp_set.
     wp_ret. isArray. }
+  (* Completion. *)
+  { wp_shadow a. isArray. }
 Qed.
 
 End Fill.
@@ -1432,14 +1435,14 @@ Proof.
       (* Case: [eq x y] returns [false]. *)
       { eauto with lia. }
     }
-    z. intros [[]|]; unfold equal_inv; intros (i&?); unpack; wp_ret.
+    z. intros [[]|]; unfold equal_inv; intros (i&?); unpack.
     (* Case: the loop ends by breaking. *)
-    { tc. }
+    { wp_ret. }
     (* Case: the loop ends normally. *)
-    { assert (i = len xs) by tauto. subst. tc. }
+    { assert (i = len xs) by tauto. wp_ret. }
   }
   (* Second branch: the lengths of the arrays differ. *)
-  { wp_ret. tc. }
+  { wp_ret. }
 Qed.
 
 End Equal.
@@ -1509,12 +1512,10 @@ Lemma wp_segment_iteri a xs f :
 Proof.
   intros. ITER. unfold segment_iteri.
   wp_iter_up inv.
-  clear dependent s.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?.
-    wp_get x.
-    wp_op_shadow Hstep s.
-    wp_ret. eauto. }
+  { clear dependent s.
+    wp_up_intros j s. intros _j ?.
+    wp_get x. }
 Qed.
 
 (* The public specification of [iteri]. *)
@@ -1557,10 +1558,12 @@ Proof.
     isArray a (listz.init k ψ ++ replicate (n - k) inhabitant)
   ).
   (* The loop body. *)
-  clear dependent a. wp_up_intros k a. intros _k ?. (* TODO *)
-  wp_op_intro Hf x.
-  wp_set.
-  isArray.
+  { clear dependent a. wp_up_intros k a. intros _k ?. (* TODO *)
+    wp_op_intro Hf x.
+    wp_set.
+    isArray. }
+  (* Completion. *)
+  { wp_shadow a. isArray. }
 Qed.
 
 Ltac wp_init a :=

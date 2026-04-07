@@ -51,7 +51,7 @@ Local Ltac listz_easy ::=
 (* After stepping over an operation, simplify the postcondition. *)
 
 Local Ltac wp_intro_hook Hx ::=
-  list in Hx; unpack in Hx.
+  list in Hx; unpack in Hx; wp_ret_hook.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -783,7 +783,7 @@ Lemma wp_isortto _src src _dst dst :
 Proof.
   intros. unfold isortto. arrays.
   (* The outer loop. *)
-  wp_iter_up (isortto_inv src srcofs dst dstofs).
+  wp_iter_up (isortto_inv src srcofs dst dstofs); last wp_intro ?.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. }
   (* The body of the outer loop. *)
@@ -909,7 +909,7 @@ Lemma wp_isortto' a xs :
 Proof.
   intros. unfold isortto'. arrays.
   (* The outer loop. *)
-  wp_iter_up (isortto_inv xs srcofs xs dstofs).
+  wp_iter_up (isortto_inv xs srcofs xs dstofs); last wp_intro ?.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. }
   (* The body of the outer loop. *)
@@ -1758,8 +1758,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op_shadow wp_merge_aux _dst.
-    assumption. }
+    wp_op_shadow wp_merge_aux _dst. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1835,8 +1834,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op_shadow wp_merge_aux_1 _src1.
-    assumption. }
+    wp_op_shadow wp_merge_aux_1 _src1. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1907,8 +1905,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op_shadow wp_merge_aux_2 _src2.
-    assumption. }
+    wp_op_shadow wp_merge_aux_2 _src2. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1975,8 +1972,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op_shadow wp_merge_aux_12 _dst.
-    assumption. }
+    wp_op_shadow wp_merge_aux_12 _dst. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -2324,9 +2320,7 @@ Proof.
   intros. unfold sort_seg. arrays.
   wp_if.
   (* Case [n ≤ cutoff]. *)
-  { wp_op_shadow wp_isortto' a.
-    elim_isortto_inv xs'.
-    intro_sort_seg_post. }
+  { wp_op_shadow wp_isortto' a. }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
   { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
     assert (isInt _n1 n1) by tc.

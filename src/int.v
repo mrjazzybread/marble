@@ -829,8 +829,7 @@ Proof.
   (* Case [j = i]. *)
   { subst j.
     wp_op_shadow Hstep s.
-    wp_ret.
-    eauto. }
+    wp_ret. }
   (* Case [j ≠ i]. *)
   { rename H into IH.
     wp_op_shadow Hstep s.
@@ -865,9 +864,10 @@ Proof.
   intros. ITER. unfold iter_down.
   wp_if; z.
   (* Case [k ≤ i]. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
   (* Case [i < k]. *)
-  { wp_loop @wp_iter_down_aux inv. }
+  { wp_loop @wp_iter_down_aux inv; wp_shadow s.
+    eauto. }
 Qed.
 
 Global Ltac wp_iter_down I :=
@@ -952,9 +952,11 @@ Proof.
   intros. XITER. unfold xiter_down.
   wp_if; z.
   (* Case [k ≤ i]. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
   (* Case [i < k]. *)
-  { wp_loop @wp_xiter_down_aux inv. }
+  { wp_loop @wp_xiter_down_aux inv.
+    clear dependent s. wp_intro sout. destruct sout as [s out]. (* TODO *)
+    assumption. }
 Qed.
 
 Global Ltac wp_xiter_down I :=
@@ -1038,9 +1040,10 @@ Proof.
   intros. UXITER. unfold uxiter_down.
   wp_if; z.
   (* Case [k ≤ i]. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
   (* Case [i < k]. *)
-  { wp_loop @wp_uxiter_down_aux inv. }
+  { wp_loop @wp_uxiter_down_aux inv; wp_intro out.
+    eauto. }
 Qed.
 
 Global Ltac wp_uxiter_down I :=
@@ -1109,9 +1112,9 @@ Proof.
   (* Case [i < k]. *)
   { wp_op_shadow Hstep s.
     wp_op_shadow H s.
-    wp_ret. eauto. }
+    wp_ret. }
   (* Case [¬ i < k]. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
 Qed.
 
 (* A definition of [iter_up], with reordered parameters. *)
@@ -1183,7 +1186,7 @@ Proof.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
 Qed.
 
 (* [xiter_up] with reordered parameters. *)
@@ -1249,7 +1252,7 @@ Proof.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)
-  { wp_ret. eauto. }
+  { wp_ret. }
 Qed.
 
 (* [uxiter_up] with reordered parameters. *)

@@ -533,13 +533,6 @@ Ltac wp_break :=
    It is essentially a special case of [wp_apply] where we want to
    specialize the lemma. *)
 
-Ltac wp_loop_exit :=
-  cbv beta;
-  (* Expand the definitions that could get in the way. *)
-  expand_ITER;
-  intros; unpack; try subst; list in *; eauto 3 with lia.
-    (* TODO control naming of newly introduced names *)
-
 Ltac wp_loop_nude lemma I :=
   (* Apply the reasoning rule for this operation. *)
   first [
@@ -563,7 +556,7 @@ Ltac wp_loop_nude lemma I :=
 Ltac wp_loop lemma I :=
   first [
     wp_loop_nude lemma I
-  | simple eapply wp_conseq; [ wp_loop_nude lemma I | wp_loop_exit ]
+  | simple eapply wp_conseq; [ wp_loop_nude lemma I | (* leave this subgoal open *) ]
   ].
 
 (* TODO comment; combine with [wp_loop_nude]? use [wp_intro_hook]? *)

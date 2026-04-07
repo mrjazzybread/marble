@@ -14,7 +14,10 @@ Local Ltac wp_intro_hook Hx ::=
   (* Simplify expressions that involve lists and arithmetic. *)
   list in Hx;
   (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx.
+  unpack in Hx;
+  (* Attempt to (cheaply) solve the goal. *)
+  (* This can kill some proof obligations, e.g., at loop exits. *)
+  wp_ret_hook.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -178,7 +181,7 @@ Lemma wp_get v xs _i i :
 Proof.
   intros. unfold get.
   destructIsVector. destructIsVectorCap.
-  wp_get x. eauto.
+  wp_get x.
 Qed.
 
 Definition set v _i x : vector A :=
@@ -333,7 +336,6 @@ Proof.
   wp_op_intro wp_next_capacity _c'.
   wp_bind_eq.
   wp_op_shadow wp_grow a.
-  eauto with lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -374,10 +376,9 @@ Proof.
   ).
   { wp_if.
     (* Case: there is still room. *)
-    + wp_ret. eauto with lia.
+    + wp_ret.
     (* Case: the array must be grown. *)
-    + wp_op_shadow wp_really_ensure_capacity a.
-      eauto. }
+    + wp_op_shadow wp_really_ensure_capacity a. }
   clear dependent unoccupied. (* A bit ad hoc. *)
   wp_shadow a.
   destructIsVectorCap.
@@ -423,9 +424,7 @@ Proof.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?. wp_intro x.
-    wp_op_shadow Hstep s.
-    assumption. }
+  { wp_up_intros j s. intros _j ?. wp_intro x. }
 Qed.
 
 (* The public specification of [iteri]. *)
@@ -442,9 +441,7 @@ Proof.
   wp_loop @array.wp_segment_iteri inv.
   clear dependent s.
   (* The loop body. *)
-  { wp_up_intros j s. intros _j ?. wp_intro x.
-    wp_op_shadow Hstep s.
-    assumption. }
+  { wp_up_intros j s. intros _j ?. wp_intro x. }
 Qed.
 
 End Iteri.
@@ -585,7 +582,6 @@ Proof.
   intros. unfold of_list.
   wp_op_intro @array.wp_of_list a.
   wp_steal_array.
-  eauto.
 Qed.
 
 End OfList.
