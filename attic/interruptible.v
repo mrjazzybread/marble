@@ -157,7 +157,7 @@ Proof.
     + wp_ret. eauto with lia.
     (* Subcase: [out] is [continue]. *)
     + eapply wp_conseq.
-      - eapply H; itc.
+      - eapply H; try solve [ intuition eauto with typeclass_instances lia ].
       - autorewrite with nat. eauto. }
   (* Case [b ≤ a]. *)
   { wp_ret. eauto with lia. }

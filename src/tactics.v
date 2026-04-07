@@ -58,16 +58,6 @@ Ltac tc :=
 Ltac tc3 :=
   eauto 3 with typeclass_instances lia.
 
-(* [intuition eauto] can eliminate disjunctions, which is sometimes
-   handy. However, it tends to destructure the goal even when it is
-   unable to solve it, which is inconvenient. Hence we wrap it with
-   [try solve]. Furthermore, in some cases, [intuition eauto] fails
-   whereas [eauto] succeeds. Therefore [intuition eauto] should not
-   be the default tactic. *)
-
-Ltac itc :=
-  try solve [ intuition eauto with typeclass_instances lia ].
-
 (* The tactic [really replace i with e] replaces [i] with [e] in
    the goal, and fails if this replacement is trivial, that is,
    if [i] and [e] are identical. This can be a good thing, as it
