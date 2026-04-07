@@ -1030,53 +1030,7 @@ Local Hint Extern 1 (order _ _ _ _) =>
 
 (* -------------------------------------------------------------------------- *)
 
-(* [merge_aux] merges two sorted array segments and writes the resulting
-   sorted data into an array segment. *)
-
-Section MergeAux.
-
-(* In the recursive definition of [merge_aux], the following four
-   parameters remain fixed. [_src1] and [_src2] are the source arrays.
-   [_j1] and [_j2] are the end indices of the two source segments. *)
-
-Variable _src1 _src2 : array A.
-Variable _j1 _j2 : int.
-
-(* Here is the code of [merge_aux]. *)
-
-(* [_i1] and [_i2] are the start indices of the source segments. Each
-   of the two source segments must be nonempty; [x1] and [x2] are the
-   first elements of the source segments. [_dst] is the destination
-   array. [_k] is the start index of the destination segment. The end
-   index of the destination segment is [k + (j1 - i1) + (j2 - i2)]. *)
-
-Open Scope uint63.
-
-Equations merge_aux _i1 x1 _i2 x2 _dst _k : array A
-by wf (_i1, _i2) (order _j1 _j2) :=
-merge_aux _i1 x1 _i2 x2 _dst _k :=
-  if (x1 ≤? x2)%element then
-    do _dst ← set _dst _k x1 ;
-    let _i1 := _i1 + 1 in
-    let _k := _k + 1 in
-    IF (_i1 <? _j1) THEN
-      do x1 ← get _src1 _i1 ;
-      merge_aux _i1 x1 _i2 x2 _dst _k
-    ELSE
-      blit _src2 _i2 _dst _k (_j2 - _i2)
-  else
-    do _dst ← set _dst _k x2 ;
-    let _i2 := _i2 + 1 in
-    let _k := _k + 1 in
-    IF (_i2 <? _j2) THEN
-      do x2 ← get _src2 _i2 ;
-      merge_aux _i1 x1 _i2 x2 _dst _k
-    ELSE
-      blit _src1 _i1 _dst _k (_j1 - _i1).
-
-End MergeAux.
-
-(* The postcondition of [merge_aux]. *)
+(* The postcondition of [merge_aux] and its key properties. *)
 
 Definition merge_aux_post src1 src2 i1 j1 i2 j2 dst k :=
   λ _dst,
@@ -1105,20 +1059,12 @@ Local Ltac elim_merge_aux_post dst' :=
     zring in h;
     unpack in h
   end.
-  (* TODO review *)
 
 (* The following two lemmas represent the reasoning that must be performed
    after [merge_aux] calls itself. *)
 
 (* The disjunctive hypotheses that appear in these statements allow these
-   lemmas to be used in several situations. The first disjunction states:
-   either the first source segment is unaffected by the write [k := _], or
-   it is affected and we have [limit = j1], which means that the first
-   source segment forms a suffix of the destination segment. Similarly, the
-   second disjunction states: either the second source segment is unaffected
-   by the write [k := _], or it is affected and we have [limit = j2], which
-   means that the second source segment forms a suffix of the destination
-   segment. *)
+   lemmas to be used in every variant of [merge_aux]. *)
 
 Lemma merge_aux_post_implication_1 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _dst dst :
   x1 = src1 !!! i1 →
@@ -1135,12 +1081,17 @@ Lemma merge_aux_post_implication_1 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _ds
   (i2 ≤ j2)%Z →
   merge_aux_post src1' src2' (i1 + 1) j1 i2 j2 (<[k:=x1]> dst) (k + 1) _dst →
   (
+    (* Either the first source segment is unaffected by the write, *)
     src1' = src1 ∨
+    (* or it is affected and it is a suffix of the destination segment, *)
     src1' = <[k:=x1]> src1 ∧ limit = j1 ∨
-    src1' = <[k:=x1]> src1 ∧ limit = j2 ∧ disjoint_seg i1 j1 k limit
+    (* or it is affected and it is disjoint with the destination segment. *)
+    src1' = <[k:=x1]> src1 ∧ disjoint_seg i1 j1 k limit
   ) →
   (
+    (* Either the second source segment is unaffected by the write, *)
     src2' = src2 ∨
+    (* or it is affected and it is a suffix of the destination segment. *)
     src2' = <[k:=x1]> src2 ∧ limit = j2
   ) →
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
@@ -1181,7 +1132,7 @@ Lemma merge_aux_post_implication_2 src1 src1' src2 src2' i1 j1 i2 j2 x1 x2 k _ds
   (
     src1' = src1 ∨
     src1' = <[k:=x2]> src1 ∧ limit = j1 ∨
-    src1' = <[k:=x2]> src1 ∧ limit = j2 ∧ disjoint_seg i1 j1 k limit
+    src1' = <[k:=x2]> src1 ∧ disjoint_seg i1 j1 k limit
   ) →
   (
     src2' = src2 ∨
@@ -1285,6 +1236,69 @@ Proof.
   { list. zring. seg_seg. sorted. }
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
+(* A stronger local setting is needed for the proofs that follow. *)
+
+Local Ltac wp_precondition_hook ::=
+  autorewrite with z clength wp_precondition_hook;
+  match goal with
+  | |- Sorted _ _ =>
+      sorted
+  | |- pairwise _ _ _ =>
+      pw
+  | _ =>
+      eauto 6 with lia
+  end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [merge_aux] merges two sorted array segments and writes the resulting
+   sorted data into an array segment. *)
+
+Section MergeAux.
+
+(* In the recursive definition of [merge_aux], the following four
+   parameters remain fixed. [_src1] and [_src2] are the source arrays.
+   [_j1] and [_j2] are the end indices of the two source segments. *)
+
+Variable _src1 _src2 : array A.
+Variable _j1 _j2 : int.
+
+(* Here is the code of [merge_aux]. *)
+
+(* [_i1] and [_i2] are the start indices of the source segments. Each
+   of the two source segments must be nonempty; [x1] and [x2] are the
+   first elements of the source segments. [_dst] is the destination
+   array. [_k] is the start index of the destination segment. The end
+   index of the destination segment is [k + (j1 - i1) + (j2 - i2)]. *)
+
+Open Scope uint63.
+
+Equations merge_aux _i1 x1 _i2 x2 _dst _k : array A
+by wf (_i1, _i2) (order _j1 _j2) :=
+merge_aux _i1 x1 _i2 x2 _dst _k :=
+  if (x1 ≤? x2)%element then
+    do _dst ← set _dst _k x1 ;
+    let _i1 := _i1 + 1 in
+    let _k := _k + 1 in
+    IF (_i1 <? _j1) THEN
+      do x1 ← get _src1 _i1 ;
+      merge_aux _i1 x1 _i2 x2 _dst _k
+    ELSE
+      blit _src2 _i2 _dst _k (_j2 - _i2)
+  else
+    do _dst ← set _dst _k x2 ;
+    let _i2 := _i2 + 1 in
+    let _k := _k + 1 in
+    IF (_i2 <? _j2) THEN
+      do x2 ← get _src2 _i2 ;
+      merge_aux _i1 x1 _i2 x2 _dst _k
+    ELSE
+      blit _src1 _i1 _dst _k (_j1 - _i1).
+
+End MergeAux.
+
 (* The specification of [merge_aux]. *)
 
 (* Because this function has 10 parameters, it is a bit verbose. *)
@@ -1319,23 +1333,6 @@ Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   valid_seg k limit dst →
   wp (merge_aux _src1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
-
-(* TODO?
-Local Ltac tc ::=
-  eauto 7 with typeclass_instances lia.
- *)
-
-(* TODO *)
-Local Ltac wp_precondition_hook ::=
-  autorewrite with z clength wp_precondition_hook;
-  match goal with
-  | |- Sorted _ _ =>
-      sorted
-  | |- pairwise _ _ _ =>
-      pw
-  | _ =>
-      eauto 6 with lia
-  end.
 
 Lemma wp_merge_aux _j1 _j2 _i1 _i2 :
   merge_aux_spec _j1 _j2 (_i1, _i2).
