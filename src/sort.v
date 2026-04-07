@@ -125,26 +125,6 @@ Infix "`precedes`" := R'
 Infix "`precede`" := (pairwise R')
   (at level 70, no associativity) : element_scope.
 
-(* We specialize this lemma so that [eauto] accepts to use it as a hint. *)
-
-(* In combination with [le_le_lex], this lemma can exploit the hypotheses
-   [seg i1 j1 xs1 `precede` seg i2 j2 xs2] and [x1 ≤ x2] so as to prove
-   [x1 `lex` x2]. *)
-
-Local Lemma exploit_seg_pairwise_seg i1 j1 xs1 i2 j2 xs2 x1 k1 x2 k2 :
-  seg i1 j1 xs1 `precede` seg i2 j2 xs2 →
-  x1 = xs1 !!! k1 →
-  x2 = xs2 !!! k2 →
-  i1 `max` 0 ≤ k1 < j1 `min` len xs1 →
-  i2 `max` 0 ≤ k2 < j2 `min` len xs2 →
-  x1 `precedes` x2.
-Proof.
-  intros. eapply exploit_seg_pairwise_seg; eauto.
-Qed.
-
-(* TODO still used? *)
-Local Hint Resolve exploit_seg_pairwise_seg : related.
-
 (* The following hints seem to be needed. I don't understand why
    reflexivity and transitivity do not work out of the box. *)
 
