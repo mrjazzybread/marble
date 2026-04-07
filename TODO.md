@@ -2,23 +2,15 @@
 
 ## Short term
 
-* int.v: make `proj i` a notation for `to_nat (of_nat i)`
-  and see if this helps.
-
 * array.v: some operations do not have a dedicated tactic.
   Define dedicated tactics or indicate what tactic to use,
   e.g. `wp_loop`.
-
-* `array.v`: can we get rid of the tactic `arrays`?
-  If we cannot, then in `vector.v`, a similar tactic `vectors` is needed.
 
 * Plug the `sortto_segment` functions into merge sort,
   instead of insertion sort.
   Can we get rid of insertion sort entirely?
   May need to generalize the spec of `sortto_segment`
   to cover the case of two arrays.
-
-* Offer a public `merge` function, with and without stability.
 
 * `sort.v`: try to use uniform conventions regarding names and order
    of parameters; also, regarding end offset versus length.
@@ -31,9 +23,6 @@
   all the way?
 
 * Can the loops in `int.v` use `IF/THEN/ELSE` instead of `inspected`?
-
-* In `proveIsInt`, how can one test whether a term is a primitive integer
-  literal? Ask for help on Zulip.
 
 * In anticipation of vectors, many operations on arrays should also
   work on array segments.
@@ -50,12 +39,9 @@
   + a variant of `init` with a state
   + `map`
   + `compare`
-  + `merge`
 
 * Offer a generic way of obtaining a 2-way
   comparison out of a 3-way comparison?
-
-* More lemmas should be marked `Local`.
 
 * Once released (Rocq 9.2?), use `autorewrite*`.
 
