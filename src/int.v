@@ -494,47 +494,22 @@ Global Opaque isInt.
    to teach it this rule: apply [introIsInt] only if the left-hand
    side is a primitive integer literal. *)
 
-Global Ltac proveIsIntCore :=
-  lazymatch goal with (* do not backtrack *)
-  | |- isInt (_ + _) _ =>
-      eapply isInt_add; proveIsInt
-  | |- isInt (_ - _) _ =>
-      eapply isInt_sub; proveIsInt
-  | |- isInt (_ * _) _ =>
-      eapply isInt_mul; proveIsInt
-  | |- isInt (_ / _) _ =>
-      eapply isInt_div; proveIsInt
-  | |- isInt (_max _ _) _ =>
-      eapply isInt_max; [ proveIsInt | listz_arith | proveIsInt | listz_arith ]
-  | |- isInt (_min _ _) _ =>
-      eapply isInt_min; [ proveIsInt | listz_arith | proveIsInt | listz_arith ]
-  | |- isInt (_ _ _) _ =>
-      (* Unknown binary operator. *)
-      fail
-  | |- isInt (_ _) _ =>
-      (* Unknown unary operator. *)
-      fail
-  | |- isInt ?lhs _ =>
-      (* If all of the above have failed, then (maybe/probably) the
-         left-hand is a primitive integer literal. (I don't know of a
-         way of testing this with certainty.) So the goal could be
-         [isInt 1 ?i] or [isInt 1 1]. Then, we want to apply
-         [introIsInt]. Or, the goal could be [isInt _i ?i], in which
-         case we do not want to apply this lemma. We use [is_var] to
-         distinguish these situations. *)
-      (* In the premise of [introIsInt], we use [compute] so as to
-         replace [to_Z 12%uint63] with [12]. *)
-      first [ is_var lhs | eapply introIsInt; compute; eauto 2 with lia ]
-  end
-
-with proveIsInt :=
-  match goal with (* backtrack *)
+Ltac proveIsInt :=
+  lazymatch goal with
   | h: isInt ?_i ?i1 |- isInt ?_i ?i2 =>
       (* Exploit a hypothesis. *)
       replace i2 with i1 by lia;
       exact h
-  | _ =>
-      proveIsIntCore
+  | |- isInt ?_i ?i =>
+      (* If [_i] is a primitive integer literal, such as [12%uint63], then
+          we want to apply the lemma [introIsInt] and use [compute] in the
+          premise, so that [i] is instantiated with [12%Z] (if it is a
+          metavariable). On the other hand, if [_i] is not a primitive
+          integer literal then we do not want to apply [introIsInt]. *)
+      (* [unify] is a way of testing whether [_i] is (convertible with)
+         a primitive integer literal. Thanks to Guillaume Melquiond! *)
+      unify (add _i 0)%uint63 _i ;
+      eapply introIsInt; compute; eauto 2 with lia
   end.
 
 Global Hint Extern 1 (isInt _ _) =>
