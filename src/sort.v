@@ -6,7 +6,7 @@ From Stdlib Require Import Array.PArray.
 From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
 From marble Require Import equations.
-From marble Require Import tactics list_tactics.
+From marble Require Import tactics.
 From marble Require Import iteration int wp wp_tactics array.
 From marble Require Import orders sorting compare.
 Implicit Types _i _j _k : int.
@@ -53,24 +53,11 @@ Ltac same_lookup_total :=
 Ltac listz_easy ::=
   solve [ eauto 2 | same_lookup_total ].
 
-(* When the goal has the form [?R ?lhs ?rhs], the tactic [derecognize]
-   substitutes away [lhs] and [rhs], if they are variables, and
-   substitutes away any variables that are known to be equal to
-   [lhs] and [rhs]. It is used as a preparatory step in [related]. *)
-
-(* Possibly one could adopt the opposite approach and use [recognize]
-   as a preparatory step. *)
-
-Global Ltac derecognize :=
-  match goal with |- ?R ?lhs ?rhs =>
-    try subst lhs; try subst rhs
-  end;
-  try match goal with h: ?x = ?lhs |- ?R ?lhs _ =>
-    try subst x
-  end;
-  try match goal with h: ?y = ?rhs |- ?R _ ?rhs =>
-    try subst y
-  end.
+(* [derecognize] substitutes away [lhs] and [rhs], if they are variables,
+   and substitutes away any variables that are known to be equal to [lhs]
+   and [rhs]. We use it as a preparatory step in [related]. Possibly one
+   could adopt the opposite approach and use [recognize] as a preparatory
+   step. *)
 
 (* [related] solves the goal or fails. *)
 
@@ -988,9 +975,9 @@ Proof.
         wp_set. wp_continue.
         intro_inner_inv. intro_dst_inv; [| sorted | pw ].
         (* Permutation. *)
-        { rewrite <- Hpermut. clarify. (* TODO slow *)
-          rewrite (split_seg j dst'' dstofs (j + 1)) by lia. clarify.
-          recognize. eapply Permutation_app_comm. }}}
+        { rewrite <- Hpermut.
+          rewrite (split_seg j dst'' dstofs (j + 1)) by lia. recognize.
+          simplify_list_permutation_goal. eapply Permutation_app_comm. }}}
     (* Epilogue of the inner loop. *)
     { clear dependent _dst. intros [ _dst out ].
       intros (j&Hj). z in Hj. unpack in Hj.
@@ -1115,9 +1102,9 @@ Proof.
         wp_set. wp_continue.
         intro_inner_inv. intro_dst_inv; [| sorted | pw ].
         (* Permutation. *)
-        { rewrite <- Hpermut. clarify.
-          rewrite (split_seg j xs'' dstofs (j + 1)) by lia. clarify.
-          recognize. eapply Permutation_app_comm. }}}
+        { rewrite <- Hpermut. recognize.
+          rewrite (split_seg j xs'' dstofs (j + 1)) by lia. recognize.
+          simplify_list_permutation_goal. eapply Permutation_app_comm. }}}
     (* Epilogue of the inner loop. *)
     { clear dependent a. intros [ a out ].
       intros (j&Hj). z in Hj. unpack in Hj.
@@ -1394,7 +1381,7 @@ Lemma merge_aux_post_init_1 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
   intros. intro_merge_aux_post.
-  { unmodified_outside_seg. }
+  { destruct_disjoint_seg; lego. }
   { list. recognize. reflexivity. }
   { list. sorted_app.
     case (decide (i2 = j2)); intros; subst; list; pw. }
@@ -1418,7 +1405,7 @@ Lemma merge_aux_post_init_2 src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
   intros. intro_merge_aux_post.
-  { unmodified_outside_seg. }
+  { destruct_disjoint_seg; lego. }
   { list. zring. recognize. eapply Permutation_app_comm. }
   { list. sorted_app.
     case (decide (i1 = j1)); intros; subst; list; pw. }
@@ -1445,9 +1432,9 @@ Lemma merge_aux_post_init_optimistic src1 src2 i1 j1 i2 j2 x1 x2 k _dst dst :
   merge_aux_post src1 src2 i1 j1 i2 j2 dst k _dst.
 Proof.
   intros. intro_merge_aux_post.
-  { unmodified_outside_seg. }
-  { clarify. }
-  { list. zring. rewrite seg_seg by lia. z. sorted. }
+  { destruct_disjoint_seg; lego. }
+  { list. simplify_list_permutation_goal. }
+  { list. zring. seg_seg. sorted. }
 Qed.
 
 (* The specification of [merge_aux]. *)
@@ -1934,9 +1921,7 @@ Proof.
   (* Case [x1 ≤ x2]. *)
   { wp_blit.
     wp_blit.
-    wp_last Hdst.
-    (* Automatic simplification does not quite work here. *)
-    rewrite !seg_seg in Hdst by lia. z in Hdst. zring in Hdst.
+    wp_last Hdst. seg_seg in Hdst.
     wp_ret.
     eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
@@ -2013,9 +1998,7 @@ Proof.
   (* Case [x1 ≤ x2]. *)
   { wp_blit.
     wp_blit.
-    wp_last Hdst.
-    (* Automatic simplification does not quite work here. *)
-    rewrite !seg_seg in Hdst by lia. z in Hdst. zring in Hdst.
+    wp_last Hdst. seg_seg in Hdst.
     wp_ret.
     eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
@@ -2230,7 +2213,7 @@ Local Ltac intro_sortto'_post :=
   unfold sortto'_post; eexists;
   split; [ eauto 2 | split; [ listz_arith | pack ] ];
   (* 3 subgoals remain: *)
-  [ try solve [unmodified_outside_seg] | eauto | sorted ].
+  [ try solve [lego] | eauto | sorted ].
 
 Local Ltac elim_sortto'_post dst' :=
   match goal with h: sortto'_post _ _ _ _ _ |- _ =>
