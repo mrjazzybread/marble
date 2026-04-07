@@ -837,8 +837,6 @@ Hint Rewrite
   using (eauto with typeclass_instances)
 : pairwise.
 
-Ltac pairwise := autorewrite with pairwise.
-
 Arguments smt_sorted {A} R {H} xs.
 Arguments smt_sorted_seg {A} R {H} i k xs.
 Arguments smt_sorted_seg_except {A} R {H} i k xs j.
@@ -1099,3 +1097,149 @@ Proof.
 Qed.
 
 End PreOrder.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The following tactics can prove that a list is sorted. *)
+
+(* They are heavily used in sort.v. *)
+
+(* [related] proves that two elements are related: that is, it solves a goal
+   of the form [?R ?x ?y]. It either solves the goal or fails. *)
+
+Ltac related :=
+  (* [derecognize] substitutes away [lhs] and [rhs], if they are variables,
+     and substitutes away any variables that are known to be equal to [lhs]
+     and [rhs]. We use it as a preparatory step. Possibly one could adopt
+     the opposite approach and use [recognize] as a preparatory step. *)
+  derecognize;
+  (* Now proceed. *)
+  match goal with
+
+  | h: Sorted ?R (seg _ _?xs) |- ?R (?xs !!! ?i) (?xs !!! ?j) =>
+      (* Two lookups may be related because they hit a sorted segment. *)
+      eapply exploit_sorted_seg; [
+        exact h
+      | listz_arith | listz_arith | listz_arith | listz_arith | listz_arith ]
+
+  | h: pairwise ?R (seg _ _ _) (seg _ _ _) |- ?R _ _ =>
+      (* Two lookups may be related because they hit two related segments. *)
+      eapply exploit_seg_pairwise_seg; [
+        exact h | solve [eauto] | solve [eauto] | listz_arith | listz_arith ]
+
+  | h: ?x ∈ seg _ _ _ |- ?R ?x ?y =>
+      (* We want to relate [x] with [y] and we know that [x] is a member
+         of a certain segment. This means that there exists an index [j]
+         within a certain range such that [x] is [xs !!! j]. Perform this
+         replacement and continue. *)
+      rewrite lookup_total_elem_seg in h by listz_arith;
+      destruct h as (? & ? & h);
+      rewrite h;
+      related
+
+  | _ =>
+      (* Perhaps other recipes are applicable. *)
+      solve [ eauto 3 with related ]
+  end.
+
+(* [boundary] applies the lemma [boundary_test] to a goal of the form
+   [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves the
+   third one open. This subgoal is [R (xs !!! (length xs - 1)) (ys !!! 0)]
+   and has access to the hypotheses [length xs ≠ 0] and [length ys ≠ 0]. *)
+
+Ltac boundary :=
+  eapply boundary_test; [ sorted | sorted | length; intros ? ?; list ]
+
+(* [sorted_app] applies the lemma [Sorted_app] to a goal of the form
+   [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves
+   the third subgoal open. This subgoal is [xs ≼ ys]. *)
+
+with sorted_app :=
+  eapply Sorted_app; [ sorted | sorted |]
+
+(* [pw] solves a goal of the form [xs ⋅≼ ys]. *)
+
+(* [pw] either solves the goal or fails. *)
+
+with pw :=
+  match goal with (* can backtrack *)
+
+  | |- pairwise _ [] _ =>
+      (* One side is the empty list. Easy. *)
+      eapply pairwise_nil_left
+  | |- pairwise _ _ [] =>
+      (* One side is the empty list. Easy. *)
+      eapply pairwise_nil_right
+
+  | |- pairwise _ {[_]} {[_]} =>
+      (* Both sides are singletons. The goal is transformed into
+         an obligation to prove [x < y]. *)
+      rewrite pairwise_singleton_singleton_iff;
+      related
+
+  | h: pairwise _ {[?x]} ?zs |- pairwise _ {[?y]} ?zs =>
+      (* The goal is identical to a hypothesis up to an equation [x = y]. *)
+      replace y with x by eauto; exact h
+  | h: pairwise _ ?zs {[?x]} |- pairwise _ ?zs {[?y]} =>
+      (* The goal is identical to a hypothesis up to an equation [x = y]. *)
+      replace y with x by eauto; exact h
+
+  | h: pairwise _ (seg _ _ _) (seg _ _ _) |-
+       pairwise _ (seg _ _ _) (seg _ _ _) =>
+      (* To prove that two segments are related, it suffices to show that
+         are subsegments of segments which we know are related. *)
+      eapply seg_pairwise_seg_variance;
+        [ exact h | listz_arith | listz_arith | listz_arith | listz_arith ]
+
+  | |- pairwise ?R ?xs ?ys =>
+      (* If the lists [xs] and [ys] are sorted, then, to prove [xs ≼ ys],
+         it suffices to compare the two elements at the boundary test. *)
+      solve [boundary; related]
+
+  | |- pairwise _ _ (_ ++ _) =>
+      (* Another option is to decompose concatenations. In an ideal world,
+         [boundary; related] (above) would always succeed and there would
+         be no need for this technique. (TODO) *)
+      rewrite pairwise_app_right_iff; split; pw
+  | |- pairwise _ (_ ++ _) _ =>
+      rewrite pairwise_app_left_iff; split; pw
+
+  | _ =>
+      (* An assumption? *)
+      solve [ eauto 2 ]
+  end
+
+(* [sorted] solves a goal of the form [Sorted ?R ?xs]. *)
+
+(* [sorted] either solves the goal or fails. *)
+
+with sorted :=
+  match goal with
+  | |- Sorted _ [] =>
+      (* The empty list is sorted. *)
+      eapply Sorted_empty
+  | |- Sorted _ {[_]} =>
+      (* A singleton list is sorted. *)
+      eapply Sorted_singleton
+  | h: Sorted ?R ?xs |- Sorted ?R ?xs =>
+      (* Exploiting an assumption. *)
+      exact h
+  | h: Sorted ?R (?xs ++ _) |- Sorted ?R ?xs =>
+      (* A part of a sorted list is sorted. *)
+      eapply Sorted_app_inv_l; [ exact h ]
+  | h: Sorted ?R (_ ++ ?xs) |- Sorted ?R ?xs =>
+      (* A part of a sorted list is sorted. *)
+      eapply Sorted_app_inv_r; [ exact h ]
+  | h: Sorted _ (seg _ _ ?xs) |- Sorted _ (seg _ _?xs) =>
+      (* A subsegment of a sorted segment is sorted. *)
+      eapply sorted_seg_variance; [ exact h | listz_arith | listz_arith ]
+  | |- Sorted _ (?xs ++ ?zs) =>
+      sorted_app; pw
+  | h: Sorted ?R ?xs |- Sorted ?R ?ys =>
+      (* Exploiting an assumption, up to an equality of lists. *)
+      let Heq := fresh in
+      assert (Heq: xs = ys); [ solve [lego] | rewrite Heq in h; exact h ]
+  | _ =>
+      (* An assumption? *)
+      solve [eauto 2]
+  end.

@@ -24,17 +24,12 @@ Set Universe Polymorphism.
 
 (* Local settings. *)
 
+(* This reinforces our list tactics, including [list] and [lego]. *)
+
 Local Ltac listz_arith ::=
   ulength; lia.
 
-Local Ltac wp_intros_hook Hx ::=
-  list in Hx; unpack in Hx.
-
-(* TODO the hints and tactics about sorting should be cleaned up and moved
-   to sorting.v *)
-
-(* TODO also equal_lookups_to_equal_segs *)
-Ltac same_lookup_total :=
+Local Ltac same_lookup_total :=
   match goal with
   | h: ?x = ?xs !!! ?i |- ?x = ?xs !!! ?j =>
       assert (i = j) by listz_arith;
@@ -50,144 +45,13 @@ Ltac same_lookup_total :=
       congruence
   end.
 
-Ltac listz_easy ::=
+Local Ltac listz_easy ::=
   solve [ eauto 2 | same_lookup_total ].
 
-(* [derecognize] substitutes away [lhs] and [rhs], if they are variables,
-   and substitutes away any variables that are known to be equal to [lhs]
-   and [rhs]. We use it as a preparatory step in [related]. Possibly one
-   could adopt the opposite approach and use [recognize] as a preparatory
-   step. *)
+(* After stepping over an operation, simplify the postcondition. *)
 
-(* [related] solves the goal or fails. *)
-
-(* TODO combine [related] and [same_lookup_total]? *)
-Ltac related :=
-  derecognize;
-  match goal with
-
-  | h: Sorted ?R (seg _ _?xs) |- ?R (?xs !!! ?i) (?xs !!! ?j) =>
-      (* Two lookups may be related because they hit a sorted segment. *)
-      eapply exploit_sorted_seg; [
-        exact h
-      | listz_arith | listz_arith | listz_arith | listz_arith | listz_arith ]
-
-  | h: pairwise ?R (seg _ _ _) (seg _ _ _) |- ?R _ _ =>
-      (* Two lookups may be related because they hit two related segments. *)
-      eapply exploit_seg_pairwise_seg; [
-        exact h | solve [eauto] | solve [eauto] | listz_arith | listz_arith ]
-
-  | h: ?x ∈ seg _ _ _ |- ?R ?x ?y =>
-      (* We want to relate [x] with [y] and we know that [x] is a member
-         of a certain segment. This means that there exists an index [j]
-         within a certain range such that [x] is [xs !!! j]. Perform this
-         replacement and continue. *)
-      rewrite lookup_total_elem_seg in h by listz_arith;
-      destruct h as (? & ? & h);
-      rewrite h;
-      related
-
-  | _ =>
-      (* Perhaps other recipes are applicable. *)
-      solve [ eauto 3 with related ]
-  end.
-
-(* [boundary] applies the lemma [boundary_test] to a goal of the form
-   [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves
-   the third subgoal, [xs ≼ ys], open. *)
-
-Global Ltac boundary :=
-  eapply boundary_test; [ sorted | sorted | length; intros ? ?; list ]
-
-(* [sorted_app] applies the lemma [Sorted_app] to a goal of the form
-   [Sorted R (xs ++ ys)]. It solves the first two subgoals and leaves
-   the third subgoal, [xs ≼ ys], open. *)
-
-with sorted_app :=
-  eapply Sorted_app; [ sorted | sorted |]
-
-(* [pw] solves a goal of the form [xs ⋅≼ ys]. *)
-
-(* [pw] solves the goal or fails. *)
-
-with pw :=
-  match goal with (* can backtrack *)
-
-  | |- pairwise _ [] _ =>
-      (* One side is the empty list. Easy. *)
-      eapply pairwise_nil_left
-  | |- pairwise _ _ [] =>
-      (* One side is the empty list. Easy. *)
-      eapply pairwise_nil_right
-
-  | |- pairwise _ {[_]} {[_]} =>
-      (* Both sides are singletons. The goal is transformed into
-         an obligation to prove [x < y]. *)
-      rewrite pairwise_singleton_singleton_iff;
-      related
-
-  | h: pairwise _ {[?x]} ?zs |- pairwise _ {[?y]} ?zs =>
-      (* The goal is identical to a hypothesis up to an equation [x = y]. *)
-      replace y with x by eauto; exact h
-  | h: pairwise _ ?zs {[?x]} |- pairwise _ ?zs {[?y]} =>
-      (* The goal is identical to a hypothesis up to an equation [x = y]. *)
-      replace y with x by eauto; exact h
-
-  | h: pairwise _ (seg _ _ _) (seg _ _ _) |-
-       pairwise _ (seg _ _ _) (seg _ _ _) =>
-      (* To prove that two segments are related, it suffices to show that
-         are subsegments of segments which we know are related. *)
-      eapply seg_pairwise_seg_variance;
-        [ exact h | listz_arith | listz_arith | listz_arith | listz_arith ]
-
-  | |- pairwise ?R ?xs ?ys =>
-      (* If the lists [xs] and [ys] are sorted, then, to prove [xs ≼ ys],
-         it suffices to compare the two elements at the boundary test. *)
-      solve [boundary; related]
-
-  | |- pairwise _ _ (_ ++ _) =>
-      (* Another option is to decompose concatenations. *)
-      rewrite pairwise_app_right_iff; split; pw
-  | |- pairwise _ (_ ++ _) _ =>
-      rewrite pairwise_app_left_iff; split; pw
-
-  | _ =>
-      (* An assumption? *)
-      solve [ eauto 2 ]
-  end
-
-(* [sorted] solves the goal or fails. *)
-
-with sorted :=
-  match goal with
-  | |- Sorted _ [] =>
-      (* The empty list is sorted. *)
-      eapply Sorted_empty
-  | |- Sorted _ {[_]} =>
-      (* A singleton list is sorted. *)
-      eapply Sorted_singleton
-  | h: Sorted ?R ?xs |- Sorted ?R ?xs =>
-      (* Exploiting an assumption. *)
-      exact h
-  | h: Sorted ?R (?xs ++ _) |- Sorted ?R ?xs =>
-      (* A part of a sorted list is sorted. *)
-      eapply Sorted_app_inv_l; [ exact h ]
-  | h: Sorted ?R (_ ++ ?xs) |- Sorted ?R ?xs =>
-      (* A part of a sorted list is sorted. *)
-      eapply Sorted_app_inv_r; [ exact h ]
-  | h: Sorted _ (seg _ _ ?xs) |- Sorted _ (seg _ _?xs) =>
-      (* A subsegment of a sorted segment is sorted. *)
-      eapply sorted_seg_variance; [ exact h | listz_arith | listz_arith ]
-  | |- Sorted _ (?xs ++ ?zs) =>
-      sorted_app; pw
-  | h: Sorted ?R ?xs |- Sorted ?R ?ys =>
-      (* Exploiting an assumption, up to an equality of lists. *)
-      let Heq := fresh in
-      assert (Heq: xs = ys); [ solve [lego] | rewrite Heq in h; exact h ]
-  | _ =>
-      (* An assumption? *)
-      solve [eauto 2]
-  end.
+Local Ltac wp_intros_hook Hx ::=
+  list in Hx; unpack in Hx.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1311,7 +1175,7 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    pairwise. split.
+    autorewrite with pairwise. split.
     { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; pw. }
     { destruct Hcases2; unpack; subst src2'; list; pw. }}
 Qed.
@@ -1355,7 +1219,7 @@ Proof.
   (* Sortedness. *)
   { split_seg (k + 1) dst'. rewrite Hpost1 by lia. list.
     sorted_app. rewrite Hpost2.
-    pairwise. split.
+    autorewrite with pairwise. split.
     { destruct Hcases1 as [|[|]]; unpack; subst src1'; list; pw. }
     { destruct Hcases2; unpack; subst src2'; list; pw. }}
 Qed.
