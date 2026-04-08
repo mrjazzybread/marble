@@ -2225,7 +2225,8 @@ Proof.
     assert (isInt _n2 n2) by tc.
     replace n with (n1 + n2) in * by lia.
     (* The first recursive call. *)
-    wp_op_shadow_pair IH _src _dst. wp_last HpostA.
+    wp_op IH.
+    clear dependent _src _dst. intros (_src & _dst) HpostA.
     elim_sortto_post src' dst'.
     (* This call has not affected the first half of the source segment. *)
     assert (frameA: seg i (i + n1) src' = seg i (i + n1) src)
@@ -2336,7 +2337,8 @@ Proof.
     (* Allocation of an array. *)
     wp_make t.
     (* The first call. *)
-    wp_op_shadow_pair wp_sortto a t. wp_last HpostA.
+    wp_op wp_sortto.
+    clear dependent a t. intros (a & t) HpostA.
     elim_sortto_post xs' dst'. length in *.
     (* This call has not affected the first half of [a]. *)
     assert (frameA: seg i (i + n1) xs' = seg i (i + n1) xs)

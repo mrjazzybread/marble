@@ -362,22 +362,6 @@ Tactic Notation "wp_op_shadow" uconstr(lemma) simple_intropattern(x) :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* [wp_shadow_pair x y] is an ad hoc variant of [wp_shadow] that should be
-   used when the result of an operation is a pair (x, y). It is needed
-   because [clear dependent] does not accept an intropattern as an argument,
-   I believe. *)
-
-Ltac wp_shadow_pair x y :=
-  let p := fresh in
-  wp_intro p;
-  clear dependent x; clear dependent y;
-  destruct p as [x y].
-
-Ltac wp_op_shadow_pair lemma x y :=
-  wp_op lemma; last wp_shadow_pair x y.
-
-(* -------------------------------------------------------------------------- *)
-
 (* [wp_last H] renames the most recently introduced hypothesis [H]. *)
 
 (* The tactics [wp_intro] and [wp_shadow] do not allow naming the
