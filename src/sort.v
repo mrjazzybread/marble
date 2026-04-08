@@ -257,7 +257,7 @@ Qed.
    as opposed to writing a generator. This seems much easier and is good
    enough. *)
 
-(* This exercice represents quite a lot of effort. It is probably not
+(* This exercise represents quite a lot of effort. It is probably not
    really worth the trouble, but it is instructive. *)
 
 Local Definition lt_le_R   := @lt_le A R.
