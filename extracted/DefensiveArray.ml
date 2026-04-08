@@ -35,6 +35,14 @@ let map f a =
   Array.map f a.data
   |> of_array
 
+let blit a i b j n =
+  if not a.valid then failwith "blit: stale source array";
+  if not b.valid then failwith "blit: stale target array";
+  b.valid <- false;
+  let data = b.data in
+  Array.blit a.data (to_int i) data (to_int j) (to_int n);
+  of_array data
+
 (* The public version of [of_array] has an extra argument [inhabitant]. *)
 let[@inline] of_array data _inhabitant =
   of_array data
