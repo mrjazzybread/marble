@@ -4,6 +4,13 @@ module[@inline] Make (Parray : sig
   val length  : 'a t -> Uint63.t
   val get     : 'a t -> Uint63.t -> 'a
   val set     : 'a t -> Uint63.t -> 'a -> 'a t
+(*
+  val blit    : 'a t -> Uint63.t -> 'a t -> Uint63.t -> Uint63.t -> 'a t
+    (* [blit] is not used by the code that we extract out of Rocq;
+       this code contains its own [blit] function. Nevertheless we
+       may provide [blit] in order to be able to plug it in and
+       compare the performance of the two [blit] functions. *)
+ *)
 end) = struct
 
 let __ = let rec f _ = Obj.repr f in Obj.repr f

@@ -52,6 +52,9 @@ module Make (A : sig
   val set : 'a t -> uint63 -> 'a -> 'a t
   val of_array : 'a array -> 'a -> 'a t
   val map : ('a -> 'b) -> 'a t -> 'b t
+(*
+  val blit : 'a t -> uint63 -> 'a t -> uint63 -> uint63 -> 'a t
+ *)
 end) = struct
 
   let convert (a : int array) : uint63 A.t =
