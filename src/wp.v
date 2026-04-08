@@ -212,8 +212,14 @@ Ltac wp_ret :=
 
 (* The fist subgoal, [isBool _ _ _], should be solved by [tc]. *)
 
+(* Strangely enough, [simple eapply wp_if] can succeed when the goal
+   is an [IF/THEN/ELSE] construct that contains an [if/then/else]
+   construct nested inside it. (Rocq seems to exchange the
+   conditionals.) By trying [simple eapply wp_IF] first, we seem to
+   avoid this problem. *)
+
 Ltac wp_if :=
-  first [ simple eapply wp_if | simple eapply wp_IF ];
+  first [ simple eapply wp_IF | simple eapply wp_if ];
     [ tc | intros | intros ].
 
 (* Reasoning about a [bind] construct whose left-hand side is pure. *)
