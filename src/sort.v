@@ -1998,17 +1998,20 @@ Section SortTo'.
 
 Open Scope uint63.
 
-(* The cutoff determines where to switch from merge sort to insertion
-   sort. OCaml uses 5. *)
-
-Notation cutoff := 5.
+(* Above length 4, we use a standard merge sort. At lengths 2, 3, and 4,
+   we use the functions [sortto_segment_X]. The length must be at least 2;
+   we do not handle lengths 0 and 1 in this function. *)
 
 Equations sortto' _dst _i _k _n : array A
 by wf _n ilt :=
 sortto' _dst _i _k _n :=
-  IF _n ≤? cutoff THEN
-    (* Under the cutoff, use insertion sort. *)
-    isortto' _dst _i _k _n
+  IF _n ≤? 4 THEN
+    if _n =? 4 then
+      sortto_segment_4 _dst _i _dst _k
+    else if _n =? 3 then
+      sortto_segment_3 _dst _i _dst _k
+    else
+      sortto_segment_2 _dst _i _dst _k
   ELSE
     (* Divide the source segment into two halves. The second half may
        be longer by one unit. *)
@@ -2067,6 +2070,7 @@ Definition sortto'_spec _n :=
   isInt _i i →
   isInt _k k →
   isInt _n n →
+  (2 ≤ n)%Z →
   valid_seg i (i + n) dst →
   valid_seg k (k + n) dst →
   disjoint_seg i (i + n) k (k + n) →
@@ -2081,10 +2085,16 @@ Proof.
   unfold sortto'_spec. intros. arrays.
   autorewrite with sortto'.
   wp_if.
-  (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto' shadowing: _dst.
-    elim_isortto_inv dst'. intro_sortto'_post. }
-  (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
+  (* Case [n ≤ 4]. *)
+  { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
+    (* Subcase [n = 4]. *)
+    { wp_op wp_sortto_segment_4; last wp_shadow _dst. intro_sortto'_post. }
+    (* Subcase [n = 3]. *)
+    { wp_op wp_sortto_segment_3; last wp_shadow _dst. intro_sortto'_post. }
+    (* Subcase [n = 2]. *)
+    { wp_op wp_sortto_segment_2; last wp_shadow _dst. intro_sortto'_post. }
+  }
+  (* Case [4 < n]. We actually need only [4 ≤ n]. *)
   {
     set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
     assert (isInt _n1 n1) by tc.
@@ -2140,18 +2150,19 @@ Qed.
 Section SortTo.
 Open Scope uint63.
 
-(* The cutoff determines where to switch from merge sort to insertion
-   sort. OCaml uses 5. *)
-
-Notation cutoff := 5.
-
 Equations sortto _src _dst _i _k _n : array A * array A
 by wf _n ilt :=
 sortto _src _dst _i _k _n :=
-  IF _n ≤? cutoff THEN
-    (* Under the cutoff, use insertion sort. *)
-    do _dst ← isortto _src _i _dst _k _n ;
-    (_src, _dst)
+  IF _n ≤? 4 THEN
+    if _n =? 4 then
+      do _dst ← sortto_segment_4 _src _i _dst _k ;
+      (_src, _dst)
+    else if _n =? 3 then
+      do _dst ← sortto_segment_3 _src _i _dst _k ;
+      (_src, _dst)
+    else
+      do _dst ← sortto_segment_2 _src _i _dst _k ;
+      (_src, _dst)
   ELSE
     (* Divide the source segment into two halves. The second half may
        be longer by one unit. *)
@@ -2206,6 +2217,7 @@ Definition sortto_spec _n :=
   isInt _i i →
   isInt _k k →
   isInt _n n →
+  (2 ≤ n)%Z →
   valid_seg i (i + n) src →
   valid_seg k (k + n) dst →
   Sorted R' (seg i (i + n) src) →
@@ -2219,11 +2231,19 @@ Proof.
   unfold sortto_spec. intros. arrays.
   autorewrite with sortto.
   wp_if.
-  (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto shadowing: _dst.
-    elim_isortto_inv dst'.
-    wp_ret. intro_sortto_post. }
-  (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
+  (* Case [n ≤ 4]. *)
+  { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
+    (* Subcase [n = 4]. *)
+    { wp_op wp_sortto_segment_4; last wp_shadow _dst.
+      wp_ret. intro_sortto_post. }
+    (* Subcase [n = 3]. *)
+    { wp_op wp_sortto_segment_3; last wp_shadow _dst.
+      wp_ret. intro_sortto_post. }
+    (* Subcase [n = 2]. *)
+    { wp_op wp_sortto_segment_2; last wp_shadow _dst.
+      wp_ret. intro_sortto_post. }
+  }
+  (* Case [4 < n]. We actually need only [4 ≤ n]. *)
   { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
     assert (isInt _n1 n1) by tc.
     set (_n2 := (_n - _n1)%uint63). set (n2 := (n - n1)).
@@ -2262,22 +2282,24 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [sort_seg a _i _n] sorts the array segment described by the array [a],
-   the start index [_i], and the length [_n]. The data is sorted in place.
-   This is a merge sort. It is stable. *)
+(* [sort_seg_aux a _i _n] sorts the array segment described by the array
+   [a], the start index [_i], and the length [_n]. The data is sorted in
+   place. This is a merge sort. It is stable. *)
+
+(* [sort_seg_aux] requires [2 ≤ n]. We later define [sort_seg], which
+   also handles the case [n < 2]. *)
 
 Section SortSeg.
 Open Scope uint63.
 
-(* The cutoff determines where to switch from merge sort to insertion
-   sort. OCaml uses 5. *)
-
-Notation cutoff := 5.
-
-Definition sort_seg a _i _n :=
-  if _n ≤? cutoff then
-    (* Under the cutoff, use insertion sort. *)
-    isortto' a _i _i _n
+Definition sort_seg_aux a _i _n :=
+  if _n ≤? 4 then
+    if _n =? 4 then
+      sortto_segment_4 a _i a _i
+    else if _n =? 3 then
+      sortto_segment_3 a _i a _i
+    else
+      sortto_segment_2 a _i a _i
   else
     (* Divide the source segment into two halves. The second half may
        be longer by one unit. *)
@@ -2296,7 +2318,7 @@ Definition sort_seg a _i _n :=
 
 End SortSeg.
 
-(* The postcondition of [sort_seg]. *)
+(* The postcondition of [sort_seg_aux] and [sort_seg]. *)
 
 Definition sort_seg_post xs i n a :=
   ∃ xs',
@@ -2318,21 +2340,32 @@ Local Ltac elim_sort_seg_post xs' :=
     destruct h as (xs' & h); unpack in h
   end.
 
-(* The specification of [sort_seg]. *)
+(* The specification of [sort_seg_aux]. *)
 
-Lemma wp_sort_seg : ∀ a xs _i i _n n,
+Lemma wp_sort_seg_aux : ∀ a xs _i i _n n,
   isArray a xs →
   isInt _i i →
   isInt _n n →
+  (2 ≤ n)%Z →
   valid_seg i (i + n) xs →
   Sorted R' (seg i (i + n) xs) →
-  wp (sort_seg a _i _n)
+  wp (sort_seg_aux a _i _n)
      (sort_seg_post xs i n).
 Proof.
-  intros. unfold sort_seg. arrays.
+  intros. unfold sort_seg_aux. arrays.
   wp_if.
-  (* Case [n ≤ cutoff]. *)
-  { wp_op wp_isortto' shadowing: a. }
+  (* Case [n ≤ 4]. *)
+  { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
+    (* Subcase [n = 4]. *)
+    { wp_op wp_sortto_segment_4; last wp_shadow a.
+      wp_ret. intro_sort_seg_post. }
+    (* Subcase [n = 3]. *)
+    { wp_op wp_sortto_segment_3; last wp_shadow a.
+      wp_ret. intro_sort_seg_post. }
+    (* Subcase [n = 2]. *)
+    { wp_op wp_sortto_segment_2; last wp_shadow a.
+      wp_ret. intro_sort_seg_post. }
+  }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)
   { set (_n1 := (_n / 2)%uint63). set (n1 := (n / 2)).
     assert (isInt _n1 n1) by tc.
@@ -2372,17 +2405,75 @@ Proof.
       join_segments. reflexivity. }}
 Qed.
 
+(* A list whose length is at most 1 is sorted. *)
+
+Lemma sorted_subsingleton xs :
+  (len xs < 2)%Z →
+  sorted xs.
+Proof.
+  intros. lengths.
+  rewrite (seg_intro xs).
+  assert (len xs = 0 ∨ len xs = 1) as [|Hlen] by lia; rewrite ?Hlen.
+  + list_inv. list. sorted.
+  + recognize_singleton_segments. sorted.
+Qed.
+
+Lemma sorted_subsingleton_segment i n xs :
+  (n < 2)%Z →
+  sorted (seg i (i + n) xs).
+Proof.
+  intros. eapply sorted_subsingleton. ulength. lia.
+Qed.
+
+(* An extension of [sort_seg_aux] to cover the case [n < 2]. *)
+
+(* We do not want to cover this case in the recursive function because the
+   test [n <? 2] is needed just once at the root of the tree, not at every
+   node. *)
+
+Section Code.
+Open Scope uint63.
+
+Definition sort_seg a _i _n :=
+  if _n <? 2 then a else
+  sort_seg_aux a _i _n.
+
+End Code.
+
+(* The specification of [sort_seg]. *)
+
+Lemma wp_sort_seg : ∀ a xs _i i _n n,
+  isArray a xs →
+  isInt _i i →
+  isInt _n n →
+  valid_seg i (i + n) xs →
+  Sorted R' (seg i (i + n) xs) →
+  wp (sort_seg a _i _n)
+     (sort_seg_post xs i n).
+Proof.
+  intros. unfold sort_seg. arrays.
+  wp_if.
+  (* Subcase [n < 2]. *)
+  { wp_ret. intro_sort_seg_post. eauto using sorted_subsingleton_segment. }
+  (* Subcase [2 ≤ n]. *)
+  { wp_op wp_sort_seg_aux shadowing: a. }
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [sort a] sorts the array [a] in place. This is a merge sort.
    It is stable. *)
 
 Section Sort.
+
+Section Code.
 Open Scope uint63.
 
 Definition sort a :=
   do _n ← length a ;
   sort_seg a 0 _n.
+
+End Code.
 
 (* The postcondition of [sort]. *)
 
@@ -2413,8 +2504,6 @@ Lemma wp_sort a xs :
 Proof.
   intros. unfold sort. arrays.
   wp_length _n.
-  assert (Sorted R' (initial_seg (0 + len xs) xs))
-    by (list; assumption).
   wp_op wp_sort_seg shadowing: a. wp_last Hpost.
   elim_sort_seg_post xs'. list in *.
   intro_sort_post.
