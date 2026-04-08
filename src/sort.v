@@ -492,6 +492,14 @@ Qed.
    involve lots of continuations. Optimized versions of these functions
    are then obtained via compile-time computation. *)
 
+(* Perhaps suprisingly, these functions CAN be used in the case where
+   [_src] and [_dst] are the same array. The reason why this is safe is
+   that all of the reads take place before all of the writes. Therefore,
+   even when [_src] and [_dst] are the same array, there is no risk of
+   accessing an outdated version of an array. Furthermore, there is no
+   risk of overwriting a value before it is read. There is no requirement
+   that the source and destination segments be disjoint. *)
+
 Section S.
 Open Scope uint63.
 
@@ -546,28 +554,29 @@ Definition sortto_segment_4 :=
 
 (* The specification of the [sortto_segment] functions. *)
 
-(* In this specification, [_src] and [_dst] are the same array.
-   Aliasing the parameters is not a problem here because all of
-   the reads take place before all of the writes. *)
+(* In this specification, [_src] and [_dst] may be two distinct arrays,
+   but can also be the same array. *)
 
-(* The array is unmodified outside of the segment [k, k+n). Within this
-   segment, a sorted copy of the data that initially existed in the
-   segment [i, i+n) is written. This is a stable sort. *)
+(* The destination array is unmodified outside of the segment [k, k+n).
+   Within this segment, a sorted copy of the data that initially exists in
+   the segment [i, i+n) of the source array is written. This is a stable
+   sort. *)
 
 Definition wp_sortto_segment_spec sortto_segment n :=
-  ∀ a xs _i i _k k,
-  isArray a xs →
+  ∀ _src src _dst dst _i i _k k,
+  isArray _src src →
+  isArray _dst dst →
   isInt _i i →
   isInt _k k →
-  valid_seg i (i + n) xs →
-  valid_seg k (k + n) xs →
-  Sorted R' (seg i (i + n) xs) →
-  wp (sortto_segment a _i a _k) (λ a, ∃ xs',
-    isArray a xs' ∧
-    len xs = len xs' ∧
-    unmodified_outside_seg xs xs' k (k + n) ∧
-    seg k (k + n) xs' ≃ seg i (i + n) xs ∧
-    sorted (seg k (k + n) xs')
+  valid_seg i (i + n) src →
+  valid_seg k (k + n) dst →
+  Sorted R' (seg i (i + n) src) →
+  wp (sortto_segment _src _i _dst _k) (λ _dst, ∃ dst',
+    isArray _dst dst' ∧
+    len dst = len dst' ∧
+    unmodified_outside_seg dst dst' k (k + n) ∧
+    seg k (k + n) dst' ≃ seg i (i + n) src ∧
+    sorted (seg k (k + n) dst')
   ).
 
 (* Each of these functions is correct. *)
