@@ -379,8 +379,7 @@ Proof.
     + wp_ret.
     (* Case: the array must be grown. *)
     + wp_op_shadow wp_really_ensure_capacity a. }
-  clear dependent unoccupied. (* A bit ad hoc. *)
-  wp_shadow a.
+  clear dependent unoccupied. wp_shadow a.
   destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.
@@ -539,11 +538,10 @@ Lemma wp_read_write_borrow {B} v xs body (Q  : B * vector A → Prop) :
 Proof.
   intros ? Hbody.
   destructIsVector. destructIsVectorCap. unfold read_write_borrow.
-  wp_op_intro Hbody ba. wp_last Hpost.
-  clear dependent a. destruct ba as [ b a ].
-  destruct Hpost as (xs' & unoccupied' & Hpost). unpack in Hpost.
+  wp_op Hbody. clear dependent a. intros (b & a).
+  intros (xs' & unoccupied' & ? & ? & HQ).
   wp_ret.
-  eapply Hpost1. introIsVector.
+  eapply HQ. introIsVector.
   introIsVectorCap; eauto. congruence.
 Qed.
 
