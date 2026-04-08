@@ -789,7 +789,7 @@ Proof.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. }
   (* The body of the outer loop. *)
-  { clear dependent _dst. wp_up_intros i _dst. intros _i ?.
+  { clear dependent _dst. wp_iter_up_body _i i _dst.
     elim_isortto_inv dst'.
     (* [dst'] is the content of the destination array
        upon entry into the body of the outer loop. *)
@@ -802,9 +802,7 @@ Proof.
     { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
       + rewrite Hdata. join_segments. reflexivity. }
     (* Body of the inner loop. *)
-    { clear dependent _dst.
-      (* TODO need variant of [wp_down_intros] *)
-      wp_loop_intros j0 j _dst. intros. subst j0.
+    { clear dependent _dst. wp_xiter_down_body _j j _dst.
       elim_inner_inv dst''.
       (* [dst''] is the content of the destination array
          upon entry into the body of the inner loop. *)
@@ -918,7 +916,7 @@ Proof.
   (* Initialization of the outer loop. *)
   { intro_isortto_inv. }
   (* The body of the outer loop. *)
-  { clear dependent a. wp_up_intros i a. intros _i ?.
+  { clear dependent a. wp_iter_up_body _i i a.
     elim_isortto_inv xs'.
     (* [xs'] is the content of the array
        upon entry into the body of the outer loop. *)
@@ -937,9 +935,7 @@ Proof.
     { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
       + rewrite Hdata. join_segments. reflexivity. }
     (* Body of the inner loop. *)
-    { clear dependent a.
-      (* TODO need variant of [wp_down_intros] *)
-      wp_loop_intros j0 j a. intros. subst j0.
+    { clear dependent a. wp_xiter_down_body _j j a.
       elim_inner_inv xs''.
       (* [xs''] is the content of the array
          upon entry into the body of the inner loop. *)

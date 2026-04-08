@@ -422,7 +422,7 @@ Proof.
   destructIsVector. destructIsVectorCap.
   wp_op array.wp_segment_iteri; last wp_intro ?.
   (* The loop body. *)
-  { clear dependent s. wp_up_intros j s. intros _j ?. wp_intro x. }
+  { clear dependent s. wp_segment_iteri_body _j j x s. }
 Qed.
 
 (* The public specification of [iteri]. *)
@@ -438,10 +438,13 @@ Proof.
   destructIsVector. destructIsVectorCap.
   wp_op array.wp_segment_iteri; last wp_intro ?.
   (* The loop body. *)
-  { clear dependent s. wp_up_intros j s. intros _j ?. wp_intro x. }
+  { clear dependent s. wp_iteri_body _j j x s. }
 Qed.
 
 End Iteri.
+
+(* We do not provide tactics [wp_segment_iteri_body]
+   and [wp_iteri_body]; the ones in array.v should work. *)
 
 (* -------------------------------------------------------------------------- *)
 

@@ -436,7 +436,7 @@ Proof.
   (* Initialization. *)
   { lego. }
   (* Preservation. *)
-  { wp_down_intros j xs'. intros _j ?.
+  { wp_iter_down_body _j j ys.
     wp_get x.
     wp_ret.
     lego. }
@@ -483,7 +483,7 @@ Proof.
     ∀ o, j ≤ o < n → a.[of_Z o] = ys !!! (o - j)
   ).
   (* Preservation. *)
-  { wp_down_intros j ys. intros _j ?.
+  { wp_iter_down_body _j j ys.
     destructIsInt.
     wp_bind_eq.
     wp_ret. split; [ lia |].
@@ -590,6 +590,20 @@ Proof.
 Qed.
 
 End ListIteri.
+
+(* The tactic [wp_list_iteri_body s _i i x history] should be used
+   upon entry into the loop body. It introduces the state [s], the
+   index [_i] and its integer model [i], the element [x], and the
+   ghost parameter [history]. *)
+
+Tactic Notation "wp_list_iteri_body"
+  simple_intropattern(s)
+  simple_intropattern(_i)
+  simple_intropattern(i)
+  simple_intropattern(x)
+  simple_intropattern(history)
+:=
+  wp_body history ? s introducing: (fun _ => list_step x i; intros _i ?).
 
 (* In the following section, we play with two alternate specifications
    of [list_iteri]. Insteead of using [ITER_LIST], where the producer
@@ -729,6 +743,7 @@ Definition of_list xs :=
    or [list_iteri]. Instead, a bound on the length of the list [xs]
    is imposed as a precondition in this specification. *)
 
+
 Lemma wp_of_list xs :
   len xs ≤ max_array_length →
   wp (of_list xs) (λ a, isArray a xs).
@@ -741,10 +756,7 @@ Proof.
     isArray a (history ++ replicate (len xs - len history) inhabitant)
   ).
   (* Preservation. *)
-  { (* TODO tactic to clean up the next three lines? *)
-    clear dependent a.
-    wp_loop_intros history0 history1 a.
-    intros x i _; intros. subst history1.
+  { clear dependent _n a. wp_list_iteri_body a _i i x history.
     wp_set.
     isArray. }
   (* Completion. *)
@@ -883,8 +895,7 @@ Proof.
   (* Initialization. *)
   { isArray. }
   (* Preservation. *)
-  { clear dependent b.
-    wp_up_intros k b. intros _k ?.
+  { clear dependent b. wp_iter_up_body _k k b.
     wp_get x. subst x.
     (* The use of unsigned arithmetic in the computation of [_delta]
        does not cause any problem. Once upon a time, this proof used
@@ -945,8 +956,7 @@ Proof.
     (* Initialization. *)
     { isArray. }
     (* Preservation. *)
-    { clear dependent a.
-      wp_up_intros k a. intros _k ?.
+    { clear dependent a. wp_iter_up_body _k k a.
       wp_get x. subst x.
       wp_set.
       wp_ret.
@@ -960,8 +970,7 @@ Proof.
     (* Initialization. *)
     { isArray. }
     (* Preservation. *)
-    { clear dependent a.
-      wp_down_intros k a. intros _k ?.
+    { clear dependent a. wp_iter_down_body _k k a.
       wp_get x. subst x.
       wp_set.
       wp_ret.
@@ -1131,7 +1140,7 @@ Proof.
   (* Initialization. *)
   { isArray. }
   (* Preservation. *)
-  { clear dependent a. wp_up_intros k a. intros _k ?.
+  { clear dependent a. wp_iter_up_body _k k a.
     wp_set.
     wp_ret. isArray. }
   (* Completion. *)
@@ -1202,21 +1211,19 @@ Lemma wp_find_index a xs :
 Proof.
   intros. unfold find_index.
   wp_length _n.
-  eapply wp_conseq.
-  { wp_op wp_uxiter_up with invariant: (find_index_inv xs); tc;
-    unfold find_index_inv in *.
-    (* Initialization. *)
-    { eauto with on_seg lia. }
-    (* Preservation. *)
-    { (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
-      let h := fresh "Hinv" in intros j j1 h; unpack in h.
-      intros; unpack; subst.
-      wp_get x. subst x.
-      wp_if; wp_bind_eq.
-      (* Case: [OK x]. *)
-      + tc.
-      (* Case: [notOK x]. *)
-      + eauto with on_seg. }}
+  wp_op wp_uxiter_up with invariant: (find_index_inv xs);
+  unfold find_index_inv in *.
+  (* Initialization. *)
+  { eauto with on_seg lia. }
+  (* Preservation. *)
+  { wp_uxiter_up_body _j j.
+    wp_get x. subst x.
+    wp_if; wp_bind_eq.
+    (* Case: [OK x]. *)
+    + tc.
+    (* Case: [notOK x]. *)
+    + eauto with on_seg. }
+  (* Completion. *)
   { z. intros [|] (k&?&?).
     (* Subcase: the loop has ended by breaking. The loop index is an
        unknown [i]. Fortunately [find_index_inv xs k (Break i)] is
@@ -1421,33 +1428,28 @@ Proof.
   intros. unfold equal.
   wp_length _m.
   wp_length _n.
-  wp_if.
-  (* First branch: the lengths of the arrays coincide. *)
-  { eapply wp_bind.
-    { unfold equal_aux.
-      wp_op wp_uxiter_up with invariant: (equal_inv xs ys);
-        tc; unfold equal_inv in *; eauto with lia.
-      (* Initialization. *)
-      { eauto with on_seg lia. }
-      (* Preservation. *)
-      (* TODO need variant of [wp_loop_intros] or [wp_up_intros] without state? *)
-      let h := fresh "Hinv" in intros j j1 h; unpack in h.
-      intros; unpack; subst; z in *.
-      wp_get x. wp_get y.
-      wp_if; wp_bind_eq; subst.
-      (* Case: [eq x y] returns [true]. *)
-      { eauto with on_seg. }
-      (* Case: [eq x y] returns [false]. *)
-      { eauto with lia. }
-    }
-    z. intros [[]|]; unfold equal_inv; intros (i&?); unpack.
+  (* The second branch, where the lengths differ, is trivial. *)
+  wp_if; [| wp_ret ].
+  (* We focus on the first branch, where the lengths coincide. *)
+  unfold equal_aux.
+  wp_op wp_uxiter_up with invariant: (equal_inv xs ys);
+  unfold equal_inv in *.
+  (* Initialization. *)
+  { eauto with on_seg lia. }
+  (* Preservation. *)
+  { wp_uxiter_up_body _j j.
+    wp_get x. wp_get y.
+    wp_if; wp_bind_eq; subst.
+    (* Case: [eq x y] returns [true]. *)
+    { wp_continue. eauto with on_seg. }
+    (* Case: [eq x y] returns [false]. *)
+    { wp_break. eauto with lia. }}
+  (* Completion. *)
+  { z. intros [[]|]; unfold equal_inv; intros (i&?); unpack.
     (* Case: the loop ends by breaking. *)
     { wp_ret. }
     (* Case: the loop ends normally. *)
-    { assert (i = len xs) by tauto. wp_ret. }
-  }
-  (* Second branch: the lengths of the arrays differ. *)
-  { wp_ret. }
+    { assert (i = len xs) by tauto. wp_ret. }}
 Qed.
 
 End Equal.
@@ -1518,8 +1520,7 @@ Proof.
   intros. ITER. unfold segment_iteri.
   wp_op wp_iter_up; last wp_intro ?.
   (* The loop body. *)
-  { clear dependent s.
-    wp_up_intros j s. intros _j ?.
+  { clear dependent s. wp_iter_up_body _j j s.
     wp_get x. }
 Qed.
 
@@ -1538,6 +1539,20 @@ Proof.
 Qed.
 
 End Iteri.
+
+(* Use [wp_segment_iteri_body _j j x s]
+    or [wp_iteri_body _j j x s]
+   at the start of the loop body. *)
+
+Tactic Notation "wp_segment_iteri_body"
+  simple_intropattern(_j) simple_intropattern(j)
+  simple_intropattern(x) simple_intropattern(s) :=
+  wp_body j ? s introducing: (fun _ => z_step; intros _j ?; wp_intro x).
+
+Tactic Notation "wp_iteri_body"
+  simple_intropattern(_j) simple_intropattern(j)
+  simple_intropattern(x) simple_intropattern(s) :=
+  wp_body j ? s introducing: (fun _ => z_step; intros _j ?; wp_intro x).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1563,7 +1578,7 @@ Proof.
     isArray a (listz.init k ψ ++ replicate (n - k) inhabitant)
   ).
   (* The loop body. *)
-  { clear dependent a. wp_up_intros k a. intros _k ?. (* TODO *)
+  { clear dependent a. wp_iter_up_body _k k a.
     wp_op Hf introducing: x.
     wp_set.
     isArray. }

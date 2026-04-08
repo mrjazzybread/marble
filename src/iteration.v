@@ -264,6 +264,19 @@ Definition ITERI_LIST {S A}
     )
     loop.
 
+(* The tactic [list_step x i] is meant to be used after [wp_body ...],
+   while iterating on a list.
+   Then the goal is [∀ x i,
+                     init `prefix_of` history0 →
+                     history0 ++ {[x]} = history1 →
+                     history1 `prefix_of` xs →
+                     i = length history0 → ...].
+   The tactic introduces these hypotheses
+   and uses the equation to substitute away [history1]. *)
+
+Tactic Notation "list_step" simple_intropattern(x) simple_intropattern(i) :=
+  intros x i ? <- ? ?.
+
 Definition ITER_LIST {S A}
   (init xs : list A)
   (body : A → S → WP S)
@@ -444,6 +457,16 @@ Definition z_step i k dir `{PropLike A}
       body j1
   end.
 
+(* The tactic [z_step] is meant to be used after [wp_body ...],
+   while iterating on an interval of the integers.
+   Then, the goal is [j1 = j0 + 1 → i ≤ j0 < k → ...]
+                  or [j0 = j1 + 1 → i ≤ j1 < k → ...].
+   The tactic introduces these hypotheses
+   and uses the equation to substitute away [j0] or [j1]. *)
+
+Ltac z_step :=
+  intros -> ?.
+
 Definition ITER_Z {S}
   i k dir
   (body : Z → S → WP S)
@@ -515,42 +538,67 @@ Ltac UXITER :=
   expand_ITER;
   intros ? Hinit Hbody.
 
-(* The following tactics help reason about invocations of [continue]
-   and [break]. *)
+(* The tactics [wp_continue] and [wp_break] help reason about invocations
+   of [continue] and [break]. They recognize a suitable hypothesis and
+   apply it. *)
 
 Ltac wp_continue :=
   match goal with
-  Hcontinue: ∀ s, _ → wp (?continue s) _,
-  Hbreak: ∀ s x, _ → wp (?break s x) _
-  |- wp (?continue _) _ =>
-    simple eapply Hcontinue; clear Hcontinue Hbreak
+  | Hcontinue: ∀ s, _ → wp (?continue s) _,
+    Hbreak: ∀ s x, _ → wp (?break s x) _
+    |- wp (?continue _) _ =>
+      simple eapply Hcontinue; clear Hcontinue Hbreak
+  | Hcontinue: _ → wp (?continue ()) _,
+    Hbreak: ∀ x, _ → wp (?break x) _
+    |- wp (?continue ()) _ =>
+      simple eapply Hcontinue; clear Hcontinue Hbreak
   end.
 
 Ltac wp_break :=
   match goal with
-  Hcontinue: ∀ s, _ → wp (?continue s) _,
-  Hbreak: ∀ s x, _ → wp (?break s x) _
-  |- wp (?break _ _) _ =>
-    simple eapply Hbreak; clear Hcontinue Hbreak
+  | Hcontinue: ∀ s, _ → wp (?continue s) _,
+    Hbreak: ∀ s x, _ → wp (?break s x) _
+    |- wp (?break _ _) _ =>
+      simple eapply Hbreak; clear Hcontinue Hbreak
+  | Hcontinue: _ → wp (?continue ()) _,
+    Hbreak: ∀ x, _ → wp (?break x) _
+    |- wp (?break _) _ =>
+      simple eapply Hbreak; clear Hcontinue Hbreak
   end.
 
-(* TODO clean up *)
+(* The tactic [wp_body] helps introduce variables at the beginning
+   of the body of a loop. *)
 
-Ltac wp_loop_intros j0 j1 s :=
-  let h := fresh "Hinv" in
-  intros j0 j1 s h;
-  unpack in h.
+(* The goal typically is [∀ j0 j1 s, inv ... → ...] or
+                         [∀ j0 j1,   inv ... → ...].
+   (See [ITER], [XITER], [UXITER].)
 
-(* TODO improve / comment *)
+   The parameters of [wp_body] should be [j0 j1] or [j0 j1 s],
+   followed with a tactic [more_intros].
 
-Ltac wp_up_intros j s :=
-  let j1 := fresh "j1" in
-  wp_loop_intros j j1 s;
-  intros -> ?.
+   After introducing [j0], [j1], and possibly [s],
+   [wp_body] introduces the invariant [Hinv],
+   executes the tactic [more_intros],
+   then applies [wp_body_hook] to [Hinv],
+   so as to perform simplification.
 
-(* TODO improve / comment *)
+   Things would be simpler if we could perform simplification before
+   executing [more_intros]; then there would be no need to pass
+   [more_intros] as a parameter to [wp_body]. However, it is important
+   to introduce all of the variables before calling [wp_body_hook]. *)
 
-Ltac wp_down_intros j s :=
-  let j0 := fresh "j0" in
-  wp_loop_intros j0 j s;
-  intros -> ?.
+(* After using [wp_body ...], one should typically use [z_step] or
+   [list_step] or a similar tactic to introduce the hypotheses that
+   express the fact that one step has been made. *)
+
+Ltac wp_body_hook Hinv :=
+  z in Hinv;
+  unpack in Hinv.
+
+Tactic Notation "wp_body" simple_intropattern_list(ps)
+                "introducing:" tactic1(more_intros) :=
+  intros ps;
+  let Hinv := fresh "Hinv" in
+  intro Hinv;
+  more_intros ();
+  wp_body_hook Hinv.

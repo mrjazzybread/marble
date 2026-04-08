@@ -870,6 +870,17 @@ Proof.
     eauto. }
 Qed.
 
+(* The tactic [wp_iter_down_body _j j s] should be used upon entry into
+   the loop body. It introduces the index [_j] and its integer model [j]
+   as well as the state [s]. *)
+
+(* Prior to using this tactic, one can use [clear dependent] to clear any
+   pre-existing variables by the same names. *)
+
+Tactic Notation "wp_iter_down_body"
+  simple_intropattern(_j) simple_intropattern(j) simple_intropattern(s) :=
+  wp_body ? j s introducing: (fun _ => z_step; intros _j ?).
+
 (* -------------------------------------------------------------------------- *)
 
 (* An exitable loop, counting down, using machine integers. *)
@@ -952,9 +963,20 @@ Proof.
   { wp_ret. }
   (* Case [i < k]. *)
   { wp_op wp_xiter_down_aux.
-    clear dependent s. wp_intro sout. destruct sout as [s out]. (* TODO *)
-    assumption. }
+    clear dependent s. wp_intro (s & out).
+    eauto. }
 Qed.
+
+(* The tactic [wp_xiter_down_body _j j s] should be used upon entry into
+   the loop body. It introduces the index [_j] and its integer model [j]
+   as well as the state [s]. *)
+
+(* Prior to using this tactic, one can use [clear dependent] to clear any
+   pre-existing variables by the same names. *)
+
+Tactic Notation "wp_xiter_down_body"
+  simple_intropattern(_j) simple_intropattern(j) simple_intropattern(s) :=
+  wp_body ? j s ?????? introducing: (fun _ => z_step; intros _j ?).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1039,6 +1061,16 @@ Proof.
   { wp_op wp_uxiter_down_aux; wp_intro out.
     eauto. }
 Qed.
+
+(* The tactic [wp_uxiter_down_body _j j] should be used upon entry into
+   the loop body. It introduces the index [_j] and its integer model [j]. *)
+
+(* Prior to using this tactic, one can use [clear dependent] to clear any
+   pre-existing variables by the same names. *)
+
+Tactic Notation "wp_uxiter_down_body"
+  simple_intropattern(_j) simple_intropattern(j) :=
+  wp_body ? j ?????? introducing: (fun _ => z_step; intros _j ?).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1129,6 +1161,17 @@ Proof.
   unfold iter_up. eauto using wp_iter_up_aux.
 Qed.
 
+(* The tactic [wp_iter_up_body _j j s] should be used upon entry into the
+   loop body. It introduces the index [_j] and its integer model [j] as well
+   as the state [s]. *)
+
+(* Prior to using this tactic, one can use [clear dependent] to clear any
+   pre-existing variables by the same names. *)
+
+Tactic Notation "wp_iter_up_body"
+  simple_intropattern(_j) simple_intropattern(j) simple_intropattern(s) :=
+  wp_body j ? s introducing: (fun _ => z_step; intros _j ?).
+
 (* -------------------------------------------------------------------------- *)
 
 (* An exitable loop, counting up from [i] to [k]. The loop can be broken via
@@ -1207,6 +1250,10 @@ Proof.
   unfold xiter_up. eauto using wp_xiter_up_aux.
 Qed.
 
+Tactic Notation "wp_xiter_up_body"
+  simple_intropattern(_j) simple_intropattern(j) simple_intropattern(s) :=
+  wp_body j ? s ?????? introducing: (fun _ => z_step; intros _j ?).
+
 (* -------------------------------------------------------------------------- *)
 
 (* A simplified exitable loop with a state of type [unit]. *)
@@ -1279,3 +1326,13 @@ Lemma wp_uxiter_up {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W
 Proof.
   unfold uxiter_up. eauto using wp_uxiter_up_aux.
 Qed.
+
+(* The tactic [wp_uxiter_up_body _j j] should be used upon entry into the
+   loop body. It introduces the index [_j] and its integer model [j]. *)
+
+(* Prior to using this tactic, one can use [clear dependent] to clear any
+   pre-existing variables by the same names. *)
+
+Tactic Notation "wp_uxiter_up_body"
+  simple_intropattern(_j) simple_intropattern(j) :=
+  wp_body j ? ?????? introducing: (fun _ => z_step; intros _j ?).
