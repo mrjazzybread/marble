@@ -2,10 +2,6 @@
 
 ## Short term
 
-* array.v: some operations do not have a dedicated tactic.
-  Define dedicated tactics or indicate what tactic to use,
-  e.g. `wp_loop`.
-
 * Plug the `sortto_segment` functions into merge sort,
   instead of insertion sort.
   Can we get rid of insertion sort entirely?
@@ -29,11 +25,6 @@
   + `segment_find_index`
   + `segment_exist`
   + `segment_for_all`
-
-* Tactics:
-  + automate the search for a specification
-  + every (user) function that modifies an array should be
-    accompanied by a tactic that performs clear-and-rename
 
 * Missing functions on arrays:
   + a variant of `init` with a state
