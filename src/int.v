@@ -1007,7 +1007,7 @@ Proof.
   { subst j. eapply Hbody; pack; tc; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH. eapply Hbody; pack; tc.
-    + wp_op_intro (IH()) out. eauto.
+    + wp_op (IH()) introducing: out. eauto.
     + wp_ret. eauto. }
 Qed.
 
@@ -1181,7 +1181,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
-    + wp_op_intro H sout. assumption.
+    + wp_op H introducing: sout. assumption.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)
@@ -1255,7 +1255,7 @@ Proof.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
-    + wp_op_intro (H()) out. eauto.
+    + wp_op (H()) introducing: out. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)

@@ -354,7 +354,8 @@ Tactic Notation "wp_op" uconstr(lemma) "with" "invariant:" constr(I) :=
    [wp_shadow x]. The following tactics are abbreviations for these common
    practices. *)
 
-Tactic Notation "wp_op_intro" uconstr(lemma) simple_intropattern(x) :=
+Tactic Notation "wp_op" uconstr(lemma)
+                "introducing:" simple_intropattern(x) :=
   wp_op lemma; last wp_intro x.
 
 Tactic Notation "wp_op_shadow" uconstr(lemma) simple_intropattern(x) :=

@@ -333,7 +333,7 @@ Proof.
   assert (isVector (_n, a) xs). { introIsVector. eauto. }
   destructIsVectorCap.
   wp_length _c.
-  wp_op_intro wp_next_capacity _c'.
+  wp_op wp_next_capacity introducing: _c'.
   wp_bind_eq.
   wp_op_shadow wp_grow a.
 Qed.
@@ -554,8 +554,8 @@ Ltac wp_steal_array :=
     wp_op_shadow wp_steal_array a
   end.
 
-Ltac wp_of_array b :=
-  wp_op_intro wp_of_array b.
+Ltac wp_of_array v :=
+  wp_op wp_of_array introducing: v.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -576,11 +576,11 @@ Lemma wp_of_list xs :
   wp (of_list xs) (λ v, isVector v xs).
 Proof.
   intros. unfold of_list.
-  wp_op_intro @array.wp_of_list a.
+  wp_op array.wp_of_list introducing: a.
   wp_steal_array.
 Qed.
 
 End OfList.
 
 Ltac wp_of_list v :=
-  wp_op_intro wp_of_list v.
+  wp_op wp_of_list introducing: v.

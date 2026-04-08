@@ -2614,7 +2614,7 @@ Lemma wp_merge' `{Inhabited A, PreOrder A R, LebSpec A R} :
   ).
 Proof.
   intros.
-  wp_op_intro (@wp_merge A _ R _ _ _ R' _) c.
+  wp_op (@wp_merge A _ R _ _ _ R' _) introducing: c.
   eauto using Sorted_covariant.
 Qed.
 
@@ -2627,4 +2627,4 @@ Global Ltac wp_sort a :=
   wp_op_shadow wp_sort' a.
 
 Global Ltac wp_merge c :=
-  wp_op_intro wp_merge' c.
+  wp_op wp_merge' introducing: c.

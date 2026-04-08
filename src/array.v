@@ -353,10 +353,10 @@ End PrimSpec.
 (* The following tactics help use the above specifications. *)
 
 Ltac wp_length n :=
-  wp_op_intro wp_length n.
+  wp_op wp_length introducing: n.
 
-Ltac wp_get x :=
-  wp_op_intro wp_get x.
+Tactic Notation "wp_get" simple_intropattern(x) :=
+  wp_op wp_get introducing: x.
 
 Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
@@ -364,7 +364,7 @@ Ltac wp_set :=
   end.
 
 Ltac wp_make a :=
-  wp_op_intro wp_make a.
+  wp_op wp_make introducing: a.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -448,7 +448,7 @@ Lemma wp_to_list a xs :
 Proof.
   intro. unfold to_list.
   wp_length _n.
-  wp_op_intro wp_segment_to_list ?.
+  wp_op wp_segment_to_list introducing: ?.
 Qed.
 
 (* A second (stronger) specification of [to_list]. *)
@@ -699,7 +699,7 @@ Lemma wp_list_length xs :
   wp (list_length xs) (λ _i, isInt _i (len xs)).
 Proof.
   unfold list_length.
-  wp_op_intro wp_list_length_aux _i.
+  wp_op wp_list_length_aux introducing: ?.
 Qed.
 
 End ListLength.
@@ -734,7 +734,7 @@ Lemma wp_of_list xs :
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
   intros. unfold of_list.
-  wp_op_intro wp_list_length _n.
+  wp_op wp_list_length introducing: _n.
   wp_make a.
   (* The loop invariant. *)
   wp_op wp_list_iteri with invariant: (λ history a,
@@ -772,8 +772,8 @@ Proof.
     ) (λ ys, xs = ys)
   ).
   { rewrite wp_iff. eauto. }
-  wp_op_intro wp_of_list a.
-  wp_op_intro wp_to_list ys.
+  wp_op wp_of_list introducing: a.
+  wp_op wp_to_list introducing: ys.
   wp_ret.
 Qed.
 
@@ -1011,7 +1011,7 @@ Qed.
 End Copy.
 
 Ltac wp_copy b :=
-  wp_op_intro wp_copy b.
+  wp_op wp_copy introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1045,7 +1045,7 @@ Qed.
 End Sub.
 
 Ltac wp_sub b :=
-  wp_op_intro wp_sub b.
+  wp_op wp_sub introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1090,7 +1090,7 @@ Qed.
 End Append.
 
 Ltac wp_append c :=
-  wp_op_intro wp_append c.
+  wp_op wp_append introducing: c.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1260,8 +1260,8 @@ Goal
   Break 0%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
-Ltac wp_find_index out :=
-  wp_op_intro wp_find_index out.
+Tactic Notation "wp_find_index" simple_intropattern(out) :=
+  wp_op wp_find_index introducing: out.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1304,7 +1304,7 @@ Qed.
 End Exist.
 
 Ltac wp_exist b :=
-  wp_op_intro wp_exist b.
+  wp_op wp_exist introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1349,7 +1349,7 @@ Qed.
 End ForAll.
 
 Ltac wp_for_all b :=
-  wp_op_intro wp_for_all b.
+  wp_op wp_for_all introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1453,7 +1453,7 @@ Qed.
 End Equal.
 
 Ltac wp_equal b :=
-  wp_op_intro wp_equal b.
+  wp_op wp_equal introducing: b.
 
 (* As a special case, we recover a simpler specification of [equal]
    in the case where the relation [≡] is equality. *)
@@ -1564,7 +1564,7 @@ Proof.
   ).
   (* The loop body. *)
   { clear dependent a. wp_up_intros k a. intros _k ?. (* TODO *)
-    wp_op_intro Hf x.
+    wp_op Hf introducing: x.
     wp_set.
     isArray. }
   (* Completion. *)
@@ -1572,4 +1572,4 @@ Proof.
 Qed.
 
 Ltac wp_init a :=
-  wp_op_intro wp_init a.
+  wp_op wp_init introducing: a.
