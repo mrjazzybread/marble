@@ -37,18 +37,18 @@ Time Definition a : array int :=
 Time Definition a' : array int :=
   Eval vm_compute in
   sort a.
-    (*  2000: 2.7 seconds; (was 6 seconds; why?) *)
+    (*  2000: 5.8 seconds (sometimes also observed less than 3 seconds?) *)
     (*        native_compute: 0.9 seconds if warm *)
-    (* 10000: 39.8 seconds *)
+    (* 10000: 41.7 seconds (wow) *)
 
 Time Definition xs : list int :=
   Eval vm_compute in
   list_init.init 2000 (λ (i : nat), data (Uint63.of_nat i)).
     (*  2000: 0.18 seconds *)
-    (* 10000: 4.1 seconds  *)
+    (* 10000: 4.4 seconds  *)
 
 Time Definition xs' : list int :=
   Eval vm_compute in
   Sort.sort xs.
     (*  2000: between 0.01 and 0.02 seconds *)
-    (* 10000: 0.08 seconds *)
+    (* 10000: 0.09 seconds *)
