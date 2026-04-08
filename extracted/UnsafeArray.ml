@@ -24,6 +24,10 @@ let[@inline] length a =
 let map =
   Array.map
 
+let blit a i b j n =
+  Array.blit a (to_int i) b (to_int j) (to_int n);
+  b
+
 (* The public version of [of_array] has an extra argument [inhabitant]. *)
 let[@inline] of_array data _inhabitant =
   data
