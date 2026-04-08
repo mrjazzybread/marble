@@ -360,7 +360,7 @@ Tactic Notation "wp_get" simple_intropattern(x) :=
 
 Ltac wp_set :=
   match goal with |- context[set ?a _ _] =>
-    wp_op_shadow wp_set a
+    wp_op wp_set shadowing: a
   end.
 
 Ltac wp_make a :=
@@ -574,8 +574,8 @@ Proof.
   (* Case: the future is empty. *)
   { wp_ret. }
   (* Case: the future begins with [x]. *)
-  { wp_op_shadow Hstep s.
-    wp_op_shadow IHfuture s. }
+  { wp_op Hstep shadowing: s.
+    wp_op IHfuture shadowing: s. }
 Qed.
 
 (* The public specification of [list_iteri]. *)
@@ -623,11 +623,11 @@ Proof.
   ITER;
   simpl list_iteri; subst; list in *.
   { wp_ret. }
-  { wp_op_shadow Hstep s.
+  { wp_op Hstep shadowing: s.
     { list. eauto. }
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
-    wp_op_shadow (IHfuture (history ++ {[x]})) s. }
+    wp_op (IHfuture (history ++ {[x]})) shadowing: s. }
 Qed.
 
 (* In this variant, we get rid of [history] and we keep track only
@@ -660,8 +660,8 @@ Proof.
   { assert (i < len xs) by lia.
     assert (x = xs !!! i) by (lookup_through_seg; eauto).
     assert (final_seg (i + 1) xs = future) by (seg_through_seg; eauto).
-    wp_op_shadow Hstep s.
-    wp_op_shadow IHfuture s. }
+    wp_op Hstep shadowing: s.
+    wp_op IHfuture shadowing: s. }
 Qed.
 
 End Attic.
@@ -690,7 +690,7 @@ Local Lemma wp_list_length_aux xs : ∀ _n n,
 Proof.
   induction xs as [| x xs ]; simpl list_length_aux; list; intros.
   { wp_ret. }
-  { wp_op_shadow IHxs _n. }
+  { wp_op IHxs shadowing: _n. }
 Qed.
 
 (* The public specification of [list_length]. *)
@@ -975,9 +975,9 @@ End Blit.
 Ltac wp_blit :=
   match goal with
   | |- context[blit _ _ ?b _ _] =>
-      wp_op_shadow wp_blit b
+      wp_op wp_blit shadowing: b
   | |- context[blit' ?a _ _ _] =>
-      wp_op_shadow wp_blit' a
+      wp_op wp_blit' shadowing: a
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -1142,7 +1142,7 @@ End Fill.
 
 Ltac wp_fill :=
   match goal with |- context[fill ?a _ _ _] =>
-    wp_op_shadow wp_fill a
+    wp_op wp_fill shadowing: a
   end.
 
 (* -------------------------------------------------------------------------- *)

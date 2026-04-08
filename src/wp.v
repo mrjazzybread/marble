@@ -358,7 +358,8 @@ Tactic Notation "wp_op" uconstr(lemma)
                 "introducing:" simple_intropattern(x) :=
   wp_op lemma; last wp_intro x.
 
-Tactic Notation "wp_op_shadow" uconstr(lemma) simple_intropattern(x) :=
+Tactic Notation "wp_op" uconstr(lemma)
+                "shadowing:" simple_intropattern(x) :=
   wp_op lemma; last wp_shadow x.
 
 (* -------------------------------------------------------------------------- *)

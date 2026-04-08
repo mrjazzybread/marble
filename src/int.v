@@ -828,12 +828,12 @@ Proof.
   intros; isBool_magic; z.
   (* Case [j = i]. *)
   { subst j.
-    wp_op_shadow Hstep s.
+    wp_op Hstep shadowing: s.
     wp_ret. }
   (* Case [j ≠ i]. *)
   { rename H into IH.
-    wp_op_shadow Hstep s.
-    wp_op_shadow IH s.
+    wp_op Hstep shadowing: s.
+    wp_op IH shadowing: s.
     eauto. }
 Qed.
 
@@ -922,7 +922,7 @@ Proof.
   { subst j. eapply Hbody; pack; tc; wp_ret; eauto. }
   (* Case [j ≠ i]. *)
   { rename H into IH. eapply Hbody; pack; tc.
-    + wp_op_shadow IH s. assumption.
+    + wp_op IH shadowing: s. assumption.
     + wp_ret. eauto. }
 Qed.
 
@@ -1101,8 +1101,8 @@ Proof.
   funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
   isBool_magic; z.
   (* Case [i < k]. *)
-  { wp_op_shadow Hstep s.
-    wp_op_shadow H s.
+  { wp_op Hstep shadowing: s.
+    wp_op H shadowing: s.
     wp_ret. }
   (* Case [¬ i < k]. *)
   { wp_ret. }

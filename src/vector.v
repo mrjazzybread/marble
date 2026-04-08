@@ -335,7 +335,7 @@ Proof.
   wp_length _c.
   wp_op wp_next_capacity introducing: _c'.
   wp_bind_eq.
-  wp_op_shadow wp_grow a.
+  wp_op wp_grow shadowing: a.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -378,7 +378,7 @@ Proof.
     (* Case: there is still room. *)
     + wp_ret.
     (* Case: the array must be grown. *)
-    + wp_op_shadow wp_really_ensure_capacity a. }
+    + wp_op wp_really_ensure_capacity shadowing: a. }
   clear dependent unoccupied. wp_shadow a.
   destructIsVectorCap.
   (* Write; return. *)
@@ -551,7 +551,7 @@ End Operations.
 
 Ltac wp_steal_array :=
   match goal with |- context[steal_array ?a] =>
-    wp_op_shadow wp_steal_array a
+    wp_op wp_steal_array shadowing: a
   end.
 
 Ltac wp_of_array v :=
