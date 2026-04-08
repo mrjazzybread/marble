@@ -17,26 +17,19 @@ let make n x =
   |> of_array
 
 let[@inline] get a i =
-  if a.valid then
-    Array.get a.data (to_int i)
-  else
-    failwith "get: stale array"
+  if not a.valid then failwith "get: stale array";
+  Array.get a.data (to_int i)
 
 let[@inline] set a i x =
-  if a.valid then begin
-    a.valid <- false;
-    let data = a.data in
-    Array.set data (to_int i) x;
-    of_array data
-  end
-  else
-    failwith "set: stale array"
+  if not a.valid then failwith "set: stale array";
+  a.valid <- false;
+  let data = a.data in
+  Array.set data (to_int i) x;
+  of_array data
 
 let[@inline] length a =
-  if a.valid then
-    U.of_int (Array.length a.data)
-  else
-    failwith "length: stale array"
+  if not a.valid then failwith "length: stale array";
+  U.of_int (Array.length a.data)
 
 let map f a =
   Array.map f a.data
