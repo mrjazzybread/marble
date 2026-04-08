@@ -223,3 +223,6 @@ let fold_left2 f a p1 p2 =
     r := f !r v1 v2
   done;
   f !r (default p1) (default p2)
+
+let blit _a _i _b _j _n =
+  failwith "Parray.blit: not implemented"
