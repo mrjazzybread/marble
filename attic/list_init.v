@@ -3,7 +3,7 @@ From stdpp Require Import list.
 (** [init_segment i n f] is a list of length [n] whose elements are [f(i)],
     [f(i+1)], etc., up to [f(i+n-1)]. *)
 Fixpoint init_segment {A} (i : nat) (n : nat) (f : nat → A) : list A :=
-  match n with 0 => [] | S n => f i :: init_segment (i + 1) n f end.
+  match n with 0 => [] | S n => f i :: init_segment (S i) n f end.
 
 (** [init n f] is a list of length [n] whose elements are [f(0)],
     [f(1)], etc., up to [f(n-1)]. *)
