@@ -3,7 +3,7 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics bool int iteration wp logic.
+From marble Require Import tactics bool int iteration wp logic equations.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -840,6 +840,11 @@ Proof. vm_compute. reflexivity. Qed.
 
 (* Copying data from an array to another array: [blit]. *)
 
+(* In [blit], the arrays [a] and [b] must be two *independent* arrays;
+   that is, they should not be two persistent arrays that are backed
+   by the same underlying physical array. To move data within a single
+   array, see [blit']. *)
+
 Section Blit.
 Context `{Inhabited A}.
 Implicit Types a b : array A.
@@ -847,20 +852,18 @@ Implicit Types xs ys : list A.
 
 (* The code. *)
 
-(* Here: to obtain the desired performance, the arrays [a] and [b]
-   must be two *independent* arrays; that is, they should not be two
-   persistent arrays that are backed by the same underlying physical
-   array. To move data within a single array, see [blit']. *)
+Section Code.
+Open Scope uint63.
+
+(* We begin with a naive definition, using [int.iter_up] so as to save
+   the trouble of writing a loop. *)
 
 (* We compute [_delta] outside of the loop so as to save one addition
    inside the loop. This is a bit subtle, as the difference [_j - _i]
    might be negative, yet we compute it as an unsigned integer. This
    yields the correct result in the end anyway. *)
 
-Section Code.
-Open Scope uint63.
-
-Definition blit a _i b _j _n :=
+Definition naive_blit a _i b _j _n :=
   do _delta ← _j - _i ;
   int.iter_up _i (_i + _n) b @@ λ _k b,
   do x ← get a _k ;
@@ -869,7 +872,7 @@ Definition blit a _i b _j _n :=
 
 End Code.
 
-(* The postcondition. *)
+(* The postcondition of a [blit] function. *)
 
 Notation blit_post xs i ys j n := (
   λ b,
@@ -877,19 +880,28 @@ Notation blit_post xs i ys j n := (
       (initial_seg j ys ++ seg i (i + n) xs ++ final_seg (j + n) ys)
 ).
 
-(* The public specification of [blit]. *)
+(* The specification of a a [blit] function. *)
 
-Lemma wp_blit a xs b ys :
+(* We have several [blit] functions, so it is worth isolating this
+   definition. *)
+
+Definition blit_spec (blit : array A → int → array A → int → array A) _n :=
+  ∀ a xs b ys,
   isArray a xs →
   ∀Int _i i,
   isArray b ys →
   ∀Int _j j,
-  ∀Int _n n,
+  ∀ n, isInt _n n →
   valid_seg i (i + n) xs →
   valid_seg j (j + n) ys →
-  wp (blit a _i b _j _n) (blit_post xs i ys j n).
+  wp (blit a _i b _j) (blit_post xs i ys j n).
+
+(* [naive_blit] is correct. *)
+
+Lemma wp_naive_blit _n :
+  blit_spec (λ a _i b _j, naive_blit a _i b _j _n) _n.
 Proof.
-  intros. unfold blit.
+  unfold blit_spec, naive_blit. intros.
   wp_bind_eq.
   wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i)).
   (* Initialization. *)
@@ -907,6 +919,199 @@ Proof.
   (* Completion. *)
   { wp_shadow b. isArray. }
 Qed.
+
+(* We continue with a second naive [blit] function. The algorithm is
+   essentially the same (it is just a loop). This time we do not use the
+   higher-order function [int.iter_up], which is defined using Equations.
+   Thus we hope to save both the cost of using a higher-order iteration
+   function and the overhead that is possibly introduced by Equations.
+   (Apparently Equations tends to group function arguments in a tuple.) *)
+
+(* We use a formulation as a tail-recursive function where the parameter
+   [_n] decreases. This lets us use well-founded recursion over [_n]. *)
+
+(* We use structural induction over a proof of accessibility, as
+   described by Xavier Leroy:
+   https://xavierleroy.org/publi/wf-recursion.pdf *)
+
+(* In the second branch, [Hnz] is a proof that [_n] is nonzero.
+   We use it to build [Acc_ilt_n_minus_1 _n ACC Hnz], a proof
+   that [_n - 1] is less than [_n]. This proof is used to argue
+   that the recursive call is permitted. *)
+
+Section Code.
+Open Scope uint63.
+
+Fixpoint simple_blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
+  IFC _n =? 0 THEN
+    λ _, b
+  ELSE
+    λ (Hnz : (_n =? 0) = false),
+    do x ← get a _i ;
+    do b ← set b _j x ;
+    simple_blit_aux a (_i + 1) b (_j + 1) (_n - 1)
+                    (Acc_ilt_n_minus_1 _n ACC Hnz).
+
+Definition simple_blit a _i b _j _n :=
+  simple_blit_aux a _i b _j _n (Wf_ilt _n).
+
+(* A technical lemma: regardless of which proof [ACC] is used,
+   [simple_blit_aux a _i b _j _n ACC] always returns the same
+   result, which can be expressed in terms of [simple_blit]. *)
+
+(* As an immediate consequence of this lemma, [simple_blit]
+   satisfies the desired fixed point equation. *)
+
+Lemma simple_blit_aux_eq _n :
+  ∀ a _i b _j ACC,
+  simple_blit_aux a _i b _j _n ACC =
+  if _n =? 0 then
+    b
+  else
+    do x ← get a _i ;
+    do b ← set b _j x ;
+    simple_blit a (_i + 1) b (_j + 1) (_n - 1).
+Proof.
+  (* By well-founded induction on [_n]. *)
+  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+    (* or: induction _n using (well_founded_ind ilt_wf). *)
+  (* The following line follows Leroy's paper, page 2, top right: *)
+  intros; destruct ACC; simpl.
+  (* Then Xavier's method falls short! [destruct] does not work. *)
+  (* Fail destruct (_n =? 0). *)
+  (* Our work-around is to apply the lemma [IFC_if]. Fortunately,
+     the induction hypothesis [IH] provides exactly the guarantee
+     that this lemma requires. *)
+  eapply IFC_if; [ eauto |]. intro.
+  setoid_rewrite IH; eauto 2 with lia.
+Qed.
+
+End Code.
+
+(* We can now prove that [simple_blit] is correct. *)
+
+Lemma wp_simple_blit _n :
+  blit_spec (λ a _i b _j, simple_blit a _i b _j _n) _n.
+Proof.
+  (* By well-founded induction on [_n]. *)
+  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  unfold blit_spec, simple_blit. intros.
+  rewrite simple_blit_aux_eq.
+  wp_if.
+  (* Base case. *)
+  { wp_ret. isArray. }
+  (* Step case. *)
+  { wp_get x.
+    wp_set.
+    wp_op IH; last wp_shadow b.
+    { eauto using ilt_n_minus_1 with lia. }
+    isArray. }
+Qed.
+
+(* TODO *)
+Definition blit := @simple_blit.
+Definition wp_blit := @wp_simple_blit.
+
+(* Now let us define specialized [blit] functions for small known
+   sizes. We use natural numbers (and induction on them). They exist
+   only at compile time and disappear in the residual code. *)
+
+(* Using two compile-time parameters [n] and [o] lets us compute
+   all offsets at compile-time; thus we avoid creating chains of
+   additions of the form [_i + 1 + 1 ... + 1]. *)
+
+Fixpoint static_blit a _i b _j (n : nat) (o : nat) :=
+  match n with
+  | O =>
+      b
+  | S n =>
+      do x ← get a (_i + of_nat o) ;
+      do b ← set b (_j + of_nat o) x ;
+      static_blit a _i b _j n (S o)
+  end.
+
+(* [static_blit] is correct. *)
+
+(* We cannot use [blit_spec] in this statement because of the offset [o].
+   The indices [i] and [j] must be adjusted using [o]. *)
+
+Lemma wp_static_blit :
+  ∀ n o a xs b ys,
+  isArray a xs →
+  ∀Int _i i,
+  let i := i + Z.of_nat o in
+  isArray b ys →
+  ∀Int _j j,
+  let j := j + Z.of_nat o in
+  valid_seg i (i + Z.of_nat n) xs →
+  valid_seg j (j + Z.of_nat n) ys →
+  wp (static_blit a _i b _j n o) (blit_post xs i ys j (Z.of_nat n)).
+Proof.
+  induction n as [| n ]; simpl static_blit; intros.
+  (* Base case. *)
+  { wp_ret. isArray. }
+  (* Inductive case. *)
+  { wp_get x.
+    wp_set.
+    wp_op IHn; last wp_shadow b; wp_last Hpost; z. (* a bit slow *)
+    (* Clean up Hpost. *)
+    subst x. rewrite singleton_is_seg in Hpost by lia.
+    isArray. (* a bit slow *) }
+Qed.
+
+(* Is there in Rocq a way of macro-generating N function definitions? *)
+
+Definition blit1 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 1 0.
+Definition blit2 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 2 0.
+Definition blit3 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 3 0.
+Definition blit4 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 4 0.
+Definition blit5 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 5 0.
+Definition blit6 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 6 0.
+Definition blit7 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 7 0.
+Definition blit8 a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j 8 0.
+
+(* Disable Notation "t .[ i ]" := (get t i). *)
+(* Disable Notation "t .[ i <- a ]" := (set t i a). *)
+(* Print blit8. *)
+
+(* Every specialized [blit] function is correct. *)
+
+Lemma wp_blit1 :
+  blit_spec blit1 1.
+Proof.
+  unfold blit_spec. intros.
+  assert (n = 1) by (rewrite isInt_def in *; lia). subst n.
+  change (blit1 a _i b _j) with (static_blit a _i b _j 1 0).
+  wp_op wp_static_blit; wp_shadow b; isArray.
+Qed.
+
+Lemma wp_blit2 :
+  blit_spec blit2 2.
+Proof.
+  unfold blit_spec. intros.
+  assert (n = 2) by (rewrite isInt_def in *; lia). subst n.
+  change (blit2 a _i b _j) with (static_blit a _i b _j 2 0).
+  wp_op wp_static_blit; wp_shadow b; isArray.
+Qed.
+
+Lemma wp_blit3 :
+  blit_spec blit3 3.
+Proof.
+  unfold blit_spec. intros.
+  assert (n = 3) by (rewrite isInt_def in *; lia). subst n.
+  change (blit3 a _i b _j) with (static_blit a _i b _j 3 0).
+  wp_op wp_static_blit; wp_shadow b; isArray.
+Qed.
+
+(* TODO continue up to 7 *)
 
 (* Moving data within an array: [blit']. *)
 
