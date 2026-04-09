@@ -719,6 +719,20 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* This instance can be useful when we use natural numbers
+   at compile time and convert them to machine integers. *)
+
+Instance isInt_of_nat n : isInt (of_nat n) (Z.of_nat n).
+Proof. rewrite isInt_def. lia. Qed.
+
+Lemma Z_of_nat_S n :  Z.of_nat (S n) = Z.of_nat n + 1.
+Proof. lia. Qed.
+  (* Nat2Z.inj_succ : Z.of_nat (S n) = Z.succ (Z.of_nat n) *)
+
+Hint Rewrite Z_of_nat_S : uz z.
+
+(* -------------------------------------------------------------------------- *)
+
 (* TODO I would like to split this file here *)
 
 Local Obligation Tactic :=
