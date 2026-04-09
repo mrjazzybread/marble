@@ -3,7 +3,7 @@ From Stdlib Require Import ZArith.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From listz Require Import listz.
-From marble Require Import bool int array.
+From marble Require Import bool int array compare.
 Open Scope uint63.
 
 (* The times in comments use OCaml 4.14.2+flambda. *)
@@ -78,7 +78,6 @@ Time Definition c : array int :=
 Time Definition time_sort : array int :=
   Eval vm_compute in
   sort c.
-    (* 16000: 49 seconds : 326 elements/second *)
-    (* the above timing was based on [simple_blit] *)
-    (* since plugging in the new [blit], whose loop is unrolled,
-       this benchmark allocates over 40Gb and does not terminate! *)
+    (* 1600: 1.5 seconds *)
+    (* 16000: 22 seconds : 727 elements/second *)
+    (* not fast, but already twice faster than with [simple_blit] *)
