@@ -65,6 +65,14 @@ Proof.
   destruct c; reflexivity.
 Qed.
 
+(* Rewriting using [setoid_rewrite] inside [bind] is permitted. *)
+
+Instance Proper_bind A B :
+  Proper (eq ==> (pointwise_relation _ eq) ==> eq) (@bind A B).
+Proof.
+  repeat intro. unfold bind. congruence.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [wp] has type [A → WP A]. *)
