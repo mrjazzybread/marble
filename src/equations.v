@@ -4,22 +4,34 @@ From Equations Require Export Equations.
 From Equations.Prop Require Export Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
 
-(* The following notation offers syntactic sugar for a "rich"
+(* The following notations offers syntactic sugar for a "rich"
    conditional construct. In the first branch, the hypothesis
    [e0 = true] appears; in the second branch, [e0 = false]
    appears. A rich conditional must be used when the proof of
    termination of the code depends on this information. *)
 
-Global Notation "'IF' e0 'THEN' e1 'ELSE' e2" :=
+(* In [IFC e0 THEN e1 ELSE e2], the branches [e1] and [e2] are
+   functions of type [e0 = true → A] and [e0 = false → A]. *)
+
+(* In [IF e0 THEN e1 ELSE e2], the branches [e1] and [e2] are
+   just terms of type [A]. *)
+
+Global Notation "'IFC' e0 'THEN' e1 'ELSE' e2" :=
   (
     (
       if e0 as b
       return e0 = b → _
-      then
-        λ (_ : e0 = true), e1
-      else
-        λ (_ : e0 = false), e2
+      then e1 else e2
     ) eq_refl
+  )
+  (at level 70).
+
+Global Notation "'IF' e0 'THEN' e1 'ELSE' e2" :=
+  (
+    IFC e0 THEN
+      λ (_ : e0 = true), e1
+    ELSE
+      λ (_ : e0 = false), e2
   )
   (at level 70).
 
@@ -31,6 +43,17 @@ Lemma IF_if {A} (e0 : bool) (e1 e2 : A) :
   if e0 then e1 else e2.
 Proof.
   destruct e0; reflexivity.
+Qed.
+
+Lemma IFC_if {A} (e0 : bool)
+  (e1 : (e0 = true) → A) (a1 : A)
+  (e2 : (e0 = false) → A) (a2 : A) :
+  (∀ pf1, e1 pf1 = a1) →
+  (∀ pf2, e2 pf2 = a2) →
+  IFC e0 THEN e1 ELSE e2 =
+  if e0 then a1 else a2.
+Proof.
+  intros. destruct e0; congruence.
 Qed.
 
 (* Instruct Equations to use [eauto with lia] to kill proof obligations. *)
