@@ -1052,10 +1052,6 @@ Proof.
     isArray. }
 Qed.
 
-(* TODO *)
-Definition blit := @simple_blit.
-Definition wp_blit := @wp_simple_blit.
-
 (* Now let us define specialized [blit] functions for small known
    sizes. We use natural numbers (and induction on them). They exist
    only at compile time and disappear in the residual code. *)
@@ -1103,57 +1099,37 @@ Proof.
     isArray. (* a bit slow *) }
 Qed.
 
-(* Is there in Rocq a way of macro-generating N function definitions? *)
+(* The parameter [N] is the unrolling factor of the main loop in [blit]. *)
 
-Definition blit1 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 1 0.
-Definition blit2 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 2 0.
-Definition blit3 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 3 0.
-Definition blit4 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 4 0.
-Definition blit5 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 5 0.
-Definition blit6 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 6 0.
-Definition blit7 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 7 0.
-Definition blit8 a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j 8 0.
+Definition N  : nat := 8. (* TODO benchmark various sizes *)
+Definition NZ : Z   := Eval compute in Z.of_nat N.
+Definition Ni : int := Eval compute in Uint63.of_nat N.
+
+(* Generate [blitN], which deals just with size [N]. *)
+
+Definition blitN a _i b _j :=
+  Eval compute -[bind] in static_blit a _i b _j N 0.
 
 (* Disable Notation "t .[ i ]" := (get t i). *)
 (* Disable Notation "t .[ i <- a ]" := (set t i a). *)
-(* Print blit8. *)
+(* Print blitN. *)
 
-(* Every specialized [blit] function is correct. *)
+(* [blitN] is correct. *)
 
-Lemma wp_blit1 :
-  blit_spec blit1 1.
+Lemma wp_blitN :
+  blit_spec blitN NZ.
 Proof.
-  unfold blit_spec. intros.
-  change (blit1 a _i b _j) with (static_blit a _i b _j 1 0).
-  wp_op wp_static_blit; wp_shadow b; isArray.
-Qed.
-
-Lemma wp_blit2 :
-  blit_spec blit2 2.
-Proof.
-  unfold blit_spec. intros.
-  change (blit2 a _i b _j) with (static_blit a _i b _j 2 0).
-  wp_op wp_static_blit; wp_shadow b; isArray.
-Qed.
-
-Lemma wp_blit3 :
-  blit_spec blit3 3.
-Proof.
-  unfold blit_spec. intros.
-  change (blit3 a _i b _j) with (static_blit a _i b _j 3 0).
+  unfold NZ, blit_spec. intros.
+  change (blitN a _i b _j) with (static_blit a _i b _j N 0).
   wp_op wp_static_blit; wp_shadow b; isArray.
 Qed.
 
 (* [static_blit_under] handles all sizes [_n] comprised in the semi-open
-   interval [lo, lo+delta). *)
+   interval [lo, lo+delta). The parameters [lo] and [delta] have type
+   [nat]; they exist at compile time only. *)
+
+(* TODO this logic is largely independent of [static_blit] and
+   could be generalized *)
 
 Section BU.
 Local Opaque Nat.div. (* This prevents unfolding and helps [lia]. *)
@@ -1179,7 +1155,7 @@ Lemma wp_static_blit_under delta :
   ∀ lo,
   ∀IntU _n n,
   (lo ≤ Z.to_nat n < lo + delta)%nat →
-  Z.of_nat (lo + delta) ≤ wB →
+  unsigned (Z.of_nat (lo + delta)) →
   blit_spec (λ a _i b _j, static_blit_under a _i b _j _n lo delta) n.
 Proof.
   (* By well-founded induction on [delta]. *)
@@ -1197,26 +1173,119 @@ Proof.
   { wp_if; eapply IH; tc. }
 Qed.
 
-Definition blit_under8 a _i b _j _n :=
-  Eval vm_compute in static_blit_under a _i b _j _n 0 8.
+(* We can now specialize [static_blit_under] for the size [N]. *)
+
+(* This scheme generates code of quadratic size, because each size [k] up
+   to the limit [N] requires a code fragment of size [k]. If we could use
+   Duff's device then we could generate code of linear size. That would
+   require the ability to programmatically generate named (toplevel)
+   functions and function calls. *)
+
+Transparent static_blit_under.
+Definition blit_underN a _i b _j _n :=
+  Eval compute -[bind] in static_blit_under a _i b _j _n 0 N.
 
 (* Disable Notation "t .[ i ]" := (get t i). *)
 (* Disable Notation "t .[ i <- a ]" := (set t i a). *)
-(* Print blit_under8. *)
+(* Print blit_underN. *)
 
-(* [blit_under8] is correct. *)
+(* [blit_underN] is correct. It handles all sizes less than [N]. *)
 
-Lemma wp_blit_under8 :
+Lemma wp_blit_underN :
   ∀Int _n n,
-  (0 ≤ n < 8)%Z →
-  blit_spec (λ a _i b _j, blit_under8 a _i b _j _n) n.
+  (0 ≤ n < NZ)%Z →
+  blit_spec (λ a _i b _j, blit_underN a _i b _j _n) n.
 Proof.
+  unfold NZ.
   intros.
   unfold blit_spec. intros.
-  change (blit_under8 a _i b _j _n)
-    with (static_blit_under a _i b _j _n 0 8).
+  change (blit_underN a _i b _j _n)
+    with (static_blit_under a _i b _j _n 0 N).
+  unfold N.
   eapply wp_static_blit_under; tc.
 Qed.
+
+(* A couple technical lemmas. *)
+
+Lemma Acc_ilt_n_minus_N _n (pf : Acc ilt _n) :
+  (_n <? Ni)%uint63 = false →
+  Acc ilt (_n - Ni)%uint63.
+Proof.
+  intros. destruct pf as [pf]. apply pf.
+  abstract (unfold ilt, Ni in *; lia).
+Defined.
+
+Lemma ilt_n_minus_N : ∀Int _n n, unsigned n → ¬ n < NZ → ilt (_n - Ni) _n.
+Proof.
+  intros. rewrite isInt_def in *. unfold ilt, NZ, Ni in *. lia.
+Qed.
+
+(* We are now ready to define an optimized [blit],
+   where the main loop is unrolled [N] times. *)
+
+Section Code.
+Open Scope uint63.
+
+Fixpoint blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
+  IFC _n <? Ni THEN
+    λ _, blit_underN a _i b _j _n
+  ELSE
+    λ (Hlt : (_n <? Ni) = false),
+    do b ← blitN a _i b _j ;
+    blit_aux a (_i + Ni) b (_j + Ni) (_n - Ni)
+                    (Acc_ilt_n_minus_N _n ACC Hlt).
+
+Definition blit a _i b _j _n :=
+  blit_aux a _i b _j _n (Wf_ilt _n).
+
+(* The fixed point equation. *)
+
+Lemma blit_aux_eq _n :
+  ∀ a _i b _j ACC,
+  blit_aux a _i b _j _n ACC =
+  if _n <? Ni then
+    blit_underN a _i b _j _n
+  else
+    do b ← blitN a _i b _j ;
+    blit a (_i + Ni) b (_j + Ni) (_n - Ni).
+Proof.
+  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  intros; destruct ACC; simpl. unfold Ni.
+  eapply IFC_if; [ eauto |]. intro.
+  setoid_rewrite IH; eauto 2 with lia.
+Qed.
+
+End Code.
+
+(* [blit] is correct. *)
+
+Section NoPreHook.
+(* TODO make this global? *)
+Local Ltac Zify.zify_pre_hook ::=
+  ulength.
+
+Lemma wp_blit :
+  ∀Int _n n,
+  blit_spec (λ a _i b _j, blit a _i b _j _n) n.
+Proof.
+  (* By well-founded induction on [_n]. *)
+  intro _n.
+  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  unfold blit_spec, blit. intros. arrays. lengths.
+  rewrite blit_aux_eq.
+  wp_if.
+  (* Base case. *)
+  { wp_op wp_blit_underN; last wp_shadow b. }
+  (* Step case. *)
+  { unfold Ni.
+    assert (ilt (_n - Ni) _n) by eauto using ilt_n_minus_N with lia.
+    wp_op wp_blitN; unfold NZ; tc; last wp_shadow b.
+    wp_op IH; last wp_shadow b. wp_last Hb.
+    seg_seg in Hb.
+    isArray. }
+Qed.
+
+End NoPreHook.
 
 (* Moving data within an array: [blit']. *)
 
