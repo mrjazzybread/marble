@@ -24,11 +24,10 @@ Time Definition a : array int :=
   init n data.
     (* 4.5 seconds *)
 
-(* TODO report bug?
-Time Definition xs : list int :=
-  Eval vm_compute in to_list a.
-    (* segmentation fault in about 15 seconds *)
- *)
+Definition time_to_list : int :=
+  Eval vm_compute in hd 0 (to_list a).
+    (* about 14 seconds : 3500 elements/second *)
+    (* calling [hd 0 _] suppresses display, which would crash *)
 
 Time Definition b : array int :=
   Eval vm_compute in
