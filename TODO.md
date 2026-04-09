@@ -2,14 +2,21 @@
 
 ## Short term
 
+* Treat `blit'` in the same as `blit`.
+
+* Get rid of Equations everywhere:
+  define every function using structural recursion
+  on a proof of accessibility.
+
+* optimistic merge the other way around? (can blit if the two halves
+  are neatly exchanged)
+
 * `sort.v`: try to use uniform conventions regarding names and order
    of parameters; also, regarding end offset versus length.
 
 * `sort.v`, `compare.v`: we may want to use a Hoare-style spec for
    the comparison function, instead of `LebSpec`. E.g. think of the
    case of a comparison function on machine integers.
-
-* Can the loops in `int.v` use `IF/THEN/ELSE` instead of `inspected`?
 
 * In anticipation of vectors, many operations on arrays should also
   work on array segments.
