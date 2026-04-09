@@ -29,6 +29,13 @@ Implicit Types  z : Z.
 
 (* -------------------------------------------------------------------------- *)
 
+(* The type [int] is inhabited. *)
+
+Instance Inhabited_int : Inhabited int.
+Proof. constructor. exact 0%uint63. Defined.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [unsigned z] means that [z] lies in the interval of the unsigned
    machine integers. *)
 
@@ -591,6 +598,8 @@ Proof. tc3. Qed.
 
 (* All four orderings are well-founded. *)
 
+(* [ilt] *)
+
 Definition ilt _i _j :=
   φ _i < φ _j.
 
@@ -605,6 +614,23 @@ Global Instance Wf_ilt : WellFounded ilt :=
   (* The use of [wf_guard] is meant to allow computation inside Rocq
      in spite of the opaque well-foundedness proof [ilt_wf]. *)
 
+(* The following lemmas are useful in direct definitions of recursive
+   functions by structural induction on a proof of accessibility. *)
+
+Lemma Acc_ilt_n_minus_1 _n (pf : Acc ilt _n) :
+  (_n =? 0)%uint63 = false →
+  Acc ilt (_n - 1)%uint63.
+Proof.
+  intros. destruct pf as [pf]. apply pf. abstract (unfold ilt; lia).
+Defined.
+
+Lemma ilt_n_minus_1 : ∀Int _n n, unsigned n → n ≠ 0 → ilt (_n - 1) _n.
+Proof.
+  intros. rewrite isInt_def in *. unfold ilt. lia.
+Qed.
+
+(* [rilt] *)
+
 Definition rilt _a _i _j :=
   ilt (_i - _a) (_j - _a).
 
@@ -616,6 +642,8 @@ Qed.
 
 Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
   wf_guard 32 (rilt_wf _a).
+
+(* [igt] *)
 
 Definition igt _i _j :=
   φ _j < φ _i.
@@ -635,6 +663,8 @@ Qed.
 
 Global Instance Wf_igt : WellFounded igt :=
   wf_guard 32 igt_wf.
+
+(* [rigt] *)
 
 Definition rigt _a _i _j :=
   igt (_i - _a) (_j - _a).
