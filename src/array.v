@@ -146,14 +146,13 @@ Ltac arrays :=
   (* We also introduce [unsigned max_array_length]. *)
   generalize unsigned_max_array_length; intro.
 
-(* We let [lia] invoke [arrays; lengths]. *)
-
-(* We do not make this a setting, because this might disturb or
-   surprise the user. We expect the user to reproduce and adapt this
-   setting in every file. *)
+(* One might wish to define [zify_pre_hook] so as to invoke
+   [arrays; lengths; ulength in *]. However, in some proofs,
+   this can be very slow. *)
 
 Local Ltac Zify.zify_pre_hook ::=
-  arrays; lengths; ulength in *.
+  generalize unsigned_max_array_length; intro;
+  ulength.
 
 (* Any number that is bounded by [max_array_length] is representable. *)
 
@@ -165,11 +164,11 @@ Goal ∀ `{Inhabited A} (a : array A) xs,
   isArray a xs →
   n ≤ len xs →
   n ≤ max_array_length.
-Proof. eauto with lia. Qed.
+Proof. intros. arrays. eauto with lia. Qed.
 
 Goal ∀ `{Inhabited A} (a : array A) xs,
   isArray a xs → unsigned (len xs).
-Proof. eauto with lia. Qed.
+Proof. intros. arrays. eauto with lia. Qed.
 
 Local Lemma isArray_pi3 `{Inhabited A} (a : array A) xs :
   isArray a xs →
@@ -196,7 +195,7 @@ Local Lemma isArray_show_valid `{Inhabited A} (a : array A) xs :
 Proof.
   intros ?????. destructIsIntU.
   rewrite ltb_spec, isInt_length by eauto.
-  eauto with lia.
+  intros. arrays. eauto with lia.
 Qed.
 
 Local Lemma isArray_use_valid `{Inhabited A} (a : array A) xs :
@@ -207,7 +206,7 @@ Local Lemma isArray_use_valid `{Inhabited A} (a : array A) xs :
 Proof.
   intros ???? Hxs. destructIsInt.
   rewrite ltb_spec, isInt_length by eauto.
-  eauto with lia.
+  arrays. eauto with lia.
 Qed.
 
 (* I am not sure whether it is a good idea to have this instance.
@@ -220,7 +219,7 @@ Instance isBool1_lt_length `{Inhabited A} (a : array A) xs :
   ∀IntU _i i,
   isBool1 (_i <? length a)%uint63 (valid i xs).
 Proof.
-  intros. eapply isBool1_variance; tc3. (* so sweet! *)
+  intros. arrays. eapply isBool1_variance; tc3. (* so sweet! *)
 Qed.
 
 (* [isArray _ xs] is injective, up to the side condition
@@ -248,7 +247,7 @@ Qed.
 Lemma isArray_inj_2 `{Inhabited A} a (xs ys : list A) :
   isArray a xs → isArray a ys → xs = ys.
 Proof.
-  intros.
+  intros. arrays.
   assert (len xs = len ys).
   { eapply isInt_inj_2;
     eauto using isInt_length with typeclass_instances lia. }
@@ -322,7 +321,8 @@ Lemma wp_set _i i a xs x :
   valid i xs →
   wp a.[_i <- x] (λ a', isArray a' (<[i := x]>xs)).
 Proof.
-  intros Hi ??. wp_ret. introIsArray; length.
+  intros Hi ??. arrays.
+  wp_ret. introIsArray; length.
   { rewrite length_set. tc. }
   { eauto with lia. }
   intros j ?. destructAndKeepIsInt.
@@ -429,7 +429,7 @@ Lemma wp_segment_to_list a xs :
 Proof.
   (* This proof relies on the lemmas [wp_length] and [wp_get].
      It does not need to unfold the definition of [isArray]. *)
-  intros. unfold segment_to_list.
+  intros. arrays. unfold segment_to_list.
   (* The loop invariant. *)
   wp_op wp_iter_down with invariant: (λ j ys, ys = seg j k xs);
   last wp_intro ?.
@@ -446,7 +446,7 @@ Lemma wp_to_list a xs :
   isArray a xs →
   wp (to_list a) (λ xs', xs' = xs).
 Proof.
-  intro. unfold to_list.
+  intro. arrays. unfold to_list.
   wp_length _n.
   wp_op wp_segment_to_list introducing: ?.
 Qed.
@@ -635,7 +635,7 @@ Proof.
   induction future as [| x future ];
   intros history xs _i i ? ? ?;
   ITER;
-  simpl list_iteri; subst; list in *.
+  simpl list_iteri; subst; lengths; list in *.
   { wp_ret. }
   { wp_op Hstep shadowing: s.
     { list. eauto. }
@@ -666,7 +666,8 @@ Proof.
   induction future as [| x future ];
   intros _i i ? ? ?;
   ITER;
-  simpl list_iteri.
+  simpl list_iteri;
+  lengths; ulength in *.
   (* Case: the future is empty. We have [i = len xs]. *)
   { assert (i = len xs) by lia.
     wp_ret. }
@@ -743,12 +744,11 @@ Definition of_list xs :=
    or [list_iteri]. Instead, a bound on the length of the list [xs]
    is imposed as a precondition in this specification. *)
 
-
 Lemma wp_of_list xs :
   len xs ≤ max_array_length →
   wp (of_list xs) (λ a, isArray a xs).
 Proof.
-  intros. unfold of_list.
+  intros. lengths. unfold of_list.
   wp_op wp_list_length introducing: _n.
   wp_make a.
   (* The loop invariant. *)
@@ -757,6 +757,7 @@ Proof.
   ).
   (* Preservation. *)
   { clear dependent _n a. wp_list_iteri_body a _i i x history.
+    lengths. ulength in *.
     wp_set.
     isArray. }
   (* Completion. *)
@@ -901,7 +902,7 @@ Lemma wp_naive_blit :
   ∀Int _n n,
   blit_spec (λ a _i b _j, naive_blit a _i b _j _n) n.
 Proof.
-  unfold blit_spec, naive_blit. intros.
+  unfold blit_spec, naive_blit. intros. arrays.
   wp_bind_eq.
   wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i)).
   (* Initialization. *)
@@ -997,7 +998,7 @@ Proof.
   (* By well-founded induction on [_n]. *)
   intro _n.
   pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
-  unfold blit_spec, simple_blit. intros.
+  unfold blit_spec, simple_blit. intros. arrays.
   rewrite simple_blit_aux_eq.
   wp_if.
   (* Base case. *)
@@ -1041,7 +1042,8 @@ Proof.
   (* By well-founded induction on [_n]. *)
   intro _n.
   pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
-  unfold blit_spec. intros. autorewrite with equations_blit.
+  unfold blit_spec. intros. arrays.
+  autorewrite with equations_blit.
   wp_if.
   (* Base case. *)
   { wp_ret. isArray. }
@@ -1259,11 +1261,6 @@ End Code.
 
 (* [blit] is correct. *)
 
-Section NoPreHook.
-(* TODO make this global? *)
-Local Ltac Zify.zify_pre_hook ::=
-  ulength.
-
 Lemma wp_blit :
   ∀Int _n n,
   blit_spec (λ a _i b _j, blit a _i b _j _n) n.
@@ -1284,8 +1281,6 @@ Proof.
     seg_seg in Hb.
     isArray. }
 Qed.
-
-End NoPreHook.
 
 (* Moving data within an array: [blit']. *)
 
@@ -1323,7 +1318,7 @@ Lemma wp_blit' a xs :
   valid_seg j (j + n) xs →
   wp (blit' a _i _j _n) (blit_post xs i xs j n).
 Proof.
-  intros. unfold blit'.
+  intros. arrays. unfold blit'.
   wp_if.
   (* Case [j = i]. *)
   { subst j. wp_ret. isArray. }
@@ -1390,7 +1385,7 @@ Lemma wp_copy a xs :
   isArray a xs →
   wp (copy a) (λ b, isArray b xs).
 Proof.
-  intros. unfold copy.
+  intros. arrays. unfold copy.
   wp_length n.
   wp_make b.
   wp_blit.
@@ -1425,7 +1420,7 @@ Lemma wp_sub a _i i _n n xs :
   valid_seg i (i + n) xs →
   wp (sub a _i _n) (λ b, isArray b (seg i (i + n) xs)).
 Proof.
-  intros. unfold sub.
+  intros. arrays. unfold sub.
   wp_make b.
   wp_blit.
 Qed.
@@ -1467,7 +1462,7 @@ Lemma wp_append a xs b ys :
   len xs + len ys ≤ max_array_length →
   wp (append a b) (λ c, isArray c (xs ++ ys)).
 Proof.
-  intros. unfold append.
+  intros. arrays. unfold append.
   wp_length _m.
   wp_length _n.
   wp_make c.
@@ -1512,7 +1507,7 @@ Lemma wp_fill a xs _i i _n n  x :
     (initial_seg i xs ++ replicate n x ++ final_seg (i + n) xs)
   ).
 Proof.
-  intros. unfold fill.
+  intros. arrays. unfold fill.
   wp_op wp_iter_up with invariant: (λ k a, isArray a
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ).
@@ -1588,7 +1583,7 @@ Lemma wp_find_index a xs :
   isArray a xs →
   wp (find_index a) (λ out, find_index_inv xs (len xs) out).
 Proof.
-  intros. unfold find_index.
+  intros. arrays. unfold find_index.
   wp_length _n.
   wp_op wp_uxiter_up with invariant: (find_index_inv xs);
   unfold find_index_inv in *.
@@ -1804,7 +1799,7 @@ Lemma wp_equal a xs b ys :
       isBool1 o (Forall2 EQ xs ys)
   ).
 Proof.
-  intros. unfold equal.
+  intros. arrays. unfold equal.
   wp_length _m.
   wp_length _n.
   (* The second branch, where the lengths differ, is trivial. *)
@@ -1896,7 +1891,7 @@ Lemma wp_segment_iteri a xs f :
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
-  intros. ITER. unfold segment_iteri.
+  intros. arrays. ITER. unfold segment_iteri.
   wp_op wp_iter_up; last wp_intro ?.
   (* The loop body. *)
   { clear dependent s. wp_iter_up_body _j j s.
@@ -1912,7 +1907,7 @@ Lemma wp_iteri a xs f :
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (iteri a s f) Q).
 Proof.
-  intros. ITER. unfold iteri.
+  intros. arrays. ITER. unfold iteri.
   wp_length _n.
   wp_op wp_segment_iteri; last wp_intro ?.
 Qed.
