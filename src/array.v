@@ -885,21 +885,21 @@ Notation blit_post xs i ys j n := (
 (* We have several [blit] functions, so it is worth isolating this
    definition. *)
 
-Definition blit_spec (blit : array A → int → array A → int → array A) _n :=
+Definition blit_spec (blit : array A → int → array A → int → array A) n :=
   ∀ a xs b ys,
   isArray a xs →
   ∀Int _i i,
   isArray b ys →
   ∀Int _j j,
-  ∀ n, isInt _n n →
   valid_seg i (i + n) xs →
   valid_seg j (j + n) ys →
   wp (blit a _i b _j) (blit_post xs i ys j n).
 
 (* [naive_blit] is correct. *)
 
-Lemma wp_naive_blit _n :
-  blit_spec (λ a _i b _j, naive_blit a _i b _j _n) _n.
+Lemma wp_naive_blit :
+  ∀Int _n n,
+  blit_spec (λ a _i b _j, naive_blit a _i b _j _n) n.
 Proof.
   unfold blit_spec, naive_blit. intros.
   wp_bind_eq.
@@ -988,12 +988,14 @@ Qed.
 
 End Code.
 
-(* We can now prove that [simple_blit] is correct. *)
+(* [simple_blit] is correct. *)
 
-Lemma wp_simple_blit _n :
-  blit_spec (λ a _i b _j, simple_blit a _i b _j _n) _n.
+Lemma wp_simple_blit :
+  ∀Int _n n,
+  blit_spec (λ a _i b _j, simple_blit a _i b _j _n) n.
 Proof.
   (* By well-founded induction on [_n]. *)
+  intro _n.
   pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
   unfold blit_spec, simple_blit. intros.
   rewrite simple_blit_aux_eq.
@@ -1011,6 +1013,10 @@ Qed.
 (* In order to allow a fair comparison, let's define a third naive [blit],
    this time using Equations, but without a higher-order function. *)
 
+(* A micro-benchmark (benchmark.v) suggests that, when running inside Rocq
+   using [vm_compute], [equations_blit] can be 75 times slower than
+   [simple_blit]. *)
+
 Section Code.
 Open Scope uint63.
 
@@ -1026,12 +1032,14 @@ equations_blit a _i b _j _n :=
 
 End Code.
 
-(* We can now prove that [equations_blit] is correct. *)
+(* [equations_blit] is correct. *)
 
-Lemma wp_equations_blit _n :
-  blit_spec (λ a _i b _j, equations_blit a _i b _j _n) _n.
+Lemma wp_equations_blit :
+  ∀Int _n n,
+  blit_spec (λ a _i b _j, equations_blit a _i b _j _n) n.
 Proof.
   (* By well-founded induction on [_n]. *)
+  intro _n.
   pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
   unfold blit_spec. intros. autorewrite with equations_blit.
   wp_if.
@@ -1124,7 +1132,6 @@ Lemma wp_blit1 :
   blit_spec blit1 1.
 Proof.
   unfold blit_spec. intros.
-  assert (n = 1) by (rewrite isInt_def in *; lia). subst n.
   change (blit1 a _i b _j) with (static_blit a _i b _j 1 0).
   wp_op wp_static_blit; wp_shadow b; isArray.
 Qed.
@@ -1133,7 +1140,6 @@ Lemma wp_blit2 :
   blit_spec blit2 2.
 Proof.
   unfold blit_spec. intros.
-  assert (n = 2) by (rewrite isInt_def in *; lia). subst n.
   change (blit2 a _i b _j) with (static_blit a _i b _j 2 0).
   wp_op wp_static_blit; wp_shadow b; isArray.
 Qed.
@@ -1142,12 +1148,75 @@ Lemma wp_blit3 :
   blit_spec blit3 3.
 Proof.
   unfold blit_spec. intros.
-  assert (n = 3) by (rewrite isInt_def in *; lia). subst n.
   change (blit3 a _i b _j) with (static_blit a _i b _j 3 0).
   wp_op wp_static_blit; wp_shadow b; isArray.
 Qed.
 
-(* TODO continue up to 7 *)
+(* [static_blit_under] handles all sizes [_n] comprised in the semi-open
+   interval [lo, lo+delta). *)
+
+Section BU.
+Local Opaque Nat.div. (* This prevents unfolding and helps [lia]. *)
+
+Equations static_blit_under a _i b _j _n (lo delta : nat) : array A
+by wf delta lt :=
+static_blit_under a _i b _j _n lo delta :=
+  IF (delta <=? 1)%nat THEN
+    static_blit a _i b _j lo 0
+  ELSE
+    let half := (delta / 2)%nat in
+    let midpoint := (lo + half)%nat in
+    if (_n <? of_nat midpoint)%uint63 then
+      static_blit_under a _i b _j _n lo half
+    else
+      static_blit_under a _i b _j _n midpoint (delta - half).
+
+End BU.
+
+(* [static_blit_under] is correct. *)
+
+Lemma wp_static_blit_under delta :
+  ∀ lo,
+  ∀IntU _n n,
+  (lo ≤ Z.to_nat n < lo + delta)%nat →
+  Z.of_nat (lo + delta) ≤ wB →
+  blit_spec (λ a _i b _j, static_blit_under a _i b _j _n lo delta) n.
+Proof.
+  (* By well-founded induction on [delta]. *)
+  pattern delta.
+  eapply (well_founded_ind lt_wf). clear delta. intros delta IH. intros.
+  unfold blit_spec. intros.
+  autorewrite with static_blit_under.
+  destruct (delta <=? 1)%nat eqn:Heq.
+  (* Case [delta ≤ 1]. In fact, [delta] cannot be zero, as [n] lies
+     within the semi-open interval of [lo] to [lo + delta]. So, we
+     must in fact have [delta = 1]. *)
+  { wp_op wp_static_blit; last wp_shadow b.
+    isArray. }
+  (* Case [1 < delta]. *)
+  { wp_if; eapply IH; tc. }
+Qed.
+
+Definition blit_under8 a _i b _j _n :=
+  Eval vm_compute in static_blit_under a _i b _j _n 0 8.
+
+(* Disable Notation "t .[ i ]" := (get t i). *)
+(* Disable Notation "t .[ i <- a ]" := (set t i a). *)
+(* Print blit_under8. *)
+
+(* [blit_under8] is correct. *)
+
+Lemma wp_blit_under8 :
+  ∀Int _n n,
+  (0 ≤ n < 8)%Z →
+  blit_spec (λ a _i b _j, blit_under8 a _i b _j _n) n.
+Proof.
+  intros.
+  unfold blit_spec. intros.
+  change (blit_under8 a _i b _j _n)
+    with (static_blit_under a _i b _j _n 0 8).
+  eapply wp_static_blit_under; tc.
+Qed.
 
 (* Moving data within an array: [blit']. *)
 
