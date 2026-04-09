@@ -50,6 +50,16 @@ Time Definition time_simple_blit :=
   (simple_blit a 0 b' 0 n)%uint63.
     (* 0.06 seconds : 830,000 elements/second *)
 
+Time Definition b'' : array int :=
+  Eval vm_compute in
+  init n data.
+    (* 4.5 seconds *)
+
+Time Definition time_equations_blit :=
+  Eval vm_compute in
+  (equations_blit a 0 b'' 0 n)%uint63.
+    (* 4.7 seconds : 10,500 elements/second *)
+
 Time Definition c : array int :=
   Eval vm_compute in
   init 16000 data.
