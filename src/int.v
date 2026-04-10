@@ -629,6 +629,8 @@ Proof.
   intros. rewrite isInt_def in *. unfold ilt. lia.
 Qed.
 
+Hint Resolve ilt_n_minus_1 : lia.
+
 (* [rilt] *)
 
 Definition rilt _a _i _j :=
@@ -663,6 +665,27 @@ Qed.
 
 Global Instance Wf_igt : WellFounded igt :=
   wf_guard 32 igt_wf.
+
+(* The following lemmas are useful in direct definitions of recursive
+   functions by structural induction on a proof of accessibility. *)
+
+Lemma Acc_igt_n_plus_1 _n _k (pf : Acc igt _n) :
+  (_n <? _k)%uint63 = true →
+  Acc igt (_n + 1)%uint63.
+Proof.
+  intros. destruct pf as [pf]. apply pf. abstract (unfold igt; lia).
+Defined.
+
+Lemma igt_n_plus_1 :
+  ∀IntU _n n,
+  ∀IntU _k k,
+  n < k →
+  igt (_n + 1) _n.
+Proof.
+  intros. rewrite isInt_def in *. unfold igt. lia.
+Qed.
+
+Hint Resolve igt_n_plus_1 : lia.
 
 (* [rigt] *)
 
@@ -1123,75 +1146,51 @@ Tactic Notation "wp_uxiter_down_body"
 (* Our intervals are semi-open on the right end: [i] is included,
    [k] is excluded. *)
 
+(* [iter_up _i _k s body] applies the loop body [body] to every
+   machine integer from [_i], included, up to [_k], excluded. A state
+   of type [S] is carried, whose initial value is [s]. *)
+
 Section IterUp.
 Context {S : Type}.
 Implicit Types s : S.
-
-(* We hoist the loop-invariant parameters out of the loop, because
-   otherwise Equations produces ugly code where these parameters are
-   carried around in a tuple, itself encoded using nested pairs. *)
-
-Variable _k : int.
-Variable body : int → S → S.
-
-(* [iter_up_aux _i s] applies the loop body [body] to every machine integer
-   from [_i], included, up to [_k], excluded. A state of type [S] is
-   carried, whose initial value is [s]. *)
-
-(* We use Equations to more easily define [iter_up_aux] by well-founded
-   recursion over the loop counter [_i]. The somewhat strange [with]
-   syntax is a way of expressing the test [_i <? _k]. The use of [inspect]
-   and [inspected] is an idiosyncratic way of making the outcome of the
-   test visible at the logical level in the branches. In the second
-   branch, the fact that [_i <? _k] is false is needed in order to prove
-   that [_i + 1] is less than [_i], a fact which itself is required by the
-   termination argument. *)
-
-Section Code.
+Implicit Types body : int → S → S.
 Open Scope uint63.
 
-Equations iter_up_aux _i s : S
-by wf _i igt :=
-iter_up_aux _i s with inspect (_i <? _k) => {
-| inspected true :=
+(* We define [iter_up_aux] by well-founded recursion over a proof of
+   accessibility of the index [_i]. In the first branch, the fact that
+   [_i <? _k] is true is needed in order to prove that [_i + 1] is
+   less than [_i], a fact which itself is required by the termination
+   argument. *)
+
+Fixpoint iter_up_aux _i _k s body (ACC : Acc igt _i) :=
+  IFC _i <? _k THEN λ Hik,
     do s ← body _i s ;
-    do s ← iter_up_aux (_i + 1) s ;
-    s ;
-| inspected false :=
-    s
-}.
+    iter_up_aux (_i + 1) _k s body
+                (Acc_igt_n_plus_1 _i _k ACC Hik)
+  ELSE λ _,
+    s.
 
-End Code.
-End IterUp.
+Definition iter_up _i _k s body :=
+  iter_up_aux _i _k s body (Wf_igt _i).
 
-(* A specification of [iter_up_aux]. *)
+(* The proof irrelevance and fixed point lemma. *)
 
-Lemma wp_iter_up_aux {S} (body : int → S → S) :
-  ∀IntU _i i ,
-  ∀IntU _k k ,
-  ITER_Z i k Up
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_up_aux _k body _i s) Q).
+Lemma iter_up_aux_eq _i : ∀ _k s body (ACC : Acc igt _i),
+  iter_up_aux _i _k s body ACC =
+  if _i <? _k then
+    do s ← body _i s ;
+    iter_up (_i + 1) _k s body
+  else
+    s.
 Proof.
-  intros. ITER.
-  funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
-  isBool_magic; z.
-  (* Case [i < k]. *)
-  { wp_op Hstep shadowing: s.
-    wp_op H shadowing: s.
-    wp_ret. }
-  (* Case [¬ i < k]. *)
-  { wp_ret. }
+  (* By well-founded induction on [_i]. *)
+  pattern _i. eapply (well_founded_ind igt_wf). clear _i. intros _i IH.
+  intros; destruct ACC; simpl.
+  eapply IFC_if; [| eauto ]. intro.
+  setoid_rewrite IH; eauto 2 with lia.
 Qed.
 
-(* A definition of [iter_up], with reordered parameters. *)
-
-(* [iter_up _i _k s body] applies the loop body [body] to every machine
-   integer from [_i], included, up to [_k], excluded. A state of type [S]
-   is carried, whose initial value is [s]. *)
-
-Definition iter_up {S} _i _k s (body : int → S → S) :=
-  iter_up_aux _k body _i s.
+End IterUp.
 
 (* A specification of [iter_up]. *)
 
@@ -1202,7 +1201,19 @@ Lemma wp_iter_up {S} (body : int → S → S) :
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_up _i _k s body) Q).
 Proof.
-  unfold iter_up. eauto using wp_iter_up_aux.
+  (* By well-founded induction on [_i]. *)
+  intro _i.
+  pattern _i. eapply (well_founded_ind igt_wf). clear _i. intros _i IH.
+  intros. ITER.
+  unfold ITER_Z, ITER, z_step in IH; simpl implication in IH. (* TODO *)
+  unfold iter_up. rewrite iter_up_aux_eq.
+  wp_if.
+  (* Case [i < k]. *)
+  { wp_op Hstep shadowing: s.
+    wp_op IH shadowing: s.
+    wp_ret. }
+  (* Case [¬ i < k]. *)
+  { wp_ret. }
 Qed.
 
 (* The tactic [wp_iter_up_body _j j s] should be used upon entry into the

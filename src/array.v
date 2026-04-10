@@ -1014,7 +1014,6 @@ Proof.
   { wp_get x.
     wp_set.
     wp_op IH; last wp_shadow b.
-    { eauto using ilt_n_minus_1 with lia. }
     isArray. }
 Qed.
 
