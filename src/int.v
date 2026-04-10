@@ -622,7 +622,7 @@ Lemma Acc_ilt_n_minus_1 _n (pf : Acc ilt _n) :
   Acc ilt (_n - 1)%uint63.
 Proof.
   intros. destruct pf as [pf]. apply pf. abstract (unfold ilt; lia).
-Defined.
+Defined. (* Defined, not Qed. *)
 
 Lemma ilt_n_minus_1 : ∀Int _n n, unsigned n → n ≠ 0 → ilt (_n - 1) _n.
 Proof.
@@ -674,7 +674,7 @@ Lemma Acc_igt_n_plus_1 _n _k (pf : Acc igt _n) :
   Acc igt (_n + 1)%uint63.
 Proof.
   intros. destruct pf as [pf]. apply pf. abstract (unfold igt; lia).
-Defined.
+Defined. (* Defined, not Qed. *)
 
 Lemma igt_n_plus_1 :
   ∀IntU _n n,
