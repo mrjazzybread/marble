@@ -518,6 +518,15 @@ Ltac expand_ITER :=
     ITER, XITER, UXITER;
     simpl implication.
 
+Tactic Notation "expand_ITER" "in" hyp(h) :=
+  unfold
+    ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
+    ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
+    ITER_LIST, ITERI_LIST,
+    ITER, XITER, UXITER
+  in h;
+  simpl implication in h.
+
 (* Updating this hook (which is defined in wp.v) lets us to call [expand_ITER]
    in every precondition of a loop, before [wp_precondition_hook] is called. *)
 
