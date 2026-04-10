@@ -26,6 +26,9 @@ let sorted_array n : int array =
 let reversed_array n : int array =
   Array.init n @@ fun i -> n - i
 
+let zeroed_array n : int array =
+  Array.make n 0
+
 type construction =
   (int -> int array) * string
 
@@ -73,15 +76,15 @@ end) = struct
 
   (* The extracted code under test. *)
 
-  open Extracted.Make(A)
+  include Extracted.Make(A)
 
-  (* The benchmark: sorting an integer array of size [n]. *)
+  (* A benchmark: sorting an integer array of size [n]. *)
 
-  let benchmark n construction (algorithm : string) : B.benchmark =
+  let sort_benchmark n construction (array : string) : B.benchmark =
     let basis = n
     and name =
       sprintf "sorting %s (size %d) (sort/%s)"
-        (snd construction) n algorithm
+        (snd construction) n array
     and run () =
       (* Construct a fresh mutable array of integers. *)
       let a : int array = (fst construction) n in
@@ -94,13 +97,32 @@ end) = struct
     in
     B.benchmark ~name ~quota ~basis ~run
 
+  (* A benchmark: blitting between integer arrays. *)
+
+  let blit_benchmark n blit (algorithm : string) (array : string) : B.benchmark =
+    let basis = n
+    and name =
+      sprintf "blitting (size %d) (%s/%s)" n algorithm array
+    and run () =
+      (* Construct two arrays. *)
+      let src : int array = sorted_array n
+      and dst : int array = zeroed_array n in
+      (* Convert them to persistent arrays of unsigned integers. *)
+      let src, dst = convert src, convert dst in
+      (* The benchmark is to blit from [src] to [dst]. *)
+      fun () ->
+        let dst' = blit src Uint63.zero dst Uint63.zero (Uint63.of_int n) in
+        ignore dst'
+    in
+    B.benchmark ~name ~quota ~basis ~run
+
 end (* Make *)
 
 (* -------------------------------------------------------------------------- *)
 
-(* The baseline: the function [Array.sort] in OCaml's standard library. *)
+(* The baseline: OCaml's standard [Array] module. *)
 
-let baseline n construction : B.benchmark =
+let sort_baseline n construction : B.benchmark =
   let basis = n
   and name =
     sprintf "sorting %s (size %d) (Stdlib.Array.sort)"
@@ -116,36 +138,64 @@ let baseline n construction : B.benchmark =
   in
   B.benchmark ~name ~quota ~basis ~run
 
+let blit_baseline n : B.benchmark =
+  let basis = n
+  and name =
+    sprintf "blitting (size %d) (Stdlib.Array.blit)" n
+  and run () =
+    (* Construct two arrays. *)
+    let src : int array = sorted_array n
+    and dst : int array = zeroed_array n in
+    (* The benchmark is to blit from [src] to [dst]. *)
+    fun () ->
+      Array.blit src 0 dst 0 n
+  in
+  B.benchmark ~name ~quota ~basis ~run
+
 (* -------------------------------------------------------------------------- *)
 
-(* A list of the benchmarks that we want to run. *)
+(* A list of the benchmarks of [blit]. *)
 
-let benchmarks n construction : B.benchmark list = [
-  baseline n construction;
-  (let module M = Make(UnsafeArray) in M.benchmark n construction "UnsafeArray");
-  (let module M = Make(DefensiveArray) in M.benchmark n construction "DefensiveArray");
-  (let module M = Make(Parray) in M.benchmark n construction "Parray");
+let blit_benchmarks n : B.benchmark list = [
+  blit_baseline n;
+  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.blit "blit" "UnsafeArray");
+  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.simple_blit "simple_blit" "UnsafeArray");
+  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.equations_blit "equations_blit" "UnsafeArray");
+  (let module M = Make(DefensiveArray) in M.blit_benchmark n M.blit "blit" "DefensiveArray");
+  (let module M = Make(Parray) in M.blit_benchmark n M.blit "blit" "Parray");
 ]
 
-let benchmarks n : B.benchmark list =
+(* -------------------------------------------------------------------------- *)
+
+(* A list of the benchmarks of [sort]. *)
+
+let sort_benchmarks n construction : B.benchmark list = [
+  sort_baseline n construction;
+  (let module M = Make(UnsafeArray) in M.sort_benchmark n construction "UnsafeArray");
+  (let module M = Make(DefensiveArray) in M.sort_benchmark n construction "DefensiveArray");
+  (let module M = Make(Parray) in M.sort_benchmark n construction "Parray");
+]
+
+let sort_benchmarks n : B.benchmark list =
   [ random; sorted; reversed ]
-  |> List.map (benchmarks n)
+  |> List.map (sort_benchmarks n)
   |> List.flatten
 
 (* -------------------------------------------------------------------------- *)
 
 (* Read the command line. *)
 
-let sort =
-  ref 0
+let blit, sort =
+  ref 0, ref 0
 
 let () =
   Arg.parse [
+    "--blit", Arg.Set_int blit, " <n> Benchmark blit";
     "--sort", Arg.Set_int sort, " <n> Benchmark sort";
   ] (fun _ -> ()) "Invalid usage"
 
-let sort =
-  !sort
+let blit, sort =
+  !blit, !sort
 
 let run benchmarks =
   List.iter B.drive_and_display benchmarks
@@ -158,4 +208,6 @@ let possibly n (benchmarks : int -> B.benchmark list) =
 (* Main. *)
 
 let () =
-  possibly sort benchmarks
+  possibly blit blit_benchmarks;
+  possibly sort sort_benchmarks;
+  ()
