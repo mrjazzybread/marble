@@ -985,6 +985,11 @@ Proof.
      that this lemma requires. *)
   eapply IFC_if; [ eauto |]. intro.
   setoid_rewrite IH; eauto 2 with lia.
+  (* The reason why Xavier does not encounter this problem is that he
+     uses a non-dependent [match] construct to analyse the result of
+     the test [Nat.eq_dec b 0], whose type is [{b = 0} + {b <> 0}];
+     whereas we use a dependent [if] construct to analyze the result
+     of the test [n =? 0], whose type is [bool]. *)
 Qed.
 
 End Code.
