@@ -1204,8 +1204,7 @@ Proof.
   (* By well-founded induction on [_i]. *)
   intro _i.
   pattern _i. eapply (well_founded_ind igt_wf). clear _i. intros _i IH.
-  intros. ITER.
-  unfold ITER_Z, ITER, z_step in IH; simpl implication in IH. (* TODO *)
+  intros. ITER. expand_ITER in IH.
   unfold iter_up. rewrite iter_up_aux_eq.
   wp_if.
   (* Case [i < k]. *)
@@ -1229,68 +1228,57 @@ Tactic Notation "wp_iter_up_body"
 
 (* -------------------------------------------------------------------------- *)
 
-(* An exitable loop, counting up from [i] to [k]. The loop can be broken via
-   an early exit: the loop body receives two continuations [continue] and
-   [break] and must invoke either [continue s] or [break s x]. *)
+(* An exitable loop, counting up from [i] to [k]. The loop can be broken
+   via an early exit: the loop body receives two continuations [continue]
+   and [break] and must invoke either [continue s] or [break s x]. An
+   invocation of the loop body takes the form [body _i s continue break]. *)
 
 Section XiterUp.
 Context {S A : Type}.
 Implicit Types s : S.
-
-(* The upper bound. *)
-Variable _k : int.
-
-(* The loop body: [body _i s continue break]. *)
-Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
-
-(* The code. *)
-Section Code.
 Open Scope uint63.
 
-Equations xiter_up_aux _i s : S * outcome A
-by wf _i igt :=
-xiter_up_aux _i s
-with inspect (_i <? _k) => {
-| inspected true :=
-    let continue s := xiter_up_aux (_i + 1) s in
+Fixpoint xiter_up_aux _i _k s
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W)
+  (ACC : Acc igt _i)
+: S * outcome A :=
+  IFC _i <? _k THEN λ Hik,
+    let continue s := xiter_up_aux (_i + 1) _k s (@body)
+                        (Acc_igt_n_plus_1 _i _k ACC Hik) in
     let break s x := (s, Break x) in
     body _i s continue break
-| inspected false :=
-    (s, Continue)
-}.
+  ELSE λ _,
+    (s, Continue).
 
-End Code.
+Definition xiter_up _i _k s body :=
+  xiter_up_aux _i _k s body (Wf_igt _i).
+
 End XiterUp.
 
-(* A specification of [xiter_up_aux]. *)
+(* The specification of [xiter_up_aux]. *)
 
 Lemma wp_xiter_up_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntU _i i ,
   ∀IntU _k k ,
+  ∀ ACC,
   XITER_Z i k Up
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_up_aux _k (@body) _i s) Q).
+    (λ s Q, wp (xiter_up_aux _i _k s (@body) ACC) Q).
 Proof.
-  (* The spec is quite complex, but the proof is very simple. *)
-  intros. XITER.
-  funelim (xiter_up_aux _k (@body) _i s); cleanup; clear Heqcall; intros;
-  isBool_magic; z.
+  by well-founded induction on _i along igt.
+  intros. XITER. expand_ITER in IH.
+  destruct ACC; simpl.
+  wp_if.
   (* Case [a < b]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
-    + wp_op H introducing: sout. assumption.
+    + wp_op IH introducing: (s' & out). z. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [b ≤ a]. *)
   { wp_ret. }
 Qed.
-
-(* [xiter_up] with reordered parameters. *)
-
-Definition xiter_up {S A} _i _k s
-  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :=
-  xiter_up_aux _k (@body) _i s.
 
 (* The specification of [xiter_up]. *)
 
