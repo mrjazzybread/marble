@@ -934,36 +934,34 @@ Tactic Notation "wp_iter_down_body"
 
 (* -------------------------------------------------------------------------- *)
 
-(* An exitable loop, counting down, using machine integers. *)
+(* An exitable loop, counting down]. The loop can be broken via an early
+   exit: the loop body receives two continuations [continue] and [break] and
+   must invoke either [continue s] or [break s x]. An invocation of the loop
+   body takes the form [body _j s continue break]. *)
 
 Section XIterDown.
 Context {S A : Type}.
 Implicit Types s : S.
-
-(* The lower bound. *)
-Variable _i : int.
-
-(* The loop body: [body _j s continue break]. *)
-Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
-
-(* The code. *)
-Section Code.
 Open Scope uint63.
 
-Equations xiter_down_aux _j s : S * outcome A
-by wf _j (rilt _i) :=
-xiter_down_aux _j s with inspect (_j =? _i) => {
-| inspected true :=
+Fixpoint xiter_down_aux _i _k s
+  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W)
+  (ACC : Acc (rilt _i) _k)
+: S * outcome A :=
+  IFC _k =? _i THEN λ _,
     let continue s := (s, Continue) in
     let break s x := (s, Break x) in
-    body _j s continue break
-| inspected false :=
-    let continue s := xiter_down_aux (_j - 1) s in
+    body _k s continue break
+  ELSE λ Hki,
+    let continue s := xiter_down_aux _i (_k - 1) s (@body)
+                        (Acc_rilt_n_minus_1 _k _i ACC Hki) in
     let break s x := (s, Break x) in
-    body _j s continue break
-}.
+    body _k s continue break.
 
-End Code.
+Definition xiter_down _k _i s body :=
+  if _k ≤? _i then (s, Continue)
+  else xiter_down_aux _i (_k - 1) s body (Wf_rilt _i (_k - 1)).
+
 End XIterDown.
 
 (* A specification of [xiter_down_aux]. *)
@@ -971,32 +969,27 @@ End XIterDown.
 Lemma wp_xiter_down_aux {S A}
   (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :
   ∀IntU _i i ,
-  ∀IntU _j j ,
-  i ≤ j →
-  XITER_Z i (j + 1) Down
+  ∀IntU _k k ,
+  i ≤ k →
+  ∀ ACC,
+  XITER_Z i (k + 1) Down
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_down_aux _i (@body) _j s) Q).
+    (λ s Q, wp (xiter_down_aux _i _k s (@body) ACC) Q).
 Proof.
-  intros. XITER.
-  funelim (xiter_down_aux _i (@body) _j s); cleanup; clear Heqcall;
-  intros; isBool_magic; z.
-  (* Case [j = i]. *)
-  { subst j. eapply Hbody; pack; tc; wp_ret; eauto. }
-  (* Case [j ≠ i]. *)
-  { rename H into IH. eapply Hbody; pack; tc.
-    + wp_op IH shadowing: s. assumption.
+  intros _i i ? ?.
+  by well-founded induction on _k along (rilt _i).
+  intros. XITER. expand_ITER in IH.
+  destruct ACC; simpl.
+  wp_if.
+  (* Case [k = i]. *)
+  { eapply Hbody; pack; tc; wp_ret. }
+  (* Case [k ≠ i]. *)
+  { eapply Hbody; pack; tc.
+    (* Normal continuation. *)
+    + wp_op IH introducing: (s' & out). z. eauto.
+    (* Exit continuation. *)
     + wp_ret. eauto. }
 Qed.
-
-Section Code.
-Open Scope uint63.
-
-Definition xiter_down {S A} _k _i (s : S)
-  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W) :=
-  if _k ≤? _i then (s, Continue)
-  else xiter_down_aux _i (@body) (_k - 1) s.
-
-End Code.
 
 (* A specification of [xiter_down]. *)
 
@@ -1009,13 +1002,13 @@ Lemma wp_xiter_down {S A}
     (λ s Q, wp (xiter_down _k _i s (@body)) Q).
 Proof.
   intros. XITER. unfold xiter_down.
-  wp_if; z.
+  wp_if.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
   { wp_op wp_xiter_down_aux.
     clear dependent s. wp_intro (s & out).
-    eauto. }
+    z. eauto. }
 Qed.
 
 (* The tactic [wp_xiter_down_body _j j s] should be used upon entry into
