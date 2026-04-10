@@ -975,9 +975,7 @@ Lemma simple_blit_aux_eq _n :
     do b ← set b _j x ;
     simple_blit a (_i + 1) b (_j + 1) (_n - 1).
 Proof.
-  (* By well-founded induction on [_n]. *)
-  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
-    (* or: induction _n using (well_founded_ind ilt_wf). *)
+  by well-founded induction on _n along ilt.
   (* The following line follows Leroy's paper, page 2, top right: *)
   intros; destruct ACC; simpl.
   (* Then Xavier's method falls short! [destruct] does not work. *)
@@ -1002,9 +1000,7 @@ Lemma wp_simple_blit :
   ∀Int _n n,
   blit_spec (λ a _i b _j, simple_blit a _i b _j _n) n.
 Proof.
-  (* By well-founded induction on [_n]. *)
-  intro _n.
-  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  by well-founded induction on _n along ilt.
   unfold blit_spec, simple_blit. intros. arrays.
   rewrite simple_blit_aux_eq.
   wp_if.
@@ -1045,9 +1041,7 @@ Lemma wp_equations_blit :
   ∀Int _n n,
   blit_spec (λ a _i b _j, equations_blit a _i b _j _n) n.
 Proof.
-  (* By well-founded induction on [_n]. *)
-  intro _n.
-  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  by well-founded induction on _n along ilt.
   unfold blit_spec. intros. arrays.
   autorewrite with equations_blit.
   wp_if.
@@ -1166,9 +1160,7 @@ Lemma wp_static_blit_under delta :
   unsigned (Z.of_nat (lo + delta)) →
   blit_spec (λ a _i b _j, static_blit_under a _i b _j _n lo delta) n.
 Proof.
-  (* By well-founded induction on [delta]. *)
-  pattern delta.
-  eapply (well_founded_ind lt_wf). clear delta. intros delta IH. intros.
+  by well-founded induction on delta along lt.
   unfold blit_spec. intros.
   autorewrite with static_blit_under.
   destruct (delta <=? 1)%nat eqn:Heq.
@@ -1257,7 +1249,7 @@ Lemma blit_aux_eq _n :
     do b ← blitN a _i b _j ;
     blit a (_i + Ni) b (_j + Ni) (_n - Ni).
 Proof.
-  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  by well-founded induction on _n along ilt.
   intros; destruct ACC; simpl. unfold Ni.
   eapply IFC_if; [ eauto |]. intro.
   setoid_rewrite IH; eauto 2 with lia.
@@ -1271,9 +1263,7 @@ Lemma wp_blit :
   ∀Int _n n,
   blit_spec (λ a _i b _j, blit a _i b _j _n) n.
 Proof.
-  (* By well-founded induction on [_n]. *)
-  intro _n.
-  pattern _n. eapply (well_founded_ind ilt_wf). clear _n. intros _n IH.
+  by well-founded induction on _n along ilt.
   unfold blit_spec, blit. intros. arrays. lengths.
   rewrite blit_aux_eq.
   wp_if.
