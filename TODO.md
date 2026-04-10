@@ -36,6 +36,9 @@
 
 * Why is `of_to_Z` an axiom in the stdlib?
 
+* Instead of `blit_underN`, one could just use `simple_blit`.
+  Try it and benchmark.
+
 # OCaml Extraction
 
 * Set up extraction to use defensive, non-persistent arrays.
