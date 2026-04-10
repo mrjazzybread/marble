@@ -72,3 +72,30 @@ Ltac cleanup :=
   match goal with h: sigmaI _ _ _ = sigmaI _ _ _ |- _ =>
     clear h
   end.
+
+(* I can never remember how to perform well-founded induction, so here is
+   a recipe. The goal must be of the form [x ⊢ P], where the variable [x]
+   has already been introduced. *)
+
+(* The type class [WellFounded], which is defined by Equations, is used
+   to automatically find a proof of well-foundedness of the relation [R]. *)
+
+Tactic Notation "by" "well-founded" "induction" "on" ident(x) "along" constr(R) :=
+  let Hwf := fresh in
+  assert (Hwf: WellFounded R) by eauto with typeclass_instances;
+  induction x as [ x IH ] using (well_founded_ind Hwf);
+  clear Hwf.
+
+(* [induction x as [ x IH ] using (well_founded_ind Hwf)]
+   is equivalent to:
+
+  (* Put the goal in the form [P x]. *)
+  pattern x;
+  (* Apply well-founded induction *)
+  eapply (well_founded_ind Hwf);
+  (* Clean up. *)
+  clear x;
+  (* Introduce [x] and the induction hypothesis. *)
+  intros x IH.
+
+ *)
