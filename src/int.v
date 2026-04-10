@@ -1292,13 +1292,13 @@ Proof.
   intros. XITER. expand_ITER in IH.
   destruct ACC; simpl.
   wp_if.
-  (* Case [a < b]. *)
+  (* Case [i < k]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
     + wp_op IH introducing: (s' & out). z. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
-  (* Case [b ≤ a]. *)
+  (* Case [k ≤ i]. *)
   { wp_ret. }
 Qed.
 
@@ -1323,62 +1323,53 @@ Tactic Notation "wp_xiter_up_body"
 
 (* A simplified exitable loop with a state of type [unit]. *)
 
+(* The calling convention of the body is [body _i continue break]. *)
+
 Section UXIterUp.
 Context {A : Type}.
-
-(* The upper bound. *)
-Variable _k : int.
-
-(* The loop body: [body _i continue break]. *)
-Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
-
-(* The code. *)
-Section Code.
 Open Scope uint63.
 
-Equations uxiter_up_aux _i : outcome A
-by wf _i igt :=
-uxiter_up_aux _i
-with inspect (_i <? _k) => {
-| inspected true :=
-    let continue '() := uxiter_up_aux (_i + 1) in
+Fixpoint uxiter_up_aux _i _k
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W)
+  (ACC : Acc igt _i)
+: outcome A :=
+  IFC _i <? _k THEN λ Hik,
+    let continue '() := uxiter_up_aux (_i + 1) _k (@body)
+                         (Acc_igt_n_plus_1 _i _k ACC Hik) in
     let break x := Break x in
     body _i continue break
-| inspected false :=
-    Continue
-}.
+  ELSE λ _,
+    Continue.
 
-End Code.
+Definition uxiter_up _i _k body :=
+  uxiter_up_aux _i _k body (Wf_igt _i).
+
 End UXIterUp.
 
-(* A specification of [uxiter_up_aux]. *)
+(* The specification of [uxiter_up_aux]. *)
 
-Lemma wp_uxiter_up_aux {A} (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
+Lemma wp_uxiter_up_aux {A}
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntU _i i ,
   ∀IntU _k k ,
+  ∀ ACC,
   UXITER_Z i k Up
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_up_aux _k (@body) _i) Q).
+    (λ Q, wp (uxiter_up_aux _i _k (@body) ACC) Q).
 Proof.
-  (* The spec is quite complex, but the proof is very simple. *)
-  intros. UXITER.
-  funelim (uxiter_up_aux _k (@body) _i); cleanup; clear Heqcall; intros;
-  isBool_magic; z.
-  (* Case [a < b]. *)
+  by well-founded induction on _i along igt.
+  intros. UXITER. expand_ITER in IH.
+  destruct ACC; simpl.
+  wp_if.
+  (* Case [i < k]. *)
   { eapply Hbody; pack; tc; intros.
     (* Normal continuation. *)
-    + wp_op (H()) introducing: out. eauto.
+    + wp_op IH introducing: out. z. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
-  (* Case [b ≤ a]. *)
+  (* Case [k ≤ i]. *)
   { wp_ret. }
 Qed.
-
-(* [uxiter_up] with reordered parameters. *)
-
-Definition uxiter_up {A} _i _k
-  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
-  uxiter_up_aux _k (@body) _i.
 
 (* The specification of [uxiter_up]. *)
 
