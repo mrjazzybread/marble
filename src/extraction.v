@@ -24,4 +24,4 @@ Extraction Inline simple_blit.
 
 From marble Require Import sort.
 
-Recursive Extraction sort.sort.
+Recursive Extraction array.equations_blit array.simple_blit array.blit sort.sort.
