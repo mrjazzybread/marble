@@ -820,14 +820,12 @@ Local Ltac wp_intro_hook Hx ::=
 
 (* A loop, counting down, using machine integers. *)
 
-(* [iter_down _k _i s body] applies the loop body [body] to every machine
+(* [iter_down _i _k s body] applies the loop body [body] to every machine
    integer from [_k], excluded, down to [_i], included. A state of type [S]
    is carried, whose initial value is [s]. *)
 
-(* [iter_down_aux _k _i s body] applies the loop body [body] to every
+(* [iter_down_aux _i _k s body] applies the loop body [body] to every
    machine integer from [_k], INCLUDED, down to [_i], included. *)
-
-(* TODO exchange _k and _i in the parameters of [iter_down]? *)
 
 Section IterDown.
 Context {S : Type}.
@@ -852,17 +850,17 @@ Open Scope uint63.
    be unnatural and inconvenient to propose a specification that allows
    underflow to take place. *)
 
-Fixpoint iter_down_aux _k _i s body (ACC : Acc (rilt _i) _k) :=
+Fixpoint iter_down_aux _i _k s body (ACC : Acc (rilt _i) _k) :=
   IFC _k =? _i THEN λ _,
     do s ← body _k s ;
     s
   ELSE λ Hki,
     do s ← body _k s ;
-    iter_down_aux (_k - 1) _i s body (Acc_rilt_n_minus_1 _k _i ACC Hki).
+    iter_down_aux _i (_k - 1) s body (Acc_rilt_n_minus_1 _k _i ACC Hki).
 
-Definition iter_down _k _i s body :=
+Definition iter_down _i _k s body :=
   if _k ≤? _i then s
-  else iter_down_aux (_k - 1) _i s body (Wf_rilt _i (_k - 1)).
+  else iter_down_aux _i (_k - 1) s body (Wf_rilt _i (_k - 1)).
 
 End IterDown.
 
@@ -879,7 +877,7 @@ Lemma wp_iter_down_aux {S} (body : int → S → S) :
   ∀ ACC,
   ITER_Z i (k + 1) Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_aux _k _i s body ACC) Q).
+    (λ s Q, wp (iter_down_aux _i _k s body ACC) Q).
 Proof.
   intros _i i ? ?.
   by well-founded induction on _k along (rilt _i).
@@ -902,7 +900,7 @@ Lemma wp_iter_down {S} (body : int → S → S) :
   ∀IntU _k k ,
   ITER_Z i k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down _k _i s body) Q).
+    (λ s Q, wp (iter_down _i _k s body) Q).
 Proof.
   intros. ITER. unfold iter_down.
   wp_if.
@@ -950,7 +948,7 @@ Fixpoint xiter_down_aux _i _k s
     let break s x := (s, Break x) in
     body _k s continue break.
 
-Definition xiter_down _k _i s body :=
+Definition xiter_down _i _k s body :=
   if _k ≤? _i then (s, Continue)
   else xiter_down_aux _i (_k - 1) s body (Wf_rilt _i (_k - 1)).
 
@@ -991,7 +989,7 @@ Lemma wp_xiter_down {S A}
   ∀IntU _k k ,
   XITER_Z i k Down
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_down _k _i s (@body)) Q).
+    (λ s Q, wp (xiter_down _i _k s (@body)) Q).
 Proof.
   intros. XITER. unfold xiter_down.
   wp_if.
@@ -1038,7 +1036,7 @@ Fixpoint uxiter_down_aux _i _k
     let break x := Break x in
     body _k continue break.
 
-Definition uxiter_down _k _i
+Definition uxiter_down _i _k
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
   if _k ≤? _i then Continue
   else uxiter_down_aux _i (_k - 1) (@body) (Wf_rilt _i (_k - 1)).
@@ -1080,7 +1078,7 @@ Lemma wp_uxiter_down {A}
   ∀IntU _k k ,
   UXITER_Z i k Down
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_down _k _i (@body)) Q).
+    (λ Q, wp (uxiter_down _i _k (@body)) Q).
 Proof.
   intros. UXITER. unfold uxiter_down.
   wp_if.

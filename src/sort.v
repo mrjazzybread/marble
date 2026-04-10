@@ -654,7 +654,7 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
     do xi ← get _src (_srcofs + _i) ;
     do (_dst, out) ← (
       (* Let [j] scan the sorted part of the destination segment, downwards. *)
-      int.xiter_down (_dstofs + _i) _dstofs _dst @@
+      int.xiter_down _dstofs (_dstofs + _i) _dst @@
       λ _ _j _dst continue break ,
         (* Read an element [xj] at offset [j] in the destination segment.
            If [xj ≥ xi] holds then move [xj] upwards by one position and
@@ -876,7 +876,7 @@ Definition isortto' a _srcofs _dstofs _n :=
   int.iter_up 0 _n a @@ λ _i a ,
     do xi ← get a (_srcofs + _i) ;
     do (a, out) ← (
-      int.xiter_down (_dstofs + _i) _dstofs a @@
+      int.xiter_down _dstofs (_dstofs + _i) a @@
       λ _ _j a continue break ,
         do xj ← get a _j ;
         if (xj ≤? xi)%element then

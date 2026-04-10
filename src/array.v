@@ -398,9 +398,9 @@ Implicit Types xs : list A.
 (* The code. *)
 
 Definition segment_to_list a _i _k :=
-  (* For [_j] ranging from [_k] down to [_i],
+  (* For [_j] ranging from [_k] (excluded) down to [_i],
      with running state [xs], initially empty, *)
-  int.iter_down _k _i [] @@ λ _j xs,
+  int.iter_down _i _k [] @@ λ _j xs,
   (* Read the [_j]-th element of the array [a], *)
   do x ← a.[_j] ;
   (* and prepend it in front of [xs]. *)
@@ -794,14 +794,18 @@ Qed.
 
 (* Some tests of [to_list . of_list]. *)
 
-(* This test shows that [compute] is unable to properly evaluate
-   a call to [int.iter_down_aux]. I don't know whether this is normal. *)
+(* This test shows that [compute] is able to evaluate a call to
+   [iter_down_aux]. *)
 Goal to_list (of_list [1;2;3]) = [1;2;3].
-Proof. compute. Abort.
+Proof. compute. reflexivity. Qed.
 
 (* This test shows that [vm_compute] works as desired. *)
 Goal to_list (of_list [1;2;3]) = [1;2;3].
 Proof. vm_compute. reflexivity. Qed.
+
+(* This test shows that [lazy] works as desired. *)
+Goal to_list (of_list [1;2;3]) = [1;2;3].
+Proof. lazy. reflexivity. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1296,7 +1300,7 @@ Definition blit' a _i _j _n :=
     a
   else
     do _delta ← _j - _i ;
-    int.iter_down (_i + _n) _i a @@ λ _k a,
+    int.iter_down _i (_i + _n) a @@ λ _k a,
     do x ← get a _k ;
     do a ← set a (_k + _delta) x ;
     a.
