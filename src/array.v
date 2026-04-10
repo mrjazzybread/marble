@@ -960,6 +960,8 @@ Definition simple_blit a _i b _j _n :=
    [simple_blit_aux a _i b _j _n ACC] always returns the same
    result, which can be expressed in terms of [simple_blit]. *)
 
+(* This is a proof irrelevance result. *)
+
 (* As an immediate consequence of this lemma, [simple_blit]
    satisfies the desired fixed point equation. *)
 
