@@ -2,7 +2,7 @@
 
 ## Short term
 
-* Treat `blit'` in the same as `blit`.
+* Treat `blit'` in the same way as `blit`.
 
 * Get rid of Equations everywhere:
   define every function using structural recursion
@@ -36,8 +36,9 @@
 
 * Why is `of_to_Z` an axiom in the stdlib?
 
-* Instead of `blit_underN`, one could just use `simple_blit`.
-  Try it and benchmark.
+* In `blit`, instead of calling `blit_underN` in the base case, one could just
+  use `simple_blit`. Try it and benchmark `sort`, where this could make a
+  difference.
 
 # OCaml Extraction
 
