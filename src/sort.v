@@ -2088,11 +2088,11 @@ Proof.
   (* Case [n ≤ 4]. *)
   { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
     (* Subcase [n = 4]. *)
-    { wp_op wp_sortto_segment_4; last wp_shadow _dst. intro_sortto'_post. }
+    { wp_op wp_sortto_segment_4 shadowing: _dst. intro_sortto'_post. }
     (* Subcase [n = 3]. *)
-    { wp_op wp_sortto_segment_3; last wp_shadow _dst. intro_sortto'_post. }
+    { wp_op wp_sortto_segment_3 shadowing: _dst. intro_sortto'_post. }
     (* Subcase [n = 2]. *)
-    { wp_op wp_sortto_segment_2; last wp_shadow _dst. intro_sortto'_post. }
+    { wp_op wp_sortto_segment_2 shadowing: _dst. intro_sortto'_post. }
   }
   (* Case [4 < n]. We actually need only [4 ≤ n]. *)
   {
@@ -2234,13 +2234,13 @@ Proof.
   (* Case [n ≤ 4]. *)
   { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
     (* Subcase [n = 4]. *)
-    { wp_op wp_sortto_segment_4; last wp_shadow _dst.
+    { wp_op wp_sortto_segment_4 shadowing: _dst.
       wp_ret. intro_sortto_post. }
     (* Subcase [n = 3]. *)
-    { wp_op wp_sortto_segment_3; last wp_shadow _dst.
+    { wp_op wp_sortto_segment_3 shadowing: _dst.
       wp_ret. intro_sortto_post. }
     (* Subcase [n = 2]. *)
-    { wp_op wp_sortto_segment_2; last wp_shadow _dst.
+    { wp_op wp_sortto_segment_2 shadowing: _dst.
       wp_ret. intro_sortto_post. }
   }
   (* Case [4 < n]. We actually need only [4 ≤ n]. *)
@@ -2357,13 +2357,13 @@ Proof.
   (* Case [n ≤ 4]. *)
   { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
     (* Subcase [n = 4]. *)
-    { wp_op wp_sortto_segment_4; last wp_shadow a.
+    { wp_op wp_sortto_segment_4 shadowing: a.
       wp_ret. intro_sort_seg_post. }
     (* Subcase [n = 3]. *)
-    { wp_op wp_sortto_segment_3; last wp_shadow a.
+    { wp_op wp_sortto_segment_3 shadowing: a.
       wp_ret. intro_sort_seg_post. }
     (* Subcase [n = 2]. *)
-    { wp_op wp_sortto_segment_2; last wp_shadow a.
+    { wp_op wp_sortto_segment_2 shadowing: a.
       wp_ret. intro_sort_seg_post. }
   }
   (* Case [cutoff < n]. We actually need only [2 ≤ n]. *)

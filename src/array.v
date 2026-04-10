@@ -1013,7 +1013,7 @@ Proof.
   (* Step case. *)
   { wp_get x.
     wp_set.
-    wp_op IH; last wp_shadow b.
+    wp_op IH shadowing: b.
     isArray. }
 Qed.
 
@@ -1056,7 +1056,7 @@ Proof.
   (* Step case. *)
   { wp_get x.
     wp_set.
-    wp_op IH; last wp_shadow b.
+    wp_op IH shadowing: b.
     isArray. }
 Qed.
 
@@ -1101,7 +1101,7 @@ Proof.
   (* Inductive case. *)
   { wp_get x.
     wp_set.
-    wp_op IHn; last wp_shadow b; wp_last Hpost; z. (* a bit slow *)
+    wp_op IHn shadowing: b; wp_last Hpost; z. (* a bit slow *)
     (* Clean up Hpost. *)
     subst x. rewrite singleton_is_seg in Hpost by lia.
     isArray. (* a bit slow *) }
@@ -1175,7 +1175,7 @@ Proof.
   (* Case [delta ≤ 1]. In fact, [delta] cannot be zero, as [n] lies
      within the semi-open interval of [lo] to [lo + delta]. So, we
      must in fact have [delta = 1]. *)
-  { wp_op wp_static_blit; last wp_shadow b.
+  { wp_op wp_static_blit shadowing: b.
     isArray. }
   (* Case [1 < delta]. *)
   { wp_if; eapply IH; tc. }
@@ -1278,12 +1278,12 @@ Proof.
   rewrite blit_aux_eq.
   wp_if.
   (* Base case. *)
-  { wp_op wp_blit_underN; last wp_shadow b. }
+  { wp_op wp_blit_underN shadowing: b. }
   (* Step case. *)
   { unfold Ni.
     assert (ilt (_n - Ni) _n) by eauto using ilt_n_minus_N with lia.
     wp_op wp_blitN; unfold NZ; tc; last wp_shadow b.
-    wp_op IH; last wp_shadow b. wp_last Hb.
+    wp_op IH shadowing: b. wp_last Hb.
     seg_seg in Hb.
     isArray. }
 Qed.
@@ -1898,7 +1898,7 @@ Lemma wp_segment_iteri a xs f :
     (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
   intros. arrays. ITER. unfold segment_iteri.
-  wp_op wp_iter_up; last wp_intro ?.
+  wp_op wp_iter_up introducing: ?.
   (* The loop body. *)
   { clear dependent s. wp_iter_up_body _j j s.
     wp_get x. }
@@ -1915,7 +1915,7 @@ Lemma wp_iteri a xs f :
 Proof.
   intros. arrays. ITER. unfold iteri.
   wp_length _n.
-  wp_op wp_segment_iteri; last wp_intro ?.
+  wp_op wp_segment_iteri introducing: ?.
 Qed.
 
 End Iteri.
