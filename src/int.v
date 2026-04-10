@@ -810,14 +810,6 @@ Hint Rewrite Z_of_nat_S : uz z.
 
 (* TODO I would like to split this file here *)
 
-(* TODO remove *)
-Local Obligation Tactic :=
-  simpl in *;
-  Tactics.program_simplify;
-  CoreTactics.equations_simpl;
-  try Tactics.program_solve_wf;
-  eauto 3 with lia.
-
 Local Ltac wp_intro_hook Hx ::=
   (* Perform arithmetic simplification. *)
   z in Hx;
@@ -1026,33 +1018,31 @@ Tactic Notation "wp_xiter_down_body"
 
 (* A simplified exitable loop with a state of type [unit]. *)
 
+(* The calling convention of the body is [body _i continue break]. *)
+
 Section UXIterDown.
 Context {A : Type}.
-
-(* The lower bound. *)
-Variable _i : int.
-
-(* The loop body: [body _j continue break]. *)
-Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
-
-(* The code. *)
-Section Code.
 Open Scope uint63.
 
-Equations uxiter_down_aux _j : outcome A
-by wf _j (rilt _i) :=
-uxiter_down_aux _j with inspect (_j =? _i) => {
-| inspected true :=
+Fixpoint uxiter_down_aux _i _k
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W)
+  (ACC : Acc (rilt _i) _k)
+: outcome A :=
+  IFC _k =? _i THEN λ _,
     let continue '() := Continue in
     let break x := Break x in
-    body _j continue break
-| inspected false :=
-    let continue '() := uxiter_down_aux (_j - 1) in
+    body _k continue break
+  ELSE λ Hki,
+    let continue '() := uxiter_down_aux _i (_k - 1) (@body)
+                         (Acc_rilt_n_minus_1 _k _i ACC Hki) in
     let break x := Break x in
-    body _j continue break
-}.
+    body _k continue break.
 
-End Code.
+Definition uxiter_down _k _i
+  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
+  if _k ≤? _i then Continue
+  else uxiter_down_aux _i (_k - 1) (@body) (Wf_rilt _i (_k - 1)).
+
 End UXIterDown.
 
 (* A specification of [uxiter_down_aux]. *)
@@ -1060,32 +1050,27 @@ End UXIterDown.
 Lemma wp_uxiter_down_aux {A}
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :
   ∀IntU _i i ,
-  ∀IntU _j j ,
-  i ≤ j →
-  UXITER_Z i (j + 1) Down
+  ∀IntU _k k ,
+  i ≤ k →
+  ∀ ACC,
+  UXITER_Z i (k + 1) Down
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_down_aux _i (@body) _j) Q).
+    (λ Q, wp (uxiter_down_aux _i _k (@body) ACC) Q).
 Proof.
-  intros. UXITER.
-  funelim (uxiter_down_aux _i (@body) _j); cleanup; clear Heqcall;
-  intros; isBool_magic; z.
-  (* Case [j = i]. *)
-  { subst j. eapply Hbody; pack; tc; wp_ret; eauto. }
-  (* Case [j ≠ i]. *)
-  { rename H into IH. eapply Hbody; pack; tc.
-    + wp_op (IH()) introducing: out. eauto.
+  intros _i i ? ?.
+  by well-founded induction on _k along (rilt _i).
+  intros. UXITER. expand_ITER in IH.
+  destruct ACC; simpl.
+  wp_if.
+  (* Case [k = i]. *)
+  { eapply Hbody; pack; tc; wp_ret. }
+  (* Case [k ≠ i]. *)
+  { eapply Hbody; pack; tc; intros.
+    (* Normal continuation. *)
+    + wp_op IH introducing: out. z. eauto.
+    (* Exit continuation. *)
     + wp_ret. eauto. }
 Qed.
-
-Section Code.
-Open Scope uint63.
-
-Definition uxiter_down {A} _k _i
-  (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
-  if _k ≤? _i then Continue
-  else uxiter_down_aux _i (@body) (_k - 1).
-
-End Code.
 
 (* A specification of [uxiter_down]. *)
 
@@ -1098,12 +1083,12 @@ Lemma wp_uxiter_down {A}
     (λ Q, wp (uxiter_down _k _i (@body)) Q).
 Proof.
   intros. UXITER. unfold uxiter_down.
-  wp_if; z.
+  wp_if.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
   { wp_op wp_uxiter_down_aux; wp_intro out.
-    eauto. }
+    z. eauto. }
 Qed.
 
 (* The tactic [wp_uxiter_down_body _j j] should be used upon entry into
