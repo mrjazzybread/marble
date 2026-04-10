@@ -1173,7 +1173,12 @@ Fixpoint iter_up_aux _i _k s body (ACC : Acc igt _i) :=
 Definition iter_up _i _k s body :=
   iter_up_aux _i _k s body (Wf_igt _i).
 
-(* The proof irrelevance and fixed point lemma. *)
+(* The proof irrelevance and fixed point lemmas. *)
+
+(* I keep these lemmas for the record, but one could establish the
+   Hoare-style reasoning rules [wp_iter_up_aux] and [wp_iter_up] without
+   using them. See [xiter_up], where the reasoning rules are established
+   directly, without proving proof irrelevance first. *)
 
 Lemma iter_up_aux_eq _i : ∀ _k s body (ACC : Acc igt _i),
   iter_up_aux _i _k s body ACC =
@@ -1183,11 +1188,21 @@ Lemma iter_up_aux_eq _i : ∀ _k s body (ACC : Acc igt _i),
   else
     s.
 Proof.
-  (* By well-founded induction on [_i]. *)
-  pattern _i. eapply (well_founded_ind igt_wf). clear _i. intros _i IH.
+  by well-founded induction on _i along igt.
   intros; destruct ACC; simpl.
   eapply IFC_if; [| eauto ]. intro.
   setoid_rewrite IH; eauto 2 with lia.
+Qed.
+
+Lemma iter_up_eq _i _k s body :
+  iter_up _i _k s body =
+  if _i <? _k then
+    do s ← body _i s ;
+    iter_up (_i + 1) _k s body
+  else
+    s.
+Proof.
+  unfold iter_up. eapply iter_up_aux_eq.
 Qed.
 
 End IterUp.
@@ -1201,9 +1216,7 @@ Lemma wp_iter_up {S} (body : int → S → S) :
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_up _i _k s body) Q).
 Proof.
-  (* By well-founded induction on [_i]. *)
-  intro _i.
-  pattern _i. eapply (well_founded_ind igt_wf). clear _i. intros _i IH.
+  by well-founded induction on _i along igt.
   intros. ITER. expand_ITER in IH.
   unfold iter_up. rewrite iter_up_aux_eq.
   wp_if.
@@ -1254,6 +1267,15 @@ Definition xiter_up _i _k s body :=
   xiter_up_aux _i _k s body (Wf_igt _i).
 
 End XiterUp.
+
+(* We do not establish a proof irrelevance / fixed point lemma here,
+   because that would be difficult: we would need to either use the
+   axiom of functional extensionality or make a hypothesis about
+   [body]. The difficulty is that the recursive call appears nested
+   inside the continuation [continue], that is, under a lambda. *)
+
+(* Instead, we proceed directly to the proof of Hoare-style reasoning
+   rules for [xiter_up_aux] and [xiter_up]. *)
 
 (* The specification of [xiter_up_aux]. *)
 
