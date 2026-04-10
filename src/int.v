@@ -645,6 +645,28 @@ Qed.
 Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
   wf_guard 32 (rilt_wf _a).
 
+(* The following lemmas are useful in direct definitions of recursive
+   functions by structural induction on a proof of accessibility. *)
+
+Lemma Acc_rilt_n_minus_1 _k _i (pf : Acc (rilt _i) _k) :
+  (_k =? _i)%uint63 = false →
+  Acc (rilt _i) (_k - 1)%uint63.
+Proof.
+  intros. destruct pf as [pf]. apply pf.
+  abstract (unfold rilt, ilt; lia).
+Defined. (* Defined, not Qed. *)
+
+Lemma rilt_n_minus_1 :
+  ∀IntU _k k,
+  ∀IntU _i i,
+  k ≠ i →
+  rilt _i (_k - 1) _k.
+Proof.
+  intros. rewrite isInt_def in *. unfold rilt, ilt. lia.
+Qed.
+
+Hint Resolve rilt_n_minus_1 : lia.
+
 (* [igt] *)
 
 Definition igt _i _j :=
@@ -788,6 +810,7 @@ Hint Rewrite Z_of_nat_S : uz z.
 
 (* TODO I would like to split this file here *)
 
+(* TODO remove *)
 Local Obligation Tactic :=
   simpl in *;
   Tactics.program_simplify;
@@ -805,121 +828,82 @@ Local Ltac wp_intro_hook Hx ::=
 
 (* A loop, counting down, using machine integers. *)
 
+(* [iter_down _k _i s body] applies the loop body [body] to every machine
+   integer from [_k], excluded, down to [_i], included. A state of type [S]
+   is carried, whose initial value is [s]. *)
+
+(* [iter_down_aux _k _i s body] applies the loop body [body] to every
+   machine integer from [_k], INCLUDED, down to [_i], included. *)
+
+(* TODO exchange _k and _i in the parameters of [iter_down]? *)
+
 Section IterDown.
 Context {S : Type}.
 Implicit Types s : S.
+Implicit Types body : int → S → S.
+Open Scope uint63.
 
-Variable _i : int.
-Variable body : int → S → S.
-
-(* [iter_down_aux _j s] applies the loop body [body] to every machine
-   integer from [_j], included, down to [_i], included. A state of type [S]
-   is carried, whose initial value is [s]. *)
-
-(* We are careful to test the condition [_j =? _i] before decrementing [_j].
+(* We are careful to test the condition [_k =? _i] before decrementing [_k].
    Because our semi-open intervals are closed at the bottom end, we cannot
-   first decrement and then test the condition [_j <? _i]. If [_i] is zero
+   first decrement and then test the condition [_k <? _i]. If [_i] is zero
    then this would underflow. *)
 
-(* We use Equations to more easily define [iter_down_aux] by well-founded
-   recursion over the loop counter [_j]. The somewhat strange [with] syntax
-   is a way of expressing the test [_j =? _i]. The use of [inspect] and
-   [inspected] is an idiosyncratic way of making the outcome of the test
-   visible at the logical level in the branches. In the second branch, the
-   fact that [_j =? _i] is false is needed in order to prove that [_j - 1]
-   is less than [_j], a fact which itself is required by the termination
-   argument. *)
+(* We define [iter_down_aux] by well-founded recursion over the index [_k].
+   In the second branch, the fact that [_k =? _i] is false is needed in
+   order to prove that [_k - 1] is less than [_k], a fact which itself is
+   required by the termination argument. *)
 
 (* It is worth noting that the termination argument does not need the
-   hypothesis [φ _i ≤ φ _j]. Even in the absence of this hypothesis,
+   hypothesis [φ _i ≤ φ _k]. Even in the absence of this hypothesis,
    termination is guaranteed, thanks to underflow. This said, later on, when
-   we give a specification of [iter_down_aux], we assume [a ≤ i]. It would
+   we give a specification of [iter_down_aux], we assume [i ≤ k]. It would
    be unnatural and inconvenient to propose a specification that allows
    underflow to take place. *)
 
-Section Code.
-Open Scope uint63.
+Fixpoint iter_down_aux _k _i s body (ACC : Acc (rilt _i) _k) :=
+  IFC _k =? _i THEN λ _,
+    do s ← body _k s ;
+    s
+  ELSE λ Hki,
+    do s ← body _k s ;
+    iter_down_aux (_k - 1) _i s body (Acc_rilt_n_minus_1 _k _i ACC Hki).
 
-Equations iter_down_aux _j s : S
-by wf _j (rilt _i) :=
-iter_down_aux _j s with inspect (_j =? _i) => {
-| inspected true :=
-    do s ← body _j s ;
-    s ;
-| inspected false :=
-    do s ← body _j s ;
-    iter_down_aux (_j - 1) s
-}.
-
-(* For the record, here is a direct definition of [iter_down_aux], which
-   does not use Equations. At extraction time, this definition produces
-   slightly better-looking OCaml code. However, reasoning about it is more
-   difficult; we lose the fixed point equation and the induction principle
-   produced by Equations, which are used via the tactic [funelim]. *)
-Goal int → S → S.
-Proof.
-  eapply (Fix (Wf_rilt _i) (λ _, S → S)). intros _j self s.
-  destruct (_j =? _i) eqn:Heq.
-  + refine (
-      do s ← body _j s ;
-      s
-    ).
-  + refine (
-      do s ← body _j s ;
-      self (_j - 1) _ s
-    ).
-    eauto using safe_decrement_relative.
-Defined.
-
-End Code.
+Definition iter_down _k _i s body :=
+  if _k ≤? _i then s
+  else iter_down_aux (_k - 1) _i s body (Wf_rilt _i (_k - 1)).
 
 End IterDown.
 
 (* A specification of [iter_down_aux]. *)
 
-(* This specification requires [i ≤ j]: that is, the start index [j] must
-   be greater than or equal to the end index [i]. This hypothesis is
+(* This specification requires [i ≤ k]: that is, the top index [k] must
+   be greater than or equal to the bottom index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
 Lemma wp_iter_down_aux {S} (body : int → S → S) :
   ∀IntU _i i ,
-  ∀IntU _j j ,
-  i ≤ j →
-  ITER_Z
-    i (j + 1) Down
+  ∀IntU _k k ,
+  i ≤ k →
+  ∀ ACC,
+  ITER_Z i (k + 1) Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_aux _i body _j s) Q).
+    (λ s Q, wp (iter_down_aux _k _i s body ACC) Q).
 Proof.
-  intros. ITER.
-  funelim (iter_down_aux _i body _j s); cleanup; clear Heqcall;
-  intros; isBool_magic; z.
-  (* Case [j = i]. *)
-  { subst j.
-    wp_op Hstep shadowing: s.
+  intros _i i ? ?.
+  by well-founded induction on _k along (rilt _i).
+  intros. ITER. expand_ITER in IH.
+  intros; destruct ACC; simpl.
+  wp_if.
+  (* Case [k = i]. *)
+  { wp_op Hstep shadowing: s.
     wp_ret. }
-  (* Case [j ≠ i]. *)
-  { rename H into IH.
-    wp_op Hstep shadowing: s.
+  (* Case [k ≠ i]. *)
+  { wp_op Hstep shadowing: s.
     wp_op IH shadowing: s.
-    eauto. }
+    z. eauto. }
 Qed.
 
-(* [iter_down _k _i s body] applies the loop body [body] to every machine
-   integer from [_k], excluded, down to [_i], included. A state of type [S]
-   is carried, whose initial value is [s]. *)
-
-Section Code.
-Open Scope uint63.
-
-Definition iter_down {S} _k _i (s : S) body :=
-  if _k ≤? _i then s
-  else iter_down_aux _i body (_k - 1) s.
-
-End Code.
-
 (* A specification of [iter_down]. *)
-
-(* TODO exchange _k and _i in the parameters of [iter_down]? *)
 
 Lemma wp_iter_down {S} (body : int → S → S) :
   ∀IntU _i i ,
@@ -929,12 +913,12 @@ Lemma wp_iter_down {S} (body : int → S → S) :
     (λ s Q, wp (iter_down _k _i s body) Q).
 Proof.
   intros. ITER. unfold iter_down.
-  wp_if; z.
+  wp_if.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
-  { wp_op wp_iter_down_aux; wp_shadow s.
-    eauto. }
+  { wp_op wp_iter_down_aux shadowing: s.
+    z. eauto. }
 Qed.
 
 (* The tactic [wp_iter_down_body _j j s] should be used upon entry into
