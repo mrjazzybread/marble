@@ -147,7 +147,7 @@ Proof.
   eauto.
 Qed.
 
-(* Two reasoning rules for conditional expressions. *)
+(* Reasoning rules for conditional expressions. *)
 
 (* [wp_if] does not make the equations [b = true] and [b = false]
    accessible to the user while verifying [e1] and [e2]. If desired,
@@ -162,6 +162,9 @@ Qed.
    about such a function using well-founded recursion then one must
    repeat the termination argument; then these equations are needed. *)
 
+(* [wp_IFC] is analagous to [wp_IF] but allows the branches [e1] and
+   [e2] to be parameterized with a proof of [b = true] or [b = false]. *)
+
 Lemma wp_if {A} (b : bool) (e1 e2 : A) (Q : A → Prop) {P1 P2 : Prop} :
   isBool b P1 P2 →
   (P1 → wp e1 Q) →
@@ -173,9 +176,18 @@ Qed.
 
 Lemma wp_IF {A} (b : bool) (e1 e2 : A) (Q : A → Prop) {P1 P2 : Prop} :
   isBool b P1 P2 →
-  (b = true → P1 → wp e1 Q) →
+  (b =  true → P1 → wp e1 Q) →
   (b = false → P2 → wp e2 Q) →
   wp (IF b THEN e1 ELSE e2) Q.
+Proof.
+  unfold isBool. intros. destruct b; eauto.
+Qed.
+
+Lemma wp_IFC {A} (b : bool) e1 e2 (Q : A → Prop) {P1 P2 : Prop} :
+  isBool b P1 P2 →
+  (∀ pf1 : b =  true, P1 → wp (e1 pf1) Q) →
+  (∀ pf2 : b = false, P2 → wp (e2 pf2) Q) →
+  wp (IFC b THEN e1 ELSE e2) Q.
 Proof.
   unfold isBool. intros. destruct b; eauto.
 Qed.
@@ -220,14 +232,13 @@ Ltac wp_ret :=
 
 (* The fist subgoal, [isBool _ _ _], should be solved by [tc]. *)
 
-(* Strangely enough, [simple eapply wp_if] can succeed when the goal
-   is an [IF/THEN/ELSE] construct that contains an [if/then/else]
-   construct nested inside it. (Rocq seems to exchange the
-   conditionals.) By trying [simple eapply wp_IF] first, we seem to
-   avoid this problem. *)
+(* Strangely enough, [simple eapply wp_if] can succeed when the goal is an
+   [IF/THEN/ELSE] construct that contains an [if/then/else] construct
+   nested inside it. (Rocq seems to exchange the conditionals.) By trying
+   [simple eapply wp_IF] first, we seem to avoid this problem. *)
 
 Ltac wp_if :=
-  first [ simple eapply wp_IF | simple eapply wp_if ];
+  first [ simple eapply wp_IF | simple eapply wp_IFC | simple eapply wp_if ];
     [ tc | intros | intros ].
 
 (* Reasoning about a [bind] construct whose left-hand side is pure. *)
