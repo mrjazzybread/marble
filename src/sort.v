@@ -7,7 +7,7 @@ From Stdlib Require Import Sorting.Permutation Sorting.Sorted.
 From Corelib Require Import Classes.RelationClasses.
 From marble Require Import equations.
 From marble Require Import tactics.
-From marble Require Import iteration int wp array.
+From marble Require Import iteration int loop wp array.
 From marble Require Import orders sorting compare.
 Implicit Types _i _j _k : int.
 
@@ -649,12 +649,12 @@ Open Scope uint63.
 
 Definition isortto _src _srcofs _dst _dstofs _n :=
   (* Let [i] scan the source segment upwards. *)
-  int.iter_up 0 _n _dst @@ λ _i _dst ,
+  iter_up 0 _n _dst @@ λ _i _dst ,
     (* Extract [xi] at offset [i] in the source segment. *)
     do xi ← get _src (_srcofs + _i) ;
     do (_dst, out) ← (
       (* Let [j] scan the sorted part of the destination segment, downwards. *)
-      int.xiter_down _dstofs (_dstofs + _i) _dst @@
+      xiter_down _dstofs (_dstofs + _i) _dst @@
       λ _ _j _dst continue break ,
         (* Read an element [xj] at offset [j] in the destination segment.
            If [xj ≥ xi] holds then move [xj] upwards by one position and
@@ -873,10 +873,10 @@ Section Code.
 Open Scope uint63.
 
 Definition isortto' a _srcofs _dstofs _n :=
-  int.iter_up 0 _n a @@ λ _i a ,
+  iter_up 0 _n a @@ λ _i a ,
     do xi ← get a (_srcofs + _i) ;
     do (a, out) ← (
-      int.xiter_down _dstofs (_dstofs + _i) a @@
+      xiter_down _dstofs (_dstofs + _i) a @@
       λ _ _j a continue break ,
         do xj ← get a _j ;
         if (xj ≤? xi)%element then

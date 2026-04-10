@@ -3,7 +3,8 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics bool int iteration wp logic equations.
+From marble Require Import tactics bool int iteration loop wp logic.
+From marble Require Import equations.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -400,7 +401,7 @@ Implicit Types xs : list A.
 Definition segment_to_list a _i _k :=
   (* For [_j] ranging from [_k] (excluded) down to [_i],
      with running state [xs], initially empty, *)
-  int.iter_down _i _k [] @@ λ _j xs,
+  iter_down _i _k [] @@ λ _j xs,
   (* Read the [_j]-th element of the array [a], *)
   do x ← a.[_j] ;
   (* and prepend it in front of [xs]. *)
@@ -860,7 +861,7 @@ Implicit Types xs ys : list A.
 Section Code.
 Open Scope uint63.
 
-(* We begin with a naive definition, using [int.iter_up] so as to save
+(* We begin with a naive definition, using [iter_up] so as to save
    the trouble of writing a loop. *)
 
 (* We compute [_delta] outside of the loop so as to save one addition
@@ -870,7 +871,7 @@ Open Scope uint63.
 
 Definition naive_blit a _i b _j _n :=
   do _delta ← _j - _i ;
-  int.iter_up _i (_i + _n) b @@ λ _k b,
+  iter_up _i (_i + _n) b @@ λ _k b,
   do x ← get a _k ;
   do b ← set b (_k + _delta) x ;
   b.
@@ -926,11 +927,9 @@ Proof.
 Qed.
 
 (* We continue with a second naive [blit] function. The algorithm is
-   essentially the same (it is just a loop). This time we do not use the
-   higher-order function [int.iter_up], which is defined using Equations.
-   Thus we hope to save both the cost of using a higher-order iteration
-   function and the overhead that is possibly introduced by Equations.
-   (Apparently Equations tends to group function arguments in a tuple.) *)
+   essentially the same (it is just a loop). This time we do not use
+   the higher-order function [iter_up]. Thus we hope to save the cost
+   of using a higher-order iteration function. *)
 
 (* We use a formulation as a tail-recursive function where the parameter
    [_n] decreases. This lets us use well-founded recursion over [_n]. *)
@@ -1294,13 +1293,13 @@ Definition blit' a _i _j _n :=
     a
   else if _j <=? _i then
     do _delta ← _j - _i ;
-    int.iter_up _i (_i + _n) a @@ λ _k a,
+    iter_up _i (_i + _n) a @@ λ _k a,
     do x ← get a _k ;
     do a ← set a (_k + _delta) x ;
     a
   else
     do _delta ← _j - _i ;
-    int.iter_down _i (_i + _n) a @@ λ _k a,
+    iter_down _i (_i + _n) a @@ λ _k a,
     do x ← get a _k ;
     do a ← set a (_k + _delta) x ;
     a.
@@ -1490,7 +1489,7 @@ Section Code.
 Open Scope uint63.
 
 Definition fill a _i _n x :=
-  int.iter_up _i (_i + _n) a @@ λ _k a,
+  iter_up _i (_i + _n) a @@ λ _k a,
   do a ← set a _k x ;
   a.
 
@@ -1545,7 +1544,7 @@ Variable f : A → bool.
 
 Definition find_index a : outcome int :=
   do _n ← length a ;
-  int.uxiter_up 0 _n @@ λ _ _i continue break,
+  uxiter_up 0 _n @@ λ _ _i continue break,
   do x ← get a _i ;
   if f x then break _i else continue ().
 
@@ -1749,7 +1748,7 @@ Section Code.
 Open Scope uint63.
 
 Definition equal_aux _m a b : outcome unit :=
-  int.uxiter_up 0 _m @@ λ _ _i continue break ,
+  uxiter_up 0 _m @@ λ _ _i continue break ,
   do x ← get a _i ;
   do y ← get b _i ;
   if eq x y then continue () else break ().
@@ -1853,7 +1852,7 @@ Qed.
 (* [segment_iteri] and [iteri]. *)
 
 (* An iteration function on an array is not super useful, as the user
-   can just as well use [int.iter_up] or [int.iter_down] directly.
+   can just as well use [iter_up] or [iter_down] directly.
    However, this is a good exercise in preparation for defining
    iteration functions on vectors, hash tables, or other containers. *)
 
@@ -1871,7 +1870,7 @@ Implicit Types f : int → A → S → S.
 (* The code. *)
 
 Definition segment_iteri a _i _k s f : S :=
-  int.iter_up _i _k s @@ λ _j s ,
+  iter_up _i _k s @@ λ _j s ,
   do x ← get a _j ;
   do s ← f _j x s ;
   s.
@@ -1936,7 +1935,7 @@ Tactic Notation "wp_iteri_body"
 
 Definition init `{Inhabited A} _n (f : int → A) : array A :=
   do a ← make _n inhabitant ;
-  int.iter_up 0 _n a @@ λ _i a ,
+  iter_up 0 _n a @@ λ _i a ,
   do x ← f _i ;
   set a _i x.
 

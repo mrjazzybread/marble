@@ -11,7 +11,7 @@ From Stdlib Require ExtrOCamlInt63.
 From marble Require Import iteration.
 Extraction Inline did_break did_not_break.
 
-From marble Require Import int.
+From marble Require Import int loop.
 Extraction Inline iter_down iter_up xiter_up uxiter_up.
 
 (* Recursive Extraction iter_down iter_up xiter_up uxiter_up. *)
