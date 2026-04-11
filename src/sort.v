@@ -98,12 +98,12 @@ Local Lemma trans_le x y z : x ≤ y → y ≤ z → x ≤ z.
 Proof. intros. transitivity y; eauto. Qed.
 Local Hint Resolve reflex_le trans_le : core.
 
-Definition lt_le' := (@lt_le A R).
+Local Definition lt_le' := (@lt_le A R).
 Local Hint Resolve lt_le' : core.
 
-Lemma lt_equiv_lt x y z : x < y → y ≡ z → x < z.
+Local Lemma lt_equiv_lt x y z : x < y → y ≡ z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
-Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
+Local Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
 Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
 
