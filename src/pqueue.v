@@ -28,7 +28,7 @@ Section PQueue.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Assumptions. *)
+(* Assumptions. (Identical to sort.v.) *)
 
 (* We assume that there is a preorder [R], also written [≤], on the type [A]. *)
 
@@ -87,38 +87,39 @@ Local Infix "≃" := (@Permutation A)
 (* The node at index [i] has children at indices [2 * i + 1] and
    [2 * i + 2], provided these are valid indices into the vector. *)
 
-Local Notation   left i := (2 * i + 1).
-Local Notation  right i := (2 * i + 2).
+Local Notation   left j := (2 * j + 1).
+Local Notation  right j := (2 * j + 2).
 Local Notation parent i := ((i - 1) / 2).
 
 (* The tree is heap-ordered. *)
 
-Local Notation dominates_left_child x i xs :=
-  (valid  (left i) xs%list → x ≤ xs%list !!!  (left i)).
+Local Notation dominates_left_child x j xs :=
+  (valid  (left j) xs%list → x ≤ xs%list !!!  (left j)).
 
-Local Notation dominates_right_child x i xs :=
-  (valid (right i) xs%list → x ≤ xs%list !!! (right i)).
+Local Notation dominates_right_child x j xs :=
+  (valid (right j) xs%list → x ≤ xs%list !!! (right j)).
 
-Local Notation dominates_children x i xs :=
-  (dominates_left_child  x i xs ∧
-   dominates_right_child x i xs).
+Local Notation dominates_children x j xs :=
+  (dominates_left_child  x j xs ∧
+   dominates_right_child x j xs).
 
 Definition heap xs :=
-  (∀ i, valid i xs → dominates_left_child  (xs !!! i) i xs) ∧
-  (∀ i, valid i xs → dominates_right_child (xs !!! i) i xs).
+  (∀ j, valid j xs → dominates_left_child  (xs !!! j) j xs) ∧
+  (∀ j, valid j xs → dominates_right_child (xs !!! j) j xs).
 
 Local Ltac introHeap :=
   split.
 
 Local Ltac destructHeap :=
-  match goal with h: heap _ |- _ =>
-    destruct h
+  match goal with
+  | h: heap _ |- _ =>
+      destruct h
   end.
 
 Local Ltac destructAndKeepHeap :=
-  match goal with h: heap _ |- _ =>
-    generalize h; intro;
-    destruct h
+  match goal with
+  | h: heap _ |- _ =>
+      generalize h; intro; destruct h
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -131,11 +132,11 @@ Proof. lia. Qed.
 Local Lemma parent_right i : parent (right i) = i.
 Proof. lia. Qed.
 
+Local Hint Rewrite parent_left parent_right : parent.
+
 Local Lemma child_disjunction i :
   i ≠ 0 → i = left (parent i) ∨ i = right (parent i).
 Proof. lia. Qed.
-
-Local Hint Rewrite parent_left parent_right : parent.
 
 Local Lemma exploit_heap_upwards i xs :
   heap xs → valid i xs → i ≠ 0 →
@@ -154,9 +155,9 @@ Local Hint Resolve exploit_heap_upwards : heap.
    into slot 0. *)
 
 Lemma heap_insert_at_root x i xs :
-  heap xs →
   i = 0 →
   valid i xs →
+  heap xs →
   dominates_children x i xs →
   heap (<[i := x]>xs).
 Proof.
@@ -200,6 +201,53 @@ Proof.
   repeat case_lookup_insert; unpack; try subst;
   autorewrite with parent in *;
   eauto 4 with heap lia.
+Qed.
+
+(* Any sequence of length 1 forms a heap. *)
+
+Lemma singleton_heap xs :
+  len xs = 1 →
+  heap xs.
+Proof.
+  intros. introHeap; eauto 2 with lia.
+Qed.
+
+(* If [x] is dominated by the parent of slot [n], where [n] is the final
+   uninitialized slot, then [x] can be written into this slot. *)
+
+Lemma quasi_heap_insert_deep x n xs y :
+  heap xs →
+  n = len xs →
+  y = xs !!! parent n →
+  y ≤ x →
+  heap (xs ++ {[x]}).
+Proof.
+  intros. destructHeap.
+  introHeap; intros j; length; intros; list;
+  case_lookup_app;
+  eauto 2 with lia;
+  assert (parent n = j) by lia;
+  congruence.
+Qed.
+
+(* Moving an element [y] from slot [parent n] down to slot [n],
+   where [n] is the final uninitialized slot, is permitted. *)
+
+Lemma quasi_heap_move_down x n xs y :
+  heap xs →
+  n = len xs →
+  y = xs !!! parent n →
+  heap (xs ++ {[y]}).
+Proof.
+  intros. destructAndKeepHeap. subst y.
+  introHeap; list; intros j ??;
+  repeat case_lookup_app.
+  { replace n with (left j) by lia.
+    autorewrite with parent.
+    eauto. }
+  { replace n with (right j) by lia.
+    autorewrite with parent.
+    eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -264,11 +312,11 @@ Ltac queues :=
 Implicit Types q : queue A.
 Implicit Types v : vector.vector A.
 Implicit Types xs : list A.
-Implicit Types a b : array A.
+Implicit Types a : array A.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Creating an empty queue: [create]. *)
+(* Creating an empty priority queue: [create]. *)
 
 Definition create (_ : unit) : queue A :=
   vector.create().
@@ -285,19 +333,23 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-Section Code.
-Open Scope uint63.
+(* Inserting an element into a priority queue: [move_up] and [insert]. *)
 
 (* TODO use [vector.borrow] and work directly on the array *)
 
-Lemma move_up_ilt _i : (_i =? 0) = false → ilt ((_i - 1) / 2) _i.
+Section Code.
+Open Scope uint63.
+
+Local Lemma move_up_ilt _i : (_i =? 0) = false → ilt ((_i - 1) / 2) _i.
 Proof. eauto with lia. Qed.
 
 Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector.vector A :=
   IFC _i =? 0 THEN λ _,
     vector.set v _i x
   ELSE λ Hi,
-    let _j := (_i - 1) / 2 in (* [_j] is the parent of [_i] *)
+    (* [_j] is the parent of [_i]. *)
+    let _j := (_i - 1) / 2 in
+    (* Read the element [y] in slot [_j]. *)
     do y ← vector.get v _j ;
     if leb y x then
       (* [x] can settle in slot [_i]. *)
@@ -307,22 +359,24 @@ Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector.vector A :=
       do v ← vector.set v _i y ;
       move_up v _j x (Acc_inv ACC (move_up_ilt _i Hi)).
 
+(* To insert a new element [x], it suffices to reserve a new slot at the end
+   of the vector, thus creating a logically empty slot, and to call [move_up].
+   Filliâtre does essentially this, but does not have access to [reserve], so
+   he uses [push] instead, causing a redundant write. Walch et al. duplicate
+   the logic of [move_up] inside [insert]. We avoid this code duplication;
+   instead we verify [move_up] twice with slightly different specifications. *)
+
 Definition insert q x :=
   do _n ← vector.length q ;
-  if _n =? 0 then
-    vector.push q x
-  else
-    let _j := (_n - 1) / 2 in (* [_j] is the parent of [_n] *)
-    do y ← vector.get q _j ;
-    if leb y x then
-      (* [x] can settle in slot [_n]. *)
-      vector.push q x
-    else
-      (* Move [y] down into slot [_n] and continue moving [x] up. *)
-      do v ← vector.push q y ;
-      move_up v _j x (Wf_ilt _j).
+  do q ← vector.reserve q ;
+  move_up q _n x (Wf_ilt _n).
 
 End Code.
+
+(* The postcondition of [move_up]. *)
+
+(* The effect of [move_up] is to write [x] into slot [i] and then permute
+   the elements so that they form a heap again. *)
 
 Definition move_up_post v xs i x :=
   ∃ xs',
@@ -335,9 +389,13 @@ Local Ltac intro_move_up_post :=
 
 Local Ltac elim_move_up_post xs' :=
   match goal with h: move_up_post _ _ _ _ |- _ =>
-   destruct h as (xs' & h);
-   unpack in h
+    destruct h as (xs' & h);
+    unpack in h
   end.
+
+(* This is the first specification of [move_up]. If [xs] forms a heap and
+   if [x] dominates the children of slot [i] then [move_up v _i x] can be
+   called. *)
 
 Lemma wp_move_up _i :
   ∀ v x ACC xs,
@@ -379,6 +437,69 @@ Proof.
       rewrite swap_inserts by lia.
       rewrite (list_insert_total_id' _ j) by (list; eauto with lia).
       eauto. }
+Qed.
+
+(* This is the second specification of [move_up]. If [xs] forms a heap
+   then [move_up v _n x] can be called. *)
+
+Lemma wp_move_up' _n n :
+  ∀ v x ACC xs dummy ,
+  vector.isVector v (xs ++ {[dummy]}) →
+  heap xs →
+  isInt _n n →
+  n = len xs →
+  wp (move_up v _n x ACC) (λ v, move_up_post v (xs ++ {[dummy]}) n x).
+Proof.
+  intros. vector.vectors. lengths. length in *.
+  destruct ACC; simpl.
+  wp_if.
+  (* Case [n = 0]. *)
+  { subst n. list_inv. list.
+    wp_op vector.wp_set shadowing: v.
+    intro_move_up_post; eauto using singleton_heap. }
+  (* Case [n ≠ 0]. *)
+  set (_j := ((_n - 1) / 2)%uint63).
+  set (j := parent n).
+  assert (isInt _j j) by tc.
+  wp_op vector.wp_get introducing: y.
+  wp_if.
+  (* Subcase: [y ≤ x]. *)
+  { wp_op vector.wp_set shadowing: v.
+    intro_move_up_post; list; eauto using quasi_heap_insert_deep. }
+  (* Subcase: [x < y]. *)
+  { wp_op vector.wp_set shadowing: v.
+    wp_op wp_move_up shadowing: v.
+    + (* The first precondition of the recursive call. *)
+      eauto using quasi_heap_move_down.
+    + (* The second precondition of the recursive call. *)
+      destructHeap. subst y.
+      split; intros; case_lookup_app; eapply lt_le';
+      eapply strict_transitive_l; eauto 2 with lia.
+    + elim_move_up_post xs'. intro_move_up_post.
+      (* Permutation. *)
+      match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
+      replace (xs ++ {[y]}) with (<[n := y]>(xs ++ {[dummy]}))
+        by (list; eauto).
+      rewrite swap_inserts by lia.
+      eapply identity_permutation. subst y. lego. }
+Qed.
+
+(* The specification of [insert]. *)
+
+Lemma wp_insert q y ys :
+  isQueue q ys →
+  (len ys + 1 ≤ array.max_array_length)%Z →
+  wp (insert q y) (λ q, isQueue q (ys ++ {[y]})).
+Proof.
+  intros. destructQueue xs. lengths. unfold insert.
+  wp_op vector.wp_length introducing: _n.
+  wp_op vector.wp_reserve shadowing: q.
+  wp_op wp_move_up' shadowing: q. wp_last Hpost.
+  elim_move_up_post xs'. list in Hpost0.
+  introQueue; eauto 2.
+  (* Permutation. *)
+  { match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
+    simplify_list_permutation_goal. eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
