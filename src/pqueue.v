@@ -397,6 +397,17 @@ Local Ltac elim_move_up_post xs' :=
    if [x] dominates the children of slot [i] then [move_up v _i x] can be
    called. *)
 
+(* Intuitively, the precondition of [move_up] is: [xs] must form a heap
+   except possibly at index [i], which is logically empty and could
+   contain a dummy value. Here, following Walch, Pereira and Filliâtre,
+   we cheat a little bit: for simplicity, we require [xs] to form a heap
+   everywhere. When [move_up] calls itself, this stronger requirement is
+   met because [y] has been copied down, so the logically empty slot
+   contains a copy of [y]. When [insert] calls [move_up], this
+   requirement is NOT met, because the logically empty slot is in fact
+   uninitialized and contains an arbitrary value. To deal with this
+   situation, we give a second specification of [move_up] below. *)
+
 Lemma wp_move_up _i :
   ∀ v x ACC xs,
   vector.isVector v xs →
@@ -440,7 +451,10 @@ Proof.
 Qed.
 
 (* This is the second specification of [move_up]. If [xs] forms a heap
-   then [move_up v _n x] can be called. *)
+   and if the vector contains the sequence [xs ++ {[dummy]}] then
+   [move_up v _n x] can be called. *)
+
+(* The proof is essentially the same as above, with small changes. *)
 
 Lemma wp_move_up' _n n :
   ∀ v x ACC xs dummy ,
