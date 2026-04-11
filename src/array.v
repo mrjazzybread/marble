@@ -133,8 +133,7 @@ Proof.
 Qed.
 
 (* The tactic [arrays] looks for hypotheses of the form [isArray a xs]
-   and introduces the fact [0 ≤ len xs ≤ max_array_length]. Furthermore,
-   it simplifies the expression [len xs] using the tactic [length]. *)
+   and introduces the fact [0 ≤ len xs ≤ max_array_length]. *)
 
 Ltac arrays :=
   repeat match goal with
