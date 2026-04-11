@@ -166,6 +166,22 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Reading a vector's logical length: [length]. *)
+
+Definition length (v : vector A) : int :=
+  let '(_n, _) := v in
+  _n.
+
+Lemma wp_length v xs :
+  isVector v xs →
+  wp (length v) (λ _n, isInt _n (len xs)).
+Proof.
+  intros. destructIsVector. destructIsVectorCap.
+  unfold length. wp_ret.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Random access: [get] and [set]. *)
 
 Definition get v _i : A :=
@@ -348,7 +364,7 @@ Definition push v x : vector A :=
   let (_n, a) := v in
   (* Ensure that sufficient space exists. *)
   let _n' := _n + 1 in
-  do _c ← length a ;
+  do _c ← PArray.length a ;
   do a ← (
     if _n' ≤? _c then a
     else really_ensure_capacity v _n'
@@ -453,7 +469,7 @@ End Iteri.
    representation of the vector. In [of_array], it is copied. *)
 
 Definition steal_array a :=
-  do _n ← length a ;
+  do _n ← PArray.length a ;
   (_n, a).
 
 Definition of_array a :=
