@@ -394,10 +394,56 @@ Proof.
     + wp_ret.
     (* Case: the array must be grown. *)
     + wp_op wp_really_ensure_capacity shadowing: a. }
-  clear dependent unoccupied. wp_shadow a.
+  clear dependent a unoccupied. intros a (c' & ? & ?).
   destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.
+  introIsVector.
+  introIsVectorCapWithWitness (final_seg 1 unoccupied); tc.
+  isArray.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Reserving an element onto the end of a vector: [reserve]. *)
+
+(* This is analogous to [push], but does not initialize the new slot. *)
+
+Section Code.
+Open Scope uint63.
+
+Definition reserve v : vector A :=
+  let (_n, a) := v in
+  (* Ensure that sufficient space exists. *)
+  let _n' := _n + 1 in
+  do _c ← PArray.length a ;
+  do a ← (
+    if _n' ≤? _c then a
+    else really_ensure_capacity v _n'
+  ) ;
+  (* A free slot now exists. *)
+  (_n', a).
+
+End Code.
+
+Lemma wp_reserve v xs :
+  isVector v xs →
+  len xs + 1 ≤ max_array_length →
+  wp (reserve v) (λ v, ∃ x, isVector v (xs ++ {[x]})).
+Proof.
+  intros. unfold reserve.
+  destructIsVector. destructAndKeepIsVectorCap.
+  wp_length _c.
+  eapply wp_bind with (P := λ a,
+    isVectorCapLe (_n, a) xs (len xs + 1)
+  ).
+  { wp_if.
+    + wp_ret.
+    + wp_op wp_really_ensure_capacity shadowing: a. }
+  clear dependent a unoccupied. intros a (c' & ? & ?).
+  destructIsVectorCap.
+  wp_ret.
+  set (x := unoccupied !!! 0). exists x.
   introIsVector.
   introIsVectorCapWithWitness (final_seg 1 unoccupied); tc.
   isArray.
