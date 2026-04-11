@@ -111,7 +111,8 @@
 * HAMTs.
 * B-Trees.
 * Chunked sequences.
-* Priority queue within an array.
+* Priority queue within a vector.
+* Doubly-linked list (permutation) inside an array or vector.
 * Depth-first search, SCCs and other graph algorithms.
 * Congruence closure.
 
