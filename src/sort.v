@@ -92,8 +92,8 @@ Infix "≡" := (equivalent R)
 (* The following hints seem to be needed. I don't understand why
    reflexivity and transitivity do not work out of the box. *)
 
-Local Lemma reflex_le x : x ≤ x.
-Proof. intros. reflexivity. Qed.
+Local Lemma reflex_le x y : x = y → x ≤ y.
+Proof. intros. subst. reflexivity. Qed.
 Local Lemma trans_le x y z : x ≤ y → y ≤ z → x ≤ z.
 Proof. intros. transitivity y; eauto. Qed.
 Local Hint Resolve reflex_le trans_le : core.
