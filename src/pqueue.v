@@ -462,7 +462,7 @@ Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector.vector A :=
     let _j := (_i - 1) / 2 in
     (* Read the element [y] in slot [_j]. *)
     do y ← vector.get v _j ;
-    if leb y x then
+    if (y ≤? x)%element then
       (* [x] can settle in slot [_i]. *)
       vector.set v _i x
     else
@@ -679,7 +679,7 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector.vector A :=
       let _j := _left _i in
       do y ← vector.get v _j ;
       (* BEGIN COPY 1 *)
-      if leb x y then
+      if (x ≤? y)%element then
         (* [x] can settle here. *)
         vector.set v _i x
       else
@@ -693,12 +693,12 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector.vector A :=
       let _i2 := _right _i in
       do y1 ← vector.get v _i1 ;
       do y2 ← vector.get v _i2 ;
-      if leb y1 y2 then
+      if (y1 ≤? y2)%element then
         (* The left child is smaller. Go left. *)
         let _j := _i1 in
         let y := y1 in
         (* BEGIN COPY 2 *)
-        if leb x y then
+        if (x ≤? y)%element then
           (* [x] can settle here. *)
           vector.set v _i x
         else
@@ -710,7 +710,7 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector.vector A :=
         let _j := _i2 in
         let y := y2 in
         (* BEGIN COPY 3 *)
-        if leb x y then
+        if (x ≤? y)%element then
           (* [x] can settle here. *)
           vector.set v _i x
         else
