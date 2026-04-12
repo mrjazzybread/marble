@@ -343,8 +343,12 @@ Open Scope uint63.
 Local Lemma move_up_ilt _i : (_i =? 0) = false → ilt ((_i - 1) / 2) _i.
 Proof. eauto with lia. Qed.
 
+(* [move_up v _i x] writes the element [x] into slot [_i], then moves it
+   up as far as necessary so as to restore the heap invariant. *)
+
 Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector.vector A :=
   IFC _i =? 0 THEN λ _,
+    (* [x] has reached the root. *)
     vector.set v _i x
   ELSE λ Hi,
     (* [_j] is the parent of [_i]. *)
