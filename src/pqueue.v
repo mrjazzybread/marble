@@ -126,6 +126,8 @@ Local Ltac destructAndKeepHeap :=
 
 (* Basic properties of heaps. *)
 
+(* The parent of a child of [i] is [i]. *)
+
 Local Lemma parent_left i : parent (left i) = i.
 Proof. lia. Qed.
 
@@ -134,9 +136,28 @@ Proof. lia. Qed.
 
 Local Hint Rewrite parent_left parent_right : parent.
 
-Local Lemma child_disjunction i :
-  i ≠ 0 → i = left (parent i) ∨ i = right (parent i).
-Proof. lia. Qed.
+(* These technical corollaries are used in the proof of [move_down]. *)
+
+Lemma parent_left_corollary i y xs x :
+  valid i xs →
+  y < x →
+  <[i:=y]>xs !!! parent (left i) < x.
+Proof.
+  intros. rewrite parent_left. list. assumption.
+Qed.
+
+Lemma parent_right_corollary i y xs x :
+  valid i xs →
+  y < x →
+  <[i:=y]>xs !!! parent (right i) < x.
+Proof.
+  intros. autorewrite with parent. list. assumption.
+Qed.
+
+Local Hint Resolve parent_left_corollary parent_right_corollary : core.
+
+(* If the heap property holds then every element is dominated by its
+   parent in the tree. *)
 
 Local Lemma exploit_heap_upwards i xs :
   heap xs → valid i xs → i ≠ 0 →
@@ -150,6 +171,8 @@ Proof.
 Qed.
 
 Local Hint Resolve exploit_heap_upwards : heap.
+
+(* A grandparent dominates its grandchild. *)
 
 Lemma grandparent_dominates_grandchild xs i j y :
   heap xs →
@@ -165,6 +188,8 @@ Proof.
   assert (xs !!! i ≤ xs !!! j) by (subst i; eauto 2 with heap lia).
   eauto.
 Qed.
+
+(* A transitivity property. *)
 
 Lemma dominates_trans x y i xs :
   dominates_children y i xs →
@@ -416,22 +441,22 @@ Definition insert q x :=
 
 End Code.
 
-(* The postcondition of [move_up]. *)
+(* The postcondition of [move_up] and [move_down]. *)
 
-(* The effect of [move_up] is to write [x] into slot [i] and then permute
-   the elements so that they form a heap again. *)
+(* The effect of [move_up] and [move_down] is to write [x] into slot [i]
+   and then permute the elements so that they form a heap again. *)
 
-Definition move_up_post v xs i x :=
+Definition move_post v xs i x :=
   ∃ xs',
   vector.isVector v xs' ∧
   <[i := x]>xs ≃ xs' ∧
   heap xs'.
 
-Local Ltac intro_move_up_post :=
+Local Ltac intro_move_post :=
   eexists; split; [ eauto | pack; eauto ].
 
-Local Ltac elim_move_up_post xs' :=
-  match goal with h: move_up_post _ _ _ _ |- _ =>
+Local Ltac elim_move_post xs' :=
+  match goal with h: move_post _ _ _ _ |- _ =>
     destruct h as (xs' & h);
     unpack in h
   end.
@@ -440,15 +465,15 @@ Local Ltac elim_move_up_post xs' :=
    writing [y] into slot [i] and calling [move_up v _j x] establishes
    the desired postcondition. *)
 
-Lemma move_up_post_insert v i y xs j x :
-  move_up_post v (<[i:=y]> xs) j x →
+Lemma move_post_insert v i y xs j x :
+  move_post v (<[i:=y]> xs) j x →
   valid i xs →
   valid j xs →
   i ≠ j →
   y = xs !!! j →
-  move_up_post v xs i x.
+  move_post v xs i x.
 Proof.
-  intros. elim_move_up_post xs'. intro_move_up_post.
+  intros. elim_move_post xs'. intro_move_post.
   (* A permutation goal. *)
   match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
   rewrite swap_inserts by eauto.
@@ -478,7 +503,7 @@ Lemma wp_move_up _i :
   ∀ i, isInt _i i →
   valid i xs →
   dominates_children x i xs →
-  wp (move_up v _i x ACC) (λ v, move_up_post v xs i x).
+  wp (move_up v _i x ACC) (λ v, move_post v xs i x).
 Proof.
   by well-founded induction on _i along ilt.
   intros. unpack. vector.vectors.
@@ -486,7 +511,7 @@ Proof.
   wp_if.
   (* Case [i = 0]. *)
   { wp_op vector.wp_set shadowing: v.
-    intro_move_up_post; eauto using heap_insert_at_root. }
+    intro_move_post; eauto using heap_insert_at_root. }
   (* Case [i ≠ 0]. *)
   set (_j := ((_i - 1) / 2)%uint63).
   set (j := parent i).
@@ -495,7 +520,7 @@ Proof.
   wp_if.
   (* Subcase: [y ≤ x]. *)
   { wp_op vector.wp_set shadowing: v.
-    intro_move_up_post; eauto using heap_insert_deep. }
+    intro_move_post; eauto using heap_insert_deep. }
   (* Subcase: [x < y]. *)
   { wp_op vector.wp_set shadowing: v.
     wp_op IH shadowing: v.
@@ -505,7 +530,7 @@ Proof.
       destructHeap. subst y.
       split; intros; case_lookup_insert; eapply lt_le';
       eapply strict_transitive_l; eauto 2 with lia.
-    + eauto using move_up_post_insert with lia. }
+    + eauto using move_post_insert with lia. }
 Qed.
 
 (* This is the second specification of [move_up]. If [xs] forms a heap
@@ -520,7 +545,7 @@ Lemma wp_move_up' _n n :
   heap xs →
   isInt _n n →
   n = len xs →
-  wp (move_up v _n x ACC) (λ v, move_up_post v (xs ++ {[dummy]}) n x).
+  wp (move_up v _n x ACC) (λ v, move_post v (xs ++ {[dummy]}) n x).
 Proof.
   intros. vector.vectors. lengths. length in *.
   destruct ACC; simpl.
@@ -528,7 +553,7 @@ Proof.
   (* Case [n = 0]. *)
   { subst n. list_inv. list.
     wp_op vector.wp_set shadowing: v.
-    intro_move_up_post; eauto using singleton_heap. }
+    intro_move_post; eauto using singleton_heap. }
   (* Case [n ≠ 0]. *)
   set (_j := ((_n - 1) / 2)%uint63).
   set (j := parent n).
@@ -537,7 +562,7 @@ Proof.
   wp_if.
   (* Subcase: [y ≤ x]. *)
   { wp_op vector.wp_set shadowing: v.
-    intro_move_up_post; list; eauto using quasi_heap_insert_deep. }
+    intro_move_post; list; eauto using quasi_heap_insert_deep. }
   (* Subcase: [x < y]. *)
   { wp_op vector.wp_set shadowing: v.
     wp_op wp_move_up shadowing: v.
@@ -547,7 +572,7 @@ Proof.
       destructHeap. subst y.
       split; intros; case_lookup_app; eapply lt_le';
       eapply strict_transitive_l; eauto 2 with lia.
-    + elim_move_up_post xs'. intro_move_up_post.
+    + elim_move_post xs'. intro_move_post.
       (* Permutation. *)
       match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
       replace (xs ++ {[y]}) with (<[n := y]>(xs ++ {[dummy]}))
@@ -567,7 +592,7 @@ Proof.
   wp_op vector.wp_length introducing: _n.
   wp_op vector.wp_reserve shadowing: q.
   wp_op wp_move_up' shadowing: q. wp_last Hpost.
-  elim_move_up_post xs'. list in Hpost0.
+  elim_move_post xs'. list in Hpost0.
   introQueue; eauto 2.
   (* Permutation. *)
   { match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
@@ -576,9 +601,7 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Extracting an element out of a priority queue: [move_down] and [extract]. *)
-
-(* TODO some of the following stuff could move elsewhere *)
+(* These notations and lemmas are used by [move_down]. *)
 
 Local Notation within _n _i :=
   ((_n ≤? _i) = false)%uint63.
@@ -586,19 +609,9 @@ Local Notation within _n _i :=
 Local Notation bounded _n :=
   ((_n ≤? max_length) = true)%uint63.
 
-Local Lemma within_iff :
-  ∀IntU _n n,
-  ∀IntU _i i,
-  within _n _i ↔ (i < n)%Z.
-Proof.
-  intros. rewrite isInt_def in *. lia.
-Qed.
+(* -------------------------------------------------------------------------- *)
 
-Local Lemma bounded_iff :
-  ∀IntU _n n, bounded _n ↔ 0 ≤ n ≤ array.max_array_length.
-Proof.
-  unfold array.max_array_length. intros. rewrite isInt_def in *. lia.
-Qed.
+(* Extracting an element out of a priority queue: [move_down] and [extract]. *)
 
 Section Code.
 Open Scope uint63.
@@ -629,34 +642,19 @@ Qed.
 (* [move_down _n Hn v _i Hni x ACC] writes the element [x] into slot [_i],
    then moves it down as far as necessary to restore the heap invariant. *)
 
-(* This is the type of [move_down]. *)
-
-Definition typeof_move_down :=
-  ∀ _n : int,
-  bounded _n →
-  vector.vector A →
-  ∀ _i : int,
-  within _n _i →
-  A →
-  Acc igt _i →
-  vector.vector A.
-
-(* In order to avoid some duplication, we define an auxiliary function
-   [move_down_aux]. This function compare [x] and its child [y] and
-   determines whether [x] should settle here or should continue to go
-   down. *)
-(* TODO inline this function? *)
-
-Definition move_down_aux (move_down : typeof_move_down)
-  _n (Hn : bounded _n) v _i x _j (Hnj : within _n _j) y (ACC : Acc igt _j) : vector.vector A
-:=
-  if leb x y then
-    (* [x] can settle here. *)
-    vector.set v _i x
-  else
-    (* Move [y] up and continue moving [x] down. *)
-    do v ← vector.set v _i y ;
-    move_down _n Hn v _j Hnj x ACC.
+(* [move_down] calls itself in three possible situations: 1- there is a
+   left child and no right child; 2- there are two children and the left
+   child is smaller; 3- there are two children and the right child is
+   smaller. In order to avoid duplicating code (and proofs), one could
+   introduce an auxiliary function; however, this function would be
+   mutually recursive with [move_down], which would make our definitions
+   and proofs more complex. Or, one could introduce a [do] construct whose
+   body is a conditional; but then, either this conditional would have to
+   return a pair, causing an allocation, or a redundant read in the vector
+   would be necessary. We avoid all of these problems by duplicating
+   (three times) the 5 lines of code that determine whether [x] can settle
+   here or should continue to move down. The copies are marked with [BEGIN
+   COPY ... END COPY] in the code and in the proof. *)
 
 Fixpoint move_down
   _n (Hn : bounded _n)
@@ -665,6 +663,7 @@ Fixpoint move_down
   x
   (ACC : Acc igt _i)
 : vector.vector A :=
+
   (* [_left] is the index of the left child of [_i], if it exists. *)
   let _left := 2 * _i + 1 in
   IFC _n ≤? _left THEN λ _,
@@ -680,8 +679,17 @@ Fixpoint move_down
       (* Only the left child exists. Go left. *)
       let _j := _left in
       do y ← vector.get v _j ;
+      let Hnj := Hln in
       let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
-      move_down_aux move_down _n Hn v _i x _j Hln y ACC
+      (* BEGIN COPY 1 *)
+      if leb x y then
+        (* [x] can settle here. *)
+        vector.set v _i x
+      else
+        (* Move [y] up and continue moving [x] down. *)
+        do v ← vector.set v _i y ;
+        move_down _n Hn v _j Hnj x ACC
+      (* END COPY 1 *)
     ELSE λ Hrn,
       (* Both children exist. Compare them. *)
       do yl ← vector.get v _left ;
@@ -689,14 +697,33 @@ Fixpoint move_down
       if leb yl yr then
         (* The left child is smaller. Go left. *)
         let _j := _left in
+        let Hnj := Hln in
         let y := yl in
         let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
-        move_down_aux move_down _n Hn v _i x _j Hln y ACC
+        (* BEGIN COPY 2 *)
+        if leb x y then
+          (* [x] can settle here. *)
+          vector.set v _i x
+        else
+          (* Move [y] up and continue moving [x] down. *)
+          do v ← vector.set v _i y ;
+          move_down _n Hn v _j Hnj x ACC
+        (* END COPY 2 *)
       else
         let _j := _right in
+        let Hnj := Hrn in
         let y := yr in
         let ACC := Acc_inv ACC (move_down_igt_right _n _i Hni Hn) in
-        move_down_aux move_down _n Hn v _i x _j Hrn y ACC.
+        (* BEGIN COPY 3 *)
+        if leb x y then
+          (* [x] can settle here. *)
+          vector.set v _i x
+        else
+          (* Move [y] up and continue moving [x] down. *)
+          do v ← vector.set v _i y ;
+          move_down _n Hn v _j Hnj x ACC
+        (* END COPY 3 *)
+.
 
 (* The following two lemmas are needed to justify that [extract] is
    allowed to invoke [move_down]. *)
@@ -741,16 +768,9 @@ Definition extract q : option A :=
 
 End Code.
 
-Local Notation move_down_post :=
-  move_up_post.
-Local Ltac intro_move_down_post :=
-  intro_move_up_post.
-Local Ltac elim_move_down_post xs' :=
-  elim_move_up_post xs'.
-Definition move_down_post_insert :=
-  move_up_post_insert.
+Local Hint Resolve move_down_igt_left move_down_igt_right : core.
 
-Definition move_down_spec (move_down : typeof_move_down) :=
+Lemma wp_move_down :
   ∀IntU _i i,
   ∀IntU _n n,
   ∀ (Hn : bounded _n) (Hni : within _n _i),
@@ -759,57 +779,15 @@ Definition move_down_spec (move_down : typeof_move_down) :=
   n = len xs →
   heap xs →
   ((0 < i)%Z → xs !!! parent i < x) →
-  wp (move_down _n Hn v _i Hni x ACC) (λ v, move_down_post v xs i x).
-
-Lemma wp_move_down_aux :
-  ∀ (move_down : typeof_move_down),
-  move_down_spec move_down →
-  ∀IntU _i i,
-  ∀IntU _j j,
-  ∀IntU _n n,
-  ∀ (Hn : bounded _n) (Hnj : within _n _j) ACC,
-  ∀ v xs x y,
-  vector.isVector v xs →
-  n = len xs →
-  heap xs →
-  ((0 < i)%Z → xs !!! parent i < x) →
-  parent j = i →
-  y = xs !!! j →
-  dominates_children y i xs →
-  wp (move_down_aux move_down _n Hn v _i x _j Hnj y ACC)
-     (λ v, move_down_post v xs i x).
+  wp (move_down _n Hn v _i Hni x ACC) (λ v, move_post v xs i x).
 Proof.
-  intros ? IH. intros. unfold move_down_aux.
-  (* Preliminaries. *)
-  assert (j < n)%Z.
-  { rewrite within_iff in Hnj by eauto. eauto. }
-  assert (0 ≤ n ≤ array.max_array_length).
-  { rewrite bounded_iff in Hn by eauto. eauto. }
-  wp_if.
-  (* Case [x ≤ y]. [x] can settle here. *)
-  { wp_op vector.wp_set shadowing: v.
-    intro_move_down_post.
-    eapply heap_insert; eauto 3 with lia. }
-  (* Case [y < x]. [y] moves up; [x] continues to move down. *)
-  { wp_op vector.wp_set shadowing: v.
-    wp_op IH shadowing: v.
-    { eapply heap_insert;
-      eauto 2 using grandparent_dominates_grandchild with lia. }
-    { list. eauto 3. }
-    eauto using move_down_post_insert with lia. }
-Qed.
-
-Lemma wp_move_down :
-  move_down_spec move_down.
-Proof.
-  unfold move_down_spec.
   by well-founded induction on _i along igt.
   intros.
   (* Preliminaries. *)
   assert (i < n)%Z.
-  { rewrite within_iff in Hni by eauto. eauto. }
+  { rewrite isInt_def in *. lia. }
   assert (0 ≤ n ≤ array.max_array_length).
-  { rewrite bounded_iff in Hn by eauto. eauto. }
+  { rewrite isInt_def in *. unfold array.max_array_length. lia. }
   destruct ACC; simpl.
   set (_left  := (2 * _i + 1)%uint63).
   set (_right := (2 * _i + 2)%uint63).
@@ -822,28 +800,80 @@ Proof.
   wp_if.
   (* Case [n ≤ left i]. There are no children. *)
   { wp_op vector.wp_set shadowing: v.
-    intro_move_down_post.
+    intro_move_post.
     eapply heap_insert; eauto 3 with lia. }
   (* Case [left i < n]. There is a left child. *)
   wp_if.
   (* Case [n ≤ right i]. There is only a left child. *)
   { wp_op vector.wp_get introducing: y.
-    wp_op wp_move_down_aux shadowing: v.
-    { admit. }
+    (* BEGIN COPY 1 *)
+    wp_if.
+    (* Case [x ≤ y]. [x] can settle here. *)
+    { wp_op vector.wp_set shadowing: v.
+      intro_move_post.
+      assert (dominates_children x i xs).
+      { split; intro; [ eauto 3 | lia ]. }
+      eapply heap_insert; eauto 3 with lia. }
+    (* Case [y < x]. [y] moves up; [x] continues to move down. *)
+    { wp_op vector.wp_set shadowing: v.
+      assert (dominates_children y i xs).
+      { split; intro; [ eauto 2 | exfalso; lia ]. }
+      assert ((0 < i)%Z → xs !!! parent i ≤ y).
+      { intro. eapply grandparent_dominates_grandchild with (j := left i);
+        eauto 2 with lia. }
+      assert (heap (<[i:=y]> xs)).
+      { eapply heap_insert; eauto 2 with lia. }
+      wp_op IH shadowing: v.
+      eauto using move_post_insert with lia. }
+    (* END COPY 1 *)
   }
   (* Case [right i < n]. There are two children. *)
-  { wp_op vector.wp_get introducing: yl.
-    wp_op vector.wp_get introducing: yr.
+  wp_op vector.wp_get introducing: yl.
+  wp_op vector.wp_get introducing: yr.
+  wp_if.
+  (* Subcase [yl ≤ yr]. The left child is smaller. *)
+  {
+    (* BEGIN COPY 2 *)
     wp_if.
-    (* Subcase [yl ≤ yr]. The left child is smaller. *)
-    { wp_op wp_move_down_aux shadowing: v. (* UGLY slow *)
-      { admit. }
-      { eauto. }
-    }
-    (* Subcase [yr < yl]. The right child is smaller. *)
-    { wp_op wp_move_down_aux shadowing: v. (* UGLY slow *)
-      { admit. }
-      { eauto 6. }
+    (* Case [x ≤ y]. [x] can settle here. *)
+    { wp_op vector.wp_set shadowing: v.
+      intro_move_post.
+      assert (dominates_children x i xs) by (split; eauto).
+      eapply heap_insert; eauto 3 with lia. }
+    (* Case [y < x]. [y] moves up; [x] continues to move down. *)
+    { set (y := yl).
+      wp_op vector.wp_set shadowing: v.
+      assert (dominates_children y i xs) by (split; eauto).
+      assert ((0 < i)%Z → xs !!! parent i ≤ y).
+      { intro. eapply grandparent_dominates_grandchild with (j := left i);
+        eauto 2 with lia. }
+      assert (heap (<[i:=y]> xs)).
+      { eapply heap_insert; eauto 2 with lia. }
+      unfold _left. wp_op IH shadowing: v.
+      eauto using move_post_insert with lia. }
+    (* END COPY 2 *)
+  }
+  (* Subcase [yr < yl]. The right child is smaller. *)
+  {
+    (* BEGIN COPY 3 *)
+    wp_if.
+    (* Case [x ≤ y]. [x] can settle here. *)
+    { wp_op vector.wp_set shadowing: v.
+      intro_move_post.
+      assert (dominates_children x i xs) by (split; eauto).
+      eapply heap_insert; eauto 3 with lia. }
+    (* Case [y < x]. [y] moves up; [x] continues to move down. *)
+    { set (y := yr).
+      wp_op vector.wp_set shadowing: v.
+      assert (dominates_children y i xs) by (split; eauto).
+      assert ((0 < i)%Z → xs !!! parent i ≤ y).
+      { intro. eapply grandparent_dominates_grandchild with (j := right i);
+        eauto 2 with lia. }
+      assert (heap (<[i:=y]> xs)).
+      { eapply heap_insert; eauto 2 with lia. }
+      unfold _right. wp_op IH shadowing: v.
+      eauto using move_post_insert with lia. }
+    (* END COPY 3 *)
   }
 Qed.
 
