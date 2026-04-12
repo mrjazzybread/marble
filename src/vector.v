@@ -100,6 +100,12 @@ Proof.
   arrays. lengths. ulength in *. lia.
 Qed.
 
+(* Sometimes the fact that a vector has bounded length must be
+   established a priori, at function definition time, as opposed to a
+   posteriori, while verifying a function. However, with our current
+   definition of the type [vector A], this is impossible: we would
+   need to record a proof of [(length v ≤? max_length)%uint63 = true]. *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* The tactic [vectors] looks for hypotheses of the form [isArray a xs]

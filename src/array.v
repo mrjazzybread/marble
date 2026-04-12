@@ -132,6 +132,15 @@ Proof.
   intros. destructIsArray. lengths. lia.
 Qed.
 
+(* Sometimes the fact that an array has bounded length must be
+   established a priori, at function definition time, as opposed to a
+   posteriori, while verifying a function. The axiom [leb_length] can
+   be used for this purpose. *)
+
+Goal ∀ A (a : array A),
+  (length a ≤? max_length)%uint63 = true.
+Proof. exact leb_length. Qed.
+
 (* The tactic [arrays] looks for hypotheses of the form [isArray a xs]
    and introduces the fact [0 ≤ len xs ≤ max_array_length]. *)
 
