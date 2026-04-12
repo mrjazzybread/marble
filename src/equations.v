@@ -74,8 +74,8 @@ Ltac cleanup :=
   end.
 
 (* I can never remember how to perform well-founded induction, so here is
-   a recipe. The goal must be of the form [x ⊢ P], where the variable [x]
-   has already been introduced. *)
+   a recipe. The goal must be either [x ⊢ P], where the variable [x]
+   has already been introduced, or [⊢ ∀x. P]. *)
 
 (* The type class [WellFounded], which is defined by Equations, is used
    to automatically find a proof of well-foundedness of the relation [R]. *)
