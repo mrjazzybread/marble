@@ -168,24 +168,19 @@ Local Hint Resolve parent_left_corollary parent_right_corollary : core.
    termination of [move_down] without keeping track of hypotheses about [n]
    and [i]. *)
 
-(* TODO change to Goal if unused *)
-Local Lemma left_child_test i n :
-(n ≤ left i ↔ parent (n - 1) < i)%Z.
+Goal ∀ i n, (n ≤ left i ↔ parent (n - 1) < i)%Z.
 Proof. lia. Qed.
 
-Local Lemma left_child_test' i n :
-(n ≤ left i ↔ n / 2 ≤ i)%Z.
+Goal ∀ i n, (n ≤ left i ↔ n / 2 ≤ i)%Z.
 Proof. lia. Qed.
 
-Local Lemma right_child_test i n :
-(n ≤ right i ↔ parent (n - 2) < i)%Z.
+Goal ∀ i n, (n ≤ right i ↔ parent (n - 2) < i)%Z.
 Proof. lia. Qed.
 
-Local Lemma right_child_test' i n :
-(n ≤ right i ↔ (n - 1) / 2 ≤ i)%Z.
+Goal ∀ i n, (n ≤ right i ↔ (n - 1) / 2 ≤ i)%Z.
 Proof. lia. Qed.
 
-Local Lemma note _i _n :
+Goal ∀ _i _n,
   (_n ≤? _i)%uint63 = false →
   (_n ≤? max_length)%uint63 = true →
   (_n ≤? _left _i)%uint63 = true ↔
