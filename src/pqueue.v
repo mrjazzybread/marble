@@ -151,6 +151,31 @@ Qed.
 
 Local Hint Resolve exploit_heap_upwards : heap.
 
+Lemma grandparent_dominates_grandchild xs i j y :
+  heap xs →
+  parent j = i →
+  y = xs !!! j →
+  valid i xs →
+  valid j xs →
+  (0 < i)%Z →
+  xs !!! parent i ≤ y.
+Proof.
+  intros. subst y.
+  assert (xs !!! parent i ≤ xs !!! i) by eauto 2 with heap lia.
+  assert (xs !!! i ≤ xs !!! j) by (subst i; eauto 2 with heap lia).
+  eauto.
+Qed.
+
+Lemma dominates_trans x y i xs :
+  dominates_children y i xs →
+  x ≤ y →
+  dominates_children x i xs.
+Proof.
+  intros (? & ?) ?. split; eauto.
+Qed.
+
+Local Hint Resolve dominates_trans : core.
+
 (* If [x] dominates the two children of slot 0 then it can be written
    into slot 0. *)
 
@@ -184,6 +209,20 @@ Proof.
   repeat case_lookup_insert; unpack; try subst;
   autorewrite with parent in *;
   eauto 2 with lia.
+Qed.
+
+(* A combination of the previous two lemmas. *)
+
+Lemma heap_insert x i xs :
+  heap xs →
+  valid i xs →
+  dominates_children x i xs →
+  ((0 < i)%Z → xs !!! parent i ≤ x) →
+  heap (<[i := x]>xs).
+Proof.
+  intros. case (decide (i = 0)); intros; [ subst i |].
+  { eauto using heap_insert_at_root. }
+  { eauto using heap_insert_deep with lia. }
 Qed.
 
 (* Moving an element [y] from slot [parent i] down to slot [i] is
@@ -397,6 +436,26 @@ Local Ltac elim_move_up_post xs' :=
     unpack in h
   end.
 
+(* Inside [move_up v _i x], if [y] is the element at index [j], then
+   writing [y] into slot [i] and calling [move_up v _j x] establishes
+   the desired postcondition. *)
+
+Lemma move_up_post_insert v i y xs j x :
+  move_up_post v (<[i:=y]> xs) j x →
+  valid i xs →
+  valid j xs →
+  i ≠ j →
+  y = xs !!! j →
+  move_up_post v xs i x.
+Proof.
+  intros. elim_move_up_post xs'. intro_move_up_post.
+  (* A permutation goal. *)
+  match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
+  rewrite swap_inserts by eauto.
+  rewrite (list_insert_total_id' _ j) by (list; eauto with lia).
+  eauto.
+Qed.
+
 (* This is the first specification of [move_up]. If [xs] forms a heap and
    if [x] dominates the children of slot [i] then [move_up v _i x] can be
    called. *)
@@ -446,12 +505,7 @@ Proof.
       destructHeap. subst y.
       split; intros; case_lookup_insert; eapply lt_le';
       eapply strict_transitive_l; eauto 2 with lia.
-    + elim_move_up_post xs'. intro_move_up_post.
-      (* Permutation. *)
-      match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
-      rewrite swap_inserts by lia.
-      rewrite (list_insert_total_id' _ j) by (list; eauto with lia).
-      eauto. }
+    + eauto using move_up_post_insert with lia. }
 Qed.
 
 (* This is the second specification of [move_up]. If [xs] forms a heap
