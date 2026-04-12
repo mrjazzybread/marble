@@ -91,6 +91,9 @@ Local Notation   left j := (2 * j + 1).
 Local Notation  right j := (2 * j + 2).
 Local Notation parent i := ((i - 1) / 2).
 
+Local Notation  _left _j := (2 * _j + 1)%uint63.
+Local Notation _right _j := (2 * _j + 2)%uint63.
+
 (* The tree is heap-ordered. *)
 
 Local Notation dominates_left_child x j xs :=
@@ -155,6 +158,51 @@ Proof.
 Qed.
 
 Local Hint Resolve parent_left_corollary parent_right_corollary : core.
+
+(* In the ideal integers, there are several ways of expressing the fact that
+   a node has no left child: one can write either [n ≤ left i] or [n / 2 ≤ i].
+   These conditions are equivalent. In the machine integers, however, these
+   tests are not equivalent; one must add extra hypotheses, namely [i < n] and
+   [n ≤ max_array_length], for these conditions to be equivalent. Thus, in
+   [move_down], we prefer to use the test [n / 2 ≤ i]; this lets us prove the
+   termination of [move_down] without keeping track of hypotheses about [n]
+   and [i]. *)
+
+(* TODO change to Goal if unused *)
+Local Lemma left_child_test i n :
+(n ≤ left i ↔ parent (n - 1) < i)%Z.
+Proof. lia. Qed.
+
+Local Lemma left_child_test' i n :
+(n ≤ left i ↔ n / 2 ≤ i)%Z.
+Proof. lia. Qed.
+
+Local Lemma right_child_test i n :
+(n ≤ right i ↔ parent (n - 2) < i)%Z.
+Proof. lia. Qed.
+
+Local Lemma right_child_test' i n :
+(n ≤ right i ↔ (n - 1) / 2 ≤ i)%Z.
+Proof. lia. Qed.
+
+Local Lemma note _i _n :
+  (_n ≤? _i)%uint63 = false →
+  (_n ≤? max_length)%uint63 = true →
+  (_n ≤? _left _i)%uint63 = true ↔
+  (_n / 2 ≤? _i)%uint63 = true.
+Proof. unfold max_length. lia. Qed.
+
+Local Lemma rigt_left {_i _n} :
+  (_n / 2 ≤?_i)%uint63 = false →
+  rigt _n (_left _i)%uint63 _i.
+Proof. eauto with lia. Qed.
+
+Local Lemma rigt_right {_i _n} :
+  ((_n - 1) / 2 ≤? _i)%uint63 = false →
+  rigt _n (_right _i)%uint63 _i.
+Proof. eauto with lia. Qed.
+
+Local Hint Resolve rigt_left rigt_right : core.
 
 (* If the heap property holds then every element is dominated by its
    parent in the tree. *)
@@ -601,45 +649,12 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* These notations and lemmas are used by [move_down]. *)
-
-Local Notation within _n _i :=
-  ((_n ≤? _i) = false)%uint63.
-
-Local Notation bounded _n :=
-  ((_n ≤? max_length) = true)%uint63.
-
-(* -------------------------------------------------------------------------- *)
-
 (* Extracting an element out of a priority queue: [move_down] and [extract]. *)
 
 Section Code.
 Open Scope uint63.
 
-(* The following two lemmas are needed to establish termination. They are
-   quite painful: they require keeping track of the fact that the index
-   [_i] lies within the bounds of the array (this is not implied by the
-   fact that [2 * _i + 1] lies within the bounds!) and of the fact that
-   the length of the array is bounded by [max_array_length]. As a result,
-   [move_down] must take these hypotheses as parameters. *)
-
-Local Lemma move_down_igt_left _n _i :
-  within _n _i → bounded _n → igt (2 * _i + 1) _i.
-Proof.
-  generalize array.unsigned_twice_max_array_length; intro.
-  unfold array.max_array_length in *.
-  eauto with lia.
-Qed.
-
-Local Lemma move_down_igt_right _n _i :
-  within _n _i → bounded _n → igt (2 * _i + 2) _i.
-Proof.
-  generalize array.unsigned_twice_max_array_length; intro.
-  unfold array.max_array_length in *.
-  eauto with lia.
-Qed.
-
-(* [move_down _n Hn v _i Hni x ACC] writes the element [x] into slot [_i],
+(* [move_down _n v _i x ACC] writes the element [x] into slot [_i],
    then moves it down as far as necessary to restore the heap invariant. *)
 
 (* [move_down] calls itself in three possible situations: 1- there is a
@@ -656,31 +671,18 @@ Qed.
    here or should continue to move down. The copies are marked with [BEGIN
    COPY ... END COPY] in the code and in the proof. *)
 
-Fixpoint move_down
-  _n (Hn : bounded _n)
-  v
-  _i (Hni : within _n _i)
-  x
-  (ACC : Acc igt _i)
-: vector.vector A :=
-
-  (* [_left] is the index of the left child of [_i], if it exists. *)
-  let _left := 2 * _i + 1 in
-  IFC _n ≤? _left THEN λ _,
+Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector.vector A :=
+  IFC _n / 2 ≤? _i THEN λ _,
     (* There are no children. [x] cannot move further down. *)
     vector.set v _i x
-  ELSE λ Hln,
+  ELSE λ Hl,
     (* The left child exists. *)
-    (* [_right] is the index of the left child of [_i], if it exists. *)
-    let _right := 2 * _i + 2 in
     (* To preserve the heap invariant, the smaller of the two children
        must move up. Let us compute its index [_j]. *)
-    IFC _n ≤? _right THEN λ _,
+    IFC (_n - 1) / 2 ≤? _i THEN λ _,
       (* Only the left child exists. Go left. *)
-      let _j := _left in
+      let _j := _left _i in
       do y ← vector.get v _j ;
-      let Hnj := Hln in
-      let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
       (* BEGIN COPY 1 *)
       if leb x y then
         (* [x] can settle here. *)
@@ -688,18 +690,18 @@ Fixpoint move_down
       else
         (* Move [y] up and continue moving [x] down. *)
         do v ← vector.set v _i y ;
-        move_down _n Hn v _j Hnj x ACC
+        move_down _n v _j x (Acc_inv ACC (rigt_left Hl))
       (* END COPY 1 *)
-    ELSE λ Hrn,
+    ELSE λ Hr,
       (* Both children exist. Compare them. *)
-      do yl ← vector.get v _left ;
-      do yr ← vector.get v _right ;
-      if leb yl yr then
+      let _i1 := _left _i in
+      let _i2 := _right _i in
+      do y1 ← vector.get v _i1 ;
+      do y2 ← vector.get v _i2 ;
+      if leb y1 y2 then
         (* The left child is smaller. Go left. *)
-        let _j := _left in
-        let Hnj := Hln in
-        let y := yl in
-        let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
+        let _j := _i1 in
+        let y := y1 in
         (* BEGIN COPY 2 *)
         if leb x y then
           (* [x] can settle here. *)
@@ -707,13 +709,11 @@ Fixpoint move_down
         else
           (* Move [y] up and continue moving [x] down. *)
           do v ← vector.set v _i y ;
-          move_down _n Hn v _j Hnj x ACC
+          move_down _n v _j x (Acc_inv ACC (rigt_left Hl))
         (* END COPY 2 *)
       else
-        let _j := _right in
-        let Hnj := Hrn in
-        let y := yr in
-        let ACC := Acc_inv ACC (move_down_igt_right _n _i Hni Hn) in
+        let _j := _i2 in
+        let y := y2 in
         (* BEGIN COPY 3 *)
         if leb x y then
           (* [x] can settle here. *)
@@ -721,90 +721,66 @@ Fixpoint move_down
         else
           (* Move [y] up and continue moving [x] down. *)
           do v ← vector.set v _i y ;
-          move_down _n Hn v _j Hnj x ACC
+          move_down _n v _j x (Acc_inv ACC (rigt_right Hr))
         (* END COPY 3 *)
 .
 
-(* The following two lemmas are needed to justify that [extract] is
-   allowed to invoke [move_down]. *)
+(* Here are [extract_nonempty] and [extract]. *)
 
-Local Lemma extract_within {_n} :
-  (_n =? 1) = false → within (_n - 1) 0.
-Proof. lia. Qed.
-
-Local Lemma bounded_n_minus_1 {_n} :
-  bounded _n → (_n =? 0) = false → bounded (_n - 1).
-Proof. lia. Qed.
-
-(* Here is [extract]. *)
+Definition extract_nonempty q : A :=
+  (* Pop the last element [x] of the vector. *)
+  do (x, q) ← vector.pop q ;
+  do _n ← vector.length q ;
+  if _n =? 0 then
+    (* [x] was the only element. We are done. *)
+    x
+  else
+    (* Read the first element [m] of the vector. *)
+    (* This is the root of the tree. *)
+    do m ← vector.get q 0 ;
+    (* Now place [x] at the root of the tree and let it go down. *)
+    do v ← move_down _n q 0 x (Wf_rigt _n 0) ;
+    (* Return [m]. *)
+    m.
 
 Definition extract q : option A :=
   do _n ← vector.length q ;
-  if (_n =? 0) then
-    (* The queue is empty. *)
-    None
-  else
-    (* Pop the last element [x] of the vector. *)
-    do (x, q) ← vector.pop q ;
-    IFC (_n =? 1) THEN λ _,
-      (* [x] was the only element. We are done. *)
-      Some x
-    ELSE λ Hn0,
-      let _n := _n - 1 in
-      IFC (_n ≤? max_length) THEN λ Hn,
-        (* Read the first element [m] of the vector. *)
-        (* This is the root of the tree. *)
-        do m ← vector.get q 0 ;
-        (* Now place [x] at the root of the tree and let it go down. *)
-        do v ← move_down _n Hn q 0 (extract_within Hn0) x (Wf_igt 0) ;
-        (* Return [m]. *)
-        Some m
-      ELSE λ _,
-        (* This cannot happen. The runtime test [_n ≤? max_length] always
-           succeeds. We cannot avoid this test because our definition of
-           the type [vector A] does not keep track of the fact that the
-           length of a vector is bounded by [max_array_length]. *)
-        None.
+  if (_n =? 0) then None else
+  do x ← extract_nonempty q ;
+  Some x.
 
 End Code.
 
-Local Hint Resolve move_down_igt_left move_down_igt_right : core.
+(* The specification of [move_down]. *)
 
 Lemma wp_move_down :
-  ∀IntU _i i,
   ∀IntU _n n,
-  ∀ (Hn : bounded _n) (Hni : within _n _i),
+  ∀IntU _i i,
   ∀ v xs x ACC,
   vector.isVector v xs →
   n = len xs →
+  valid i xs →
   heap xs →
   ((0 < i)%Z → xs !!! parent i < x) →
-  wp (move_down _n Hn v _i Hni x ACC) (λ v, move_post v xs i x).
+  wp (move_down _n v _i x ACC) (λ v, move_post v xs i x).
 Proof.
-  by well-founded induction on _i along igt.
-  intros.
-  (* Preliminaries. *)
-  assert (i < n)%Z.
-  { rewrite isInt_def in *. lia. }
-  assert (0 ≤ n ≤ array.max_array_length).
-  { rewrite isInt_def in *. unfold array.max_array_length. lia. }
+  intros _n n ? ?.
+  by well-founded induction on _i along (rigt _n).
+  intros. vector.vectors.
   destruct ACC; simpl.
-  set (_left  := (2 * _i + 1)%uint63).
-  set (_right := (2 * _i + 2)%uint63).
-  assert (isInt _left (left i)) by tc.
-  assert (isInt _right (right i)) by tc.
-  generalize array.unsigned_twice_max_array_length; intro.
-  assert (unsigned (left i)) by lia.
-  assert (unsigned (right i)) by lia.
+  set (_i1 :=  _left _i).
+  set (_i2 := _right _i).
+  assert (isInt _i1 (left i)) by tc.
+  assert (isInt _i2 (right i)) by tc.
   (* Now examine the code. *)
   wp_if.
-  (* Case [n ≤ left i]. There are no children. *)
+  (* Case [n / 2 ≤ i]. There are no children. *)
   { wp_op vector.wp_set shadowing: v.
     intro_move_post.
     eapply heap_insert; eauto 3 with lia. }
-  (* Case [left i < n]. There is a left child. *)
+  (* Case [i < n / 2]. There is a left child. *)
   wp_if.
-  (* Case [n ≤ right i]. There is only a left child. *)
+  (* Case [(n - 1) / 2 ≤ i]. There is only a left child. *)
   { wp_op vector.wp_get introducing: y.
     (* BEGIN COPY 1 *)
     wp_if.
@@ -827,11 +803,11 @@ Proof.
       eauto using move_post_insert with lia. }
     (* END COPY 1 *)
   }
-  (* Case [right i < n]. There are two children. *)
-  wp_op vector.wp_get introducing: yl.
-  wp_op vector.wp_get introducing: yr.
+  (* Case [i < (n - 1) / 2]. There are two children. *)
+  wp_op vector.wp_get introducing: y1.
+  wp_op vector.wp_get introducing: y2.
   wp_if.
-  (* Subcase [yl ≤ yr]. The left child is smaller. *)
+  (* Subcase [y1 ≤ y2]. The left child is smaller. *)
   {
     (* BEGIN COPY 2 *)
     wp_if.
@@ -841,7 +817,7 @@ Proof.
       assert (dominates_children x i xs) by (split; eauto).
       eapply heap_insert; eauto 3 with lia. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
-    { set (y := yl).
+    { set (y := y1).
       wp_op vector.wp_set shadowing: v.
       assert (dominates_children y i xs) by (split; eauto).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
@@ -849,11 +825,11 @@ Proof.
         eauto 2 with lia. }
       assert (heap (<[i:=y]> xs)).
       { eapply heap_insert; eauto 2 with lia. }
-      unfold _left. wp_op IH shadowing: v.
+      unfold _i1. wp_op IH shadowing: v.
       eauto using move_post_insert with lia. }
     (* END COPY 2 *)
   }
-  (* Subcase [yr < yl]. The right child is smaller. *)
+  (* Subcase [y2 < y1]. The right child is smaller. *)
   {
     (* BEGIN COPY 3 *)
     wp_if.
@@ -863,7 +839,7 @@ Proof.
       assert (dominates_children x i xs) by (split; eauto).
       eapply heap_insert; eauto 3 with lia. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
-    { set (y := yr).
+    { set (y := y2).
       wp_op vector.wp_set shadowing: v.
       assert (dominates_children y i xs) by (split; eauto).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
@@ -871,7 +847,7 @@ Proof.
         eauto 2 with lia. }
       assert (heap (<[i:=y]> xs)).
       { eapply heap_insert; eauto 2 with lia. }
-      unfold _right. wp_op IH shadowing: v.
+      unfold _i2. wp_op IH shadowing: v.
       eauto using move_post_insert with lia. }
     (* END COPY 3 *)
   }
