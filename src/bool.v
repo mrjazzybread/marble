@@ -178,14 +178,14 @@ Global Ltac isBool_magic :=
       evar (P : Prop);
       assert (P); [
         eapply (@isBool_elim_true b); [ exact h | tc ]
-      | clear h; subst P
+      | try clear h; subst P
       ]
   | h: ?b = false |- _ =>
       let P := fresh in
       evar (P : Prop);
       assert (P); [
         eapply (@isBool_elim_false b); [ exact h | tc ]
-      | clear h; subst P
+      | try clear h; subst P
       ]
   end.
 
