@@ -578,6 +578,28 @@ Qed.
 
 (* Extracting an element out of a priority queue: [move_down] and [extract]. *)
 
+(* TODO some of the following stuff could move elsewhere *)
+
+Local Notation within _n _i :=
+  ((_n ≤? _i) = false)%uint63.
+
+Local Notation bounded _n :=
+  ((_n ≤? max_length) = true)%uint63.
+
+Local Lemma within_iff :
+  ∀IntU _n n,
+  ∀IntU _i i,
+  within _n _i ↔ (i < n)%Z.
+Proof.
+  intros. rewrite isInt_def in *. lia.
+Qed.
+
+Local Lemma bounded_iff :
+  ∀IntU _n n, bounded _n ↔ 0 ≤ n ≤ array.max_array_length.
+Proof.
+  unfold array.max_array_length. intros. rewrite isInt_def in *. lia.
+Qed.
+
 Section Code.
 Open Scope uint63.
 
@@ -587,12 +609,6 @@ Open Scope uint63.
    fact that [2 * _i + 1] lies within the bounds!) and of the fact that
    the length of the array is bounded by [max_array_length]. As a result,
    [move_down] must take these hypotheses as parameters. *)
-
-Local Notation within _n _i :=
-  ((_n ≤? _i) = false).
-
-Local Notation bounded _n :=
-  ((_n ≤? max_length) = true).
 
 Local Lemma move_down_igt_left _n _i :
   within _n _i → bounded _n → igt (2 * _i + 1) _i.
@@ -649,36 +665,36 @@ Fixpoint move_down
   x
   (ACC : Acc igt _i)
 : vector.vector A :=
-  (* [left] is the index of the left child of [_i], if it exists. *)
-  let left := 2 * _i + 1 in
-  IFC _n ≤? left THEN λ _,
+  (* [_left] is the index of the left child of [_i], if it exists. *)
+  let _left := 2 * _i + 1 in
+  IFC _n ≤? _left THEN λ _,
     (* There are no children. [x] cannot move further down. *)
     vector.set v _i x
   ELSE λ Hln,
     (* The left child exists. *)
-    (* [right] is the index of the left child of [_i], if it exists. *)
-    let right := 2 * _i + 2 in
+    (* [_right] is the index of the left child of [_i], if it exists. *)
+    let _right := 2 * _i + 2 in
     (* To preserve the heap invariant, the smaller of the two children
        must move up. Let us compute its index [_j]. *)
-    IFC _n ≤? right THEN λ _,
+    IFC _n ≤? _right THEN λ _,
       (* Only the left child exists. Go left. *)
-      let _j := left in
+      let _j := _left in
       do y ← vector.get v _j ;
       let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
       move_down_aux move_down _n Hn v _i x _j Hln y ACC
     ELSE λ Hrn,
       (* Both children exist. Compare them. *)
-      do yl ← vector.get v left ;
-      do yr ← vector.get v right ;
+      do yl ← vector.get v _left ;
+      do yr ← vector.get v _right ;
       if leb yl yr then
         (* The left child is smaller. Go left. *)
-        let _j := left in
-        do y ← vector.get v _j ;
+        let _j := _left in
+        let y := yl in
         let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
         move_down_aux move_down _n Hn v _i x _j Hln y ACC
       else
-        let _j := right in
-        do y ← vector.get v _j ;
+        let _j := _right in
+        let y := yr in
         let ACC := Acc_inv ACC (move_down_igt_right _n _i Hni Hn) in
         move_down_aux move_down _n Hn v _i x _j Hrn y ACC.
 
@@ -724,6 +740,112 @@ Definition extract q : option A :=
         None.
 
 End Code.
+
+Local Notation move_down_post :=
+  move_up_post.
+Local Ltac intro_move_down_post :=
+  intro_move_up_post.
+Local Ltac elim_move_down_post xs' :=
+  elim_move_up_post xs'.
+Definition move_down_post_insert :=
+  move_up_post_insert.
+
+Definition move_down_spec (move_down : typeof_move_down) :=
+  ∀IntU _i i,
+  ∀IntU _n n,
+  ∀ (Hn : bounded _n) (Hni : within _n _i),
+  ∀ v xs x ACC,
+  vector.isVector v xs →
+  n = len xs →
+  heap xs →
+  ((0 < i)%Z → xs !!! parent i < x) →
+  wp (move_down _n Hn v _i Hni x ACC) (λ v, move_down_post v xs i x).
+
+Lemma wp_move_down_aux :
+  ∀ (move_down : typeof_move_down),
+  move_down_spec move_down →
+  ∀IntU _i i,
+  ∀IntU _j j,
+  ∀IntU _n n,
+  ∀ (Hn : bounded _n) (Hnj : within _n _j) ACC,
+  ∀ v xs x y,
+  vector.isVector v xs →
+  n = len xs →
+  heap xs →
+  ((0 < i)%Z → xs !!! parent i < x) →
+  parent j = i →
+  y = xs !!! j →
+  dominates_children y i xs →
+  wp (move_down_aux move_down _n Hn v _i x _j Hnj y ACC)
+     (λ v, move_down_post v xs i x).
+Proof.
+  intros ? IH. intros. unfold move_down_aux.
+  (* Preliminaries. *)
+  assert (j < n)%Z.
+  { rewrite within_iff in Hnj by eauto. eauto. }
+  assert (0 ≤ n ≤ array.max_array_length).
+  { rewrite bounded_iff in Hn by eauto. eauto. }
+  wp_if.
+  (* Case [x ≤ y]. [x] can settle here. *)
+  { wp_op vector.wp_set shadowing: v.
+    intro_move_down_post.
+    eapply heap_insert; eauto 3 with lia. }
+  (* Case [y < x]. [y] moves up; [x] continues to move down. *)
+  { wp_op vector.wp_set shadowing: v.
+    wp_op IH shadowing: v.
+    { eapply heap_insert;
+      eauto 2 using grandparent_dominates_grandchild with lia. }
+    { list. eauto 3. }
+    eauto using move_down_post_insert with lia. }
+Qed.
+
+Lemma wp_move_down :
+  move_down_spec move_down.
+Proof.
+  unfold move_down_spec.
+  by well-founded induction on _i along igt.
+  intros.
+  (* Preliminaries. *)
+  assert (i < n)%Z.
+  { rewrite within_iff in Hni by eauto. eauto. }
+  assert (0 ≤ n ≤ array.max_array_length).
+  { rewrite bounded_iff in Hn by eauto. eauto. }
+  destruct ACC; simpl.
+  set (_left  := (2 * _i + 1)%uint63).
+  set (_right := (2 * _i + 2)%uint63).
+  assert (isInt _left (left i)) by tc.
+  assert (isInt _right (right i)) by tc.
+  generalize array.unsigned_twice_max_array_length; intro.
+  assert (unsigned (left i)) by lia.
+  assert (unsigned (right i)) by lia.
+  (* Now examine the code. *)
+  wp_if.
+  (* Case [n ≤ left i]. There are no children. *)
+  { wp_op vector.wp_set shadowing: v.
+    intro_move_down_post.
+    eapply heap_insert; eauto 3 with lia. }
+  (* Case [left i < n]. There is a left child. *)
+  wp_if.
+  (* Case [n ≤ right i]. There is only a left child. *)
+  { wp_op vector.wp_get introducing: y.
+    wp_op wp_move_down_aux shadowing: v.
+    { admit. }
+  }
+  (* Case [right i < n]. There are two children. *)
+  { wp_op vector.wp_get introducing: yl.
+    wp_op vector.wp_get introducing: yr.
+    wp_if.
+    (* Subcase [yl ≤ yr]. The left child is smaller. *)
+    { wp_op wp_move_down_aux shadowing: v. (* UGLY slow *)
+      { admit. }
+      { eauto. }
+    }
+    (* Subcase [yr < yl]. The right child is smaller. *)
+    { wp_op wp_move_down_aux shadowing: v. (* UGLY slow *)
+      { admit. }
+      { eauto 6. }
+  }
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
