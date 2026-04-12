@@ -522,4 +522,155 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Extracting an element out of a priority queue: [move_down] and [extract]. *)
+
+Section Code.
+Open Scope uint63.
+
+(* The following two lemmas are needed to establish termination. They are
+   quite painful: they require keeping track of the fact that the index
+   [_i] lies within the bounds of the array (this is not implied by the
+   fact that [2 * _i + 1] lies within the bounds!) and of the fact that
+   the length of the array is bounded by [max_array_length]. As a result,
+   [move_down] must take these hypotheses as parameters. *)
+
+Local Notation within _n _i :=
+  ((_n ≤? _i) = false).
+
+Local Notation bounded _n :=
+  ((_n ≤? max_length) = true).
+
+Local Lemma move_down_igt_left _n _i :
+  within _n _i → bounded _n → igt (2 * _i + 1) _i.
+Proof.
+  generalize array.unsigned_twice_max_array_length; intro.
+  unfold array.max_array_length in *.
+  eauto with lia.
+Qed.
+
+Local Lemma move_down_igt_right _n _i :
+  within _n _i → bounded _n → igt (2 * _i + 2) _i.
+Proof.
+  generalize array.unsigned_twice_max_array_length; intro.
+  unfold array.max_array_length in *.
+  eauto with lia.
+Qed.
+
+(* [move_down _n Hn v _i Hni x ACC] writes the element [x] into slot [_i],
+   then moves it down as far as necessary to restore the heap invariant. *)
+
+(* This is the type of [move_down]. *)
+
+Definition typeof_move_down :=
+  ∀ _n : int,
+  bounded _n →
+  vector.vector A →
+  ∀ _i : int,
+  within _n _i →
+  A →
+  Acc igt _i →
+  vector.vector A.
+
+(* In order to avoid some duplication, we define an auxiliary function
+   [move_down_aux]. This function compare [x] and its child [y] and
+   determines whether [x] should settle here or should continue to go
+   down. *)
+(* TODO inline this function? *)
+
+Definition move_down_aux (move_down : typeof_move_down)
+  _n (Hn : bounded _n) v _i x _j (Hnj : within _n _j) y (ACC : Acc igt _j) : vector.vector A
+:=
+  if leb x y then
+    (* [x] can settle here. *)
+    vector.set v _i x
+  else
+    (* Move [y] up and continue moving [x] down. *)
+    do v ← vector.set v _i y ;
+    move_down _n Hn v _j Hnj x ACC.
+
+Fixpoint move_down
+  _n (Hn : bounded _n)
+  v
+  _i (Hni : within _n _i)
+  x
+  (ACC : Acc igt _i)
+: vector.vector A :=
+  (* [left] is the index of the left child of [_i], if it exists. *)
+  let left := 2 * _i + 1 in
+  IFC _n ≤? left THEN λ _,
+    (* There are no children. [x] cannot move further down. *)
+    vector.set v _i x
+  ELSE λ Hln,
+    (* The left child exists. *)
+    (* [right] is the index of the left child of [_i], if it exists. *)
+    let right := 2 * _i + 2 in
+    (* To preserve the heap invariant, the smaller of the two children
+       must move up. Let us compute its index [_j]. *)
+    IFC _n ≤? right THEN λ _,
+      (* Only the left child exists. Go left. *)
+      let _j := left in
+      do y ← vector.get v _j ;
+      let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
+      move_down_aux move_down _n Hn v _i x _j Hln y ACC
+    ELSE λ Hrn,
+      (* Both children exist. Compare them. *)
+      do yl ← vector.get v left ;
+      do yr ← vector.get v right ;
+      if leb yl yr then
+        (* The left child is smaller. Go left. *)
+        let _j := left in
+        do y ← vector.get v _j ;
+        let ACC := Acc_inv ACC (move_down_igt_left _n _i Hni Hn) in
+        move_down_aux move_down _n Hn v _i x _j Hln y ACC
+      else
+        let _j := right in
+        do y ← vector.get v _j ;
+        let ACC := Acc_inv ACC (move_down_igt_right _n _i Hni Hn) in
+        move_down_aux move_down _n Hn v _i x _j Hrn y ACC.
+
+(* The following two lemmas are needed to justify that [extract] is
+   allowed to invoke [move_down]. *)
+
+Local Lemma extract_within {_n} :
+  (_n =? 1) = false → within (_n - 1) 0.
+Proof. lia. Qed.
+
+Local Lemma bounded_n_minus_1 {_n} :
+  bounded _n → (_n =? 0) = false → bounded (_n - 1).
+Proof. lia. Qed.
+
+(* Here is [extract]. *)
+
+Definition extract q : option A :=
+  do _n ← vector.length q ;
+  if (_n =? 0) then
+    (* The queue is empty. *)
+    None
+  else
+    (* Pop the last element [x] of the vector. *)
+    do (x, q) ← vector.pop q ;
+    IFC (_n =? 1) THEN λ _,
+      (* [x] was the only element. We are done. *)
+      Some x
+    ELSE λ Hn0,
+      let _n := _n - 1 in
+      IFC (_n ≤? max_length) THEN λ Hn,
+        (* Read the first element [m] of the vector. *)
+        (* This is the root of the tree. *)
+        do m ← vector.get q 0 ;
+        (* Now place [x] at the root of the tree and let it go down. *)
+        do v ← move_down _n Hn q 0 (extract_within Hn0) x (Wf_igt 0) ;
+        (* Return [m]. *)
+        Some m
+      ELSE λ _,
+        (* This cannot happen. The runtime test [_n ≤? max_length] always
+           succeeds. We cannot avoid this test because our definition of
+           the type [vector A] does not keep track of the fact that the
+           length of a vector is bounded by [max_array_length]. *)
+        None.
+
+End Code.
+
+(* -------------------------------------------------------------------------- *)
+
 End PQueue.
