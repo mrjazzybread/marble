@@ -598,8 +598,8 @@ Lemma wp_read_write_borrow {B} v xs body (Q  : B * vector A → Prop) :
   ( ∀ a unoccupied,
     isArray a (xs ++ unoccupied) →
     wp (body a) (λ '(b, a),
-      ∃ xs' unoccupied',
-      isArray a (xs' ++ unoccupied') ∧
+      ∃ xs',
+      isArray a (xs' ++ unoccupied) ∧
       len xs = len xs' ∧
       (∀ v, isVector v xs' → Q (b, v))
     )
@@ -609,7 +609,7 @@ Proof.
   intros ? Hbody.
   destructIsVector. destructIsVectorCap. unfold read_write_borrow.
   wp_op Hbody. clear dependent a. intros (b & a).
-  intros (xs' & unoccupied' & ? & ? & HQ).
+  intros (xs' & ? & ? & HQ).
   wp_ret.
   eapply HQ. introIsVector.
   introIsVectorCap; eauto. congruence.
