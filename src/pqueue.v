@@ -87,12 +87,13 @@ Local Infix "≃" := (@Permutation A)
 (* The node at index [i] has children at indices [2 * i + 1] and
    [2 * i + 2], provided these are valid indices into the vector. *)
 
-Local Notation   left j := (2 * j + 1).
-Local Notation  right j := (2 * j + 2).
-Local Notation parent i := ((i - 1) / 2).
+Local Notation     left j := (2 * j + 1).
+Local Notation    right j := (2 * j + 2).
+Local Notation   parent i := ((i - 1) / 2).
 
-Local Notation  _left _j := (2 * _j + 1)%uint63.
-Local Notation _right _j := (2 * _j + 2)%uint63.
+Local Notation   _left _j := (2 * _j + 1)%uint63.
+Local Notation  _right _j := (2 * _j + 2)%uint63.
+Local Notation _parent _i := ((_i - 1) / 2)%uint63.
 
 (* The tree is heap-ordered. *)
 
@@ -447,7 +448,7 @@ Qed.
 Section Code.
 Open Scope uint63.
 
-Local Lemma move_up_ilt _i : (_i =? 0) = false → ilt ((_i - 1) / 2) _i.
+Local Lemma move_up_ilt _i : (_i =? 0) = false → ilt (_parent _i) _i.
 Proof. eauto with lia. Qed.
 
 (* [move_up v _i x] writes the element [x] into slot [_i], then moves it
@@ -459,7 +460,7 @@ Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector.vector A :=
     vector.set v _i x
   ELSE λ Hi,
     (* [_j] is the parent of [_i]. *)
-    let _j := (_i - 1) / 2 in
+    let _j := _parent _i in
     (* Read the element [y] in slot [_j]. *)
     do y ← vector.get v _j ;
     if (y ≤? x)%element then
@@ -556,7 +557,7 @@ Proof.
   { wp_op vector.wp_set shadowing: v.
     intro_move_post; eauto using heap_insert_at_root. }
   (* Case [i ≠ 0]. *)
-  set (_j := ((_i - 1) / 2)%uint63).
+  set (_j := (_parent _i)).
   set (j := parent i).
   assert (isInt _j j) by tc.
   wp_op vector.wp_get introducing: y.
@@ -598,7 +599,7 @@ Proof.
     wp_op vector.wp_set shadowing: v.
     intro_move_post; eauto using singleton_heap. }
   (* Case [n ≠ 0]. *)
-  set (_j := ((_n - 1) / 2)%uint63).
+  set (_j := (_parent _n)).
   set (j := parent n).
   assert (isInt _j j) by tc.
   wp_op vector.wp_get introducing: y.
