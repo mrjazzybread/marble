@@ -77,8 +77,13 @@ Ltac cleanup :=
    a recipe. The goal must be either [x ⊢ P], where the variable [x]
    has already been introduced, or [⊢ ∀x. P]. *)
 
-(* The type class [WellFounded], which is defined by Equations, is used
-   to automatically find a proof of well-foundedness of the relation [R]. *)
+(* We offer two variants: one writes either [using Hwf], where [Hwf]
+   is a proof of [well_founded R], or [along R], where type class
+   search is able to find a proof of [WellFounded R]. The type class
+   [WellFounded] is defined by Equations. *)
+
+Tactic Notation "by" "well-founded" "induction" "on" ident(x) "using" constr(Hwf) :=
+  induction x as [ x IH ] using (well_founded_ind Hwf).
 
 Tactic Notation "by" "well-founded" "induction" "on" ident(x) "along" constr(R) :=
   let Hwf := fresh in
