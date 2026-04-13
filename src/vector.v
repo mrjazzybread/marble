@@ -239,13 +239,14 @@ Definition pop v : A * vector A :=
 
 End Code.
 
+(* A specification of [pop]. *)
+
 Lemma wp_pop v xs :
   isVector v xs →
   0 < len xs →
   wp (pop v) (λ '(x, v),
-    let i := len xs - 1 in
-    x = xs !!! i ∧
-    isVector v (initial_seg i xs)
+    x = xs !!! (len xs - 1) ∧
+    isVector v (initial_seg (len xs - 1) xs)
   ).
 Proof.
   intros. unfold pop.
@@ -254,6 +255,22 @@ Proof.
   introIsVector.
   introIsVectorCapWithWitness ({[x]} ++ unoccupied); tc.
   subst x. isArray.
+Qed.
+
+(* An alternate specification of [pop]. *)
+
+Lemma wp_pop' v xs :
+  isVector v xs →
+  0 < len xs →
+  wp (pop v) (λ '(x, v),
+    ∃ xs',
+    isVector v xs' ∧
+    xs = xs' ++ {[x]}
+  ).
+Proof.
+  intros.
+  wp_op wp_pop introducing: (x & v').
+  eexists. split; [ eauto | lego ].
 Qed.
 
 (* -------------------------------------------------------------------------- *)
