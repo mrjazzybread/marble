@@ -379,6 +379,13 @@ Tactic Notation "wp_apply" uconstr(lemma) "with" "invariant:" constr(I) :=
 (* The first subgoal is changed by [wp_apply lemma] into an arbitrary
    number of subgoals (preconditions). *)
 
+(* One may think that [wp_op lemma] should first try [wp_apply lemma],
+   as this could succeed directly, without introducing an unnecessary
+   application of the consequence rule. However, [wp_apply lemma] can
+   also lead to a dead end: when [lemma] is a universally quantified
+   statement, [wp_apply lemma] can instantiate the quantifiers in an
+   incorrect way and create unsatisfiable goals. *)
+
 Tactic Notation "wp_op" uconstr(lemma) :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
     [ wp_apply lemma | ].
