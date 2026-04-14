@@ -258,9 +258,7 @@ Ltac wp_bind_eq :=
    redefine it if they need more expensive / aggressive simplification. *)
 
 Ltac wp_intro_hook Hx :=
-  unpack in Hx;
-  (* Attempt to cheaply solve the goal. *)
-  wp_ret_hook.
+  unpack in Hx.
 
 (* -------------------------------------------------------------------------- *)
 
