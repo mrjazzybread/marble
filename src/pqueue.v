@@ -73,8 +73,6 @@ Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
 Local Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
 
-Local Hint Resolve lt_equiv_lt equiv_lt_lt : order.
-
 (* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
    a permutation of their elements. In other words, [xs ≃ ys] means that
    the multisets [xs] and [ys] are equal. *)

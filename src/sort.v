@@ -105,7 +105,6 @@ Local Lemma lt_equiv_lt x y z : x < y → y ≡ z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
 Local Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
-Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
 
 (* We assume that there is a second preorder [R'] on the type [A]. *)
 
