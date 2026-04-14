@@ -6,9 +6,64 @@
 
 ## The Program Logic
 
-TODO: `equations.v`
-TODO: `tactics.v`
+The code in this library is ordinary Rocq code. It is purely functional.
+It uses Rocq's
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays).
+They are persistent arrays, whose implementation exploits mutable arrays.
+When an array is updated, a new array is returned.
+In principle, the previous array still exists and can still be accessed;
+in practice, however, for efficiency, it should not be accessed:
+[a section of this document](#the-linear-use-discipline) explains why.
+
+Because updating a data structure produces a new data structure,
+all code must naturally be written in state-passing style.
+We provide the notation [`do x ← e1 ; e2`](wp.v:Definition bind)
+to facilitate this. It should typically be used when one thinks
+of `e1` as a (possibly complex) *computation* whose result one wants to name `x`.
+Rocq's native notation `let x := e1 in e2` can also be used.
+It should typically be used when `e1` is a (small) *expression*,
+such as an arithmetic expression.
+
+We also provide the notation [`f @@ x`](wp.v:a function application operator)
+for function application. This notation allows the parentheses around the
+argument `x` to be omitted, even if this argument is a complex expression.
+This is very useful when `f` is a higher-order function and `x` itself is a
+function: in particular, this leads to a rather nice way of writing
+[loops](#iteration-on-machine-integers).
+
+To help users write specifications and verify programs, we define a simple
+program logic, in the style of Hoare logic.
+The judgement [`wp e Q`](wp.v:Definition wp)
+means that the expression `e` admits the postcondition `Q`:
+that is, result of `e` satisfies the property `Q`.
+Naturally, Rocq does not distinguish between a computation and its result:
+they are considered equal. Thus, the definition of `wp e Q` is just `Q e`.
+Nevertheless, the judgement `wp` is useful: applying its reasoning rules lets
+us reason step by step about the behavior of a program.
+
+The basic reasoning rules are
+[return](wp.v:Lemma wp_ret),
+[sequencing](wp.v:Lemma wp_bind),
+[conditional](wp.v:Lemma wp_if),
+and
+[consequence](wp.v:Lemma wp_conseq).
+We offer several tactics that help apply these rules: see below.
+
+We offer syntactic sugar for two dependent conditional constructs,
+[`IFC e0 THEN e1 ELSE e2`](equations.v:IFC e0 THEN e1 ELSE e2)
+and
+[`IF e0 THEN e1 ELSE e2`](equations.v:IF e0 THEN e1 ELSE e2).
+These constructs are useful and necessary
+when the status of condition `e0`
+is needed in a proof of termination,
+that is,
+when a proof of termination
+needs a hypothesis of type `e0 = true` or `e0 = true`.
+The definition of [`iter_down`](Fixpoint iter_down_aux)
+offers an example of this.
+
 TODO: `wp.v`
+TODO: `tactics.v`
 
 <!--------------------------------------------------------------------------->
 
@@ -18,7 +73,7 @@ TODO: `bool.v`
 
 <!--------------------------------------------------------------------------->
 
-## Machine integers
+## Machine Integers
 
 TODO: `int.v`
 
@@ -335,6 +390,10 @@ TODO: `vector.v`
 ## Priority Queues
 
 TODO: `pqueue.v`
+
+<!--------------------------------------------------------------------------->
+
+## The Linear Use Discipline
 
 <!--------------------------------------------------------------------------->
 
