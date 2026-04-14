@@ -238,6 +238,8 @@ Proof.
   eapply Permutation_app_comm.
 Qed.
 
+Local Hint Resolve Permutation_refl : marble.
+
 (* -------------------------------------------------------------------------- *)
 
 (* What can one do, at the leaves, to speed up a merge sort? Three approaches
@@ -696,7 +698,7 @@ Definition isortto_inv src srcofs dst dstofs := λ i _dst,
   sorted (seg dstofs (dstofs + i) dst').
 
 Local Ltac intro_isortto_inv :=
-  unfold isortto_inv; pack; list; tc3; list; tc3.
+  unfold isortto_inv; pack; list; tc2; list; tc2. (* yes, this is needed *)
 
 Local Ltac elim_isortto_inv dst' :=
   match goal with h: isortto_inv _ _ _ _ _ _ |- _ =>
@@ -796,7 +798,7 @@ Proof.
     with invariant: (isortto_inv src srcofs dst dstofs);
     last wp_intro ?.
   (* Initialization of the outer loop. *)
-  { intro_isortto_inv. }
+  { intro_isortto_inv. sorted. }
   (* The body of the outer loop. *)
   { clear dependent _dst. wp_iter_up_body _i i _dst.
     elim_isortto_inv dst'.
@@ -923,7 +925,7 @@ Proof.
     with invariant: (isortto_inv xs srcofs xs dstofs);
     last wp_intro ?.
   (* Initialization of the outer loop. *)
-  { intro_isortto_inv. }
+  { intro_isortto_inv. sorted. }
   (* The body of the outer loop. *)
   { clear dependent a. wp_iter_up_body _i i a.
     elim_isortto_inv xs'.
@@ -1041,8 +1043,8 @@ Local Instance Wf_order _j1 _j2 : WellFounded (order _j1 _j2) :=
   wf_guard 32 (wf_order _j1 _j2).
 
 Local Hint Extern 1 (order _ _ _ _) =>
-  unfold order, order1, order2
-: lia.
+  unfold order, order1, order2, rigt, igt
+: marble.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1256,7 +1258,7 @@ Qed.
 
 (* A stronger local setting is needed for the proofs that follow. *)
 
-Local Ltac wp_precondition_hook ::=
+Local Ltac wp_precondition_secondary_hook ::=
   list;
   match goal with
   | |- Sorted _ _ =>
@@ -2663,6 +2665,7 @@ Lemma wp_sort_seg' a xs _i i _n n :
 Proof.
   intros.
   wp_op (@wp_sort_seg A _ R _ _ _ R' _) shadowing: a.
+  { eauto. }
   elim_sort_seg_post xs'.
   eauto 7 using Sorted_covariant.
 Qed.
@@ -2685,6 +2688,7 @@ Lemma wp_sort' `{Inhabited A, PreOrder A R, LebSpec A R} a xs :
 Proof.
   intros.
   wp_op (@wp_sort A _ R _ _ _ R' _) shadowing: a.
+  { eauto. }
   elim_sort_post xs'.
   eauto 6 using Sorted_covariant.
 Qed.
@@ -2709,6 +2713,9 @@ Lemma wp_merge' `{Inhabited A, PreOrder A R, LebSpec A R} :
 Proof.
   intros.
   wp_op (@wp_merge A _ R _ _ _ R' _) introducing: c.
+  { eauto. }
+  { eauto. }
+  { eauto. }
   eauto using Sorted_covariant.
 Qed.
 
