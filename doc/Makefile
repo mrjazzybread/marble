@@ -16,5 +16,6 @@ clean:
 	@ git clean -fdX
 
 %.md: %.md.pre $(wildcard ../src/*.v) preprocess.sh
+	@ rm -f $@
 	./preprocess.sh $< > $@
 	@ chmod u-w $@
