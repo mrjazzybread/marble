@@ -42,7 +42,7 @@ is needed in a proof of termination,
 that is,
 when a proof of termination
 needs a hypothesis of type `e0 = true` or `e0 = true`.
-The definition of [`iter_down`](Fixpoint iter_down_aux)
+The definition of [`iter_down`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/loop.v?ref_type=heads#L65)
 offers an example of this.
 
 <!--------------------------------------------------------------------------->
@@ -72,7 +72,7 @@ The tactic [`wp_ret`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp
 `wp e Q` where `e` is a variable or a simple expression,
 such as an arithmetic expression. It transforms the goal into `Q e`
 and attempts to solve it using the tactic
-[`wp_ret_hook`](Ltac wp_ret_hook), which can be customized.
+[`wp_ret_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L222), which can be customized.
 
 The tactic [`wp_if`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L240) should be used when the goal is
 `wp e Q` where `e` is a conditional construct (that is, `if/then/else`
@@ -103,14 +103,16 @@ one typically uses either [`wp_intro x`](https://gitlab.inria.fr/fpottier/marble
 or
 [`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L288).
 
-`wp_intro x` introduces the result of the operation `f y z ...`
+[`wp_intro x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L269)
+introduces the result of the operation `f y z ...`
 under the name `x`. (`x` can be a variable or a composite pattern.)
 It also introduces a hypothesis about `x`,
 which represents the postcondition of the operation `f y z ...`,
 and uses the tactic [`wp_intro_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L260),
 which can be customized, to destruct or simplify this postcondition.
 
-`wp_shadow x` also introduces the result of the operation `f y z ...`
+[`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L288)
+also introduces the result of the operation `f y z ...`
 under the name `x`. (In this case, `x` must be a variable.)
 It assumes that there is already a variable named `x`, and
 intentionally shadows it: that is, before introducing the new
@@ -128,8 +130,9 @@ The tactic `wp_op <lemma> shadowing: x`
 is sugar for `wp_op <lemma>; last wp_shadow x`.
 
 The tactic `wp_op <lemma> with invariant: I`
-is sugar for `wp_op <lemma with inv := I>`.
-It is useful when invoking a higher-order [iteration](#iteration) function.
+is sugar for (roughly) `wp_op <lemma with inv := I>`.
+It is useful when invoking a higher-order [iteration](#iteration) function:
+it allows providing a *loop invariant*.
 At this time,
 this form cannot be combined with `introducing:` or `shadowing:`.
 
