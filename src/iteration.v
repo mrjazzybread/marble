@@ -18,8 +18,10 @@ Class PropLike (A : Type) :=
 Global Instance PropLike_Prop : PropLike Prop :=
   { implication := λ A B, A → B }.
 
-Global Instance PropLike_forall {A} `{∀ a, PropLike (B a)} : PropLike (∀ a : A, B a) :=
-  { implication := λ (P : Prop) (f : ∀ a : A, B a) (a : A), implication P (f a) }.
+Global Instance PropLike_forall {A} {B : A → Type} `{∀ a, PropLike (B a)}
+  : PropLike (∀ a : A, B a) :=
+  { implication :=
+      λ (P : Prop) (f : ∀ a : A, B a) (a : A), implication P (f a) }.
 
 Global Infix "⇝" := implication
   (right associativity, at level 90).
