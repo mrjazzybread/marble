@@ -95,14 +95,14 @@ Proof.
   by well-founded induction on _k along (rilt _i).
   intros. ITER. expand_ITER in IH.
   intros; destruct ACC; simpl.
-  wp_if.
+  wp_if; z.
   (* Case [k = i]. *)
   { wp_op Hstep shadowing: s.
     wp_ret. }
   (* Case [k ≠ i]. *)
   { wp_op Hstep shadowing: s.
     wp_op IH shadowing: s.
-    z. eauto. }
+    eauto. }
 Qed.
 
 (* A specification of [iter_down]. *)
@@ -115,12 +115,12 @@ Lemma wp_iter_down {S} (body : int → S → S) :
     (λ s Q, wp (iter_down _i _k s body) Q).
 Proof.
   intros. ITER. unfold iter_down.
-  wp_if.
+  wp_if; z.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
   { wp_op wp_iter_down_aux shadowing: s.
-    z. eauto. }
+    eauto. }
 Qed.
 
 (* The tactic [wp_iter_down_body _j j s] should be used upon entry into
@@ -182,13 +182,13 @@ Proof.
   by well-founded induction on _k along (rilt _i).
   intros. XITER. expand_ITER in IH.
   destruct ACC; simpl.
-  wp_if.
+  wp_if; z.
   (* Case [k = i]. *)
-  { eapply Hbody; pack; tc; wp_ret. }
+  { wp_apply Hbody; intros; wp_ret. }
   (* Case [k ≠ i]. *)
-  { eapply Hbody; pack; tc.
+  { wp_apply Hbody; intros.
     (* Normal continuation. *)
-    + wp_op IH introducing: (s' & out). z. eauto.
+    + wp_op IH introducing: (s' & out). eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
 Qed.
@@ -204,13 +204,13 @@ Lemma wp_xiter_down {S A}
     (λ s Q, wp (xiter_down _i _k s (@body)) Q).
 Proof.
   intros. XITER. unfold xiter_down.
-  wp_if.
+  wp_if; z.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
   { wp_op wp_xiter_down_aux.
     clear dependent s. wp_intro (s & out).
-    z. eauto. }
+    eauto. }
 Qed.
 
 (* The tactic [wp_xiter_down_body _j j s] should be used upon entry into
@@ -273,11 +273,11 @@ Proof.
   destruct ACC; simpl.
   wp_if.
   (* Case [k = i]. *)
-  { eapply Hbody; pack; tc; wp_ret. }
+  { wp_apply Hbody; intros; wp_ret. }
   (* Case [k ≠ i]. *)
-  { eapply Hbody; pack; tc; intros.
+  { wp_apply Hbody; intros.
     (* Normal continuation. *)
-    + wp_op IH introducing: out. z. eauto.
+    + wp_op IH introducing: out. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
 Qed.
@@ -293,12 +293,12 @@ Lemma wp_uxiter_down {A}
     (λ Q, wp (uxiter_down _i _k (@body)) Q).
 Proof.
   intros. UXITER. unfold uxiter_down.
-  wp_if.
+  wp_if; z.
   (* Case [k ≤ i]. *)
   { wp_ret. }
   (* Case [i < k]. *)
   { wp_op wp_uxiter_down_aux; wp_intro out.
-    z. eauto. }
+    eauto. }
 Qed.
 
 (* The tactic [wp_uxiter_down_body _j j] should be used upon entry into
@@ -363,7 +363,7 @@ Proof.
   by well-founded induction on _i along igt.
   intros; destruct ACC; simpl.
   eapply IFC_if; [| eauto ]. intro.
-  setoid_rewrite IH; eauto 2 with lia.
+  setoid_rewrite IH; tc2.
 Qed.
 
 Lemma iter_up_eq _i _k s body :
@@ -463,11 +463,11 @@ Proof.
   by well-founded induction on _i along igt.
   intros. XITER. expand_ITER in IH.
   destruct ACC; simpl.
-  wp_if.
+  wp_if; z.
   (* Case [i < k]. *)
-  { eapply Hbody; pack; tc; intros.
+  { wp_apply Hbody; intros.
     (* Normal continuation. *)
-    + wp_op IH introducing: (s' & out). z. eauto.
+    + wp_op IH introducing: (s' & out). eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [k ≤ i]. *)
@@ -532,11 +532,11 @@ Proof.
   by well-founded induction on _i along igt.
   intros. UXITER. expand_ITER in IH.
   destruct ACC; simpl.
-  wp_if.
+  wp_if; z.
   (* Case [i < k]. *)
-  { eapply Hbody; pack; tc; intros.
+  { wp_apply Hbody; intros.
     (* Normal continuation. *)
-    + wp_op IH introducing: out. z. eauto.
+    + wp_op IH introducing: out. eauto.
     (* Exit continuation. *)
     + wp_ret. eauto. }
   (* Case [k ≤ i]. *)
