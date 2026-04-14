@@ -67,6 +67,10 @@ Local Hint Resolve strict_transitive_l strict_transitive_r : order.
 Local Definition lt_le' := (@lt_le A R).
 Local Hint Resolve lt_le' : order.
 
+Local Lemma le_eq_trans x y z : x ≤ y → y = z → x ≤ z.
+Proof. intros. subst. assumption. Qed.
+Local Hint Resolve le_eq_trans : order.
+
 Local Lemma lt_equiv_lt x y z : x < y → y ≡ z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
 
@@ -841,18 +845,6 @@ Definition extract q : option (A * queue A) :=
 End Code.
 
 (* The specification of [move_down]. *)
-
-(* TODO *)
-Local Lemma le_eq_trans x y z : x ≤ y → y = z → x ≤ z.
-Proof. intros. subst. assumption. Qed.
-Local Hint Resolve le_eq_trans : order.
-
-(* TODO *)
-Lemma qwd (z : Z) : (2 * z) `div` 2 = z.
-Proof. lia. Qed.
-Hint Rewrite qwd : uz z.
-
-
 
 Lemma wp_move_down :
   ∀IntU _n n,
