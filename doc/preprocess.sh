@@ -13,10 +13,10 @@ SRC=../src
 echo "<!--- THIS FILE HAS BEEN GENERATED based on documentation.md.pre -->"
 
 while IFS= read -r line; do
-  # Identify the custom link syntax: a (short) file name and a pattern,
+  # Identify the custom link syntax: a (short) file name (which must end in .v) and a pattern,
   # separated with a colon, surrounded with parentheses. An example is
   # (array.v:Lemma wp_make)
-  if [[ $line =~ ^(.*)\(([^:]*):([^\)]*)\)(.*)$ ]]; then
+  if [[ $line =~ ^(.*)\(([^:]*\.v):([^\)]*)\)(.*)$ ]]; then
     leading="${BASH_REMATCH[1]}"
     file="${BASH_REMATCH[2]}"
     pattern="${BASH_REMATCH[3]}"
