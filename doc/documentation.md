@@ -5,7 +5,7 @@
 
 <!--------------------------------------------------------------------------->
 
-## The Program Logic
+## Writing Programs
 
 The code in this library is ordinary Rocq code. It is purely functional.
 It uses Rocq's
@@ -32,6 +32,23 @@ This is very useful when `f` is a higher-order function and `x` itself is a
 function: in particular, this leads to a rather nice way of writing
 [loops](#iteration-on-machine-integers).
 
+We offer syntactic sugar for two dependent conditional constructs,
+[`IFC e0 THEN e1 ELSE e2`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/equations.v?ref_type=heads#L13)
+and
+[`IF e0 THEN e1 ELSE e2`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/equations.v?ref_type=heads#L16).
+These constructs are useful and necessary
+when the status of condition `e0`
+is needed in a proof of termination,
+that is,
+when a proof of termination
+needs a hypothesis of type `e0 = true` or `e0 = true`.
+The definition of [`iter_down`](Fixpoint iter_down_aux)
+offers an example of this.
+
+<!--------------------------------------------------------------------------->
+
+## Verifying Programs
+
 To help users write specifications and verify programs, we define a simple
 program logic, in the style of Hoare logic.
 The judgement [`wp e Q`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L83)
@@ -48,22 +65,74 @@ The basic reasoning rules are
 [conditional](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L90),
 and
 [consequence](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L197).
-We offer several tactics that help apply these rules: see below.
 
-We offer syntactic sugar for two dependent conditional constructs,
-[`IFC e0 THEN e1 ELSE e2`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/equations.v?ref_type=heads#L13)
+To apply these reasoning rules, we offer a number of tactics.
+
+The tactic [`wp_ret`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L227) should be used when the goal is
+`wp e Q` where `e` is a variable or a simple expression,
+such as an arithmetic expression. It transforms the goal into `Q e`
+and attempts to solve it using the tactic
+[`wp_ret_hook`](Ltac wp_ret_hook), which can be customized.
+
+The tactic [`wp_if`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L240) should be used when the goal is
+`wp e Q` where `e` is a conditional construct (that is, `if/then/else`
+or `IF/THEN/ELSE` or `IFC/THEN/ELSE`). It generates one subgoal for the
+Boolean condition (which ideally should be automatically solved) and
+one subgoal for each branch.
+
+The tactic [`wp_op`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L389) is the main workhorse of
+this small tactic library. It should be used when the goal is a function call
+or begins with a function call: that is, when the goal is `wp (f y z ...) Q`
+or `wp (do x ← f y z ... ; e) Q`. This tactic expects one argument, namely a
+lemma that offers a specification of the function `f`. First, it automatically
+applies the sequencing rule or the consequence rule (whichever is applicable);
+then, it applies the lemma whose name is provided. If this lemma has
+hypotheses (which are usually known as preconditions) then it attempts
+to solve these subgoals by applying the tactics
+[`wp_precondition_primary_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L316)
 and
-[`IF e0 THEN e1 ELSE e2`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/equations.v?ref_type=heads#L16).
-These constructs are useful and necessary
-when the status of condition `e0`
-is needed in a proof of termination,
-that is,
-when a proof of termination
-needs a hypothesis of type `e0 = true` or `e0 = true`.
-The definition of [`iter_down`](Fixpoint iter_down_aux)
-offers an example of this.
+[`wp_precondition_secondary_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L320),
+which can be customized.
+It produces two kinds of subgoals:
+first, the preconditions that it was not able to solve;
+second, the subgoal that represents
+the continuation of the operation `f y z ...`.
 
-TODO: `wp.v`
+In the last subgoal of `wp_op <lemma>`,
+one typically uses either [`wp_intro x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L269)
+or
+[`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L288).
+
+`wp_intro x` introduces the result of the operation `f y z ...`
+under the name `x`. (`x` can be a variable or a composite pattern.)
+It also introduces a hypothesis about `x`,
+which represents the postcondition of the operation `f y z ...`,
+and uses the tactic [`wp_intro_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L260),
+which can be customized, to destruct or simplify this postcondition.
+
+`wp_shadow x` also introduces the result of the operation `f y z ...`
+under the name `x`. (In this case, `x` must be a variable.)
+It assumes that there is already a variable named `x`, and
+intentionally shadows it: that is, before introducing the new
+variable `x`, it uses `clear dependent x`
+to forget about the previous variable `x`.
+This tactic should be used when the operation `f y z ...`
+updates a data structure. This ensures that the previous version
+of the data structure cannot be used by mistake: in other words,
+this enforces [the linear use discipline](#the-linear-use-discipline).
+
+The tactic `wp_op <lemma> introducing: x`
+is sugar for `wp_op <lemma>; last wp_intro x`.
+
+The tactic `wp_op <lemma> shadowing: x`
+is sugar for `wp_op <lemma>; last wp_shadow x`.
+
+The tactic `wp_op <lemma> with invariant: I`
+is sugar for `wp_op <lemma with inv := I>`.
+It is useful when invoking a higher-order [iteration](#iteration) function.
+At this time,
+this form cannot be combined with `introducing:` or `shadowing:`.
+
 TODO: `tactics.v`
 
 <!--------------------------------------------------------------------------->
