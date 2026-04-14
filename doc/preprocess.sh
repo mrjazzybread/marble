@@ -10,6 +10,8 @@ set -euo pipefail
 REPO=https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/
 SRC=../src
 
+echo "<!--- THIS FILE HAS BEEN GENERATED based on documentation.md.pre -->"
+
 while IFS= read -r line; do
   # Identify the custom link syntax: a (short) file name and a pattern,
   # separated with a colon, surrounded with parentheses. An example is
