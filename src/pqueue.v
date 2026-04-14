@@ -130,10 +130,10 @@ Local Ltac destructHeap :=
       destruct h
   end.
 
-Local Ltac destructAndKeepHeap :=
+Local Ltac dupHeap :=
   match goal with
   | h: heap _ |- _ =>
-      generalize h; intro; destruct h
+      generalize h; intro
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -398,7 +398,7 @@ Lemma heap_move_down x i xs y :
   y = xs !!! parent i →
   heap (<[i := y]>xs).
 Proof.
-  intros. destructAndKeepHeap. subst y.
+  intros. dupHeap. destructHeap. subst y.
   introHeap; list; intros j ??;
   repeat case_lookup_insert; unpack; try subst;
   autorewrite with parent in *;
@@ -450,7 +450,7 @@ Lemma quasi_heap_move_down x n xs y :
   y = xs !!! parent n →
   heap (xs ++ {[y]}).
 Proof.
-  intros. destructAndKeepHeap. subst y.
+  intros. dupHeap. destructHeap. subst y.
   introHeap; list; intros j ??;
   repeat case_lookup_app; eauto 2 with marble.
   { replace n with (left j) by lia.
@@ -470,7 +470,6 @@ Definition queue (A : Type) :=
 
 (* The proposition [isQueue q ys] means that [q] is a priority queue whose
    elements form the list [ys]. *)
-(* TODO should [xs] be a finite set? a sorted list? *)
 
 Definition isQueue (q : queue A) (ys : list A) :=
   ∃ xs,
@@ -488,6 +487,12 @@ Tactic Notation "destructQueue" simple_intropattern(xs) :=
     unfold isQueue in h;
     destruct h as (xs & h);
     unpack in h
+  end.
+
+Local Ltac dupQueue :=
+  match goal with
+  | h: isQueue _ _ |- _ =>
+      generalize h; intro
   end.
 
 Lemma isQueue_bounded_length (a : queue A) ys :
@@ -955,8 +960,6 @@ Proof.
   }
 Qed.
 
-(* The specification of [extract_nonempty]. *)
-
 (* [extract_nonempty] requires the queue to be nonempty
    and extracts a minimal element out of it. *)
 
@@ -971,6 +974,8 @@ Local Notation extract_post x q ys :=
 Local Ltac intro_extract_post :=
   eexists; split; [ introQueue | split ].
 
+(* The specification of [extract_nonempty]. *)
+
 Lemma wp_extract_nonempty q ys :
   isQueue q ys →
   ys ≠ [] →
@@ -981,12 +986,12 @@ Proof.
   wp_pop x. subst_pop.
   wp_op vector.wp_length introducing: _n.
   wp_if.
-  (* Case: [n = 0]. The queue is a singleton. *)
+  (* Case [n = 0]. The queue is a singleton. *)
   { lengths. list in *. wp_ret.
     intro_extract_post; eauto 2 using empty_heap.
     use_permutation_hypothesis. autorewrite with pairwise.
     reflexivity. }
-  (* Case: [0 < n]. *)
+  (* Case [0 < n]. *)
   wp_op vector.wp_get introducing: m.
   wp_op wp_move_down shadowing: q.
   { eapply heap_pop. eassumption. }
@@ -996,6 +1001,29 @@ Proof.
   { eapply overwrite_and_compensate; eauto 1 with lia. }
   (* Minimum. *)
   { eapply heap_minimum; eauto 1 with lia. list. eauto. }
+Qed.
+
+(* The specification of [extract]. *)
+
+Lemma wp_extract q ys :
+  isQueue q ys →
+  wp (extract q) (λ o,
+    match o with
+    | None => ys = []
+    | Some (x, q) => extract_post x q ys
+    end).
+Proof.
+  intros. dupQueue. destructQueue xs. vectors. lengths.
+  unfold extract.
+  wp_op wp_length introducing: _n.
+  wp_if.
+  (* Case [n = 0]. *)
+  { assert (len ys = 0) by lia. lengths. wp_ret. }
+  (* Case [0 < n]. *)
+  assert (ys ≠ []).
+  { intro. subst. ulength in *. lia. }
+  wp_op wp_extract_nonempty. clear dependent q. intros (x & q) ?.
+  wp_ret.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
