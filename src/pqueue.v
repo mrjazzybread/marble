@@ -696,7 +696,7 @@ Proof.
   destruct ACC; simpl.
   wp_if.
   (* Case [n = 0]. *)
-  { subst n. list_inv. list.
+  { subst n. lengths. list.
     wp_op vector.wp_set shadowing: v.
     intro_move_post; eauto using singleton_heap. }
   (* Case [n ≠ 0]. *)
@@ -982,7 +982,7 @@ Proof.
   wp_op vector.wp_length introducing: _n.
   wp_if.
   (* Case: [n = 0]. The queue is a singleton. *)
-  { list_inv. list in *. wp_ret.
+  { lengths. list in *. wp_ret.
     intro_extract_post; eauto 2 using empty_heap.
     use_permutation_hypothesis. autorewrite with pairwise.
     reflexivity. }

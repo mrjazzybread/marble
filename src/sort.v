@@ -2415,7 +2415,7 @@ Proof.
   intros. lengths.
   rewrite (seg_intro xs).
   assert (len xs = 0 ∨ len xs = 1) as [|Hlen] by lia; rewrite ?Hlen.
-  + list_inv. list. sorted.
+  + lengths. list. sorted.
   + recognize_singleton_segments. sorted.
 Qed.
 
