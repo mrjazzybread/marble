@@ -629,6 +629,29 @@ Qed.
 
 End Operations.
 
+(* The tactic [wp_pop x] reasons about a call [pop v]. It assumes that
+   [v] is a variable and that we want to shadow this variable, so the
+   user introduces just [x]. *)
+
+Tactic Notation "wp_pop" simple_intropattern(x) :=
+  match goal with |- context[pop ?v] =>
+    wp_op wp_pop'; last (
+      let xs' := fresh "xs'" in
+      clear dependent v; intros (x & v) (xs' & ? & ?);
+      generalize (length_nonneg xs'); intro
+    )
+  end.
+
+(* The tactic [subst_pop] looks for a hypothesis [xs = xs' ++ {[x]}],
+   substitutes [xs] away, and renames [xs'] into [xs]. It can be used
+   immediately after [wp_pop x]. *)
+
+Ltac subst_pop :=
+  match goal with
+  h: ?xs = ?xs' ++ {[_]} |- _ =>
+    subst xs; rename xs' into xs; ulength in *
+  end.
+
 Ltac wp_steal_array :=
   match goal with |- context[steal_array ?a] =>
     wp_op wp_steal_array shadowing: a
