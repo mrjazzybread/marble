@@ -1,3 +1,4 @@
+<!--- THIS FILE HAS BEEN GENERATED based on documentation.md.pre -->
 # Marble
 
 [[_TOC_]]
