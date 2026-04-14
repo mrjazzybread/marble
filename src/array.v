@@ -4,7 +4,6 @@ Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics bool int iteration loop wp logic.
-From marble Require Import equations.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -228,7 +227,7 @@ Instance isBool1_lt_length `{Inhabited A} (a : array A) xs :
   ∀IntU _i i,
   isBool1 (_i <? length a)%uint63 (valid i xs).
 Proof.
-  intros. arrays. eapply isBool1_variance; tc3. (* so sweet! *)
+  intros. arrays. eapply isBool1_variance; tc4. (* so sweet! *)
 Qed.
 
 (* [isArray _ xs] is injective, up to the side condition
@@ -549,7 +548,10 @@ Fixpoint list_iteri _i xs s f :=
       list_iteri (_i + 1) xs s f
   end.
 
-(* A local lemma about `prefix_of`. *)
+(* Local lemmas about `prefix_of`. *)
+
+Local Lemma prefix_reflexive {B} (xs : list B) : xs `prefix_of` xs.
+Proof. reflexivity. Qed.
 
 Local Lemma prefix_of_app_l {B} (xs ys zs : list B) :
   xs ++ ys `prefix_of` xs ++ ys ++ zs.
@@ -573,10 +575,8 @@ Local Lemma wp_list_iteri_aux xs f :
     history xs
     (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
     (λ s Q, wp (list_iteri _i future s f) Q).
-(* Extend [tc] with hints for this proof. *)
-Local Hint Resolve
-  prefix_app_l prefix_of_app_l
-: typeclass_instances.
+(* Hints for this proof. *)
+Local Hint Resolve prefix_reflexive prefix_app_l prefix_of_app_l : marble.
 Proof.
   induction future as [| x future ]; simpl list_iteri; intros;
   ITER; subst xs; list in *.
@@ -650,7 +650,8 @@ Proof.
     { list. eauto. }
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
-    wp_op (IHfuture (history ++ {[x]})) shadowing: s. }
+    wp_op (IHfuture (history ++ {[x]})) shadowing: s.
+    { intros. wp_apply Hstep. }}
 Qed.
 
 (* In this variant, we get rid of [history] and we keep track only
@@ -995,7 +996,7 @@ Proof.
      the induction hypothesis [IH] provides exactly the guarantee
      that this lemma requires. *)
   eapply IFC_if; [ eauto |]. intro.
-  setoid_rewrite IH; eauto 2 with lia.
+  setoid_rewrite IH; tc2.
   (* The reason why Xavier does not encounter this problem is that he
      uses a non-dependent [match] construct to analyse the result of
      the test [Nat.eq_dec b 0], whose type is [{b = 0} + {b <> 0}];
@@ -1268,7 +1269,7 @@ Proof.
   by well-founded induction on _n along ilt.
   intros; destruct ACC; simpl. unfold Ni.
   eapply IFC_if; [ eauto |]. intro.
-  setoid_rewrite IH; eauto 2 with lia.
+  setoid_rewrite IH; tc2.
 Qed.
 
 End Code.
@@ -1606,7 +1607,7 @@ Proof.
     wp_get x. subst x.
     wp_if; wp_bind_eq.
     (* Case: [OK x]. *)
-    + tc.
+    + wp_break. eauto.
     (* Case: [notOK x]. *)
     + eauto with on_seg. }
   (* Completion. *)
