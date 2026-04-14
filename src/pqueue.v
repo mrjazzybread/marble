@@ -5,16 +5,13 @@ Local Ltac Zify.zify_pre_hook ::= ulength.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics bool iteration int wp.
-From marble Require array vector.
-From marble Require Import orders compare equations.
+From marble Require Import array vector.
+From marble Require Import orders compare sorting equations.
 Implicit Types _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
-
-Local Ltac wp_intro_hook Hx ::=
-  list in Hx; unpack in Hx; wp_ret_hook.
 
 (* This file implements a priority queue inside a vector. We follow
    the code by Jean-Christophe Filliâtre in OCaml's standard library:
@@ -28,7 +25,8 @@ Section PQueue.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Assumptions. (Identical to sort.v.) *)
+(* Assumptions. (These assumptions should be identical to those in sort.v,
+   but they have diverged a bit, as I have made some changes.) *)
 
 (* We assume that there is a preorder [R], also written [≤], on the type [A]. *)
 
@@ -63,17 +61,19 @@ Local Lemma reflex_le x y : x = y → x ≤ y.
 Proof. intros. subst. reflexivity. Qed.
 Local Lemma trans_le x y z : x ≤ y → y ≤ z → x ≤ z.
 Proof. intros. transitivity y; eauto. Qed.
-Local Hint Resolve reflex_le trans_le : core.
-Local Hint Resolve strict_transitive_l strict_transitive_r : core.
+Local Hint Resolve reflex_le trans_le : order.
+Local Hint Resolve strict_transitive_l strict_transitive_r : order.
 
 Local Definition lt_le' := (@lt_le A R).
-Local Hint Resolve lt_le' : core.
+Local Hint Resolve lt_le' : order.
 
 Local Lemma lt_equiv_lt x y z : x < y → y ≡ z → x < z.
-Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
+Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
+
 Local Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
-Proof. unfold equivalent, strict. intros; unpack; split; eauto. Qed.
-Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
+Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
+
+Local Hint Resolve lt_equiv_lt equiv_lt_lt : order.
 
 (* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
    a permutation of their elements. In other words, [xs ≃ ys] means that
@@ -81,6 +81,14 @@ Local Hint Resolve lt_equiv_lt equiv_lt_lt : core.
 
 Local Infix "≃" := (@Permutation A)
   (at level 70, no associativity).
+
+Local Ltac use_permutation_hypothesis :=
+  match goal with h: _ ≃ _ |- _ => rewrite <- h; clear h end.
+
+(* We write [xs ≼ ys] when every element of the list [xs] is less than
+   or equal to every element of the list [ys]. *)
+
+Notation "xs '≼' ys" := (pairwise R xs ys) (at level 80).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -142,7 +150,7 @@ Local Hint Rewrite parent_left parent_right : parent.
 
 (* These technical corollaries are used in the proof of [move_down]. *)
 
-Lemma parent_left_corollary i y xs x :
+Lemma move_down_remark_left i y xs x :
   valid i xs →
   y < x →
   <[i:=y]>xs !!! parent (left i) < x.
@@ -150,7 +158,7 @@ Proof.
   intros. rewrite parent_left. list. assumption.
 Qed.
 
-Lemma parent_right_corollary i y xs x :
+Lemma move_down_remark_right i y xs x :
   valid i xs →
   y < x →
   <[i:=y]>xs !!! parent (right i) < x.
@@ -158,7 +166,53 @@ Proof.
   intros. autorewrite with parent. list. assumption.
 Qed.
 
-Local Hint Resolve parent_left_corollary parent_right_corollary : core.
+Local Hint Resolve move_down_remark_left move_down_remark_right : order.
+
+(* Removing the last element of a heap preserves the heap property. *)
+
+Lemma heap_pop xs x :
+  heap (xs ++ {[x]}) →
+  heap xs.
+Proof.
+  intros (Hl & Hr). introHeap.
+  { intros j ? ?. specialize (Hl j). list in Hl. eauto with lia. }
+  { intros j ? ?. specialize (Hr j). list in Hr. eauto with lia. }
+Qed.
+
+(* These technical remarks are used in the proofs of [move_up]. *)
+
+Lemma move_up_remark i j y xs x :
+  heap xs →
+  valid i xs →
+  j = parent i →
+  y = xs !!! j →
+  x < y →
+  i ≠ 0 →
+  dominates_children x (parent i) (<[i:=y]> xs).
+Proof.
+  length. intros. destructHeap.
+  assert (x ≤ y) by eauto with order.
+  split; intros; case_lookup_insert; eauto 2 with order;
+  transitivity y; try assumption;
+  subst y j;
+  eauto 2 with lia.
+Qed.
+
+Lemma move_up'_remark n j y xs x :
+  heap xs →
+  n = len xs →
+  j = parent n →
+  y = xs !!! j →
+  x < y →
+  dominates_children x j (xs ++ {[y]}).
+Proof.
+  intros. destructHeap. list in *.
+  assert (x ≤ y) by eauto with order.
+  split; intros; case_lookup_app;
+  transitivity y; try assumption;
+  subst y;
+  eauto 2 with lia.
+Qed.
 
 (* In the ideal integers, there are several ways of expressing the fact that
    a node has no left child: one can write either [n ≤ left i] or [n / 2 ≤ i].
@@ -191,14 +245,17 @@ Proof. unfold max_length. lia. Qed.
 Local Lemma rigt_left {_i _n} :
   (_n / 2 ≤?_i)%uint63 = false →
   rigt _n (_left _i)%uint63 _i.
-Proof. eauto with lia. Qed.
+Proof. tc. Qed.
 
 Local Lemma rigt_right {_i _n} :
   ((_n - 1) / 2 ≤? _i)%uint63 = false →
   rigt _n (_right _i)%uint63 _i.
-Proof. eauto with lia. Qed.
+Proof. tc. Qed.
 
-Local Hint Resolve rigt_left rigt_right : core.
+(* TODO
+Local Hint Resolve rigt_left rigt_right : marble.
+  with these lemmas, we hit this bug:
+  https://github.com/rocq-prover/rocq/issues/21919 *)
 
 (* If the heap property holds then every element is dominated by its
    parent in the tree. *)
@@ -214,7 +271,41 @@ Proof.
   eauto 2 with lia.
 Qed.
 
-Local Hint Resolve exploit_heap_upwards : heap.
+Local Hint Resolve exploit_heap_upwards : order.
+
+(* The first element of a heap is a minimal element. *)
+
+(* The heap invariant is local: each element must dominate its children.
+   This lemma is the only place where we extract a global consequence
+   out of this local invariant. *)
+
+Lemma root_dominates_all xs :
+  heap xs →
+  valid 0 xs →
+  ∀ j,
+  valid j xs →
+  xs !!! 0 ≤ xs !!! j.
+Proof.
+  by well-founded induction on j using (Z.lt_wf 0). intros.
+  case (decide (j = 0)); intro.
+  (* Case [j = 0]. *)
+  { subst j. eauto 2 with order. }
+  (* Case [j ≠ 0]. *)
+  { transitivity (xs !!! parent j); eauto 2 with marble order. }
+Qed.
+
+Lemma heap_minimum xs m :
+  heap xs →
+  valid 0 xs →
+  m = xs !!! 0 →
+  {[m]} ≼ xs.
+Proof.
+  intros. rewrite pairwise_singleton_left_iff.
+  intros y Hy.
+  apply list_elem_of_lookup_total_1 in Hy.
+  destruct Hy as (i & ? & ?).
+  subst. eauto using root_dominates_all.
+Qed.
 
 (* A grandparent dominates its grandchild. *)
 
@@ -228,9 +319,9 @@ Lemma grandparent_dominates_grandchild xs i j y :
   xs !!! parent i ≤ y.
 Proof.
   intros. subst y.
-  assert (xs !!! parent i ≤ xs !!! i) by eauto 2 with heap lia.
-  assert (xs !!! i ≤ xs !!! j) by (subst i; eauto 2 with heap lia).
-  eauto.
+  assert (xs !!! parent i ≤ xs !!! i) by eauto 2 with marble order.
+  assert (xs !!! i ≤ xs !!! j) by (subst i; eauto 2 with marble order).
+  eauto 2 with marble order.
 Qed.
 
 (* A transitivity property. *)
@@ -240,10 +331,10 @@ Lemma dominates_trans x y i xs :
   x ≤ y →
   dominates_children x i xs.
 Proof.
-  intros (? & ?) ?. split; eauto.
+  intros (? & ?) ?. split; eauto 3 with order.
 Qed.
 
-Local Hint Resolve dominates_trans : core.
+Local Hint Resolve dominates_trans : order.
 
 (* If [x] dominates the two children of slot 0 then it can be written
    into slot 0. *)
@@ -295,7 +386,8 @@ Proof.
 Qed.
 
 (* Moving an element [y] from slot [parent i] down to slot [i] is
-   always permitted. *)
+   always permitted. This is used in the proof of [move_up]: as [x]
+   moves up, [y] moves down. *)
 
 Lemma heap_move_down x i xs y :
   heap xs →
@@ -308,10 +400,19 @@ Proof.
   introHeap; list; intros j ??;
   repeat case_lookup_insert; unpack; try subst;
   autorewrite with parent in *;
-  eauto 4 with heap lia.
+  eauto 4 with marble order.
 Qed.
 
-(* Any sequence of length 1 forms a heap. *)
+(* The empty sequence forms a heap. *)
+
+Lemma empty_heap xs :
+  xs = [] →
+  heap xs.
+Proof.
+  intros. subst. introHeap; list; lia.
+Qed.
+
+(* A singleton sequence forms a heap. *)
 
 Lemma singleton_heap xs :
   len xs = 1 →
@@ -349,13 +450,13 @@ Lemma quasi_heap_move_down x n xs y :
 Proof.
   intros. destructAndKeepHeap. subst y.
   introHeap; list; intros j ??;
-  repeat case_lookup_app.
+  repeat case_lookup_app; eauto 2 with marble.
   { replace n with (left j) by lia.
     autorewrite with parent.
-    eauto. }
+    reflexivity. }
   { replace n with (right j) by lia.
     autorewrite with parent.
-    eauto. }
+    reflexivity. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -363,7 +464,7 @@ Qed.
 (* A priority queue is represented as a vector. *)
 
 Definition queue (A : Type) :=
-  vector.vector A.
+  vector A.
 
 (* The proposition [isQueue q ys] means that [q] is a priority queue whose
    elements form the list [ys]. *)
@@ -371,7 +472,7 @@ Definition queue (A : Type) :=
 
 Definition isQueue (q : queue A) (ys : list A) :=
   ∃ xs,
-  vector.isVector q xs ∧
+  isVector q xs ∧
   xs ≃ ys ∧
   heap xs.
 
@@ -389,11 +490,11 @@ Tactic Notation "destructQueue" simple_intropattern(xs) :=
 
 Lemma isQueue_bounded_length (a : queue A) ys :
   isQueue a ys →
-  0 ≤ len ys ≤ array.max_array_length.
+  0 ≤ len ys ≤ max_array_length.
 Proof.
   intros. destructQueue xs. lengths.
-  assert (0 ≤ len xs ≤ array.max_array_length)
-    by eauto using vector.isVector_bounded_length.
+  assert (0 ≤ len xs ≤ max_array_length)
+    by eauto using isVector_bounded_length.
   lia.
 Qed.
 
@@ -411,15 +512,15 @@ Ltac queues :=
   end;
   intros;
   (* We also introduce [unsigned max_array_length]. *)
-  generalize array.unsigned_max_array_length; intro.
+  generalize unsigned_max_array_length; intro.
 
 (* -------------------------------------------------------------------------- *)
 
 (* Conventions. *)
 
 Implicit Types q : queue A.
-Implicit Types v : vector.vector A.
-Implicit Types xs : list A.
+Implicit Types v : vector A.
+Implicit Types xs ys : list A.
 Implicit Types a : array A.
 
 (* -------------------------------------------------------------------------- *)
@@ -449,12 +550,12 @@ Section Code.
 Open Scope uint63.
 
 Local Lemma move_up_ilt _i : (_i =? 0) = false → ilt (_parent _i) _i.
-Proof. eauto with lia. Qed.
+Proof. tc. Qed.
 
 (* [move_up v _i x] writes the element [x] into slot [_i], then moves it
    up as far as necessary so as to restore the heap invariant. *)
 
-Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector.vector A :=
+Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector A :=
   IFC _i =? 0 THEN λ _,
     (* [x] has reached the root. *)
     vector.set v _i x
@@ -492,7 +593,7 @@ End Code.
 
 Definition move_post v xs i x :=
   ∃ xs',
-  vector.isVector v xs' ∧
+  isVector v xs' ∧
   <[i := x]>xs ≃ xs' ∧
   heap xs'.
 
@@ -519,7 +620,7 @@ Lemma move_post_insert v i y xs j x :
 Proof.
   intros. elim_move_post xs'. intro_move_post.
   (* A permutation goal. *)
-  match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
+  use_permutation_hypothesis.
   rewrite swap_inserts by eauto.
   rewrite (list_insert_total_id' _ j) by (list; eauto with lia).
   eauto.
@@ -542,7 +643,7 @@ Qed.
 
 Lemma wp_move_up _i :
   ∀ v x ACC xs,
-  vector.isVector v xs →
+  isVector v xs →
   heap xs →
   ∀ i, isInt _i i →
   valid i xs →
@@ -550,7 +651,7 @@ Lemma wp_move_up _i :
   wp (move_up v _i x ACC) (λ v, move_post v xs i x).
 Proof.
   by well-founded induction on _i along ilt.
-  intros. unpack. vector.vectors.
+  intros. unpack. vectors.
   destruct ACC; simpl.
   wp_if.
   (* Case [i = 0]. *)
@@ -559,7 +660,7 @@ Proof.
   (* Case [i ≠ 0]. *)
   set (_j := (_parent _i)).
   set (j := parent i).
-  assert (isInt _j j) by tc.
+  assert (isInt _j j) by tc3.
   wp_op vector.wp_get introducing: y.
   wp_if.
   (* Subcase: [y ≤ x]. *)
@@ -567,14 +668,12 @@ Proof.
     intro_move_post; eauto using heap_insert_deep. }
   (* Subcase: [x < y]. *)
   { wp_op vector.wp_set shadowing: v.
+    assert (dominates_children x (parent i) (<[i:=y]> xs))
+      by eauto using move_up_remark.
+    assert (heap (<[i:=y]> xs))
+      by eauto using heap_move_down.
     wp_op IH shadowing: v.
-    + (* The first precondition of the recursive call. *)
-      eauto using heap_move_down.
-    + (* The second precondition of the recursive call. *)
-      destructHeap. subst y.
-      split; intros; case_lookup_insert; eapply lt_le';
-      eapply strict_transitive_l; eauto 2 with lia.
-    + eauto using move_post_insert with lia. }
+    eauto 2 using move_post_insert with marble. }
 Qed.
 
 (* This is the second specification of [move_up]. If [xs] forms a heap
@@ -585,13 +684,13 @@ Qed.
 
 Lemma wp_move_up' _n n :
   ∀ v x ACC xs dummy ,
-  vector.isVector v (xs ++ {[dummy]}) →
+  isVector v (xs ++ {[dummy]}) →
   heap xs →
   isInt _n n →
   n = len xs →
   wp (move_up v _n x ACC) (λ v, move_post v (xs ++ {[dummy]}) n x).
 Proof.
-  intros. vector.vectors. lengths. length in *.
+  intros. vectors. lengths. length in *.
   destruct ACC; simpl.
   wp_if.
   (* Case [n = 0]. *)
@@ -605,31 +704,28 @@ Proof.
   wp_op vector.wp_get introducing: y.
   wp_if.
   (* Subcase: [y ≤ x]. *)
-  { wp_op vector.wp_set shadowing: v.
+  { wp_op vector.wp_set shadowing: v. list in *.
     intro_move_post; list; eauto using quasi_heap_insert_deep. }
   (* Subcase: [x < y]. *)
-  { wp_op vector.wp_set shadowing: v.
+  { wp_op vector.wp_set shadowing: v. list in *.
+    assert (heap (xs ++ {[y]}))
+      by eauto using quasi_heap_move_down.
+    assert (dominates_children x j (xs ++ {[y]}))
+      by eauto using move_up'_remark.
     wp_op wp_move_up shadowing: v.
-    + (* The first precondition of the recursive call. *)
-      eauto using quasi_heap_move_down.
-    + (* The second precondition of the recursive call. *)
-      destructHeap. subst y.
-      split; intros; case_lookup_app; eapply lt_le';
-      eapply strict_transitive_l; eauto 2 with lia.
     + elim_move_post xs'. intro_move_post.
       (* Permutation. *)
-      match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
-      replace (xs ++ {[y]}) with (<[n := y]>(xs ++ {[dummy]}))
-        by (list; eauto).
-      rewrite swap_inserts by lia.
-      eapply identity_permutation. subst y. lego. }
+      use_permutation_hypothesis. list.
+      rewrite (Permutation_app_comm (_) {[y]}).
+      rewrite overwrite_and_compensate by eauto with marble.
+      reflexivity. }
 Qed.
 
 (* The specification of [insert]. *)
 
 Lemma wp_insert q y ys :
   isQueue q ys →
-  (len ys + 1 ≤ array.max_array_length)%Z →
+  (len ys + 1 ≤ max_array_length)%Z →
   wp (insert q y) (λ q, isQueue q (ys ++ {[y]})).
 Proof.
   intros. destructQueue xs. lengths. unfold insert.
@@ -639,8 +735,7 @@ Proof.
   elim_move_post xs'. list in Hpost0.
   introQueue; eauto 2.
   (* Permutation. *)
-  { match goal with h: _ ≃ xs' |- _ => rewrite <- h end.
-    simplify_list_permutation_goal. eauto. }
+  { use_permutation_hypothesis. simplify_list_permutation_goal. eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -667,7 +762,7 @@ Open Scope uint63.
    here or should continue to move down. The copies are marked with [BEGIN
    COPY ... END COPY] in the code and in the proof. *)
 
-Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector.vector A :=
+Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector A :=
   IFC _n / 2 ≤? _i THEN λ _,
     (* There are no children. [x] cannot move further down. *)
     vector.set v _i x
@@ -723,37 +818,49 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector.vector A :=
 
 (* Here are [extract_nonempty] and [extract]. *)
 
-Definition extract_nonempty q : A :=
+Definition extract_nonempty q : A * queue A :=
   (* Pop the last element [x] of the vector. *)
   do (x, q) ← vector.pop q ;
   do _n ← vector.length q ;
   if _n =? 0 then
     (* [x] was the only element. We are done. *)
-    x
+    (x, q)
   else
     (* Read the first element [m] of the vector. *)
     (* This is the root of the tree. *)
     do m ← vector.get q 0 ;
     (* Now place [x] at the root of the tree and let it go down. *)
-    do v ← move_down _n q 0 x (Wf_rigt _n 0) ;
-    (* Return [m]. *)
-    m.
+    do q ← move_down _n q 0 x (Wf_rigt _n 0) ;
+    (* Return [m] and [q]. *)
+    (m, q).
 
-Definition extract q : option A :=
+Definition extract q : option (A * queue A) :=
   do _n ← vector.length q ;
   if (_n =? 0) then None else
-  do x ← extract_nonempty q ;
-  Some x.
+  do xq ← extract_nonempty q ;
+  Some xq.
 
 End Code.
 
 (* The specification of [move_down]. *)
 
+(* TODO *)
+Local Lemma le_eq_trans x y z : x ≤ y → y = z → x ≤ z.
+Proof. intros. subst. assumption. Qed.
+Local Hint Resolve le_eq_trans : order.
+
+(* TODO *)
+Lemma qwd (z : Z) : (2 * z) `div` 2 = z.
+Proof. lia. Qed.
+Hint Rewrite qwd : uz z.
+
+
+
 Lemma wp_move_down :
   ∀IntU _n n,
   ∀IntU _i i,
   ∀ v xs x ACC,
-  vector.isVector v xs →
+  isVector v xs →
   n = len xs →
   valid i xs →
   heap xs →
@@ -762,19 +869,20 @@ Lemma wp_move_down :
 Proof.
   intros _n n ? ?.
   by well-founded induction on _i along (rigt _n).
-  intros. vector.vectors.
+  intros. vectors.
   destruct ACC; simpl.
   set (_i1 :=  _left _i).
   set (_i2 := _right _i).
-  assert (isInt _i1 (left i)) by tc.
-  assert (isInt _i2 (right i)) by tc.
+  assert (isInt _i1 (left i)) by tc3.
+  assert (isInt _i2 (right i)) by tc3.
   (* Now examine the code. *)
   wp_if.
   (* Case [n / 2 ≤ i]. There are no children. *)
   { wp_op vector.wp_set shadowing: v.
     intro_move_post.
-    eapply heap_insert; eauto 3 with lia. }
+    eapply heap_insert; eauto 3 with marble order. }
   (* Case [i < n / 2]. There is a left child. *)
+  (* assert (rigt _n _i1 _i). { unfold rigt, igt. lia. } TODO *)
   wp_if.
   (* Case [(n - 1) / 2 ≤ i]. There is only a left child. *)
   { wp_op vector.wp_get introducing: y.
@@ -784,22 +892,25 @@ Proof.
     { wp_op vector.wp_set shadowing: v.
       intro_move_post.
       assert (dominates_children x i xs).
-      { split; intro; [ eauto 3 | lia ]. }
-      eapply heap_insert; eauto 3 with lia. }
+      { subst y. split; intro; [ eauto 2 | lia ]. }
+      eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { wp_op vector.wp_set shadowing: v.
       assert (dominates_children y i xs).
-      { split; intro; [ eauto 2 | exfalso; lia ]. }
+      { split; eauto 2 with order lia. }
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := left i);
-        eauto 2 with lia. }
+        eauto 2 with marble nocore. }
       assert (heap (<[i:=y]> xs)).
       { eapply heap_insert; eauto 2 with lia. }
-      wp_op IH shadowing: v.
-      eauto using move_post_insert with lia. }
+      wp_op IH shadowing: v. (* UGLY slow, for no reason; related to BUG? *)
+      { rewrite lookup_total_insert_eq by assumption. eauto 1. }
+      eauto 2 using move_post_insert with marble nocore. }
     (* END COPY 1 *)
   }
   (* Case [i < (n - 1) / 2]. There are two children. *)
+  (* assert (rigt _n _i1 _i) by tc3. *) (* TODO *)
+  (* assert (rigt _n _i2 _i) by tc3. *)
   wp_op vector.wp_get introducing: y1.
   wp_op vector.wp_get introducing: y2.
   wp_if.
@@ -810,19 +921,21 @@ Proof.
     (* Case [x ≤ y]. [x] can settle here. *)
     { wp_op vector.wp_set shadowing: v.
       intro_move_post.
-      assert (dominates_children x i xs) by (split; eauto).
-      eapply heap_insert; eauto 3 with lia. }
+      assert (dominates_children x i xs).
+      { split; eauto 3 with order. }
+      eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { set (y := y1).
       wp_op vector.wp_set shadowing: v.
-      assert (dominates_children y i xs) by (split; eauto).
+      assert (dominates_children y i xs) by (split; eauto 2 with order).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := left i);
-        eauto 2 with lia. }
+        eauto 2 with marble nocore. }
       assert (heap (<[i:=y]> xs)).
-      { eapply heap_insert; eauto 2 with lia. }
-      unfold _i1. wp_op IH shadowing: v.
-      eauto using move_post_insert with lia. }
+      { eapply heap_insert; eauto 2. }
+      wp_op IH shadowing: v. (* UGLY slow again *)
+      { rewrite lookup_total_insert_eq by assumption. eauto 1. }
+      eauto using move_post_insert with marble nocore. }
     (* END COPY 2 *)
   }
   (* Subcase [y2 < y1]. The right child is smaller. *)
@@ -832,21 +945,67 @@ Proof.
     (* Case [x ≤ y]. [x] can settle here. *)
     { wp_op vector.wp_set shadowing: v.
       intro_move_post.
-      assert (dominates_children x i xs) by (split; eauto).
-      eapply heap_insert; eauto 3 with lia. }
+      assert (dominates_children x i xs).
+      { split; eauto 4 with order. }
+      eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { set (y := y2).
       wp_op vector.wp_set shadowing: v.
-      assert (dominates_children y i xs) by (split; eauto).
+      assert (dominates_children y i xs) by (split; eauto 3 with order).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := right i);
-        eauto 2 with lia. }
+        eauto 2 with marble nocore. }
       assert (heap (<[i:=y]> xs)).
-      { eapply heap_insert; eauto 2 with lia. }
-      unfold _i2. wp_op IH shadowing: v.
-      eauto using move_post_insert with lia. }
+      { eapply heap_insert; eauto 2. }
+      wp_op IH shadowing: v. (* UGLY slow again *)
+      { rewrite parent_right, lookup_total_insert_eq by assumption.
+        eauto 1. }
+      eauto using move_post_insert with marble nocore. }
     (* END COPY 3 *)
   }
+Qed.
+
+(* The specification of [extract_nonempty]. *)
+
+(* [extract_nonempty] requires the queue to be nonempty
+   and extracts a minimal element out of it. *)
+
+Local Notation extract_post x q ys :=
+(
+  ∃ ys',
+  isQueue q ys' ∧
+  {[x]} ++ ys' ≃ ys ∧
+  {[x]} ≼ ys
+).
+
+Local Ltac intro_extract_post :=
+  eexists; split; [ introQueue | split ].
+
+Lemma wp_extract_nonempty q ys :
+  isQueue q ys →
+  ys ≠ [] →
+  wp (extract_nonempty q) (λ '(x, q), extract_post x q ys).
+Proof.
+  intros. destructQueue xs. vectors. lengths.
+  unfold extract_nonempty.
+  wp_pop x. subst_pop.
+  wp_op vector.wp_length introducing: _n.
+  wp_if.
+  (* Case: [n = 0]. The queue is a singleton. *)
+  { list_inv. list in *. wp_ret.
+    intro_extract_post; eauto 2 using empty_heap.
+    use_permutation_hypothesis. autorewrite with pairwise.
+    reflexivity. }
+  (* Case: [0 < n]. *)
+  wp_op vector.wp_get introducing: m.
+  wp_op wp_move_down shadowing: q.
+  { eapply heap_pop. eassumption. }
+  elim_move_post xs'.
+  intro_extract_post; eauto 2; repeat use_permutation_hypothesis.
+  (* Permutation. *)
+  { eapply overwrite_and_compensate; eauto 1 with lia. }
+  (* Minimum. *)
+  { eapply heap_minimum; eauto 1 with lia. list. eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
