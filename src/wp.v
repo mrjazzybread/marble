@@ -291,30 +291,48 @@ Ltac wp_shadow x :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* The tactic [wp_precondition_hook] attempts to prove a precondition. It
-   does not fail: if it is unable to prove the goal, it leaves it open. *)
+(* [wp_precondition_primary_hook] and [wp_precondition_secondary_hook] attempt
+   to prove a precondition. These tactics do not fail: if they are unable to
+   prove the goal, they leave it open. *)
 
-(* The default definition of this tactic is cheap. We expect users to
-   redefine it if they need more expensive / aggressive simplification. *)
+(* These tactics are applied in two rounds: first, the primary hook is applied
+   to all preconditions; then the secondary hook is applied to all remaining
+   preconditions. The primary hook can instantiate metavariables (e.g., in
+   goals of the form [isInt _i ?i]). This information can be exploited in the
+   secondary hook, e.g., by applying rewriting tactics, such as [length] or
+   [list], before attempting to solve a goal. *)
 
-Global Hint Rewrite
-  <- List.app_assoc
-: wp_precondition_hook.
+(* Ideally, these tactics should be cheap; otherwise, there is a risk of
+   wasting time trying to solve goals that need human intervention anyway. On
+   the other hand, they should not be too cheap: if a tactic fails to solve a
+   goal then it may leave some metavariables uninstantiated, and in the next
+   goal, these metavariables risk being instantiated in an incorrect manner.
 
-Ltac wp_precondition_hook :=
+   Indeed, one cannot prevent [eauto] from instantiating metavariables in the
+   wrong way: if it recognizes that the goal is [0 ≤ ?j] and there is an
+   assumption [0 ≤ i], then it will instantiate [j] with [i], even though this
+   is possibly not desirable. *)
+
+Ltac wp_precondition_primary_hook :=
+  (* Attempt to solve the goal. *)
+  tc3.
+
+Ltac wp_precondition_secondary_hook :=
+  (* 1. Rewrite the goal. *)
   (* Arithmetic simplification is cheap and can be useful in loops,
      e.g., when we have [inv j s] and the goal is [inv (j - 1 + 1) s]. *)
   (* [length] is more expensive but is also useful, e.g., when an
      arithmetic side condition involves applications of the [length]
      function. *)
-  autorewrite with z clength wp_precondition_hook;
-  (* This can solve arithmetic side conditions. *)
-  eauto 3 with lia.
+  (* [app_assoc] is cheap and increases our chances of success. *)
+  autorewrite with z clength app_assoc;
+  (* 2. Attempt to solve the goal. *)
+  tc3.
 
-(* The tactic [wp_loop_precondition_hook] prepares a precondition
-   before [wp_precondition_hook] is invoked. It is invoked only by
-   [wp_apply ... with invariant: ...], that is, only when reasoning
-   about a loop. *)
+(* The tactic [wp_loop_precondition_hook] prepares a precondition before
+   [wp_precondition_secondary_hook] is invoked. It is invoked only by
+   [wp_apply ... with invariant: ...], that is, only when reasoning about a
+   loop. *)
 
 Ltac wp_loop_precondition_hook :=
   idtac.
@@ -335,9 +353,9 @@ Tactic Notation "wp_apply" uconstr(lemma) :=
   (* [tc3] can solve many preconditions cheaply, e.g., [isInt _ _]. This
      instantiates many metavariables, which (in the next round) allows
      [lia] to prove arithmetic side conditions. *)
-  tc3;
+  wp_precondition_primary_hook;
   (* This tactic is user-configurable. *)
-  wp_precondition_hook.
+  wp_precondition_secondary_hook.
 
 (* [wp_apply lemma with invariant: I] is analogous to [wp_apply lemma],
    but specifies that the lemma [lemma] should be instantiated with
@@ -346,8 +364,8 @@ Tactic Notation "wp_apply" uconstr(lemma) :=
 Tactic Notation "wp_apply" uconstr(lemma) "with" "invariant:" constr(I) :=
   simple eapply lemma with (inv := I);
   wp_loop_precondition_hook;
-  tc3;
-  wp_precondition_hook.
+  wp_precondition_primary_hook;
+  wp_precondition_secondary_hook.
 
 (* -------------------------------------------------------------------------- *)
 
