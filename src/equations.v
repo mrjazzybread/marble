@@ -56,15 +56,6 @@ Proof.
   intros. destruct e0; congruence.
 Qed.
 
-(* Instruct Equations to use [eauto with lia] to kill proof obligations. *)
-
-Global Obligation Tactic :=
-  simpl in *;
-  Tactics.program_simplify;
-  CoreTactics.equations_simpl;
-  try Tactics.program_solve_wf;
-  eauto 6 with lia.
-
 (* The tactic [cleanup] removes an equality hypothesis that is produced
    by [funelim] and that is usually unneeded. *)
 
