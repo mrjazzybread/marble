@@ -14,5 +14,5 @@ view: all
 clean:
 	git clean -fdX
 
-%.md: %.md.pre
+%.md: %.md.pre $(wildcard ../src/*.v)
 	./preprocess.sh $< > $@
