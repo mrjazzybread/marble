@@ -1,5 +1,7 @@
 # Marble
 
+[[_TOC_]]
+
 ## Arrays
 
 An array should be viewed as an abstract data structure, which holds
@@ -41,7 +43,7 @@ There are four primitive operations on arrays:
   returns the element stored at index `_i` in the array `a`.
 
   To reason about this operation,
-  use the tactic [`wp_get x`](array.v:Ltac wp_get),
+  use the tactic [`wp_get x`](array.v:Tactic Notation "wp_get"),
   where `x` is the name under you would like this element
   to be known in the proof.
 
@@ -208,7 +210,7 @@ There are four primitive operations on arrays:
   Its result has type [`outcome int`](iteration.v:Inductive outcome).
 
   To reason about this operation,
-  use the tactic [`wp_find_index out`](array.v:Ltac wp_find_index)
+  use the tactic [`wp_find_index out`](array.v:Tactic Notation "wp_find_index")
   where `out` is the name under which you would like
   the result to be known.
 
