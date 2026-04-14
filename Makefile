@@ -1,4 +1,4 @@
-.PHONY: all clean bench
+.PHONY: all clean bench doc
 
 all:
 	@ dune build
@@ -8,3 +8,6 @@ clean:
 
 bench:
 	@ dune exec extracted/main.exe -- --sort 16000
+
+doc:
+	@ make -C doc
