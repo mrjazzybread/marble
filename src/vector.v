@@ -11,13 +11,7 @@ Generalizable All Variables.
 Set Universe Polymorphism.
 
 Local Ltac wp_intro_hook Hx ::=
-  (* Simplify expressions that involve lists and arithmetic. *)
-  list in Hx;
-  (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx;
-  (* Attempt to (cheaply) solve the goal. *)
-  (* This can kill some proof obligations, e.g., at loop exits. *)
-  wp_ret_hook.
+  list in Hx; unpack in Hx; wp_ret_hook.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -340,8 +334,7 @@ Proof.
     generalize unsigned_twice_max_array_length; intro. (* UGLY *)
      wp_if; wp_ret; eexists; split; tc. }
   wp_intro _c'.
-  wp_ret.
-  eexists; split; tc.
+  wp_ret. pack; tc7.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
