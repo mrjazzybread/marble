@@ -230,7 +230,7 @@ Ltac wp_ret :=
 
 (* Reasoning about a conditional construct. *)
 
-(* The fist subgoal, [isBool _ _ _], should be solved by [tc]. *)
+(* The first subgoal, [isBool _ _ _], should be solved by [tc]. *)
 
 (* Strangely enough, [simple eapply wp_if] can succeed when the goal is an
    [IF/THEN/ELSE] construct that contains an [if/then/else] construct
