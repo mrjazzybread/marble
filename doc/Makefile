@@ -9,10 +9,12 @@
 all: documentation.md
 
 view: all
-	open -a "/Applications/Visual Studio Code.app" documentation.md
+	@ open -a "/Applications/Visual Studio Code.app" documentation.md
 
 clean:
-	git clean -fdX
+	@ rm -f documentation.md
+	@ git clean -fdX
 
-%.md: %.md.pre $(wildcard ../src/*.v)
+%.md: %.md.pre $(wildcard ../src/*.v) preprocess.sh
 	./preprocess.sh $< > $@
+	@ chmod u-w $@
