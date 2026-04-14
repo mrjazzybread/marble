@@ -2,6 +2,40 @@
 
 [[_TOC_]]
 
+<!--------------------------------------------------------------------------->
+
+## The Program Logic
+
+TODO: `equations.v`
+TODO: `tactics.v`
+TODO: `wp.v`
+
+<!--------------------------------------------------------------------------->
+
+## Booleans
+
+TODO: `bool.v`
+
+<!--------------------------------------------------------------------------->
+
+## Machine integers
+
+TODO: `int.v`
+
+<!--------------------------------------------------------------------------->
+
+## Iteration
+
+TODO: `iteration.v`
+
+<!--------------------------------------------------------------------------->
+
+## Iteration on Machine Integers
+
+TODO: `loop.v`
+
+<!--------------------------------------------------------------------------->
+
 ## Arrays
 
 An array should be viewed as an abstract data structure, which holds
@@ -282,3 +316,36 @@ help preserve information about the fact that certain integers are
 representable. This information could otherwise become obscured as the
 array `a` is updated and the assertion `isArray a _` becomes more
 complex.
+
+<!--------------------------------------------------------------------------->
+
+## Sorting
+
+TODO: `sorting.v`
+TODO: `sort.v`
+
+<!--------------------------------------------------------------------------->
+
+## Vectors
+
+TODO: `vector.v`
+
+<!--------------------------------------------------------------------------->
+
+## Priority Queues
+
+TODO: `pqueue.v`
+
+<!--------------------------------------------------------------------------->
+
+## Execution inside Rocq
+
+TODO
+
+<!--------------------------------------------------------------------------->
+
+## Extraction to OCaml
+
+TODO
+
+<!--------------------------------------------------------------------------->
