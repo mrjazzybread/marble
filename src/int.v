@@ -629,7 +629,7 @@ Proof.
   intros. rewrite isInt_def in *. unfold ilt. lia.
 Qed.
 
-Hint Resolve ilt_n_minus_1 : lia.
+Hint Resolve ilt_n_minus_1 : marble.
 
 (* [rilt] *)
 
@@ -665,7 +665,7 @@ Proof.
   intros. rewrite isInt_def in *. unfold rilt, ilt. lia.
 Qed.
 
-Hint Resolve rilt_n_minus_1 : lia.
+Hint Resolve rilt_n_minus_1 : marble.
 
 (* [igt] *)
 
@@ -707,7 +707,7 @@ Proof.
   intros. rewrite isInt_def in *. unfold igt. lia.
 Qed.
 
-Hint Resolve igt_n_plus_1 : lia.
+Hint Resolve igt_n_plus_1 : marble.
 
 (* [rigt] *)
 
@@ -730,7 +730,7 @@ Global Instance Wf_rigt _a : WellFounded (rigt _a) :=
    related to these orderings. After the definition of the ordering
    is unfolded, [lia] just solves the underlying goal. *)
 
-Global Hint Unfold ilt igt rilt rigt : lia.
+Global Hint Unfold ilt igt rilt rigt : marble.
 
 (* The following results are unused. I keep them for the record; they
    are just illustrations of the power of [eauto with lia]. *)
@@ -749,7 +749,7 @@ Local Lemma safe_increment _i _j :
   (_i <? _j)%uint63 = true → igt (_i + 1) _i.
 Proof.
   (* φ _i < φ _j → φ _i < φ (_i + 1) *)
-  eauto with lia.
+  eauto with marble.
 Qed.
 
 (* Safely decrementing a machine integer, without integer underflow. *)
@@ -765,7 +765,7 @@ Local Lemma safe_decrement _i _a :
   ilt (_i - 1) _i.
 Proof.
   (* _i ≠ _a → φ _a ≤ φ _i → φ (_i - 1) < φ _i *)
-  eauto with lia.
+  eauto with marble.
 Qed.
 
 (* The following lemma removes the hypothesis [φ _a ≤ φ _i],
@@ -777,7 +777,7 @@ Local Lemma safe_decrement_absolute _i :
   ilt (_i - 1) _i.
 Proof.
   (* _i ≠ 0%uint63 → φ (_i - 1) < φ _i *)
-  eauto with lia.
+  eauto with marble.
 Qed.
 
 (* The following lemma removes the hypothesis [φ _a ≤ φ _i] and accepts
@@ -789,7 +789,7 @@ Local Lemma safe_decrement_relative _i _a :
   rilt _a (_i - 1) _i.
 Proof.
   (* _i ≠ _a → φ (_i - 1 - _a) < φ (_i - _a) *)
-  eauto with lia.
+  eauto with marble.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
