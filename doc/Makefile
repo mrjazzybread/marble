@@ -1,4 +1,4 @@
-.PHONY: all view clean
+.PHONY: all view clean debug
 
 # The file documentation.md is generated from documentation.md.pre.
 
@@ -14,6 +14,9 @@ view: all
 clean:
 	@ rm -f documentation.md
 	@ git clean -fdX
+
+debug:
+	./preprocess.sh documentation.md.pre
 
 %.md: %.md.pre $(wildcard ../src/*.v) preprocess.sh
 	@ rm -f $@
