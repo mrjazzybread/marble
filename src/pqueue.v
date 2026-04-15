@@ -1028,4 +1028,40 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Iteration: [iter]. *)
+
+(* The function [iter] is interesting because its specification is
+   non-deterministic: it does not indicate in what order the elements
+   of the priority queue are presented to the consumer. *)
+
+(* Perhaps we could make this proof a consequence of a generic result:
+   iterating (in order) on a list [xs] such that [xs ≃ ys] is a valid
+   way of iterating on the multiset [ys]. *)
+
+Definition iter {S} q (s : S) (f : A → S → S) : S :=
+  vector.iteri q s @@ λ _i x s,
+  f x s.
+
+Lemma wp_iter {S} q ys (s : S) (f : A → S → S) :
+  isQueue q ys →
+  ITER_MULTISET
+    [] ys
+    (λ x s Q, wp (f x s) Q)
+    (λ s Q, wp (iter q s f) Q).
+Proof.
+  intros. ITER. unfold iter. destructQueue xs.
+  wp_op vector.wp_iteri with invariant: (λ i s, inv (initial_seg i xs) s);
+  last wp_shadow s.
+  (* Preservation. *)
+  { clear s. wp_iteri_body _j j x s. subst x.
+    wp_op Hstep shadowing: s.
+    { join_segments. eauto using submseteq_seg''. }
+    join_segments in *.
+    assumption. }
+  (* Conclusion. *)
+  { lengths. z in *. subst. list in *. eauto. }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 End PQueue.
