@@ -297,7 +297,84 @@ and can prove goals that involve them.
 
 ## Iteration
 
-TODO: `iteration.v`
+In functional programming languages, it is common to write iteration functions
+as higher-order functions. The producer (the function that produces elements)
+takes the consumer (the function that processes elements) as an argument. One
+can also think of the producer function as a *loop* that takes the *loop body*
+as an argument. We typically name these functions `iter`, although (since they
+carry a state) they could also be named `fold`.
+
+To facilitate reasoning about these functions, we provide several very general
+specifications, which, once suitably instantiated, can describe a wide variety
+of iteration functions. Here, we do not describe these definitions in detail,
+but provide a brief summary:
+
++ [`ITER`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L118) is a very general specification
+  for an `iter` function. Its parameters `init` and `complete` describe
+  the initial state and final state of the producer; the parameter `body`
+  describes at the same time the evolution of the producer's state and
+  the calling convention of the loop body; the parameter `loop` describes
+  the calling convention of the loop itself.
+
++ [`XITER`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L192) is a variant of `ITER` where the
+  loop is interruptible: the loop body has access to two continuations,
+  `break` and `continue`, allowing it to indicate whether it wishes to
+  terminate early or to continue.
+
++ [`UXITER`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L217) is a degenerate variant of
+  `XITER` where the loop-carried state has type `unit`.
+
+We instantiate these general specifications for several common situations:
+
++ [`ITERI_LIST`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L251) and
+  [`ITER_LIST`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L284) are
+  specialized versions of `ITER`
+  where the producer iterates, *in order* (from left to right), over a list `xs`.
+  The producer's state is a history of the elements produced so far:
+  it forms a prefix of the list `xs`.
+
++ [`ITERI_MULTISET`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L314) and
+  [`ITER_MULTISET`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L332) are
+  specialized versions of `ITER`
+  where the producer iterates, *in an arbitrary order*,
+  over a multiset `xs`.
+  The producer's state is a history of the elements produced so far:
+  it forms a sub(multi)set of the multiset `xs`.
+
++ [`ITER_Z`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L520),
+  [`XITER_Z`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L531), and
+  [`UXITER_Z`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L542)
+  are specialized versions of `ITER`, `XITER`, and `UXITER`
+  where the producer iterates (either upwards or downwards)
+  over a semi-open interval [i, k) of the integers.
+  The producer's state is just an integer index:
+  when going up, it is the index that will be produced next;
+  when going down, it is the index that has been produced last.
+
+We provide several tactics that help work with these specifications:
+
++ The tactics
+  [`ITER`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L590),
+  [`XITER`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L594), and
+  [`UXITER`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L598)
+  should be used when the goal is `ITER ...`, `XITER ...`,
+  or `UXITER ...`. They unfold definitions in the goal and
+  introduce the hypotheses under fixed conventional names.
+
++ At the beginning of the loop body, the tactic
+  [`wp_body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L271) should be used.
+  It is a higher-order tactic; it is meant to be specialized
+  so as to define more palatable tactics for use by end users.
+  For example, in the file `array.v`,
+  the tactic [`wp_iteri_body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1938)
+  concerns a loop that takes the form of a call to the higher-order function
+  [`array.iteri`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1891).
+  This tactic should be used at the beginning of the loop body.
+
++ In the body of an interruptible loop, the tactics
+  [`wp_continue`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L606) and
+  [`wp_break`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L618)
+  should be used to reason about calls to the continuations.
 
 <!--------------------------------------------------------------------------->
 
@@ -310,7 +387,7 @@ TODO: `loop.v`
 ## Arrays
 
 Rocq's
-[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays).
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays)
 are persistent arrays, whose implementation exploits mutable arrays.
 They are defined in the standard library modules
 [PrimArray](https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.PrimArray.html),

@@ -296,7 +296,84 @@ and can prove goals that involve them.
 
 ## Iteration
 
-TODO: `iteration.v`
+In functional programming languages, it is common to write iteration functions
+as higher-order functions. The producer (the function that produces elements)
+takes the consumer (the function that processes elements) as an argument. One
+can also think of the producer function as a *loop* that takes the *loop body*
+as an argument. We typically name these functions `iter`, although (since they
+carry a state) they could also be named `fold`.
+
+To facilitate reasoning about these functions, we provide several very general
+specifications, which, once suitably instantiated, can describe a wide variety
+of iteration functions. Here, we do not describe these definitions in detail,
+but provide a brief summary:
+
++ [`ITER`](iteration.v:Definition ITER) is a very general specification
+  for an `iter` function. Its parameters `init` and `complete` describe
+  the initial state and final state of the producer; the parameter `body`
+  describes at the same time the evolution of the producer's state and
+  the calling convention of the loop body; the parameter `loop` describes
+  the calling convention of the loop itself.
+
++ [`XITER`](iteration.v:Definition XITER) is a variant of `ITER` where the
+  loop is interruptible: the loop body has access to two continuations,
+  `break` and `continue`, allowing it to indicate whether it wishes to
+  terminate early or to continue.
+
++ [`UXITER`](iteration.v:Definition UXITER) is a degenerate variant of
+  `XITER` where the loop-carried state has type `unit`.
+
+We instantiate these general specifications for several common situations:
+
++ [`ITERI_LIST`](iteration.v:Definition ITERI_LIST) and
+  [`ITER_LIST`](iteration.v:Definition ITER_LIST) are
+  specialized versions of `ITER`
+  where the producer iterates, *in order* (from left to right), over a list `xs`.
+  The producer's state is a history of the elements produced so far:
+  it forms a prefix of the list `xs`.
+
++ [`ITERI_MULTISET`](iteration.v:Definition ITERI_MULTISET) and
+  [`ITER_MULTISET`](iteration.v:Definition ITER_MULTISET) are
+  specialized versions of `ITER`
+  where the producer iterates, *in an arbitrary order*,
+  over a multiset `xs`.
+  The producer's state is a history of the elements produced so far:
+  it forms a sub(multi)set of the multiset `xs`.
+
++ [`ITER_Z`](iteration.v:Definition ITER_Z),
+  [`XITER_Z`](iteration.v:Definition XITER_Z), and
+  [`UXITER_Z`](iteration.v:Definition UXITER_Z)
+  are specialized versions of `ITER`, `XITER`, and `UXITER`
+  where the producer iterates (either upwards or downwards)
+  over a semi-open interval [i, k) of the integers.
+  The producer's state is just an integer index:
+  when going up, it is the index that will be produced next;
+  when going down, it is the index that has been produced last.
+
+We provide several tactics that help work with these specifications:
+
++ The tactics
+  [`ITER`](iteration.v:Ltac ITER),
+  [`XITER`](iteration.v:Ltac XITER), and
+  [`UXITER`](iteration.v:Ltac UXITER)
+  should be used when the goal is `ITER ...`, `XITER ...`,
+  or `UXITER ...`. They unfold definitions in the goal and
+  introduce the hypotheses under fixed conventional names.
+
++ At the beginning of the loop body, the tactic
+  [`wp_body`](iteration.v:wp_body) should be used.
+  It is a higher-order tactic; it is meant to be specialized
+  so as to define more palatable tactics for use by end users.
+  For example, in the file `array.v`,
+  the tactic [`wp_iteri_body`](array.v:Tactic Notation "wp_iteri_body")
+  concerns a loop that takes the form of a call to the higher-order function
+  [`array.iteri`](array.v:Definition iteri).
+  This tactic should be used at the beginning of the loop body.
+
++ In the body of an interruptible loop, the tactics
+  [`wp_continue`](iteration.v:Ltac wp_continue) and
+  [`wp_break`](iteration.v:Ltac wp_break)
+  should be used to reason about calls to the continuations.
 
 <!--------------------------------------------------------------------------->
 
