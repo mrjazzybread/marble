@@ -7,7 +7,9 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
-(* This hint can cause divergence; remove it. *)
+(* This hint can cause divergence; remove it. (Anyway, most of the
+   time, we use the tactic [tc], which is a short-hand for [eauto
+   with nocore].) *)
 Global Remove Hints trans_eq_bool : core.
 
 (* The Rocq standard library offers several ways of relating a Boolean
