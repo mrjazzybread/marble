@@ -309,10 +309,17 @@ TODO: `loop.v`
 
 ## Arrays
 
-TODO explain what is a primitive array; provide pointers to official doc
+Rocq's
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays).
+are persistent arrays, whose implementation exploits mutable arrays.
+They are defined in the standard library modules
+[PrimArray](https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.PrimArray.html),
+[ArrayAxioms](https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.ArrayAxioms.html),
+and
+[PArray](https://rocq-prover.org/doc/v9.1/stdlib/Stdlib.Array.PArray.html).
 
-An array should be viewed as an abstract data structure, which holds
-a sequence of elements.
+An array should be viewed as an abstract data structure,
+which holds a sequence of elements.
 
 The proposition [`isArray a xs`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L103) means
 that the elements of the array `a` form the list `xs`. This

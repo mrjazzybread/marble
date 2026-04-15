@@ -13,7 +13,7 @@ Set Universe Polymorphism.
 (* Documentation:
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.PrimArray.html
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.ArrayAxioms.html
-   https://rocq-prover.org/doc/v9.0/stdlib/Stdlib.Array.PArray.html
+   https://rocq-prover.org/doc/v9.1/stdlib/Stdlib.Array.PArray.html
  *)
 
 Local Ltac wp_intro_hook Hx ::=
