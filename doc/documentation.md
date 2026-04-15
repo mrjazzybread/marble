@@ -156,7 +156,7 @@ of relating the Boolean value `b` with the logical proposition `P`
 that this value represents.
 
 For this purpose,
-we define the type class (`isBool b P Q`)[bool.v:Class isBool].
+we define the type class [`isBool b P Q`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/bool.v?ref_type=heads#L26).
 The assertion `isBool b P Q` means that `b = true` implies `P`
 and that `b = false` implies `Q`.
 We do not require `Q` to be the negation of `P`, that is, `¬P`.
@@ -164,7 +164,7 @@ We allow the opposite situation, where `P` is the negation of `Q`,
 and we allow `P` and `Q` to be unrelated propositions.
 This buys us extra flexibility and (often) lets us avoid
 the use of negation, which in Rocq is inconvenient,
-because (unless explicitly requested the user)
+because (unless explicitly requested by the user)
 the law of the excluded middle is not available.
 Because the case where `Q` is `¬P` is still common,
 we write `isBool1 b P`
@@ -187,7 +187,7 @@ We also provide instances of the type class `isBool`
 for the primitive comparison operations
 on [machine integers](#machine-integers).
 Some of these instances have side conditions:
-for example, (`isBool_ltb`)[int.v:Instance isBool_ltb],
+for example, [`isBool_ltb`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L392),
 which concerns a comparison between two machine integers `_i` and `_j`,
 has the side conditions `unsigned i` and `unsigned j`.
 Thus, when the tactic `wp_if` leaves an unsolved subgoal of the form
@@ -229,8 +229,7 @@ For example, `isInt (1)%uint63 (1)%Z` is true,
 and `isInt (1)%uint63 (2^63+1)%Z` is true as well.
 For each machine integer `_i`, there is an infinite family
 of ideal integers `i` such that `isInt _i i` holds.
-Only one member of this family lies within the interval [0, 2^63),
-though.
+Exactly one member of this family lies within the interval [0, 2^63).
 
 We write `unsigned i` as an abbreviation for `0 ≤ i < 2^63`.
 We write `isIntU _i i` as an abbreviation for `isInt _i i ∧ unsigned i`.
@@ -261,8 +260,8 @@ and the three primitive comparison operators
  [`≤?`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L416))
 require their arguments to lie within this interval.
 
-Most of the time, we do not use the conjunction `isIntU _i i`,
-which is an abbreviation for `isInt _i i ∧ unsigned i`;
+Most of the time, we do not use `isIntU _i i`,
+which is an abbreviation for the conjunction `isInt _i i ∧ unsigned i`;
 we prefer to treat `isInt _i i` and `unsigned i` as two separate facts.
 We write `∀Int _i i, P` as sugar for `∀ _i i, isInt _i i → P`.
 We write `∀IntU _i i, P` as sugar for `∀ _i i, isInt _i i → unsigned i → P`.
@@ -291,9 +290,8 @@ commonly used in termination arguments:
   is used when a machine integer increases towards `_a`
   and cannot cross this threshold.
 
-Once the definitions of these orderings are unfolded,
-the tactic `lia` understands these orderings and
-can prove goals that involve them.
+The tactic `tc` understands these orderings
+and can prove goals that involve them.
 
 <!--------------------------------------------------------------------------->
 
