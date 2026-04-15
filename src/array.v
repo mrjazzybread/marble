@@ -583,7 +583,7 @@ Proof.
   (* Case: the future is empty. *)
   { wp_ret. }
   (* Case: the future begins with [x]. *)
-  { wp_op Hstep shadowing: s.
+  { wp_op Hbody shadowing: s.
     wp_op IHfuture shadowing: s. }
 Qed.
 
@@ -646,12 +646,12 @@ Proof.
   ITER;
   simpl list_iteri; subst; lengths; list in *.
   { wp_ret. }
-  { wp_op Hstep shadowing: s.
+  { wp_op Hbody shadowing: s.
     { list. eauto. }
     (* The system cannot guess how we want to extend the history
        because any history of length [len history + 1] will do! *)
     wp_op (IHfuture (history ++ {[x]})) shadowing: s.
-    { intros. wp_apply Hstep. }}
+    { intros. wp_apply Hbody. }}
 Qed.
 
 (* In this variant, we get rid of [history] and we keep track only
@@ -685,7 +685,7 @@ Proof.
   { assert (i < len xs) by lia.
     assert (x = xs !!! i) by (lookup_through_seg; eauto).
     assert (final_seg (i + 1) xs = future) by (seg_through_seg; eauto).
-    wp_op Hstep shadowing: s.
+    wp_op Hbody shadowing: s.
     wp_op IHfuture shadowing: s. }
 Qed.
 

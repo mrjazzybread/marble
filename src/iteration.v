@@ -589,7 +589,7 @@ Global Ltac wp_loop_precondition_hook ::=
 
 Ltac ITER :=
   expand_ITER;
-  intros ? ? Hinit Hstep.
+  intros ? ? Hinit Hbody.
 
 Ltac XITER :=
   expand_ITER;

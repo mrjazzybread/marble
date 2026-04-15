@@ -152,7 +152,7 @@ Proof.
      spurious parameters of type [S * option A] and [option A]. *)
   assert (dummy: option A). { exact continue. }
   (* Case [a < b]. *)
-  { wp_op Hstep s'. clear dependent s. destruct s' as [ s [x|] ].
+  { wp_op Hbody s'. clear dependent s. destruct s' as [ s [x|] ].
     (* Subcase: [out] is [break x]. *)
     + wp_ret. eauto with lia.
     (* Subcase: [out] is [continue]. *)

@@ -961,9 +961,9 @@ Proof.
   funelim (iter_down_aux _i body _j s); cleanup; clear Heqcall;
   intros; isBool_magic; nat.
   (* Case [j = i]. *)
-  { subst j. wp_op Hstep s'. wp_ret. eauto. }
+  { subst j. wp_op Hbody s'. wp_ret. eauto. }
   (* Case [j ≠ i]. *)
-  { rename H into IH. wp_op Hstep s'. wp_op IH s''. eauto. }
+  { rename H into IH. wp_op Hbody s'. wp_op IH s''. eauto. }
 Qed.
 
 (* [iter_down _k _i s body] applies the loop body [body] to every machine
@@ -1208,7 +1208,7 @@ Proof.
   funelim (iter_up_aux _k body _i s); cleanup; clear Heqcall;
   isBool_magic; nat.
   (* Case [i < k]. *)
-  { wp_op Hstep s'. wp_op H s''. wp_ret. eauto. }
+  { wp_op Hbody s'. wp_op H s''. wp_ret. eauto. }
   (* Case [¬ i < k]. *)
   { wp_ret. eauto. }
 Qed.

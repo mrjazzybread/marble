@@ -1054,7 +1054,7 @@ Proof.
   last wp_shadow s.
   (* Preservation. *)
   { clear s. wp_iteri_body _j j x s. subst x.
-    wp_op Hstep shadowing: s.
+    wp_op Hbody shadowing: s.
     { join_segments. eauto using submseteq_seg''. }
     join_segments in *.
     assumption. }

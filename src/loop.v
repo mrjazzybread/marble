@@ -97,10 +97,10 @@ Proof.
   intros; destruct ACC; simpl.
   wp_if; z.
   (* Case [k = i]. *)
-  { wp_op Hstep shadowing: s.
+  { wp_op Hbody shadowing: s.
     wp_ret. }
   (* Case [k ≠ i]. *)
-  { wp_op Hstep shadowing: s.
+  { wp_op Hbody shadowing: s.
     wp_op IH shadowing: s.
     eauto. }
 Qed.
@@ -393,7 +393,7 @@ Proof.
   unfold iter_up. rewrite iter_up_aux_eq.
   wp_if.
   (* Case [i < k]. *)
-  { wp_op Hstep shadowing: s.
+  { wp_op Hbody shadowing: s.
     wp_op IH shadowing: s.
     wp_ret. }
   (* Case [¬ i < k]. *)

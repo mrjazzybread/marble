@@ -309,7 +309,7 @@ TODO: `loop.v`
 ## Arrays
 
 Rocq's
-[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays).
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays)
 are persistent arrays, whose implementation exploits mutable arrays.
 They are defined in the standard library modules
 [PrimArray](https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Array.PrimArray.html),
