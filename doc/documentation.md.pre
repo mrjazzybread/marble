@@ -156,7 +156,7 @@ that this value represents.
 
 For this purpose,
 we define the type class (`isBool b P Q`)[bool.v:Class isBool].
-`isBool b P Q` means that `b = true` implies `P`
+The assertion `isBool b P Q` means that `b = true` implies `P`
 and that `b = false` implies `Q`.
 We do not require `Q` to be the negation of `P`, that is, `¬P`.
 We allow the opposite situation, where `P` is the negation of `Q`,
@@ -199,7 +199,100 @@ In such an event, adding hypotheses about `i` or `j` may be necessary.
 
 ## Machine Integers
 
-TODO: `int.v`
+Rocq's
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays)
+are indexed with
+[primitive integers](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-integers).
+We also refer to them as *machine integers*.
+They are unsigned 63-bit integers.
+They are axiomatized in the standard library modules
+[`Uint63`](https://rocq-prover.org/doc/v9.1/stdlib/Stdlib.Numbers.Cyclic.Int63.Uint63.html)
+and
+[`Uint63Axioms`](https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Numbers.Cyclic.Int63.Uint63Axioms.html).
+
+Although we write code where machine integers are used,
+while reasoning about this code,
+we usually prefer to think in terms of ideal integers.
+Therefore, we establish a connection between machine integers
+and ideal integers, by defining the type class
+[`isInt _i i`](int.v:Class isInt).
+The assertion `IsInt _i i` means that the machine integer `_i`
+(whose type is `int`)
+is the result of *projecting* the ideal integer `i`
+(whose type is `Z`)
+into the semi-open interval [0, 2^63).
+
+This assertion, alone, does *not* mean that the ideal integer `i`
+lies within the interval [0, 2^63).
+For example, `isInt (1)%uint63 (1)%Z` is true,
+and `isInt (1)%uint63 (2^63+1)%Z` is true as well.
+For each machine integer `_i`, there is an infinite family
+of ideal integers `i` such that `isInt _i i` holds.
+Only one member of this family lies within the interval [0, 2^63),
+though.
+
+We write `unsigned i` as an abbreviation for `0 ≤ i < 2^63`.
+We write `isIntU _i i` as an abbreviation for `isInt _i i ∧ unsigned i`.
+Thus, for each machine integer `_i`, there is exactly one ideal integer `i`
+such that `isIntU _i i` holds.
+
+In practice, which should be used: `isInt` or `isIntU`?
+The answer varies.
+Some operations need just `isInt` and guarantee just `isInt`;
+some operations need `isIntU` and guarantee `isIntU`.
+For example,
+[addition](int.v:Instance isInt_add),
+[subtraction](int.v:Instance isInt_sub),
+and
+[multiplication](int.v:Instance isInt_mul)
+require `isInt` and ensure `isInt`.
+In other words, these operations tolerate overflow
+and have wrap-around semantics:
+they do not require their arguments to lie within the interval [0, 2^63)
+and they do not guarantee that their result lies within this interval.
+In contrast,
+[division](int.v:Instance isInt_div),
+[minimum](int.v:Instance isInt_min),
+[maximum](int.v:Instance isInt_max),
+and the three primitive comparison operators
+([`=?`](int.v:Instance isBool_eqb),
+ [`<?`](int.v:Instance isBool_ltb),
+ [`≤?`](int.v:Instance isBool_leb))
+require their arguments to lie within this interval.
+
+Most of the time, we do not use the conjunction `isIntU _i i`,
+which is an abbreviation for `isInt _i i ∧ unsigned i`;
+we prefer to treat `isInt _i i` and `unsigned i` as two separate facts.
+We write `∀Int _i i, P` as sugar for `∀ _i i, isInt _i i → P`.
+We write `∀IntU _i i, P` as sugar for `∀ _i i, isInt _i i → unsigned i → P`.
+
+It is often necessary to write recursive functions whose termination argument
+involves machine integers. Four well-founded orderings on machine integers are
+commonly used in termination arguments:
+
++ `ilt` (which stands for *integer-less-than*)
+  is used when a machine integer decreases towards 0,
+  and cannot cross this threshold.
+  That is, it cannot go below 0;
+  or in other words, it cannot wrap around and become positive again.
++ `igt` (for *integer-greater-than*)
+  is used when a machine integer increases towards 2^63-1
+  and cannot cross this threshold.
++ `rilt _a` (which stands for *relative-integer-less-than*)
+  is used when a machine integer decreases towards `_a`
+  and cannot cross this threshold.
+  In this case it is possible to start *below* `_a`
+  and (by decreasing below 0) to wrap around
+  and move into the very large positive integers;
+  but it is not possible to cross `_a`,
+  that is, to move from `_a` to a number that is less than `_a`.
++ `rigt _a` (which stands for *relative-integer-greater-than*)
+  is used when a machine integer increases towards `_a`
+  and cannot cross this threshold.
+
+Once the definitions of these orderings are unfolded,
+the tactic `lia` understands these orderings and
+can prove goals that involve them.
 
 <!--------------------------------------------------------------------------->
 
@@ -216,6 +309,8 @@ TODO: `loop.v`
 <!--------------------------------------------------------------------------->
 
 ## Arrays
+
+TODO explain what is a primitive array; provide pointers to official doc
 
 An array should be viewed as an abstract data structure, which holds
 a sequence of elements.

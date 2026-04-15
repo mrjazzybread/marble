@@ -157,7 +157,7 @@ that this value represents.
 
 For this purpose,
 we define the type class (`isBool b P Q`)[bool.v:Class isBool].
-`isBool b P Q` means that `b = true` implies `P`
+The assertion `isBool b P Q` means that `b = true` implies `P`
 and that `b = false` implies `Q`.
 We do not require `Q` to be the negation of `P`, that is, `¬P`.
 We allow the opposite situation, where `P` is the negation of `Q`,
@@ -200,7 +200,100 @@ In such an event, adding hypotheses about `i` or `j` may be necessary.
 
 ## Machine Integers
 
-TODO: `int.v`
+Rocq's
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays)
+are indexed with
+[primitive integers](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-integers).
+We also refer to them as *machine integers*.
+They are unsigned 63-bit integers.
+They are axiomatized in the standard library modules
+[`Uint63`](https://rocq-prover.org/doc/v9.1/stdlib/Stdlib.Numbers.Cyclic.Int63.Uint63.html)
+and
+[`Uint63Axioms`](https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Numbers.Cyclic.Int63.Uint63Axioms.html).
+
+Although we write code where machine integers are used,
+while reasoning about this code,
+we usually prefer to think in terms of ideal integers.
+Therefore, we establish a connection between machine integers
+and ideal integers, by defining the type class
+[`isInt _i i`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L202).
+The assertion `IsInt _i i` means that the machine integer `_i`
+(whose type is `int`)
+is the result of *projecting* the ideal integer `i`
+(whose type is `Z`)
+into the semi-open interval [0, 2^63).
+
+This assertion, alone, does *not* mean that the ideal integer `i`
+lies within the interval [0, 2^63).
+For example, `isInt (1)%uint63 (1)%Z` is true,
+and `isInt (1)%uint63 (2^63+1)%Z` is true as well.
+For each machine integer `_i`, there is an infinite family
+of ideal integers `i` such that `isInt _i i` holds.
+Only one member of this family lies within the interval [0, 2^63),
+though.
+
+We write `unsigned i` as an abbreviation for `0 ≤ i < 2^63`.
+We write `isIntU _i i` as an abbreviation for `isInt _i i ∧ unsigned i`.
+Thus, for each machine integer `_i`, there is exactly one ideal integer `i`
+such that `isIntU _i i` holds.
+
+In practice, which should be used: `isInt` or `isIntU`?
+The answer varies.
+Some operations need just `isInt` and guarantee just `isInt`;
+some operations need `isIntU` and guarantee `isIntU`.
+For example,
+[addition](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L289),
+[subtraction](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L302),
+and
+[multiplication](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L312)
+require `isInt` and ensure `isInt`.
+In other words, these operations tolerate overflow
+and have wrap-around semantics:
+they do not require their arguments to lie within the interval [0, 2^63)
+and they do not guarantee that their result lies within this interval.
+In contrast,
+[division](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L486),
+[minimum](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L435),
+[maximum](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L444),
+and the three primitive comparison operators
+([`=?`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L364),
+ [`<?`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L392),
+ [`≤?`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/int.v?ref_type=heads#L416))
+require their arguments to lie within this interval.
+
+Most of the time, we do not use the conjunction `isIntU _i i`,
+which is an abbreviation for `isInt _i i ∧ unsigned i`;
+we prefer to treat `isInt _i i` and `unsigned i` as two separate facts.
+We write `∀Int _i i, P` as sugar for `∀ _i i, isInt _i i → P`.
+We write `∀IntU _i i, P` as sugar for `∀ _i i, isInt _i i → unsigned i → P`.
+
+It is often necessary to write recursive functions whose termination argument
+involves machine integers. Four well-founded orderings on machine integers are
+commonly used in termination arguments:
+
++ `ilt` (which stands for *integer-less-than*)
+  is used when a machine integer decreases towards 0,
+  and cannot cross this threshold.
+  That is, it cannot go below 0;
+  or in other words, it cannot wrap around and become positive again.
++ `igt` (for *integer-greater-than*)
+  is used when a machine integer increases towards 2^63-1
+  and cannot cross this threshold.
++ `rilt _a` (which stands for *relative-integer-less-than*)
+  is used when a machine integer decreases towards `_a`
+  and cannot cross this threshold.
+  In this case it is possible to start *below* `_a`
+  and (by decreasing below 0) to wrap around
+  and move into the very large positive integers;
+  but it is not possible to cross `_a`,
+  that is, to move from `_a` to a number that is less than `_a`.
++ `rigt _a` (which stands for *relative-integer-greater-than*)
+  is used when a machine integer increases towards `_a`
+  and cannot cross this threshold.
+
+Once the definitions of these orderings are unfolded,
+the tactic `lia` understands these orderings and
+can prove goals that involve them.
 
 <!--------------------------------------------------------------------------->
 
@@ -217,6 +310,8 @@ TODO: `loop.v`
 <!--------------------------------------------------------------------------->
 
 ## Arrays
+
+TODO explain what is a primitive array; provide pointers to official doc
 
 An array should be viewed as an abstract data structure, which holds
 a sequence of elements.
@@ -312,8 +407,8 @@ There are four primitive operations on arrays:
   because an array is defined not only by its content
   but also by its default value.
 
-* [`init _n @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1950)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1956))
+* [`init _n @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1949)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1955))
   creates an array of length `_n` whose elements
   are computed by the function `body`.
 
@@ -321,7 +416,7 @@ There are four primitive operations on arrays:
   receives the current index `_i` and returns an element.
 
   To reason about this operation,
-  use the tactic [`wp_init`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1976).
+  use the tactic [`wp_init`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1975).
 
 * [`list_length xs`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L704)
   ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L712))
@@ -341,7 +436,7 @@ There are four primitive operations on arrays:
   It is used in the implementation of `of_list`.
 
 * [`blit a _i b _j _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L903)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1138)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1137)
   copies the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
   to the array segment determined by the array `b`,
@@ -353,12 +448,12 @@ There are four primitive operations on arrays:
   `blit'`.
 
   To reason about this operation,
-  use the tactic [`wp_blit`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1371).
+  use the tactic [`wp_blit`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1370).
   This tactic intentionally clears the previous array `b`
   and names the new array `b` in the proof.
 
-* [`blit' a _i _j _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1305)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1325)
+* [`blit' a _i _j _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1304)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1324)
   copies the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
   to the array segment determined by the array `a`,
@@ -368,101 +463,101 @@ There are four primitive operations on arrays:
   The source and destination segments may overlap.
 
   To reason about this operation,
-  use the tactic [`wp_blit`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1371).
+  use the tactic [`wp_blit`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1370).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
 
-* [`copy a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1390)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1397)
+* [`copy a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1389)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1396)
   creates a fresh copy of the array `a`,
   that is, a new array whose content
   is the same as the content of the array `a`.
 
   To reason about this operation,
-  use the tactic [`wp_copy b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1409)
+  use the tactic [`wp_copy b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1408)
   where `b` is the name under which you would like
   the new array to be known.
 
-* [`sub a _i _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1423)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1429)
+* [`sub a _i _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1422)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1428)
   creates a new array whose content
   is the same as the content of the array segment
   determined by the array `a`, the start index `_i`,
   and the length `_n`.
 
   To reason about this operation,
-  use the tactic [`wp_sub b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1443)
+  use the tactic [`wp_sub b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1442)
   where `b` is the name under which you would like
   the new array to be known.
 
-* [`append a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1460)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1472)
+* [`append a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1459)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1471)
   creates a new array whose content is the concatenation
   of the content of the arrays `a` and `b`.
 
   To reason about this operation,
-  use the tactic [`wp_append c`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1488)
+  use the tactic [`wp_append c`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1487)
   where `c` is the name under which you would like
   the new array to be known.
 
-* [`fill a _i _n x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1505)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1514)
+* [`fill a _i _n x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1504)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1513)
   fills the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
   with the value `x`.
   It returns an updated version of the array `a`.
 
   To reason about this operation,
-  use the tactic [`wp_fill`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1539).
+  use the tactic [`wp_fill`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1538).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
 
-* [`find_index f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1559)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1595)
+* [`find_index f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1558)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1594)
   searches the array `a`, from left to right,
   for an element `x` such that `f x` is true.
   Its result has type [`outcome int`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L39).
 
   To reason about this operation,
-  use the tactic [`wp_find_index out`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1657)
+  use the tactic [`wp_find_index out`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1656)
   where `out` is the name under which you would like
   the result to be known.
 
-* [`exist f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1671)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1684)
+* [`exist f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1670)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1683)
   searches the array `a`, from left to right,
   for an element `x` such that `f x` is true.
   Its result is `true` if such an element exists
   and `false` otherwise.
 
   To reason about this operation,
-  use the tactic [`wp_exist b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1700)
+  use the tactic [`wp_exist b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1699)
   where `b` is the name under which you would like
   the result to be known.
 
-* [`for_all f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1716)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1729)
+* [`for_all f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1715)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1728)
   tests whether every element `x` of the array `a`
   is such that `f x` is true.
   If so, its result is `true`;
   otherwise, its result is `false`.
 
   To reason about this operation,
-  use the tactic [`wp_for_all b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1745)
+  use the tactic [`wp_for_all b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1744)
   where `b` is the name under which you would like
   the result to be known.
 
-* [`equal eq a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1764)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1808))
+* [`equal eq a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1763)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1807))
   tests whether the arrays `a` and `b` have the same length
   and have equal elements at every index `i`.
   The function `eq` is used to check two elements for equality.
 
-  A [simpler specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1808) is given
+  A [simpler specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1807) is given
   in the case where the function `eq` is an equality test.
 
-* [`segment_iteri a _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1886)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1898))
+* [`segment_iteri a _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1885)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1897))
   is a loop over the array segment determined by the array `a`,
   start index `_i`, and end index `_k`,
   with initial state `s`.
@@ -471,8 +566,8 @@ There are four primitive operations on arrays:
   receives the current state `s`, the current index `_i`,
   and the current list element `x`, and returns a new state.
 
-* [`iteri a s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1892)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1916))
+* [`iteri a s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1891)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1915))
   is a loop over the array `a`
   with initial state `s`.
 
