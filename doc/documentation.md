@@ -136,13 +136,65 @@ it allows providing a *loop invariant*.
 At this time,
 this form cannot be combined with `introducing:` or `shadowing:`.
 
-TODO: `tactics.v`
+A small number of generally useful tactics are provided in the file
+(`tactics.v`)[../src/tactics.v]. In particular, the tactic
+[`tc`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/tactics.v?ref_type=heads#L74)
+and its depth-indexed variants [`tc0` to `tc7`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/tactics.v?ref_type=heads#L65)
+perform type class search and can solve arithmetic side conditions
+using `lia`. They can be extended
+by adding hints (via `Hint Resolve` or `Hint Extern`)
+to the hint database `marble`.
 
 <!--------------------------------------------------------------------------->
 
 ## Booleans
 
-TODO: `bool.v`
+The most basic conditional construct, `if b then ... else ...`,
+involves a Boolean expression `b`. To verify such a construct,
+it is desirable to have a standard and convenient way
+of relating the Boolean value `b` with the logical proposition `P`
+that this value represents.
+
+For this purpose,
+we define the type class (`isBool b P Q`)[bool.v:Class isBool].
+`isBool b P Q` means that `b = true` implies `P`
+and that `b = false` implies `Q`.
+We do not require `Q` to be the negation of `P`, that is, `¬P`.
+We allow the opposite situation, where `P` is the negation of `Q`,
+and we allow `P` and `Q` to be unrelated propositions.
+This buys us extra flexibility and (often) lets us avoid
+the use of negation, which in Rocq is inconvenient,
+because (unless explicitly requested the user)
+the law of the excluded middle is not available.
+Because the case where `Q` is `¬P` is still common,
+we write `isBool1 b P`
+as an abbreviation for `isBool b P (¬P)`.
+
+A hypothesis of the form `isBool b P Q` appears in the statement of the
+reasoning rule [`wp_if`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/wp.v?ref_type=heads#L90), so (provided suitable instances of
+the type class `isBool` are available) the tactic `wp_if` automatically
+transforms a Boolean condition into the logical proposition that it
+represents.
+
+We provide instances of the type class `isBool` for the most common logical
+connectives:
+[conjunction](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/bool.v?ref_type=heads#L78),
+[disjunction](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/bool.v?ref_type=heads#L86),
+and
+[negation](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/bool.v?ref_type=heads#L94).
+
+We also provide instances of the type class `isBool`
+for the primitive comparison operations
+on [machine integers](#machine-integers).
+Some of these instances have side conditions:
+for example, (`isBool_ltb`)[int.v:Instance isBool_ltb],
+which concerns a comparison between two machine integers `_i` and `_j`,
+has the side conditions `unsigned i` and `unsigned j`.
+Thus, when the tactic `wp_if` leaves an unsolved subgoal of the form
+`isBool (_i <? _j)%uint63 ?P ?Q`, very likely,
+this means that the tactic `tc` was unable to prove
+one or both of the subgoals `unsigned i` and `unsigned j`.
+In such an event, adding hypotheses about `i` or `j` may be necessary.
 
 <!--------------------------------------------------------------------------->
 
