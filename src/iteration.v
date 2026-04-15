@@ -266,6 +266,8 @@ Definition ITERI_LIST {S A}
     )
     loop.
 
+Hint Resolve prefix_nil : marble.
+
 (* The tactic [list_step x i] is meant to be used after [wp_body ...],
    while iterating on a list.
    Then the goal is [∀ x i,
@@ -290,6 +292,52 @@ Definition ITER_LIST {S A}
     loop.
 
 (* TODO define [XITER_LIST] and [UXITER_LIST] *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Iteration on a list, in an unspecified (unpredictable) order. *)
+
+(* This can be understood as iteration on a multiset. *)
+
+(* The producer state is the history, that is, the list of elements
+   produced so far. Each step extends the history with one element [x].
+   The list [init] is the initial producer state; a history that is a
+   submultiset of the list [xs] is a valid history; a history that is
+   equal (as a multiset) to the list [xs] is final. *)
+
+(* The relation [⊆+] is defined in stdpp/list_relations.v.
+   Its full name is [submseteq]. *)
+
+Local Infix "≃" := (Permutation)
+  (at level 70, no associativity).
+
+Definition ITERI_MULTISET {S A}
+  (init xs : list A)
+  (body : A → Z → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    init
+    ( λ history, history ≃ xs )
+    ( λ history0 history1 s Q,
+      ∀ x i,
+      init `prefix_of` history0 →
+      history0 ++ {[x]} = history1 →
+      history1 ⊆+ xs →
+      i = length history0 →
+      body x i s Q
+    )
+    loop.
+
+Definition ITER_MULTISET {S A}
+  (init xs : list A)
+  (body : A → S → WP S)
+  (loop : S → WP S)
+:=
+  ITERI_MULTISET
+    init xs
+    ( λ x i s Q, body x s Q )
+    loop.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -517,6 +565,7 @@ Ltac expand_ITER :=
     ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
+    ITER_MULTISET, ITERI_MULTISET,
     ITER, XITER, UXITER;
     simpl implication.
 
@@ -525,6 +574,7 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
+    ITER_MULTISET, ITERI_MULTISET,
     ITER, XITER, UXITER
   in h;
   simpl implication in h.
