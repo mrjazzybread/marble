@@ -18,8 +18,8 @@ Set Universe Polymorphism.
 (* The type of 63-bit unsigned primitive integers is named [int]. *)
 
 (* Documentation:
+   https://rocq-prover.org/doc/v9.1/stdlib/Stdlib.Numbers.Cyclic.Int63.Uint63.html
    https://rocq-prover.org/doc/V9.0.1/corelib/Corelib.Numbers.Cyclic.Int63.Uint63Axioms.html
-   https://rocq-prover.org/doc/v9.2/stdlib/Stdlib.Numbers.Cyclic.Int63.Uint63.html
  *)
 
 Open Scope Z_scope.
@@ -44,6 +44,11 @@ Proof. constructor. exact 0%uint63. Defined.
 
 Notation unsigned z :=
   (0 ≤ z < wB).
+
+(* [wB] is just a name for 2^63. *)
+
+Goal wB = 2^63.
+Proof. reflexivity. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -537,6 +542,15 @@ Proof. tc. Qed.
 Goal ∀ _i i, isInt _i i → unsigned i → isInt (_min 0 _i) (0 `min` i).
 Proof. tc. Qed.
 
+Goal isInt (1)%uint63 (1)%Z.
+Proof. tc. Qed.
+
+Goal isInt (1)%uint63 (2^63+1)%Z.
+Proof.
+  (* This one is tricky; [tc] cannot prove it. *)
+  rewrite isInt_def. lia.
+Qed.
+
 Goal isInt 12 12.
 Proof. tc. Qed.
 
@@ -603,10 +617,13 @@ Proof. tc3. Qed.
 Definition ilt _i _j :=
   φ _i < φ _j.
 
+Global Hint Extern 1 (ilt _ _) =>
+  (rewrite ?isInt_def in *; unfold ilt; lia) : marble.
+
 Lemma ilt_wf : well_founded ilt.
 Proof.
   eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := φ) ].
-  intros _i _j. unfold ilt. eauto with lia.
+  intros _i _j. eauto with marble.
 Qed.
 
 Global Instance Wf_ilt : WellFounded ilt :=
@@ -617,29 +634,26 @@ Global Instance Wf_ilt : WellFounded ilt :=
 (* The following lemmas are useful in direct definitions of recursive
    functions by structural induction on a proof of accessibility. *)
 
-Lemma Acc_ilt_n_minus_1 _n (pf : Acc ilt _n) :
+Lemma ilt_n_minus_1 _n :
   (_n =? 0)%uint63 = false →
-  Acc ilt (_n - 1)%uint63.
-Proof.
-  intros. destruct pf as [pf]. apply pf. abstract (unfold ilt; lia).
-Defined. (* Defined, not Qed. *)
+  ilt (_n - 1)%uint63 _n.
+Proof. eauto with marble. Qed.
 
-Lemma ilt_n_minus_1 : ∀Int _n n, unsigned n → n ≠ 0 → ilt (_n - 1) _n.
-Proof.
-  intros. rewrite isInt_def in *. unfold ilt. lia.
-Qed.
-
-Hint Resolve ilt_n_minus_1 : marble.
+Goal ∀IntU _n n, n ≠ 0 → ilt (_n - 1) _n.
+Proof. eauto with marble. Qed.
 
 (* [rilt] *)
 
 Definition rilt _a _i _j :=
   ilt (_i - _a) (_j - _a).
 
+Global Hint Extern 1 (rilt _ _ _) =>
+  (rewrite ?isInt_def in *; unfold rilt, ilt; lia) : marble.
+
 Lemma rilt_wf _a : well_founded (rilt _a).
 Proof.
   eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := λ _i, φ (_i - _a)) ].
-  intros _i _j. unfold rilt, ilt. eauto with lia.
+  intros _i _j. eauto with marble.
 Qed.
 
 Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
@@ -648,24 +662,13 @@ Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
 (* The following lemmas are useful in direct definitions of recursive
    functions by structural induction on a proof of accessibility. *)
 
-Lemma Acc_rilt_n_minus_1 _k _i (pf : Acc (rilt _i) _k) :
+Lemma rilt_n_minus_1 _k _i :
   (_k =? _i)%uint63 = false →
-  Acc (rilt _i) (_k - 1)%uint63.
-Proof.
-  intros. destruct pf as [pf]. apply pf.
-  abstract (unfold rilt, ilt; lia).
-Defined. (* Defined, not Qed. *)
+  (rilt _i) (_k - 1)%uint63 _k.
+Proof. eauto with marble. Qed.
 
-Lemma rilt_n_minus_1 :
-  ∀IntU _k k,
-  ∀IntU _i i,
-  k ≠ i →
-  rilt _i (_k - 1) _k.
-Proof.
-  intros. rewrite isInt_def in *. unfold rilt, ilt. lia.
-Qed.
-
-Hint Resolve rilt_n_minus_1 : marble.
+Goal ∀IntU _k k, ∀IntU _i i, k ≠ i → rilt _i (_k - 1) _k.
+Proof. eauto with marble. Qed.
 
 (* [igt] *)
 
@@ -677,6 +680,9 @@ Lemma igt_alt_def _i _j :
 Proof.
   unfold igt. split; eauto with lia.
 Qed.
+
+Global Hint Extern 1 (igt _ _) =>
+  (rewrite ?isInt_def in *; unfold igt; lia) : marble.
 
 Lemma igt_wf : well_founded igt.
 Proof.
@@ -691,28 +697,21 @@ Global Instance Wf_igt : WellFounded igt :=
 (* The following lemmas are useful in direct definitions of recursive
    functions by structural induction on a proof of accessibility. *)
 
-Lemma Acc_igt_n_plus_1 _n _k (pf : Acc igt _n) :
+Lemma igt_n_plus_1 _n _k :
   (_n <? _k)%uint63 = true →
-  Acc igt (_n + 1)%uint63.
-Proof.
-  intros. destruct pf as [pf]. apply pf. abstract (unfold igt; lia).
-Defined. (* Defined, not Qed. *)
+  igt (_n + 1)%uint63 _n.
+Proof. eauto with marble. Qed.
 
-Lemma igt_n_plus_1 :
-  ∀IntU _n n,
-  ∀IntU _k k,
-  n < k →
-  igt (_n + 1) _n.
-Proof.
-  intros. rewrite isInt_def in *. unfold igt. lia.
-Qed.
-
-Hint Resolve igt_n_plus_1 : marble.
+Goal ∀IntU _n n, ∀IntU _k k, n < k → igt (_n + 1) _n.
+Proof. eauto with marble. Qed.
 
 (* [rigt] *)
 
 Definition rigt _a _i _j :=
   igt (_i - _a) (_j - _a).
+
+Global Hint Extern 1 (rigt _ _ _) =>
+  (rewrite ?isInt_def in *; unfold rigt, igt; lia) : marble.
 
 Lemma rigt_wf _a : well_founded (rigt _a).
 Proof.
@@ -726,14 +725,8 @@ Global Instance Wf_rigt _a : WellFounded (rigt _a) :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* This hint allows [eauto with lia] to kill the proof obligations
-   related to these orderings. After the definition of the ordering
-   is unfolded, [lia] just solves the underlying goal. *)
-
-Global Hint Unfold ilt igt rilt rigt : marble.
-
 (* The following results are unused. I keep them for the record; they
-   are just illustrations of the power of [eauto with lia]. *)
+   are just illustrations of the power of [eauto with marble]. *)
 
 (* By taking advantage of the above well-founded orderings, we are able to
    prove that a loop, counting up or counting down, must terminate. *)

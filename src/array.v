@@ -947,10 +947,9 @@ Qed.
    described by Xavier Leroy:
    https://xavierleroy.org/publi/wf-recursion.pdf *)
 
-(* In the second branch, [Hnz] is a proof that [_n] is nonzero.
-   We use it to build [Acc_ilt_n_minus_1 _n ACC Hnz], a proof
-   that [_n - 1] is less than [_n]. This proof is used to argue
-   that the recursive call is permitted. *)
+(* In the second branch, [Hnz] is a proof that [_n] is nonzero. We use
+   it to build a proof that [_n - 1] is less than [_n]. This proof is
+   used to argue that the recursive call is permitted. *)
 
 Section Code.
 Open Scope uint63.
@@ -963,7 +962,7 @@ Fixpoint simple_blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
     do x ← get a _i ;
     do b ← set b _j x ;
     simple_blit_aux a (_i + 1) b (_j + 1) (_n - 1)
-                    (Acc_ilt_n_minus_1 _n ACC Hnz).
+                    (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
 
 Definition simple_blit a _i b _j _n :=
   simple_blit_aux a _i b _j _n (Wf_ilt _n).

@@ -68,7 +68,7 @@ Fixpoint iter_down_aux _i _k s body (ACC : Acc (rilt _i) _k) :=
     s
   ELSE λ Hki,
     do s ← body _k s ;
-    iter_down_aux _i (_k - 1) s body (Acc_rilt_n_minus_1 _k _i ACC Hki).
+    iter_down_aux _i (_k - 1) s body (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)).
 
 Definition iter_down _i _k s body :=
   if _k ≤? _i then s
@@ -156,7 +156,7 @@ Fixpoint xiter_down_aux _i _k s
     body _k s continue break
   ELSE λ Hki,
     let continue s := xiter_down_aux _i (_k - 1) s (@body)
-                        (Acc_rilt_n_minus_1 _k _i ACC Hki) in
+                        (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)) in
     let break s x := (s, Break x) in
     body _k s continue break.
 
@@ -244,7 +244,7 @@ Fixpoint uxiter_down_aux _i _k
     body _k continue break
   ELSE λ Hki,
     let continue '() := uxiter_down_aux _i (_k - 1) (@body)
-                         (Acc_rilt_n_minus_1 _k _i ACC Hki) in
+                         (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)) in
     let break x := Break x in
     body _k continue break.
 
@@ -338,7 +338,7 @@ Fixpoint iter_up_aux _i _k s body (ACC : Acc igt _i) :=
   IFC _i <? _k THEN λ Hik,
     do s ← body _i s ;
     iter_up_aux (_i + 1) _k s body
-                (Acc_igt_n_plus_1 _i _k ACC Hik)
+                (Acc_inv ACC (igt_n_plus_1 _i _k Hik))
   ELSE λ _,
     s.
 
@@ -429,7 +429,7 @@ Fixpoint xiter_up_aux _i _k s
 : S * outcome A :=
   IFC _i <? _k THEN λ Hik,
     let continue s := xiter_up_aux (_i + 1) _k s (@body)
-                        (Acc_igt_n_plus_1 _i _k ACC Hik) in
+                        (Acc_inv ACC (igt_n_plus_1 _i _k Hik)) in
     let break s x := (s, Break x) in
     body _i s continue break
   ELSE λ _,
@@ -507,7 +507,7 @@ Fixpoint uxiter_up_aux _i _k
 : outcome A :=
   IFC _i <? _k THEN λ Hik,
     let continue '() := uxiter_up_aux (_i + 1) _k (@body)
-                         (Acc_igt_n_plus_1 _i _k ACC Hik) in
+                         (Acc_inv ACC (igt_n_plus_1 _i _k Hik)) in
     let break x := Break x in
     body _i continue break
   ELSE λ _,
