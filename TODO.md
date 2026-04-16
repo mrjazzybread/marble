@@ -2,8 +2,7 @@
 
 ## Short term
 
-* Treat `blit'` in the same way as `blit` (write a native unrolled loop).
-  Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
+* Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
 
 * optimistic merge the other way around? (can blit if the two halves
   are neatly exchanged)
