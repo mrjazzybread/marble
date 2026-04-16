@@ -977,8 +977,8 @@ Definition simple_blit a _i b _j _n :=
 (* As an immediate consequence of this lemma, [simple_blit]
    satisfies the desired fixed point equation. *)
 
-Lemma simple_blit_aux_eq _n :
-  ∀ a _i b _j ACC,
+Lemma simple_blit_aux_eq _n ACC :
+  ∀ a _i b _j,
   simple_blit_aux a _i b _j _n ACC =
   if _n =? 0 then
     b
@@ -987,21 +987,37 @@ Lemma simple_blit_aux_eq _n :
     do b ← set b _j x ;
     simple_blit a (_i + 1) b (_j + 1) (_n - 1).
 Proof.
-  by well-founded induction on _n along ilt.
-  (* The following line follows Leroy's paper, page 2, top right: *)
-  intros; destruct ACC; simpl.
+  (* Following Leroy's paper, page 2, top right,
+     we COULD begin the proof like this: *)
+    (* by well-founded induction on _n along ilt. *)
+    (* intros; destruct ACC; simpl. *)
+
+  (* However, such a start is slightly unsatisfactory, insofar as it
+     relies on the fact that the relation [ilt] is well-founded. Yet
+     we should not need to use this fact: [ACC] is a witness of
+     accessibility of [_n], so it should suffice to do (dependent)
+     induction on [ACC]. Here is how (see equations.v): *)
+  by dependent induction on _n ACC.
+  intros. simpl.
+
   (* Then Xavier's method falls short! [destruct] does not work. *)
-  (* Fail destruct (_n =? 0). *)
-  (* Our work-around is to apply the lemma [IFC_if]. Fortunately,
-     the induction hypothesis [IH] provides exactly the guarantee
-     that this lemma requires. *)
-  eapply IFC_if; [ eauto |]. intro.
-  setoid_rewrite IH; tc2.
-  (* The reason why Xavier does not encounter this problem is that he
+    (* Fail destruct (_n =? 0). *)
+  (* The reason why [destruct] works in Xavier's setting is that he
      uses a non-dependent [match] construct to analyse the result of
      the test [Nat.eq_dec b 0], whose type is [{b = 0} + {b <> 0}];
      whereas we use a dependent [if] construct to analyze the result
      of the test [n =? 0], whose type is [bool]. *)
+
+  (* Our work-around is to apply the lemma [IFC_if]. *)
+  eapply IFC_if; [ eauto | intro ].
+
+  (* There remains to prove the equality of the second branches.
+     Fortunately, the induction hypothesis [IH] is exactly what
+     is needed for this purpose. [setoid_rewrite] is used to
+     rewrite in the continuation of [bind]. *)
+  setoid_rewrite IH; [| tc2 | tc2 ].
+  (* The goal is now trivial. *)
+  reflexivity.
 Qed.
 
 End Code.
