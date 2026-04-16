@@ -8,10 +8,10 @@ Open Scope uint63.
 
 (* The times in comments use OCaml 4.14.2+flambda. *)
 
-Time Definition test_make : array int :=
-  Eval vm_compute in
-  make 3_000_000 0.
-    (* 0.9 to 1 second : 3 million elements/second *)
+(* Time Definition test_make : array int := *)
+(*   Eval vm_compute in *)
+(*   make 3_000_000 0. *)
+(*     (* 0.9 to 1 second : 3 million elements/second *) *)
 
 Definition data (_i : int) :=
   (100000 - _i).
@@ -21,17 +21,17 @@ Definition n := 50_000.
 Time Definition a : array int :=
   Eval vm_compute in
   init n data.
-    (* 4.5 seconds *)
+    (* 0.05 seconds : 1 million elements/second *)
 
-Definition time_to_list : int :=
+Time Definition time_to_list : int :=
   Eval vm_compute in hd 0 (to_list a).
-    (* about 14 seconds : 3500 elements/second *)
+    (* 0.01 seconds : 5 million elements/second *)
     (* calling [hd 0 _] suppresses display, which would crash *)
 
 Time Definition b : array int :=
   Eval vm_compute in
   init n data.
-    (* 4.5 seconds *)
+    (* same as [a] *)
 
 Time Definition time_naive_blit :=
   Eval vm_compute in
@@ -43,7 +43,7 @@ Time Definition time_naive_blit :=
 Time Definition b' : array int :=
   Eval vm_compute in
   init n data.
-    (* 4.5 seconds *)
+    (* same as [a] *)
 
 Time Definition time_simple_blit :=
   Eval vm_compute in
@@ -53,7 +53,7 @@ Time Definition time_simple_blit :=
 Time Definition b'' : array int :=
   Eval vm_compute in
   init n data.
-    (* 4.5 seconds *)
+    (* same as [a] *)
 
 Time Definition time_equations_blit :=
   Eval vm_compute in
@@ -63,7 +63,7 @@ Time Definition time_equations_blit :=
 Time Definition b''' : array int :=
   Eval vm_compute in
   init n data.
-    (* 4.5 seconds *)
+    (* same as [a] *)
 
 Time Definition time_blit :=
   Eval vm_compute in
@@ -74,12 +74,12 @@ From marble Require Import sort.
 
 Time Definition c : array int :=
   Eval vm_compute in
-  init 16000 data.
-    (* 1.4 seconds *)
+  init 50000 data.
+    (* 0.07 seconds at best, often 0.12 seconds (why?) *)
 
 Time Definition time_sort : array int :=
   Eval vm_compute in
   sort c.
-    (* 1600: 1.5 seconds *)
-    (* 16000: 22 seconds : 727 elements/second *)
-    (* not fast, but already twice faster than with [simple_blit] *)
+    (* 1600: 0.02 seconds (used to be 1.5 seconds with Equations) *)
+    (* 16000:  0.14 (used to be 22 seconds : 727 elements/second) *)
+    (* 50000:  0.44 seconds (110,000 elements/second) *)
