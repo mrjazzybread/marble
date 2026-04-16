@@ -3,6 +3,7 @@ From Stdlib Require Export Wellfounded.Wellfounded.
 From Equations Require Export Equations.
 From Equations.Prop Require Export Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
+From marble Require Import wf. (* TODO should be merged into stdpp *)
 
 (* The following notations offers syntactic sugar for a "rich"
    conditional construct. In the first branch, the hypothesis
@@ -95,3 +96,10 @@ Tactic Notation "by" "well-founded" "induction" "on" ident(x) "along" constr(R) 
   intros x IH.
 
  *)
+
+(* The tactic [by dependent induction on x Ax] performs (dependent)
+   induction on a proof [Ax] of accessibility of [x]. The induction
+   principle is [Acc_dep_ind_strong]. *)
+
+Tactic Notation "by" "dependent" "induction" "on" ident(x) ident(Ax) :=
+  pattern x, Ax; eapply Acc_dep_ind_strong; clear x Ax.
