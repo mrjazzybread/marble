@@ -357,7 +357,7 @@ the type of the elements that the consumer receives. Therefore,
 consumer receives, say, machine integers
 (as in [`loop.iter_down`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/loop.v?ref_type=heads#L82)),
 or array elements
-(as in [`array.iteri`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1915)).
+(as in [`array.iteri`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1894)).
 
 We provide several tactics that help work with these specifications:
 
@@ -374,9 +374,9 @@ We provide several tactics that help work with these specifications:
   It is a higher-order tactic; it is meant to be specialized
   so as to define more palatable tactics for use by end users.
   For example, in the file `array.v`,
-  the tactic [`wp_iteri_body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1938)
+  the tactic [`wp_iteri_body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1917)
   concerns a loop that takes the form of a call to the higher-order function
-  [`array.iteri`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1891).
+  [`array.iteri`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1870).
   This tactic should be used at the beginning of the loop body.
 
 + In the body of an exitable loop, the tactics
@@ -507,6 +507,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_make a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L374),
   where `a` is the name under which you would like
   the newly allocated array to be known in the proof.
+  It is sugar for `wp_op wp_make introducing: a`.
 
 * `length a` ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L350))
   returns the length of the array `a`.
@@ -515,6 +516,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_length n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L363),
   where `n` is the name under you would like the length
   of this array to be known in the proof.
+  It is sugar for `wp_op wp_length introducing: n`.
 
 * `get a _i` ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L314))
   returns the element stored at index `_i` in the array `a`.
@@ -523,6 +525,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_get x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L366),
   where `x` is the name under you would like this element
   to be known in the proof.
+  It is sugar for `wp_op wp_get introducing: x`.
 
 * `set a _i x` ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L326))
   stores the element `x` at index `_i` in the array `a`.
@@ -535,6 +538,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_set`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L369).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
+  It behaves like `wp_op wp_set shadowing: a`.
 
 ### More Operations
 
@@ -575,16 +579,13 @@ There are four primitive operations on arrays:
   because an array is defined not only by its content
   but also by its default value.
 
-* [`init _n @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1949)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1955))
+* [`init _n @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1928)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1934))
   creates an array of length `_n` whose elements
   are computed by the function `body`.
 
   At each iteration, the loop body `body : int → A`
   receives the current index `_i` and returns an element.
-
-  To reason about this operation,
-  use the tactic [`wp_init`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1975).
 
 * [`list_length xs`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L704)
   ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L712))
@@ -619,6 +620,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_blit`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1370).
   This tactic intentionally clears the previous array `b`
   and names the new array `b` in the proof.
+  It behaves like `wp_op wp_blit shadowing: b`.
 
 * [`blit' a _i _j _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1304)
   [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1324)
@@ -634,6 +636,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_blit`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1370).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
+  It behaves like `wp_op wp_blit shadowing: a`.
 
 * [`copy a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1389)
   [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1396)
@@ -641,91 +644,62 @@ There are four primitive operations on arrays:
   that is, a new array whose content
   is the same as the content of the array `a`.
 
-  To reason about this operation,
-  use the tactic [`wp_copy b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1408)
-  where `b` is the name under which you would like
-  the new array to be known.
-
-* [`sub a _i _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1422)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1428)
+* [`sub a _i _n`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1419)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1425)
   creates a new array whose content
   is the same as the content of the array segment
   determined by the array `a`, the start index `_i`,
   and the length `_n`.
 
-  To reason about this operation,
-  use the tactic [`wp_sub b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1442)
-  where `b` is the name under which you would like
-  the new array to be known.
-
-* [`append a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1459)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1471)
+* [`append a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1453)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1465)
   creates a new array whose content is the concatenation
   of the content of the arrays `a` and `b`.
 
-  To reason about this operation,
-  use the tactic [`wp_append c`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1487)
-  where `c` is the name under which you would like
-  the new array to be known.
-
-* [`fill a _i _n x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1504)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1513)
+* [`fill a _i _n x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1495)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1504)
   fills the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
   with the value `x`.
   It returns an updated version of the array `a`.
 
   To reason about this operation,
-  use the tactic [`wp_fill`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1538).
+  use the tactic [`wp_fill`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1529).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
+  It behaves like `wp_op wp_fill shadowing: a`.
 
-* [`find_index f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1558)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1594)
+* [`find_index f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1549)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1585)
   searches the array `a`, from left to right,
   for an element `x` such that `f x` is true.
   Its result has type [`outcome int`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/iteration.v?ref_type=heads#L39).
 
-  To reason about this operation,
-  use the tactic [`wp_find_index out`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1656)
-  where `out` is the name under which you would like
-  the result to be known.
-
-* [`exist f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1670)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1683)
+* [`exist f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1658)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1671)
   searches the array `a`, from left to right,
   for an element `x` such that `f x` is true.
   Its result is `true` if such an element exists
   and `false` otherwise.
 
-  To reason about this operation,
-  use the tactic [`wp_exist b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1699)
-  where `b` is the name under which you would like
-  the result to be known.
-
-* [`for_all f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1715)
-  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1728)
+* [`for_all f a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1700)
+  [(specification)](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1713)
   tests whether every element `x` of the array `a`
   is such that `f x` is true.
   If so, its result is `true`;
   otherwise, its result is `false`.
 
-  To reason about this operation,
-  use the tactic [`wp_for_all b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1744)
-  where `b` is the name under which you would like
-  the result to be known.
-
-* [`equal eq a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1763)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1807))
+* [`equal eq a b`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1745)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1789))
   tests whether the arrays `a` and `b` have the same length
   and have equal elements at every index `i`.
   The function `eq` is used to check two elements for equality.
 
-  A [simpler specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1807) is given
+  A [simpler specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1789) is given
   in the case where the function `eq` is an equality test.
 
-* [`segment_iteri a _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1885)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1897))
+* [`segment_iteri a _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1864)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1876))
   is a loop over the array segment determined by the array `a`,
   start index `_i`, and end index `_k`,
   with initial state `s`.
@@ -734,14 +708,24 @@ There are four primitive operations on arrays:
   receives the current state `s`, the current index `_i`,
   and the current list element `x`, and returns a new state.
 
-* [`iteri a s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1891)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1915))
+  To reason about this operation, use the tactic
+  `wp_op wp_segment_iteri`.
+  At the beginning of the loop body, use the tactic
+  [`wp_segment_iteri_body _j j x s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1912).
+
+* [`iteri a s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1870)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1894))
   is a loop over the array `a`
   with initial state `s`.
 
   At each iteration, the loop body `body : S → int → A → S`
   receives the current state `s`, the current index `_i`,
   and the current list element `x`, and returns a new state.
+
+  To reason about this operation, use the tactic
+  `wp_op wp_iteri`.
+  At the beginning of the loop body, use the tactic
+  [`wp_iteri_body _j j x s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1917).
 
 ### Tactics
 

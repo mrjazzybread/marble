@@ -506,6 +506,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_make a`](array.v:Ltac wp_make),
   where `a` is the name under which you would like
   the newly allocated array to be known in the proof.
+  It is sugar for `wp_op wp_make introducing: a`.
 
 * `length a` ([specification](array.v:Lemma wp_length))
   returns the length of the array `a`.
@@ -514,6 +515,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_length n`](array.v:Ltac wp_length),
   where `n` is the name under you would like the length
   of this array to be known in the proof.
+  It is sugar for `wp_op wp_length introducing: n`.
 
 * `get a _i` ([specification](array.v:Lemma wp_get))
   returns the element stored at index `_i` in the array `a`.
@@ -522,6 +524,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_get x`](array.v:Tactic Notation "wp_get"),
   where `x` is the name under you would like this element
   to be known in the proof.
+  It is sugar for `wp_op wp_get introducing: x`.
 
 * `set a _i x` ([specification](array.v:Lemma wp_set))
   stores the element `x` at index `_i` in the array `a`.
@@ -534,6 +537,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_set`](array.v:Ltac wp_set).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
+  It behaves like `wp_op wp_set shadowing: a`.
 
 ### More Operations
 
@@ -582,9 +586,6 @@ There are four primitive operations on arrays:
   At each iteration, the loop body `body : int → A`
   receives the current index `_i` and returns an element.
 
-  To reason about this operation,
-  use the tactic [`wp_init`](array.v:Ltac wp_init).
-
 * [`list_length xs`](array.v:Fixpoint list_length_aux)
   ([specification](array.v:Lemma wp_list_length))
   returns the length of the list `xs` as a machine integer.
@@ -618,6 +619,7 @@ There are four primitive operations on arrays:
   use the tactic [`wp_blit`](array.v:Ltac wp_blit).
   This tactic intentionally clears the previous array `b`
   and names the new array `b` in the proof.
+  It behaves like `wp_op wp_blit shadowing: b`.
 
 * [`blit' a _i _j _n`](array.v:Definition blit')
   [(specification)](array.v:Lemma wp_blit')
@@ -633,17 +635,13 @@ There are four primitive operations on arrays:
   use the tactic [`wp_blit`](array.v:Ltac wp_blit).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
+  It behaves like `wp_op wp_blit shadowing: a`.
 
 * [`copy a`](array.v:Definition copy)
   [(specification)](array.v:Lemma wp_copy)
   creates a fresh copy of the array `a`,
   that is, a new array whose content
   is the same as the content of the array `a`.
-
-  To reason about this operation,
-  use the tactic [`wp_copy b`](array.v:Ltac wp_copy)
-  where `b` is the name under which you would like
-  the new array to be known.
 
 * [`sub a _i _n`](array.v:Definition sub)
   [(specification)](array.v:Lemma wp_sub)
@@ -652,20 +650,10 @@ There are four primitive operations on arrays:
   determined by the array `a`, the start index `_i`,
   and the length `_n`.
 
-  To reason about this operation,
-  use the tactic [`wp_sub b`](array.v:Ltac wp_sub)
-  where `b` is the name under which you would like
-  the new array to be known.
-
 * [`append a b`](array.v:Definition append)
   [(specification)](array.v:Lemma wp_append)
   creates a new array whose content is the concatenation
   of the content of the arrays `a` and `b`.
-
-  To reason about this operation,
-  use the tactic [`wp_append c`](array.v:Ltac wp_append)
-  where `c` is the name under which you would like
-  the new array to be known.
 
 * [`fill a _i _n x`](array.v:Definition fill)
   [(specification)](array.v:Lemma wp_fill)
@@ -678,17 +666,13 @@ There are four primitive operations on arrays:
   use the tactic [`wp_fill`](array.v:Ltac wp_fill).
   This tactic intentionally clears the previous array `a`
   and names the new array `a` in the proof.
+  It behaves like `wp_op wp_fill shadowing: a`.
 
 * [`find_index f a`](array.v:Definition find_index)
   [(specification)](array.v:Lemma wp_find_index)
   searches the array `a`, from left to right,
   for an element `x` such that `f x` is true.
   Its result has type [`outcome int`](iteration.v:Inductive outcome).
-
-  To reason about this operation,
-  use the tactic [`wp_find_index out`](array.v:Tactic Notation "wp_find_index")
-  where `out` is the name under which you would like
-  the result to be known.
 
 * [`exist f a`](array.v:Definition exist)
   [(specification)](array.v:Lemma wp_exist)
@@ -697,22 +681,12 @@ There are four primitive operations on arrays:
   Its result is `true` if such an element exists
   and `false` otherwise.
 
-  To reason about this operation,
-  use the tactic [`wp_exist b`](array.v:Ltac wp_exist)
-  where `b` is the name under which you would like
-  the result to be known.
-
 * [`for_all f a`](array.v:Definition for_all)
   [(specification)](array.v:Lemma wp_for_all)
   tests whether every element `x` of the array `a`
   is such that `f x` is true.
   If so, its result is `true`;
   otherwise, its result is `false`.
-
-  To reason about this operation,
-  use the tactic [`wp_for_all b`](array.v:Ltac wp_for_all)
-  where `b` is the name under which you would like
-  the result to be known.
 
 * [`equal eq a b`](array.v:Definition equal_aux)
   ([specification](array.v:Lemma wp_equal))
@@ -733,6 +707,11 @@ There are four primitive operations on arrays:
   receives the current state `s`, the current index `_i`,
   and the current list element `x`, and returns a new state.
 
+  To reason about this operation, use the tactic
+  `wp_op wp_segment_iteri`.
+  At the beginning of the loop body, use the tactic
+  [`wp_segment_iteri_body _j j x s`](array.v:Tactic Notation "wp_segment_iteri_body").
+
 * [`iteri a s @@ body`](array.v:Definition iteri)
   ([specification](array.v:Lemma wp_iteri))
   is a loop over the array `a`
@@ -741,6 +720,11 @@ There are four primitive operations on arrays:
   At each iteration, the loop body `body : S → int → A → S`
   receives the current state `s`, the current index `_i`,
   and the current list element `x`, and returns a new state.
+
+  To reason about this operation, use the tactic
+  `wp_op wp_iteri`.
+  At the beginning of the loop body, use the tactic
+  [`wp_iteri_body _j j x s`](array.v:Tactic Notation "wp_iteri_body").
 
 ### Tactics
 
