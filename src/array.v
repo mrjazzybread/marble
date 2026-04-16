@@ -1156,13 +1156,25 @@ Definition blit'_spec blit' n (direction : Z → Z → Prop) :=
 Section Code.
 Open Scope uint63.
 
-(* TODO avoid [iter_up] and [iter_down] *)
+(* TODO avoid [iter_down] *)
+
+(* [simple_blit'_up] is ALMOST the same, but NOT the same,
+   as [simple_blit_aux]. It always reads from the latest
+   version of the array, which is both the source and the
+   destination array. *)
+
+Fixpoint simple_blit'_up_aux a _i _j _n (ACC : Acc ilt _n) :=
+  IFC _n =? 0 THEN
+    λ _, a
+  ELSE
+    λ (Hnz : (_n =? 0) = false),
+    do x ← get a _i ;
+    do a ← set a _j x ;
+    simple_blit'_up_aux a (_i + 1) (_j + 1) (_n - 1)
+                        (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
+
 Definition simple_blit'_up a _i _j _n :=
-  do _delta ← _j - _i ;
-  iter_up _i (_i + _n) a @@ λ _k a,
-  do x ← get a _k ;
-  do a ← set a (_k + _delta) x ;
-  a.
+  simple_blit'_up_aux a _i _j _n ltac:(tc).
 
 Definition simple_blit'_down a _i _j _n :=
   do _delta ← _j - _i ;
@@ -1181,23 +1193,21 @@ Definition simple_blit' a _i _j _n :=
 
 End Code.
 
-(* The public specification of [simple_blit']. *)
+(* Correctness of [simple_blit']. *)
 
-Lemma wp_simple_blit'_up :
-  ∀Int _n n,
-  blit'_spec (λ a _i _j, simple_blit'_up a _i _j _n) n up.
+Lemma wp_simple_blit'_up _n ACC :
+  ∀ n, isInt _n n →
+  blit'_spec (λ a _i _j, simple_blit'_up_aux a _i _j _n ACC) n up.
 Proof.
-  unfold up, blit'_spec, simple_blit'_up. intros. arrays.
-  wp_bind_eq.
-  wp_op wp_iter_up
-    with invariant: (λ k, blit_post xs i xs j (k - i));
-  last wp_shadow a;
-  try isArray.
-  (* Preservation. *)
-  { clear dependent a. wp_iter_up_body _k k a.
-    wp_get x. subst x.
+  by dependent induction on _n ACC. intros _n ? ?.
+  unfold up in *. unfold blit'_spec. intros. arrays. simpl.
+  wp_if.
+  (* Base case. *)
+  { wp_ret. isArray. }
+  (* Step case. *)
+  { wp_get x.
     wp_set.
-    wp_ret.
+    wp_op IH shadowing: a.
     isArray. }
 Qed.
 
@@ -1235,7 +1245,8 @@ Proof.
   { subst j. wp_ret. isArray. }
   wp_if.
   (* Case [j ≤ i]. *)
-  { wp_apply wp_simple_blit'_up. }
+  { unfold simple_blit'_up.
+    wp_apply wp_simple_blit'_up. }
   (* Case [i < j]. *)
   { wp_apply wp_simple_blit'_down. unfold down. lia. }
 Qed.
