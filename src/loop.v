@@ -23,10 +23,7 @@ Implicit Types  i : Z.
 Implicit Types  z : Z.
 
 Local Ltac wp_intro_hook Hx ::=
-  (* Perform arithmetic simplification. *)
-  z in Hx;
-  (* Decompose existential quantifiers and conjunctions. *)
-  unpack in Hx.
+  z in Hx; unpack in Hx.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -136,7 +133,7 @@ Tactic Notation "wp_iter_down_body"
 
 (* -------------------------------------------------------------------------- *)
 
-(* An exitable loop, counting down]. The loop can be broken via an early
+(* An exitable loop, counting down. The loop can be broken via an early
    exit: the loop body receives two continuations [continue] and [break] and
    must invoke either [continue s] or [break s x]. An invocation of the loop
    body takes the form [body _j s continue break]. *)
