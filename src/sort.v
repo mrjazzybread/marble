@@ -2552,10 +2552,12 @@ Proof.
   wp_length _n.
   wp_if.
   { rewrite length_zero_iff_nil in *. subst. list.
-    wp_copy c. eexists; pack; eauto. }
+    wp_op wp_copy introducing: c.
+    eexists; pack; eauto. }
   wp_if.
   { rewrite length_zero_iff_nil in *. subst. list.
-    wp_copy c. eexists; pack; eauto. }
+    wp_op wp_copy introducing: c.
+    eexists; pack; eauto. }
   wp_make c.
   wp_op wp_optimistic_merge shadowing: c.
   elim_merge_aux_post zs.

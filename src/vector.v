@@ -558,7 +558,7 @@ Lemma wp_of_array a xs :
   wp (of_array a) (λ v, isVector v xs).
 Proof.
   intros. unfold of_array.
-  wp_copy b.
+  wp_op wp_copy introducing: b.
   eapply wp_steal_array.
   eauto.
 Qed.
