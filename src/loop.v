@@ -69,7 +69,7 @@ Fixpoint iter_down_aux _i _k s body (ACC : Acc (rilt _i) _k) :=
 
 Definition iter_down _i _k s body :=
   if _k ≤? _i then s
-  else iter_down_aux _i (_k - 1) s body (Wf_rilt _i (_k - 1)).
+  else iter_down_aux _i (_k - 1) s body ltac:(tc).
 
 End IterDown.
 
@@ -159,7 +159,7 @@ Fixpoint xiter_down_aux _i _k s
 
 Definition xiter_down _i _k s body :=
   if _k ≤? _i then (s, Continue)
-  else xiter_down_aux _i (_k - 1) s body (Wf_rilt _i (_k - 1)).
+  else xiter_down_aux _i (_k - 1) s body ltac:(tc).
 
 End XIterDown.
 
@@ -248,7 +248,7 @@ Fixpoint uxiter_down_aux _i _k
 Definition uxiter_down _i _k
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
   if _k ≤? _i then Continue
-  else uxiter_down_aux _i (_k - 1) (@body) (Wf_rilt _i (_k - 1)).
+  else uxiter_down_aux _i (_k - 1) (@body) ltac:(tc).
 
 End UXIterDown.
 
@@ -340,7 +340,7 @@ Fixpoint iter_up_aux _i _k s body (ACC : Acc igt _i) :=
     s.
 
 Definition iter_up _i _k s body :=
-  iter_up_aux _i _k s body (Wf_igt _i).
+  iter_up_aux _i _k s body ltac:(tc).
 
 (* The proof irrelevance and fixed point lemmas. *)
 
@@ -433,7 +433,7 @@ Fixpoint xiter_up_aux _i _k s
     (s, Continue).
 
 Definition xiter_up _i _k s body :=
-  xiter_up_aux _i _k s body (Wf_igt _i).
+  xiter_up_aux _i _k s body ltac:(tc).
 
 End XiterUp.
 
@@ -511,7 +511,7 @@ Fixpoint uxiter_up_aux _i _k
     Continue.
 
 Definition uxiter_up _i _k body :=
-  uxiter_up_aux _i _k body (Wf_igt _i).
+  uxiter_up_aux _i _k body ltac:(tc).
 
 End UXIterUp.
 
