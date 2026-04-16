@@ -1042,7 +1042,7 @@ Local Instance Wf_order _j1 _j2 : WellFounded (order _j1 _j2) :=
   wf_guard 32 (wf_order _j1 _j2).
 
 Local Lemma Acc_order _j1 _j2 _i1 _i2 : Acc (order _j1 _j2) (_i1, _i2).
-Proof. eapply Wf_order. Qed.
+Proof. eapply Wf_order. Defined.
 Local Hint Resolve Acc_order : marble.
 
 Local Hint Extern 1 (order _ _ _ _) =>
