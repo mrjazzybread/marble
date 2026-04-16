@@ -18,10 +18,15 @@ Extraction Inline iter_down iter_up xiter_up uxiter_up.
 
 From Stdlib Require ExtrOCamlPArray.
 From marble Require Import array.
-Extraction Inline simple_blit.
+Extraction Inline simple_blit blitN.
 
 (* Recursive Extraction of_list blit blit' copy find_index equal. *)
 
 From marble Require Import sort.
+Extraction Inline sortto_segment_2.
+  (* [sortto_segment_3] are [sortto_segment_4] seem too large to
+     be inlined; they have multiple call sites. *)
+Extraction Inline optimistic_merge_1 optimistic_merge_2
+                  optimistic_merge_12.
 
 Recursive Extraction sort.sort.

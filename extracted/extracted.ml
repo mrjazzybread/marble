@@ -89,32 +89,6 @@ let rec simple_blit_aux a _i b _j _n =
 let ni =
   (Uint63.of_int (8))
 
-(** val blitN :
-    'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t -> 'a1
-    'a Parray.t **)
-
-let blitN a _i b _j =
-  set
-    (set
-      (set
-        (set
-          (set
-            (set
-              (set
-                (set b (add _j (Uint63.of_int (0)))
-                  (get a (add _i (Uint63.of_int (0)))))
-                (add _j (Uint63.of_int (1)))
-                (get a (add _i (Uint63.of_int (1)))))
-              (add _j (Uint63.of_int (2)))
-              (get a (add _i (Uint63.of_int (2)))))
-            (add _j (Uint63.of_int (3)))
-            (get a (add _i (Uint63.of_int (3)))))
-          (add _j (Uint63.of_int (4)))
-          (get a (add _i (Uint63.of_int (4)))))
-        (add _j (Uint63.of_int (5))) (get a (add _i (Uint63.of_int (5)))))
-      (add _j (Uint63.of_int (6))) (get a (add _i (Uint63.of_int (6)))))
-    (add _j (Uint63.of_int (7))) (get a (add _i (Uint63.of_int (7))))
-
 (** val blit_aux :
     'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
     Uint63.t -> 'a1 'a Parray.t **)
@@ -122,7 +96,31 @@ let blitN a _i b _j =
 let rec blit_aux a _i b _j _n =
   if ltb _n ni
   then simple_blit_aux a _i b _j _n
-  else blit_aux a (add _i ni) (blitN a _i b _j) (add _j ni) (sub _n ni)
+  else blit_aux a (add _i ni)
+         (set
+           (set
+             (set
+               (set
+                 (set
+                   (set
+                     (set
+                       (set b (add _j (Uint63.of_int (0)))
+                         (get a (add _i (Uint63.of_int (0)))))
+                       (add _j (Uint63.of_int (1)))
+                       (get a (add _i (Uint63.of_int (1)))))
+                     (add _j (Uint63.of_int (2)))
+                     (get a (add _i (Uint63.of_int (2)))))
+                   (add _j (Uint63.of_int (3)))
+                   (get a (add _i (Uint63.of_int (3)))))
+                 (add _j (Uint63.of_int (4)))
+                 (get a (add _i (Uint63.of_int (4)))))
+               (add _j (Uint63.of_int (5)))
+               (get a (add _i (Uint63.of_int (5)))))
+             (add _j (Uint63.of_int (6)))
+             (get a (add _i (Uint63.of_int (6)))))
+           (add _j (Uint63.of_int (7)))
+           (get a (add _i (Uint63.of_int (7)))))
+         (add _j ni) (sub _n ni)
 
 (** val blit :
     'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
@@ -150,17 +148,6 @@ let blit' a _i _j _n =
 type 'a leb0 =
   'a -> 'a -> bool
   (* singleton inductive, whose constructor was Build_Leb *)
-
-(** val sortto_segment_2 :
-    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t ->
-    Uint63.t -> 'a1 'a Parray.t **)
-
-let sortto_segment_2 h1 _src _i _dst _k =
-  let x0 = get _src _i in
-  let x1 = get _src (add _i (Uint63.of_int (1))) in
-  if h1 x0 x1
-  then set (set _dst _k x0) (add _k (Uint63.of_int (1))) x1
-  else set (set _dst _k x1) (add _k (Uint63.of_int (1))) x0
 
 (** val sortto_segment_3 :
     'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t ->
@@ -430,38 +417,6 @@ let rec merge_aux_12 h1 _j1 _j2 _i1 x1 _i2 x2 _dst _k =
        then merge_aux_12 h1 _j1 _j2 _i1 x1 _i3 (get _dst0 _i3) _dst0 _k0
        else blit' _dst0 _i1 _k0 (sub _j1 _i1)
 
-(** val optimistic_merge_1 :
-    'a1 leb0 -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
-    Uint63.t -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
-
-let optimistic_merge_1 h1 _i1 _j1 _src2 _i2 _j2 _dst _k =
-  let x2 = get _src2 _i2 in
-  if h1 (get _dst (sub _j1 (Uint63.of_int (1)))) x2
-  then let _n1 = sub _j1 _i1 in
-       let _n2 = sub _j2 _i2 in
-       blit _src2 _i2 (blit' _dst _i1 _k _n1) (add _k _n1) _n2
-  else merge_aux_1 h1 _src2 _j1 _j2 _i1 (get _dst _i1) _i2 x2 _dst _k
-
-(** val optimistic_merge_2 :
-    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t ->
-    Uint63.t -> 'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t **)
-
-let optimistic_merge_2 h1 _src1 _i1 _j1 _i2 _j2 _dst _k =
-  let x2 = get _dst _i2 in
-  if h1 (get _src1 (sub _j1 (Uint63.of_int (1)))) x2
-  then let _n1 = sub _j1 _i1 in blit _src1 _i1 _dst _k _n1
-  else merge_aux_2 h1 _src1 _j1 _j2 _i1 (get _src1 _i1) _i2 x2 _dst _k
-
-(** val optimistic_merge_12 :
-    'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t ->
-    Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
-
-let optimistic_merge_12 h1 _dst _i1 _j1 _i2 _j2 _k =
-  let x2 = get _dst _i2 in
-  if h1 (get _dst (sub _j1 (Uint63.of_int (1)))) x2
-  then let _n1 = sub _j1 _i1 in blit' _dst _i1 _k _n1
-  else merge_aux_12 h1 _j1 _j2 _i1 (get _dst _i1) _i2 x2 _dst _k
-
 (** val sortto' :
     'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t ->
     'a1 'a Parray.t **)
@@ -472,14 +427,24 @@ let rec sortto' h1 _dst _i _k _n =
        then sortto_segment_4 h1 _dst _i _dst _k
        else if eqb _n (Uint63.of_int (3))
             then sortto_segment_3 h1 _dst _i _dst _k
-            else sortto_segment_2 h1 _dst _i _dst _k
+            else let x0 = get _dst _i in
+                 let x1 = get _dst (add _i (Uint63.of_int (1))) in
+                 if h1 x0 x1
+                 then set (set _dst _k x0) (add _k (Uint63.of_int (1))) x1
+                 else set (set _dst _k x1) (add _k (Uint63.of_int (1))) x0
   else let _n1 = div _n (Uint63.of_int (2)) in
        let _n2 = sub _n _n1 in
        let _dm = add _k _n1 in
        let _sm = add _i _n2 in
-       optimistic_merge_12 h1
-         (sortto' h1 (sortto' h1 _dst (add _i _n1) _dm _n2) _i _sm _n1)
-         _sm (add _sm _n1) _dm (add _dm _n2) _k
+       let _dst0 =
+         sortto' h1 (sortto' h1 _dst (add _i _n1) _dm _n2) _i _sm _n1
+       in
+       let _j1 = add _sm _n1 in
+       let x2 = get _dst0 _dm in
+       if h1 (get _dst0 (sub _j1 (Uint63.of_int (1)))) x2
+       then let _n3 = sub _j1 _sm in blit' _dst0 _sm _k _n3
+       else merge_aux_12 h1 _j1 (add _dm _n2) _sm (get _dst0 _sm) _dm x2
+              _dst0 _k
 
 (** val sortto :
     'a1 leb0 -> 'a1 'a Parray.t -> 'a1 'a Parray.t -> Uint63.t ->
@@ -491,7 +456,14 @@ let rec sortto h1 _src _dst _i _k _n =
        then (_src, (sortto_segment_4 h1 _src _i _dst _k))
        else if eqb _n (Uint63.of_int (3))
             then (_src, (sortto_segment_3 h1 _src _i _dst _k))
-            else (_src, (sortto_segment_2 h1 _src _i _dst _k))
+            else (_src,
+                   (let x0 = get _src _i in
+                    let x1 = get _src (add _i (Uint63.of_int (1))) in
+                    if h1 x0 x1
+                    then set (set _dst _k x0)
+                           (add _k (Uint63.of_int (1))) x1
+                    else set (set _dst _k x1)
+                           (add _k (Uint63.of_int (1))) x0))
   else let _n1 = div _n (Uint63.of_int (2)) in
        let _n2 = sub _n _n1 in
        let _dm = add _k _n1 in
@@ -499,8 +471,12 @@ let rec sortto h1 _src _dst _i _k _n =
        let _sm = add _i _n2 in
        let _src1 = sortto' h1 _src0 _i _sm _n1 in
        (_src1,
-       (optimistic_merge_2 h1 _src1 _sm (add _sm _n1) _dm (add _dm _n2)
-         _dst0 _k))
+       (let _j1 = add _sm _n1 in
+        let x2 = get _dst0 _dm in
+        if h1 (get _src1 (sub _j1 (Uint63.of_int (1)))) x2
+        then let _n3 = sub _j1 _sm in blit _src1 _sm _dst0 _k _n3
+        else merge_aux_2 h1 _src1 _j1 (add _dm _n2) _sm (get _src1 _sm)
+               _dm x2 _dst0 _k))
 
 (** val sort_seg_aux :
     'a1 inhabited -> 'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t
@@ -512,14 +488,26 @@ let sort_seg_aux h h1 a _i _n =
        then sortto_segment_4 h1 a _i a _i
        else if eqb _n (Uint63.of_int (3))
             then sortto_segment_3 h1 a _i a _i
-            else sortto_segment_2 h1 a _i a _i
+            else let x0 = get a _i in
+                 let x1 = get a (add _i (Uint63.of_int (1))) in
+                 if h1 x0 x1
+                 then set (set a _i x0) (add _i (Uint63.of_int (1))) x1
+                 else set (set a _i x1) (add _i (Uint63.of_int (1))) x0
   else let _n1 = div _n (Uint63.of_int (2)) in
        let _n2 = sub _n _n1 in
        let (a0, t) =
          sortto h1 a (make _n2 h) (add _i _n1) (Uint63.of_int (0)) _n2
        in
-       optimistic_merge_1 h1 (add _i _n2) (add _i _n) t
-         (Uint63.of_int (0)) _n2 (sortto' h1 a0 _i (add _i _n2) _n1) _i
+       let a1 = sortto' h1 a0 _i (add _i _n2) _n1 in
+       let _i1 = add _i _n2 in
+       let _j1 = add _i _n in
+       let _i2 = (Uint63.of_int (0)) in
+       let x2 = get t _i2 in
+       if h1 (get a1 (sub _j1 (Uint63.of_int (1)))) x2
+       then let _n3 = sub _j1 _i1 in
+            let _n4 = sub _n2 _i2 in
+            blit t _i2 (blit' a1 _i1 _i _n3) (add _i _n3) _n4
+       else merge_aux_1 h1 t _j1 _n2 _i1 (get a1 _i1) _i2 x2 a1 _i
 
 (** val sort_seg :
     'a1 inhabited -> 'a1 leb0 -> 'a1 'a Parray.t -> Uint63.t -> Uint63.t
