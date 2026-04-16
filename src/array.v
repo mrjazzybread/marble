@@ -1191,25 +1191,79 @@ Qed.
 Section Code.
 Open Scope uint63.
 
+Definition simple_blit'_up a _i _j _n :=
+  do _delta ← _j - _i ;
+  iter_up _i (_i + _n) a @@ λ _k a,
+  do x ← get a _k ;
+  do a ← set a (_k + _delta) x ;
+  a.
+
+Definition simple_blit'_down a _i _j _n :=
+  do _delta ← _j - _i ;
+  iter_down _i (_i + _n) a @@ λ _k a,
+  do x ← get a _k ;
+  do a ← set a (_k + _delta) x ;
+  a.
+
 Definition blit' a _i _j _n :=
   if _j =? _i then
     a
   else if _j <=? _i then
-    do _delta ← _j - _i ;
-    iter_up _i (_i + _n) a @@ λ _k a,
-    do x ← get a _k ;
-    do a ← set a (_k + _delta) x ;
-    a
+    simple_blit'_up a _i _j _n
   else
-    do _delta ← _j - _i ;
-    iter_down _i (_i + _n) a @@ λ _k a,
-    do x ← get a _k ;
-    do a ← set a (_k + _delta) x ;
-    a.
+    simple_blit'_down a _i _j _n.
 
 End Code.
 
 (* The public specification of [blit']. *)
+
+Lemma wp_simple_blit'_up a xs :
+  isArray a xs →
+  ∀Int _i i,
+  ∀Int _j j,
+  ∀Int _n n,
+  valid_seg i (i + n) xs →
+  valid_seg j (j + n) xs →
+  j ≤ i →
+  wp (simple_blit'_up a _i _j _n) (blit_post xs i xs j n).
+Proof.
+  intros. arrays. unfold simple_blit'_up.
+  wp_bind_eq.
+  wp_op wp_iter_up
+    with invariant: (λ k, blit_post xs i xs j (k - i));
+  last wp_shadow a;
+  try isArray.
+  (* Preservation. *)
+  { clear dependent a. wp_iter_up_body _k k a.
+    wp_get x. subst x.
+    wp_set.
+    wp_ret.
+    isArray. }
+Qed.
+
+Lemma wp_simple_blit'_down a xs :
+  isArray a xs →
+  ∀Int _i i,
+  ∀Int _j j,
+  ∀Int _n n,
+  valid_seg i (i + n) xs →
+  valid_seg j (j + n) xs →
+  i ≤ j →
+  wp (simple_blit'_down a _i _j _n) (blit_post xs i xs j n).
+Proof.
+  intros. arrays. unfold simple_blit'_down.
+  wp_bind_eq.
+  wp_op wp_iter_down
+    with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
+  last wp_shadow a;
+  try isArray.
+  (* Preservation. *)
+  { clear dependent a. wp_iter_down_body _k k a.
+    wp_get x. subst x.
+    wp_set.
+    wp_ret.
+    isArray. }
+Qed.
 
 Lemma wp_blit' a xs :
   isArray a xs →
@@ -1226,35 +1280,9 @@ Proof.
   { subst j. wp_ret. isArray. }
   wp_if.
   (* Case [j ≤ i]. *)
-  { wp_bind_eq.
-    wp_op wp_iter_up
-      with invariant: (λ k, blit_post xs i xs j (k - i));
-    last wp_shadow a.
-    (* Initialization. *)
-    { isArray. }
-    (* Preservation. *)
-    { clear dependent a. wp_iter_up_body _k k a.
-      wp_get x. subst x.
-      wp_set.
-      wp_ret.
-      isArray. }
-    (* Completion. *)
-    { isArray. }}
+  { wp_apply wp_simple_blit'_up. }
   (* Case [i < j]. *)
-  { wp_bind_eq.
-    wp_op wp_iter_down
-      with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
-    last wp_shadow a.
-    (* Initialization. *)
-    { isArray. }
-    (* Preservation. *)
-    { clear dependent a. wp_iter_down_body _k k a.
-      wp_get x. subst x.
-      wp_set.
-      wp_ret.
-      isArray. }
-    (* Completion. *)
-    { isArray. }}
+  { wp_apply wp_simple_blit'_down. }
 Qed.
 
 End Blit.
