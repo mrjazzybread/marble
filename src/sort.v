@@ -1318,8 +1318,7 @@ Open Scope uint63.
 
 Fixpoint merge_aux _i1 x1 _i2 x2 _dst _k
 (ACC : Acc (order _j1 _j2) (_i1, _i2))
-: array A
-:=
+: array A :=
   if (x1 ≤? x2)%element then
     do _dst ← set _dst _k x1 ;
     let _i1 := _i1 + 1 in
@@ -1432,26 +1431,28 @@ Variable _j1 _j2 : int.
 
 Open Scope uint63.
 
-Equations merge_aux_1 _i1 x1 _i2 x2 _dst _k : array A
-by wf (_i1, _i2) (order _j1 _j2) :=
-merge_aux_1 _i1 x1 _i2 x2 _dst _k :=
+Fixpoint merge_aux_1 _i1 x1 _i2 x2 _dst _k
+(ACC : Acc (order _j1 _j2) (_i1, _i2))
+: array A :=
   if (x1 ≤? x2)%element then
     do _dst ← set _dst _k x1 ;
     let _i1 := _i1 + 1 in
     let _k := _k + 1 in
-    IF (_i1 <? _j1) THEN
+    IFC (_i1 <? _j1) THEN λ Hc,
       do x1 ← get _dst _i1 ;
       merge_aux_1 _i1 x1 _i2 x2 _dst _k
-    ELSE
+        (Acc_inv ACC (order_left Hc))
+    ELSE λ _,
       blit _src2 _i2 _dst _k (_j2 - _i2)
   else
     do _dst ← set _dst _k x2 ;
     let _i2 := _i2 + 1 in
     let _k := _k + 1 in
-    IF (_i2 <? _j2) THEN
+    IFC (_i2 <? _j2) THEN λ Hc,
       do x2 ← get _src2 _i2 ;
       merge_aux_1 _i1 x1 _i2 x2 _dst _k
-    ELSE
+        (Acc_inv ACC (order_right Hc))
+    ELSE λ _,
       (* There is nothing to do in this case. *)
       _dst.
 
@@ -1459,7 +1460,7 @@ End MergeAux1.
 
 (* The specification of [merge_aux_1]. *)
 
-Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
   ∀ _src1 src1 _src2 src2,
   isArray _src1 src1 →
   isArray _src2 src2 →
@@ -1486,16 +1487,15 @@ Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j1 →
   valid_seg k limit dst →
-  wp (merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
+  wp (merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k ACC)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
-Lemma wp_merge_aux_1 _j1 _j2 _i1 _i2 :
-  merge_aux_1_spec _j1 _j2 (_i1, _i2).
+Lemma wp_merge_aux_1 _j1 _j2 _i1i2 ACC :
+  merge_aux_1_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
-  intros (_i1, _i2) IH.
+  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
   unfold merge_aux_1_spec. intros. arrays.
-  autorewrite with merge_aux_1.
+  simpl.
   wp_if.
   (* Case [x1 ≤ x2]. *)
   { wp_set.
@@ -1503,21 +1503,21 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       wp_op (IH (_i1 + 1, _i2)%uint63) shadowing: _src1.
-      eapply merge_aux_post_implication_1; eauto with lia. }
+      eapply merge_aux_post_implication_1; tc4. }
     (* Subcase [i1 + 1 = j1]. *)
     { wp_blit.
-      eapply merge_aux_post_init_1; eauto with lia. }}
+      eapply merge_aux_post_init_1; tc4. }}
   (* Case [x2 < x1]. *)
   { wp_set.
     wp_if.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       wp_op (IH (_i1, _i2 + 1)%uint63) shadowing: _src1.
-      eapply merge_aux_post_implication_2; eauto with lia. }
+      eapply merge_aux_post_implication_2; tc4. }
     (* Subcase [i2 + 1 = j2]. *)
     { assert (i1 = k + 1) by lia. subst i1.
       wp_ret.
-      eapply merge_aux_post_init_2; eauto with lia.
+      eapply merge_aux_post_init_2; tc4.
       join_segments. rewrite <- insert_seg_all by lia. assumption. }}
 Qed.
 
@@ -1536,34 +1536,36 @@ Variable _j1 _j2 : int.
 
 Open Scope uint63.
 
-Equations merge_aux_2 _i1 x1 _i2 x2 _dst _k : array A
-by wf (_i1, _i2) (order _j1 _j2) :=
-merge_aux_2 _i1 x1 _i2 x2 _dst _k :=
+Fixpoint merge_aux_2 _i1 x1 _i2 x2 _dst _k
+(ACC : Acc (order _j1 _j2) (_i1, _i2))
+: array A :=
   if (x1 ≤? x2)%element then
     do _dst ← set _dst _k x1 ;
     let _i1 := _i1 + 1 in
     let _k := _k + 1 in
-    IF (_i1 <? _j1) THEN
+    IFC (_i1 <? _j1) THEN λ Hc,
       do x1 ← get _src1 _i1 ;
       merge_aux_2 _i1 x1 _i2 x2 _dst _k
-    ELSE
+        (Acc_inv ACC (order_left Hc))
+    ELSE λ _,
       (* There is nothing to do in this case. *)
       _dst
   else
     do _dst ← set _dst _k x2 ;
     let _i2 := _i2 + 1 in
     let _k := _k + 1 in
-    IF (_i2 <? _j2) THEN
+    IFC (_i2 <? _j2) THEN λ Hc,
       do x2 ← get _dst _i2 ;
       merge_aux_2 _i1 x1 _i2 x2 _dst _k
-    ELSE
+        (Acc_inv ACC (order_right Hc))
+    ELSE λ _,
       blit _src1 _i1 _dst _k (_j1 - _i1).
 
 End MergeAux2.
 
 (* The specification of [merge_aux_2]. *)
 
-Definition merge_aux_2_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+Definition merge_aux_2_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
   ∀ _src1 src1 _src2 src2,
   isArray _src1 src1 →
   isArray _src2 src2 →
@@ -1590,16 +1592,15 @@ Definition merge_aux_2_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   let limit := k + (j1 - i1) + (j2 - i2) in
   limit = j2 →
   valid_seg k limit dst →
-  wp (merge_aux_2 _src1 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
+  wp (merge_aux_2 _src1 _j1 _j2 _i1 x1 _i2 x2 _dst _k ACC)
      (merge_aux_post src1 src2 i1 j1 i2 j2 dst k).
 
-Lemma wp_merge_aux_2 _j1 _j2 _i1 _i2 :
-  merge_aux_2_spec _j1 _j2 (_i1, _i2).
+Lemma wp_merge_aux_2 _j1 _j2 _i1i2 ACC :
+  merge_aux_2_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
-  intros (_i1, _i2) IH.
+  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
   unfold merge_aux_2_spec. intros. arrays.
-  autorewrite with merge_aux_2.
+  simpl.
   wp_if.
   (* Case [x1 ≤ x2]. *)
   { wp_set.
@@ -1607,11 +1608,11 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       wp_op (IH (_i1 + 1, _i2)%uint63) shadowing: _src2.
-      eapply merge_aux_post_implication_1; eauto with lia. }
+      eapply merge_aux_post_implication_1; tc3. }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (i2 = k + 1) by lia. subst i2.
       wp_ret.
-      eapply merge_aux_post_init_1; eauto with lia.
+      eapply merge_aux_post_init_1; tc3.
       join_segments. rewrite <- insert_seg_all by lia. assumption. }}
   (* Case [x2 < x1]. *)
   { wp_set.
@@ -1619,10 +1620,10 @@ Proof.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       wp_op (IH (_i1, _i2 + 1)%uint63) shadowing: _src2.
-      eapply merge_aux_post_implication_2; eauto with lia. }
+      eapply merge_aux_post_implication_2; tc3. }
     (* Subcase [i2 + 1 = j2]. *)
     { wp_blit.
-      eapply merge_aux_post_init_2; eauto with lia. }}
+      eapply merge_aux_post_init_2; tc3. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1638,33 +1639,35 @@ Variable _j1 _j2 : int.
 
 Open Scope uint63.
 
-Equations merge_aux_12 _i1 x1 _i2 x2 _dst _k : array A
-by wf (_i1, _i2) (order _j1 _j2) :=
-merge_aux_12 _i1 x1 _i2 x2 _dst _k :=
+Fixpoint merge_aux_12 _i1 x1 _i2 x2 _dst _k
+(ACC : Acc (order _j1 _j2) (_i1, _i2))
+: array A :=
   if (x1 ≤? x2)%element then
     do _dst ← set _dst _k x1 ;
     let _i1 := _i1 + 1 in
     let _k := _k + 1 in
-    IF (_i1 <? _j1) THEN
+    IFC (_i1 <? _j1) THEN λ Hc,
       do x1 ← get _dst _i1 ;
       merge_aux_12 _i1 x1 _i2 x2 _dst _k
-    ELSE
+        (Acc_inv ACC (order_left Hc))
+    ELSE λ _,
       _dst
   else
     do _dst ← set _dst _k x2 ;
     let _i2 := _i2 + 1 in
     let _k := _k + 1 in
-    IF (_i2 <? _j2) THEN
+    IFC (_i2 <? _j2) THEN λ Hc,
       do x2 ← get _dst _i2 ;
       merge_aux_12 _i1 x1 _i2 x2 _dst _k
-    ELSE
+        (Acc_inv ACC (order_right Hc))
+    ELSE λ _,
       blit' _dst _i1 _k (_j1 - _i1).
 
 End MergeAux12.
 
 (* The specification of [merge_aux_12]. *)
 
-Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
+Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
   ∀ _dst dst,
   isArray _dst dst →
   ∀ i1, isInt _i1 i1 →
@@ -1689,16 +1692,15 @@ Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) :=
   (* The first source segment and the destination segment must be disjoint. *)
   disjoint_seg i1 j1 k limit →
   valid_seg k limit dst →
-  wp (merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k)
+  wp (merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k ACC)
      (merge_aux_post dst dst i1 j1 i2 j2 dst k).
 
-Lemma wp_merge_aux_12 _j1 _j2 _i1 _i2 :
-  merge_aux_12_spec _j1 _j2 (_i1, _i2).
+Lemma wp_merge_aux_12 _j1 _j2 _i1i2 ACC :
+  merge_aux_12_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  simple eapply (well_founded_ind (Wf_order _j1 _j2)). clear _i1 _i2.
-  intros (_i1, _i2) IH.
+  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
   unfold merge_aux_12_spec. intros. arrays.
-  autorewrite with merge_aux_12.
+  simpl.
   wp_if.
   (* Case [x1 ≤ x2]. *)
   { wp_set.
@@ -1706,11 +1708,11 @@ Proof.
     (* Subcase [i1 + 1 < j1]. *)
     { wp_get x'1.
       wp_op (IH (_i1 + 1, _i2)%uint63) shadowing: _dst.
-      eapply merge_aux_post_implication_1; eauto with lia. }
+      eapply merge_aux_post_implication_1; tc4. }
     (* Subcase [i1 + 1 = j1]. *)
     { assert (i2 = k + 1) by lia. subst i2.
       wp_ret.
-      eapply merge_aux_post_init_1; eauto with lia.
+      eapply merge_aux_post_init_1; tc4.
       join_segments. rewrite <- insert_seg_all by lia. assumption. }}
   (* Case [x2 < x1]. *)
   { wp_set.
@@ -1718,10 +1720,10 @@ Proof.
     (* Subcase [i2 + 1 < j2]. *)
     { wp_get x'2.
       wp_op (IH (_i1, _i2 + 1)%uint63) shadowing: _dst.
-      eapply merge_aux_post_implication_2; eauto with lia. }
+      eapply merge_aux_post_implication_2; tc4. }
     (* Subcase [i2 + 1 = j2]. *)
     { wp_blit.
-      eapply merge_aux_post_init_2; eauto with lia. }}
+      eapply merge_aux_post_init_2; tc4. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1826,7 +1828,7 @@ Definition optimistic_merge_1 _i1 _j1 _src2 _i2 _j2 _dst _k :=
     _dst
   else
     do x1 ← get _dst _i1 ;
-    merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k.
+    merge_aux_1 _src2 _j1 _j2 _i1 x1 _i2 x2 _dst _k ltac:(tc).
 
 End OptimisticMerge1.
 
@@ -1872,7 +1874,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op wp_merge_aux_1 shadowing: _src1. }
+    wp_op (wp_merge_aux_1 _j1 _j2 (_i1, _i2)) shadowing: _src1. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1899,7 +1901,7 @@ Definition optimistic_merge_2 _src1 _i1 _j1 _i2 _j2 _dst _k :=
     _dst
   else
     do x1 ← get _src1 _i1 ;
-    merge_aux_2 _src1 _j1 _j2 _i1 x1 _i2 x2 _dst _k.
+    merge_aux_2 _src1 _j1 _j2 _i1 x1 _i2 x2 _dst _k ltac:(tc).
 
 End OptimisticMerge2.
 
@@ -1943,7 +1945,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op wp_merge_aux_2 shadowing: _src2. }
+    wp_op (wp_merge_aux_2 _j1 _j2 (_i1, _i2)) shadowing: _src2. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1968,7 +1970,7 @@ Definition optimistic_merge_12 _dst _i1 _j1 _i2 _j2 _k :=
     _dst
   else
     do x1 ← get _dst _i1 ;
-    merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k.
+    merge_aux_12 _j1 _j2 _i1 x1 _i2 x2 _dst _k ltac:(tc).
 
 End OptimisticMerge12.
 
@@ -2010,7 +2012,7 @@ Proof.
     eapply merge_aux_post_init_optimistic; eauto. isArray. }
   (* Case [x2 < x1]. *)
   { clear dependent x1. wp_get x1.
-    wp_op wp_merge_aux_12 shadowing: _dst. }
+    wp_op (wp_merge_aux_12 _j1 _j2 (_i1, _i2)) shadowing: _dst. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
