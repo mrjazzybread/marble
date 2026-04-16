@@ -41,22 +41,6 @@ let ltb = Uint63.lt
 
 let leb = Uint63.le
 
-(** val iter_down_aux :
-    Uint63.t -> Uint63.t -> 'a1 -> (Uint63.t -> 'a1 -> 'a1) -> 'a1 **)
-
-let rec iter_down_aux _i _k s body =
-  if eqb _k _i
-  then body _k s
-  else iter_down_aux _i (sub _k (Uint63.of_int (1))) (body _k s) body
-
-(** val iter_up_aux :
-    Uint63.t -> Uint63.t -> 'a1 -> (Uint63.t -> 'a1 -> 'a1) -> 'a1 **)
-
-let rec iter_up_aux _i _k s body =
-  if ltb _i _k
-  then iter_up_aux (add _i (Uint63.of_int (1))) _k (body _i s) body
-  else s
-
 (** val make : Uint63.t -> 'a1 -> 'a1 'a Parray.t **)
 
 let make = Parray.make
@@ -84,19 +68,14 @@ let rec simple_blit_aux a _i b _j _n =
          (set b _j (get a _i)) (add _j (Uint63.of_int (1)))
          (sub _n (Uint63.of_int (1)))
 
-(** val ni : Uint63.t **)
-
-let ni =
-  (Uint63.of_int (8))
-
 (** val blit_aux :
     'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
     Uint63.t -> 'a1 'a Parray.t **)
 
 let rec blit_aux a _i b _j _n =
-  if ltb _n ni
+  if ltb _n (Uint63.of_int (8))
   then simple_blit_aux a _i b _j _n
-  else blit_aux a (add _i ni)
+  else blit_aux a (add _i (Uint63.of_int (8)))
          (set
            (set
              (set
@@ -120,7 +99,7 @@ let rec blit_aux a _i b _j _n =
              (get a (add _i (Uint63.of_int (6)))))
            (add _j (Uint63.of_int (7)))
            (get a (add _i (Uint63.of_int (7)))))
-         (add _j ni) (sub _n ni)
+         (add _j (Uint63.of_int (8))) (sub _n (Uint63.of_int (8)))
 
 (** val blit :
     'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
@@ -129,6 +108,117 @@ let rec blit_aux a _i b _j _n =
 let blit =
   blit_aux
 
+(** val simple_blit'_up_aux :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let rec simple_blit'_up_aux a _i _j _n =
+  if eqb _n (Uint63.of_int (0))
+  then a
+  else simple_blit'_up_aux (set a _j (get a _i))
+         (add _i (Uint63.of_int (1))) (add _j (Uint63.of_int (1)))
+         (sub _n (Uint63.of_int (1)))
+
+(** val simple_blit'_down_aux :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let rec simple_blit'_down_aux a _i _j _n =
+  if eqb _n (Uint63.of_int (0))
+  then a
+  else simple_blit'_down_aux (set a _j (get a _i))
+         (sub _i (Uint63.of_int (1))) (sub _j (Uint63.of_int (1)))
+         (sub _n (Uint63.of_int (1)))
+
+(** val blit'N_up :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let blit'N_up a _i _j =
+  let a0 =
+    set a (add _j (Uint63.of_int (0)))
+      (get a (add _i (Uint63.of_int (0))))
+  in
+  let a1 =
+    set a0 (add _j (Uint63.of_int (1)))
+      (get a0 (add _i (Uint63.of_int (1))))
+  in
+  let a2 =
+    set a1 (add _j (Uint63.of_int (2)))
+      (get a1 (add _i (Uint63.of_int (2))))
+  in
+  let a3 =
+    set a2 (add _j (Uint63.of_int (3)))
+      (get a2 (add _i (Uint63.of_int (3))))
+  in
+  let a4 =
+    set a3 (add _j (Uint63.of_int (4)))
+      (get a3 (add _i (Uint63.of_int (4))))
+  in
+  let a5 =
+    set a4 (add _j (Uint63.of_int (5)))
+      (get a4 (add _i (Uint63.of_int (5))))
+  in
+  let a6 =
+    set a5 (add _j (Uint63.of_int (6)))
+      (get a5 (add _i (Uint63.of_int (6))))
+  in
+  set a6 (add _j (Uint63.of_int (7)))
+    (get a6 (add _i (Uint63.of_int (7))))
+
+(** val blit'N_down :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let blit'N_down a _i _j =
+  let a0 =
+    set a (add _j (Uint63.of_int (7)))
+      (get a (add _i (Uint63.of_int (7))))
+  in
+  let a1 =
+    set a0 (add _j (Uint63.of_int (6)))
+      (get a0 (add _i (Uint63.of_int (6))))
+  in
+  let a2 =
+    set a1 (add _j (Uint63.of_int (5)))
+      (get a1 (add _i (Uint63.of_int (5))))
+  in
+  let a3 =
+    set a2 (add _j (Uint63.of_int (4)))
+      (get a2 (add _i (Uint63.of_int (4))))
+  in
+  let a4 =
+    set a3 (add _j (Uint63.of_int (3)))
+      (get a3 (add _i (Uint63.of_int (3))))
+  in
+  let a5 =
+    set a4 (add _j (Uint63.of_int (2)))
+      (get a4 (add _i (Uint63.of_int (2))))
+  in
+  let a6 =
+    set a5 (add _j (Uint63.of_int (1)))
+      (get a5 (add _i (Uint63.of_int (1))))
+  in
+  set a6 (add _j (Uint63.of_int (0)))
+    (get a6 (add _i (Uint63.of_int (0))))
+
+(** val blit'_up_aux :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let rec blit'_up_aux a _i _j _n =
+  if ltb _n (Uint63.of_int (8))
+  then simple_blit'_up_aux a _i _j _n
+  else blit'_up_aux (blit'N_up a _i _j) (add _i (Uint63.of_int (8)))
+         (add _j (Uint63.of_int (8))) (sub _n (Uint63.of_int (8)))
+
+(** val blit'_down_aux :
+    'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
+
+let rec blit'_down_aux a _i _j _n =
+  if ltb _n (Uint63.of_int (8))
+  then simple_blit'_down_aux a (sub (add _i _n) (Uint63.of_int (1)))
+         (sub (add _j _n) (Uint63.of_int (1))) _n
+  else blit'_down_aux
+         (blit'N_down a (sub (add _i _n) (Uint63.of_int (8)))
+           (sub (add _j _n) (Uint63.of_int (8))))
+         _i _j (sub _n (Uint63.of_int (8)))
+
 (** val blit' :
     'a1 'a Parray.t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a1 'a Parray.t **)
 
@@ -136,14 +226,8 @@ let blit' a _i _j _n =
   if eqb _j _i
   then a
   else if leb _j _i
-       then iter_up_aux _i (add _i _n) a (fun _k a0 ->
-              set a0 (add _k (sub _j _i)) (get a0 _k))
-       else let _k = add _i _n in
-            if leb _k _i
-            then a
-            else iter_down_aux _i (sub _k (Uint63.of_int (1))) a
-                   (fun _k0 a0 ->
-                   set a0 (add _k0 (sub _j _i)) (get a0 _k0))
+       then blit'_up_aux a _i _j _n
+       else blit'_down_aux a _i _j _n
 
 type 'a leb0 =
   'a -> 'a -> bool

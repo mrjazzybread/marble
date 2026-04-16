@@ -18,7 +18,10 @@ Extraction Inline iter_down iter_up xiter_up uxiter_up.
 
 From Stdlib Require ExtrOCamlPArray.
 From marble Require Import array.
+Extraction Inline Ni.
 Extraction Inline simple_blit blitN.
+Extraction Inline simple_blit'_up simple_blit'_down.
+Extraction Inline blit'_up blit'_down.
 
 (* Recursive Extraction of_list blit blit' copy find_index equal. *)
 
