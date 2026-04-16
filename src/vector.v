@@ -44,25 +44,28 @@ Definition isVector `{Inhabited A} (v : vector A) (xs : list A) :=
 
 (* These tactics and lemmas help work with the above propositions. *)
 
-Local Ltac introIsVector :=
+(* They should be local; yet we expose them because [pqueue] opens up
+   the vector abstraction. *)
+
+Ltac introIsVector :=
   unfold isVector; eexists.
 
-Local Ltac introIsVectorCap :=
+Ltac introIsVectorCap :=
   unfold isVectorCap; eexists; list;
   split; [| split ].
 
-Local Ltac introIsVectorCapWithWitness unoccupied :=
+Ltac introIsVectorCapWithWitness unoccupied :=
   unfold isVectorCap; exists unoccupied; list;
   split; [| split ].
 
-Local Ltac destructIsVector :=
+Ltac destructIsVector :=
   match goal with h: isVector ?v _ |- _ =>
     unfold isVector in h;
     let c := fresh "c" in
     destruct h as (c&?)
   end.
 
-Local Ltac destructVector v :=
+Ltac destructVector v :=
   match v with
   | (_, _) => idtac
   | _ =>
@@ -71,14 +74,14 @@ Local Ltac destructVector v :=
     destruct v as [ _n a ]
   end.
 
-Local Ltac destructIsVectorCap :=
+Ltac destructIsVectorCap :=
   match goal with h: isVectorCap ?v _ _ |- _ =>
     destructVector v;
     let u := fresh "unoccupied" in
     destruct h as (u&?&?&?)
   end.
 
-Local Ltac destructAndKeepIsVectorCap :=
+Ltac destructAndKeepIsVectorCap :=
   match goal with h: isVectorCap ?v _ _ |- _ =>
     destructVector v;
     let u := fresh "unoccupied" in

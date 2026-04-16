@@ -21,6 +21,9 @@ Set Universe Polymorphism.
    by Aymeric Walch, Mário Pereira and Jean-Christophe Filliâtre:
    https://gitlab.inria.fr/why3/why3/-/blob/master/examples/pqueue.mlw *)
 
+Ltac wp_intro_hook Hx ::=
+  list in Hx; unpack in Hx.
+
 Section PQueue.
 
 (* -------------------------------------------------------------------------- *)
@@ -551,7 +554,9 @@ Qed.
 
 (* Inserting an element into a priority queue: [move_up] and [insert]. *)
 
-(* TODO use [vector.borrow] and work directly on the array *)
+(* Although we could work above the vector abstraction and use [vector.get]
+   and [vector.set], it is much more efficient to open up the abstraction,
+   expose the underlying array, and use [array.get] and [array.set]. *)
 
 Section Code.
 Open Scope uint63.
@@ -559,25 +564,25 @@ Open Scope uint63.
 Local Lemma move_up_ilt _i : (_i =? 0) = false → ilt (_parent _i) _i.
 Proof. tc. Qed.
 
-(* [move_up v _i x] writes the element [x] into slot [_i], then moves it
+(* [move_up a _i x] writes the element [x] into slot [_i], then moves it
    up as far as necessary so as to restore the heap invariant. *)
 
-Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector A :=
+Fixpoint move_up a _i x (ACC : Acc ilt _i) : array A :=
   IFC _i =? 0 THEN λ _,
     (* [x] has reached the root. *)
-    vector.set v _i x
+    PArray.set a _i x
   ELSE λ Hi,
     (* [_j] is the parent of [_i]. *)
     let _j := _parent _i in
     (* Read the element [y] in slot [_j]. *)
-    do y ← vector.get v _j ;
+    do y ← PArray.get a _j ;
     if (y ≤? x)%element then
       (* [x] can settle in slot [_i]. *)
-      vector.set v _i x
+      PArray.set a _i x
     else
       (* Move [y] down into slot [_i] and continue moving [x] up. *)
-      do v ← vector.set v _i y ;
-      move_up v _j x (Acc_inv ACC (move_up_ilt _i Hi)).
+      do a ← PArray.set a _i y ;
+      move_up a _j x (Acc_inv ACC (move_up_ilt _i Hi)).
 
 (* To insert a new element [x], it suffices to reserve a new slot at the end
    of the vector, thus creating a logically empty slot, and to call [move_up].
@@ -587,9 +592,13 @@ Fixpoint move_up v _i x (ACC : Acc ilt _i) : vector A :=
    instead we verify [move_up] twice with slightly different specifications. *)
 
 Definition insert q x :=
-  do _n ← vector.length q ;
   do q ← vector.reserve q ;
-  move_up q _n x (Wf_ilt _n).
+  (* Open up the vector, so as to get direct access to the array. *)
+  (* We could use a [borrow] function; instead, we inline it. *)
+  let '(_n, a) := q in
+  do a ← move_up a (_n - 1) x ltac:(tc) ;
+  (* Reconstruct a vector. *)
+  (_n, a).
 
 End Code.
 
@@ -598,9 +607,9 @@ End Code.
 (* The effect of [move_up] and [move_down] is to write [x] into slot [i]
    and then permute the elements so that they form a heap again. *)
 
-Definition move_post v xs i x :=
+Definition move_post a xs unoccupied i x :=
   ∃ xs',
-  isVector v xs' ∧
+  isArray a (xs' ++ unoccupied) ∧
   <[i := x]>xs ≃ xs' ∧
   heap xs'.
 
@@ -608,22 +617,22 @@ Local Ltac intro_move_post :=
   eexists; split; [ eauto | pack; eauto ].
 
 Local Ltac elim_move_post xs' :=
-  match goal with h: move_post _ _ _ _ |- _ =>
+  match goal with h: move_post _ _ _ _ _ |- _ =>
     destruct h as (xs' & h);
     unpack in h
   end.
 
-(* Inside [move_up v _i x], if [y] is the element at index [j], then
-   writing [y] into slot [i] and calling [move_up v _j x] establishes
+(* Inside [move_up a _i x], if [y] is the element at index [j], then
+   writing [y] into slot [i] and calling [move_up a _j x] establishes
    the desired postcondition. *)
 
-Lemma move_post_insert v i y xs j x :
-  move_post v (<[i:=y]> xs) j x →
+Lemma move_post_insert a i y xs unoccupied j x :
+  move_post a (<[i:=y]> xs) unoccupied j x →
   valid i xs →
   valid j xs →
   i ≠ j →
   y = xs !!! j →
-  move_post v xs i x.
+  move_post a xs unoccupied i x.
 Proof.
   intros. elim_move_post xs'. intro_move_post.
   (* A permutation goal. *)
@@ -634,7 +643,7 @@ Proof.
 Qed.
 
 (* This is the first specification of [move_up]. If [xs] forms a heap and
-   if [x] dominates the children of slot [i] then [move_up v _i x] can be
+   if [x] dominates the children of slot [i] then [move_up a _i x] can be
    called. *)
 
 (* Intuitively, the precondition of [move_up] is: [xs] must form a heap
@@ -648,38 +657,38 @@ Qed.
    uninitialized and contains an arbitrary value. To deal with this
    situation, we give a second specification of [move_up] below. *)
 
-Lemma wp_move_up _i :
-  ∀ v x ACC xs,
-  isVector v xs →
+Lemma wp_move_up unoccupied _i :
+  ∀ a x ACC xs ,
+  isArray a (xs ++ unoccupied) →
   heap xs →
   ∀ i, isInt _i i →
   valid i xs →
   dominates_children x i xs →
-  wp (move_up v _i x ACC) (λ v, move_post v xs i x).
+  wp (move_up a _i x ACC) (λ a, move_post a xs unoccupied i x).
 Proof.
   by well-founded induction on _i along ilt.
-  intros. unpack. vectors.
+  intros. unpack. arrays. lengths. ulength in *.
   destruct ACC; simpl.
   wp_if.
   (* Case [i = 0]. *)
-  { wp_op vector.wp_set shadowing: v.
+  { wp_set.
     intro_move_post; eauto using heap_insert_at_root. }
   (* Case [i ≠ 0]. *)
   set (_j := (_parent _i)).
   set (j := parent i).
   assert (isInt _j j) by tc3.
-  wp_op vector.wp_get introducing: y.
+  wp_get y.
   wp_if.
   (* Subcase: [y ≤ x]. *)
-  { wp_op vector.wp_set shadowing: v.
+  { wp_set.
     intro_move_post; eauto using heap_insert_deep. }
   (* Subcase: [x < y]. *)
-  { wp_op vector.wp_set shadowing: v.
+  { wp_set.
     assert (dominates_children x (parent i) (<[i:=y]> xs))
       by eauto using move_up_remark.
     assert (heap (<[i:=y]> xs))
       by eauto using heap_move_down.
-    wp_op IH shadowing: v.
+    wp_op IH shadowing: a.
     eauto 2 using move_post_insert with marble. }
 Qed.
 
@@ -689,43 +698,46 @@ Qed.
 
 (* The proof is essentially the same as above, with small changes. *)
 
-Lemma wp_move_up' _n n :
-  ∀ v x ACC xs dummy ,
-  isVector v (xs ++ {[dummy]}) →
+Lemma wp_move_up' unoccupied _n n :
+  ∀ a x ACC xs dummy ,
+  isArray a (xs ++ {[dummy]} ++ unoccupied) →
   heap xs →
   isInt _n n →
   n = len xs →
-  wp (move_up v _n x ACC) (λ v, move_post v (xs ++ {[dummy]}) n x).
+  wp (move_up a _n x ACC) (λ a,
+    move_post a (xs ++ {[dummy]}) unoccupied n x
+  ).
 Proof.
-  intros. vectors. lengths. length in *.
+  intros. arrays. lengths. length in *.
   destruct ACC; simpl.
   wp_if.
   (* Case [n = 0]. *)
   { subst n. lengths. list.
-    wp_op vector.wp_set shadowing: v.
+    wp_set.
     intro_move_post; eauto using singleton_heap. }
   (* Case [n ≠ 0]. *)
   set (_j := (_parent _n)).
   set (j := parent n).
   assert (isInt _j j) by tc.
-  wp_op vector.wp_get introducing: y.
+  wp_get y.
   wp_if.
   (* Subcase: [y ≤ x]. *)
-  { wp_op vector.wp_set shadowing: v. list in *.
+  { wp_set.
     intro_move_post; list; eauto using quasi_heap_insert_deep. }
   (* Subcase: [x < y]. *)
-  { wp_op vector.wp_set shadowing: v. list in *.
+  { wp_set.
     assert (heap (xs ++ {[y]}))
       by eauto using quasi_heap_move_down.
     assert (dominates_children x j (xs ++ {[y]}))
       by eauto using move_up'_remark.
-    wp_op wp_move_up shadowing: v.
-    + elim_move_post xs'. intro_move_post.
-      (* Permutation. *)
-      use_permutation_hypothesis. list.
-      rewrite (Permutation_app_comm (_) {[y]}).
-      rewrite overwrite_and_compensate by eauto with marble.
-      reflexivity. }
+    wp_op (wp_move_up unoccupied) shadowing: a.
+    { isArray. }
+    elim_move_post xs'. intro_move_post.
+    (* Permutation. *)
+    use_permutation_hypothesis. list.
+    rewrite (Permutation_app_comm (_) {[y]}).
+    rewrite overwrite_and_compensate by eauto with marble.
+    reflexivity. }
 Qed.
 
 (* The specification of [insert]. *)
@@ -736,11 +748,14 @@ Lemma wp_insert q y ys :
   wp (insert q y) (λ q, isQueue q (ys ++ {[y]})).
 Proof.
   intros. destructQueue xs. lengths. unfold insert.
-  wp_op vector.wp_length introducing: _n.
   wp_op vector.wp_reserve shadowing: q.
-  wp_op wp_move_up' shadowing: q. wp_last Hpost.
+  (* Because we have inlined [borrow], we must open up the vector. *)
+  destructIsVector. destructIsVectorCap.
+  wp_op wp_move_up' shadowing: a. wp_last Hpost.
   elim_move_post xs'. list in Hpost0.
-  introQueue; eauto 2.
+  introQueue; [ | | eassumption ].
+  (* Vector. *)
+  { lengths. length in *. introIsVector. introIsVectorCap; tc. }
   (* Permutation. *)
   { use_permutation_hypothesis. simplify_list_permutation_goal. eauto. }
 Qed.
@@ -752,7 +767,7 @@ Qed.
 Section Code.
 Open Scope uint63.
 
-(* [move_down _n v _i x ACC] writes the element [x] into slot [_i],
+(* [move_down _n a _i x ACC] writes the element [x] into slot [_i],
    then moves it down as far as necessary to restore the heap invariant. *)
 
 (* [move_down] calls itself in three possible situations: 1- there is a
@@ -769,10 +784,10 @@ Open Scope uint63.
    here or should continue to move down. The copies are marked with [BEGIN
    COPY ... END COPY] in the code and in the proof. *)
 
-Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector A :=
+Fixpoint move_down _n a _i x (ACC : Acc (rigt _n) _i) : array A :=
   IFC _n / 2 ≤? _i THEN λ _,
     (* There are no children. [x] cannot move further down. *)
-    vector.set v _i x
+    PArray.set a _i x
   ELSE λ Hl,
     (* The left child exists. *)
     (* To preserve the heap invariant, the smaller of the two children
@@ -780,22 +795,22 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector A :=
     IFC (_n - 1) / 2 ≤? _i THEN λ _,
       (* Only the left child exists. Go left. *)
       let _j := _left _i in
-      do y ← vector.get v _j ;
+      do y ← PArray.get a _j ;
       (* BEGIN COPY 1 *)
       if (x ≤? y)%element then
         (* [x] can settle here. *)
-        vector.set v _i x
+        PArray.set a _i x
       else
         (* Move [y] up and continue moving [x] down. *)
-        do v ← vector.set v _i y ;
-        move_down _n v _j x (Acc_inv ACC (rigt_left Hl))
+        do a ← PArray.set a _i y ;
+        move_down _n a _j x (Acc_inv ACC (rigt_left Hl))
       (* END COPY 1 *)
     ELSE λ Hr,
       (* Both children exist. Compare them. *)
       let _i1 := _left _i in
       let _i2 := _right _i in
-      do y1 ← vector.get v _i1 ;
-      do y2 ← vector.get v _i2 ;
+      do y1 ← PArray.get a _i1 ;
+      do y2 ← PArray.get a _i2 ;
       if (y1 ≤? y2)%element then
         (* The left child is smaller. Go left. *)
         let _j := _i1 in
@@ -803,11 +818,11 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector A :=
         (* BEGIN COPY 2 *)
         if (x ≤? y)%element then
           (* [x] can settle here. *)
-          vector.set v _i x
+          PArray.set a _i x
         else
           (* Move [y] up and continue moving [x] down. *)
-          do v ← vector.set v _i y ;
-          move_down _n v _j x (Acc_inv ACC (rigt_left Hl))
+          do a ← PArray.set a _i y ;
+          move_down _n a _j x (Acc_inv ACC (rigt_left Hl))
         (* END COPY 2 *)
       else
         let _j := _i2 in
@@ -815,11 +830,11 @@ Fixpoint move_down _n v _i x (ACC : Acc (rigt _n) _i) : vector A :=
         (* BEGIN COPY 3 *)
         if (x ≤? y)%element then
           (* [x] can settle here. *)
-          vector.set v _i x
+          PArray.set a _i x
         else
           (* Move [y] up and continue moving [x] down. *)
-          do v ← vector.set v _i y ;
-          move_down _n v _j x (Acc_inv ACC (rigt_right Hr))
+          do a ← PArray.set a _i y ;
+          move_down _n a _j x (Acc_inv ACC (rigt_right Hr))
         (* END COPY 3 *)
 .
 
@@ -833,11 +848,16 @@ Definition extract_nonempty q : A * queue A :=
     (* [x] was the only element. We are done. *)
     (x, q)
   else
+    (* Open up the vector, so as to get direct access to the array. *)
+    (* We could use a [borrow] function; instead, we inline it. *)
+    let '(_n, a) := q in
     (* Read the first element [m] of the vector. *)
     (* This is the root of the tree. *)
-    do m ← vector.get q 0 ;
+    do m ← PArray.get a 0 ;
     (* Now place [x] at the root of the tree and let it go down. *)
-    do q ← move_down _n q 0 x (Wf_rigt _n 0) ;
+    do a ← move_down _n a 0 x ltac:(tc) ;
+    (* Reconstruct a vector. *)
+    let q := (_n, a) in
     (* Return [m] and [q]. *)
     (m, q).
 
@@ -851,20 +871,20 @@ End Code.
 
 (* The specification of [move_down]. *)
 
-Lemma wp_move_down :
+Lemma wp_move_down unoccupied :
   ∀IntU _n n,
   ∀IntU _i i,
-  ∀ v xs x ACC,
-  isVector v xs →
+  ∀ a xs x ACC,
+  isArray a (xs ++ unoccupied) →
   n = len xs →
   valid i xs →
   heap xs →
   ((0 < i)%Z → xs !!! parent i < x) →
-  wp (move_down _n v _i x ACC) (λ v, move_post v xs i x).
+  wp (move_down _n a _i x ACC) (λ a, move_post a xs unoccupied i x).
 Proof.
   intros _n n ? ?.
   by well-founded induction on _i along (rigt _n).
-  intros. vectors.
+  intros. arrays. lengths.
   destruct ACC; simpl.
   set (_i1 :=  _left _i).
   set (_i2 := _right _i).
@@ -873,24 +893,24 @@ Proof.
   (* Now examine the code. *)
   wp_if.
   (* Case [n / 2 ≤ i]. There are no children. *)
-  { wp_op vector.wp_set shadowing: v.
+  { wp_set.
     intro_move_post.
     eapply heap_insert; eauto 3 with marble order. }
   (* Case [i < n / 2]. There is a left child. *)
   (* assert (rigt _n _i1 _i). { unfold rigt, igt. lia. } TODO *)
   wp_if.
   (* Case [(n - 1) / 2 ≤ i]. There is only a left child. *)
-  { wp_op vector.wp_get introducing: y.
+  { wp_get y.
     (* BEGIN COPY 1 *)
     wp_if.
     (* Case [x ≤ y]. [x] can settle here. *)
-    { wp_op vector.wp_set shadowing: v.
+    { wp_set.
       intro_move_post.
       assert (dominates_children x i xs).
       { subst y. split; intro; [ eauto 2 | lia ]. }
       eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
-    { wp_op vector.wp_set shadowing: v.
+    { wp_set.
       assert (dominates_children y i xs).
       { split; eauto 2 with order lia. }
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
@@ -898,7 +918,7 @@ Proof.
         eauto 2 with marble nocore. }
       assert (heap (<[i:=y]> xs)).
       { eapply heap_insert; eauto 2 with lia. }
-      wp_op IH shadowing: v. (* UGLY slow, for no reason; related to BUG? *)
+      wp_op IH shadowing: a. (* UGLY slow, for no reason; related to BUG? *)
       { rewrite lookup_total_insert_eq by assumption. eauto 1. }
       eauto 2 using move_post_insert with marble nocore. }
     (* END COPY 1 *)
@@ -906,29 +926,29 @@ Proof.
   (* Case [i < (n - 1) / 2]. There are two children. *)
   (* assert (rigt _n _i1 _i) by tc3. *) (* TODO *)
   (* assert (rigt _n _i2 _i) by tc3. *)
-  wp_op vector.wp_get introducing: y1.
-  wp_op vector.wp_get introducing: y2.
+  wp_get y1.
+  wp_get y2.
   wp_if.
   (* Subcase [y1 ≤ y2]. The left child is smaller. *)
   {
     (* BEGIN COPY 2 *)
     wp_if.
     (* Case [x ≤ y]. [x] can settle here. *)
-    { wp_op vector.wp_set shadowing: v.
+    { wp_set.
       intro_move_post.
       assert (dominates_children x i xs).
       { split; eauto 3 with order. }
       eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { set (y := y1).
-      wp_op vector.wp_set shadowing: v.
+      wp_set.
       assert (dominates_children y i xs) by (split; eauto 2 with order).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := left i);
         eauto 2 with marble nocore. }
       assert (heap (<[i:=y]> xs)).
       { eapply heap_insert; eauto 2. }
-      wp_op IH shadowing: v. (* UGLY slow again *)
+      wp_op IH shadowing: a. (* UGLY slow again *)
       { rewrite lookup_total_insert_eq by assumption. eauto 1. }
       eauto using move_post_insert with marble nocore. }
     (* END COPY 2 *)
@@ -938,21 +958,21 @@ Proof.
     (* BEGIN COPY 3 *)
     wp_if.
     (* Case [x ≤ y]. [x] can settle here. *)
-    { wp_op vector.wp_set shadowing: v.
+    { wp_set.
       intro_move_post.
       assert (dominates_children x i xs).
       { split; eauto 4 with order. }
       eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { set (y := y2).
-      wp_op vector.wp_set shadowing: v.
+      wp_set.
       assert (dominates_children y i xs) by (split; eauto 3 with order).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := right i);
         eauto 2 with marble nocore. }
       assert (heap (<[i:=y]> xs)).
       { eapply heap_insert; eauto 2. }
-      wp_op IH shadowing: v. (* UGLY slow again *)
+      wp_op IH shadowing: a. (* UGLY slow again *)
       { rewrite parent_right, lookup_total_insert_eq by assumption.
         eauto 1. }
       eauto using move_post_insert with marble nocore. }
@@ -992,15 +1012,26 @@ Proof.
     use_permutation_hypothesis. autorewrite with pairwise.
     reflexivity. }
   (* Case [0 < n]. *)
-  wp_op vector.wp_get introducing: m.
-  wp_op wp_move_down shadowing: q.
+  (* Because we have inlined [borrow], we must open up the vector. *)
+  destructIsVector. destructIsVectorCap. lengths.
+  wp_get m.
+  wp_op wp_move_down shadowing: a.
   { eapply heap_pop. eassumption. }
   elim_move_post xs'.
-  intro_extract_post; eauto 2; repeat use_permutation_hypothesis.
+  intro_extract_post.
+  (* Vector. *)
+  { introIsVector. introIsVectorCap; [ idtac | eauto | eauto ].
+    lengths. ulength in *. tc. }
   (* Permutation. *)
-  { eapply overwrite_and_compensate; eauto 1 with lia. }
+  { symmetry. eassumption. }
+  (* Heap. *)
+  { eauto. }
+  (* Permutation. *)
+  { repeat use_permutation_hypothesis.
+    eapply overwrite_and_compensate; eauto 1 with lia. }
   (* Minimum. *)
-  { eapply heap_minimum; eauto 1 with lia. list. eauto. }
+  { repeat use_permutation_hypothesis.
+    eapply heap_minimum; eauto 1 with lia. list. eauto. }
 Qed.
 
 (* The specification of [extract]. *)
