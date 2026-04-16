@@ -226,3 +226,6 @@ let fold_left2 f a p1 p2 =
 
 let blit _a _i _b _j _n =
   failwith "Parray.blit: not implemented"
+
+let blit' _a _i _j _n =
+  failwith "Parray.blit': not implemented"

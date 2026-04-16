@@ -43,6 +43,13 @@ let blit a i b j n =
   Array.blit a.data (to_int i) data (to_int j) (to_int n);
   of_array data
 
+let blit' a i j n =
+  if not a.valid then failwith "blit': stale array";
+  a.valid <- false;
+  let data = a.data in
+  Array.blit data (to_int i) data (to_int j) (to_int n);
+  of_array data
+
 (* The public version of [of_array] has an extra argument [inhabitant]. *)
 let[@inline] of_array data _inhabitant =
   of_array data

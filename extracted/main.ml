@@ -57,6 +57,7 @@ module Make (A : sig
   val map : ('a -> 'b) -> 'a t -> 'b t
 (*
   val blit : 'a t -> uint63 -> 'a t -> uint63 -> uint63 -> 'a t
+  val blit' : 'a t -> uint63 -> uint63 -> uint63 -> 'a t
  *)
 end) = struct
 

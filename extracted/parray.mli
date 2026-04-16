@@ -36,4 +36,5 @@ val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b t -> 'a
 val fold_left2 : ('a -> 'b -> 'c -> 'a) -> 'a -> 'b t -> 'c t -> 'a
 
 val blit    : 'a t -> Uint63.t -> 'a t -> Uint63.t -> Uint63.t -> 'a t
+val blit'   : 'a t -> Uint63.t -> Uint63.t -> Uint63.t -> 'a t
 (* dummy; not implemented *)

@@ -28,6 +28,9 @@ let blit a i b j n =
   Array.blit a (to_int i) b (to_int j) (to_int n);
   b
 
+let blit' a i j n =
+  blit a i a j n
+
 (* The public version of [of_array] has an extra argument [inhabitant]. *)
 let[@inline] of_array data _inhabitant =
   data
