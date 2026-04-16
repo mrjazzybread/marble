@@ -1135,13 +1135,28 @@ Proof.
     isArray. }
 Qed.
 
-(* Moving data within an array: [blit']. *)
+(* Moving data within an array: [simple_blit']. *)
 
 (* The source and destination segments may overlap. *)
+
+Local Definition up    (i j : Z) := j ≤ i.
+Local Definition down  (i j : Z) := i ≤ j.
+Local Definition any   (i j : Z) := True.
+
+Definition blit'_spec blit' n (direction : Z → Z → Prop) :=
+  ∀ a xs,
+  isArray a xs →
+  ∀Int _i i,
+  ∀Int _j j,
+  valid_seg i (i + n) xs →
+  valid_seg j (j + n) xs →
+  direction i j →
+  wp (blit' a _i _j) (blit_post xs i xs j n).
 
 Section Code.
 Open Scope uint63.
 
+(* TODO avoid [iter_up] and [iter_down] *)
 Definition simple_blit'_up a _i _j _n :=
   do _delta ← _j - _i ;
   iter_up _i (_i + _n) a @@ λ _k a,
@@ -1156,7 +1171,7 @@ Definition simple_blit'_down a _i _j _n :=
   do a ← set a (_k + _delta) x ;
   a.
 
-Definition blit' a _i _j _n :=
+Definition simple_blit' a _i _j _n :=
   if _j =? _i then
     a
   else if _j <=? _i then
@@ -1166,19 +1181,13 @@ Definition blit' a _i _j _n :=
 
 End Code.
 
-(* The public specification of [blit']. *)
+(* The public specification of [simple_blit']. *)
 
-Lemma wp_simple_blit'_up a xs :
-  isArray a xs →
-  ∀Int _i i,
-  ∀Int _j j,
+Lemma wp_simple_blit'_up :
   ∀Int _n n,
-  valid_seg i (i + n) xs →
-  valid_seg j (j + n) xs →
-  j ≤ i →
-  wp (simple_blit'_up a _i _j _n) (blit_post xs i xs j n).
+  blit'_spec (λ a _i _j, simple_blit'_up a _i _j _n) n up.
 Proof.
-  intros. arrays. unfold simple_blit'_up.
+  unfold up, blit'_spec, simple_blit'_up. intros. arrays.
   wp_bind_eq.
   wp_op wp_iter_up
     with invariant: (λ k, blit_post xs i xs j (k - i));
@@ -1192,17 +1201,11 @@ Proof.
     isArray. }
 Qed.
 
-Lemma wp_simple_blit'_down a xs :
-  isArray a xs →
-  ∀Int _i i,
-  ∀Int _j j,
+Lemma wp_simple_blit'_down :
   ∀Int _n n,
-  valid_seg i (i + n) xs →
-  valid_seg j (j + n) xs →
-  i ≤ j →
-  wp (simple_blit'_down a _i _j _n) (blit_post xs i xs j n).
+  blit'_spec (λ a _i _j, simple_blit'_down a _i _j _n) n down.
 Proof.
-  intros. arrays. unfold simple_blit'_down.
+  unfold down, blit'_spec, simple_blit'_down. intros. arrays.
   wp_bind_eq.
   wp_op wp_iter_down
     with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
@@ -1216,16 +1219,17 @@ Proof.
     isArray. }
 Qed.
 
-Lemma wp_blit' a xs :
+Lemma wp_simple_blit' :
+  ∀ a xs,
   isArray a xs →
   ∀Int _i i,
   ∀Int _j j,
   ∀Int _n n,
   valid_seg i (i + n) xs →
   valid_seg j (j + n) xs →
-  wp (blit' a _i _j _n) (blit_post xs i xs j n).
+  wp (simple_blit' a _i _j _n) (blit_post xs i xs j n).
 Proof.
-  intros. arrays. unfold blit'.
+  unfold any, blit'_spec, simple_blit'. intros. arrays.
   wp_if.
   (* Case [j = i]. *)
   { subst j. wp_ret. isArray. }
@@ -1233,7 +1237,97 @@ Proof.
   (* Case [j ≤ i]. *)
   { wp_apply wp_simple_blit'_up. }
   (* Case [i < j]. *)
-  { wp_apply wp_simple_blit'_down. }
+  { wp_apply wp_simple_blit'_down. unfold down. lia. }
+Qed.
+
+(* TODO temporary definitions, waiting for loop unrolling *)
+Definition blit' := simple_blit'.
+Definition wp_blit' := wp_simple_blit'.
+
+(* Specialize [blit'] for known sizes. *)
+
+Fixpoint static_blit'_up a _i _j (n : nat) (o : nat) :=
+  match n with
+  | O =>
+      a
+  | S n =>
+      do x ← get a (_i + of_nat o) ;
+      do a ← set a (_j + of_nat o) x ;
+      static_blit'_up a _i _j n (S o)
+  end.
+
+Fixpoint static_blit'_down a _i _j (n : nat) :=
+  match n with
+  | O =>
+      a
+  | S n =>
+      do x ← get a (_i + of_nat n) ;
+      do a ← set a (_j + of_nat n) x ;
+      static_blit'_down a _i _j n
+  end.
+
+Definition blit'N_up a _i _j :=
+  Eval compute -[bind] in static_blit'_up a _i _j N 0.
+
+Definition blit'N_down a _i _j :=
+  Eval compute -[bind] in static_blit'_down a _i _j N.
+
+Lemma wp_static_blit'_up :
+  ∀ n o a xs,
+  isArray a xs →
+  ∀Int _i i,
+  let i := i + Z.of_nat o in
+  ∀Int _j j,
+  let j := j + Z.of_nat o in
+  valid_seg i (i + Z.of_nat n) xs →
+  valid_seg j (j + Z.of_nat n) xs →
+  j ≤ i →
+  wp (static_blit'_up a _i _j n o) (blit_post xs i xs j (Z.of_nat n)).
+Proof.
+  induction n as [| n ]; simpl static_blit'_up; intros.
+  (* Base case. *)
+  { wp_ret. isArray. }
+  (* Inductive case. *)
+  { wp_get x.
+    wp_set.
+    wp_op IHn shadowing: a; wp_last Hpost; z.
+    subst x. isArray. }
+Qed.
+
+Lemma wp_static_blit'_down :
+  ∀ n a xs,
+  isArray a xs →
+  ∀Int _i i,
+  ∀Int _j j,
+  valid_seg i (i + Z.of_nat n) xs →
+  valid_seg j (j + Z.of_nat n) xs →
+  i ≤ j →
+  wp (static_blit'_down a _i _j n) (blit_post xs i xs j (Z.of_nat n)).
+Proof.
+  induction n as [| n ]; simpl static_blit'_down; intros.
+  (* Base case. *)
+  { wp_ret. isArray. }
+  (* Inductive case. *)
+  { wp_get x.
+    wp_set.
+    wp_op IHn shadowing: a; wp_last Hpost; z.
+    subst x. isArray. }
+Qed.
+
+Lemma wp_blitN'_up :
+  blit'_spec blit'N_up NZ up.
+Proof.
+  unfold NZ, blit'_spec. intros.
+  change (blit'N_up a _i _j) with (static_blit'_up a _i _j N 0).
+  wp_op wp_static_blit'_up shadowing: a.
+Qed.
+
+Lemma wp_blitN'_down :
+  blit'_spec blit'N_down NZ down.
+Proof.
+  unfold NZ, blit'_spec. intros.
+  change (blit'N_down a _i _j) with (static_blit'_down a _i _j N).
+  wp_op wp_static_blit'_down shadowing: a.
 Qed.
 
 End Blit.

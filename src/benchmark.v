@@ -33,31 +33,19 @@ Time Definition b : array int :=
   init n data.
     (* same as [a] *)
 
-Time Definition time_naive_blit :=
+Time Definition time_simple_blit :=
   Eval vm_compute in
-  (naive_blit a 0 b 0 n)%uint63.
-    (* when [iter_up] was defined using Equations, this used to take
-       4.5 seconds : 11,000 elements/second *)
-    (* now 0.065 seconds : 770,000 elements/second *)
+  (simple_blit a 0 b 0 n)%uint63.
+    (* 0.06 seconds : 830,000 elements/second *)
 
 Time Definition b' : array int :=
   Eval vm_compute in
   init n data.
     (* same as [a] *)
 
-Time Definition time_simple_blit :=
-  Eval vm_compute in
-  (simple_blit a 0 b' 0 n)%uint63.
-    (* 0.06 seconds : 830,000 elements/second *)
-
-Time Definition b''' : array int :=
-  Eval vm_compute in
-  init n data.
-    (* same as [a] *)
-
 Time Definition time_blit :=
   Eval vm_compute in
-  (blit a 0 b''' 0 n)%uint63.
+  (blit a 0 b' 0 n)%uint63.
     (* 0.055 seconds : 910,000 elements/second *)
 
 From marble Require Import sort.
