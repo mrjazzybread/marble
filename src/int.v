@@ -612,6 +612,9 @@ Proof. tc3. Qed.
 
 (* All four orderings are well-founded. *)
 
+(* Placing the lemmas [Acc_ilt] and friends in the hint database [marble]
+   lets us write [ltac:(tc)] where a proof of accessibility is expected. *)
+
 (* [ilt] *)
 
 Definition ilt _i _j :=
@@ -630,6 +633,10 @@ Global Instance Wf_ilt : WellFounded ilt :=
   wf_guard 32 ilt_wf.
   (* The use of [wf_guard] is meant to allow computation inside Rocq
      in spite of the opaque well-foundedness proof [ilt_wf]. *)
+
+Lemma Acc_ilt _n : Acc ilt _n.
+Proof. eapply Wf_ilt. Defined.
+Hint Resolve Acc_ilt : marble.
 
 (* The following lemmas are useful in direct definitions of recursive
    functions by structural induction on a proof of accessibility. *)
@@ -658,6 +665,10 @@ Qed.
 
 Global Instance Wf_rilt _a : WellFounded (rilt _a) :=
   wf_guard 32 (rilt_wf _a).
+
+Lemma Acc_rilt _a _i : Acc (rilt _a) _i.
+Proof. eapply Wf_rilt. Defined.
+Hint Resolve Acc_rilt : marble.
 
 (* The following lemmas are useful in direct definitions of recursive
    functions by structural induction on a proof of accessibility. *)
@@ -694,6 +705,10 @@ Qed.
 Global Instance Wf_igt : WellFounded igt :=
   wf_guard 32 igt_wf.
 
+Lemma Acc_igt _n : Acc igt _n.
+Proof. eapply Wf_igt. Defined.
+Hint Resolve Acc_igt : marble.
+
 (* The following lemmas are useful in direct definitions of recursive
    functions by structural induction on a proof of accessibility. *)
 
@@ -722,6 +737,10 @@ Qed.
 
 Global Instance Wf_rigt _a : WellFounded (rigt _a) :=
   wf_guard 32 (rigt_wf _a).
+
+Lemma Acc_rigt _a _i : Acc (rigt _a) _i.
+Proof. eapply Wf_rigt. Defined.
+Hint Resolve Acc_rigt : marble.
 
 (* -------------------------------------------------------------------------- *)
 
