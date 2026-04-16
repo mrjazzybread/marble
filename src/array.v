@@ -1199,17 +1199,11 @@ Qed.
 
 (* A couple technical lemmas. *)
 
-Lemma Acc_ilt_n_minus_N _n (pf : Acc ilt _n) :
+Lemma ilt_n_minus_N {_n} :
   (_n <? Ni)%uint63 = false →
-  Acc ilt (_n - Ni)%uint63.
+  ilt (_n - Ni)%uint63 _n.
 Proof.
-  intros. destruct pf as [pf]. apply pf.
-  abstract (unfold ilt, Ni in *; lia).
-Defined.
-
-Lemma ilt_n_minus_N : ∀Int _n n, unsigned n → ¬ n < NZ → ilt (_n - Ni) _n.
-Proof.
-  intros. rewrite isInt_def in *. unfold ilt, NZ, Ni in *. lia.
+  unfold Ni. eauto with marble.
 Qed.
 
 (* We are now ready to define an optimized [blit],
@@ -1225,7 +1219,7 @@ Fixpoint blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
     λ (Hlt : (_n <? Ni) = false),
     do b ← blitN a _i b _j ;
     blit_aux a (_i + Ni) b (_j + Ni) (_n - Ni)
-                    (Acc_ilt_n_minus_N _n ACC Hlt).
+             (Acc_inv ACC (ilt_n_minus_N Hlt)).
 
 Definition blit a _i b _j _n :=
   blit_aux a _i b _j _n ltac:(tc).
@@ -1263,7 +1257,6 @@ Proof.
   { wp_op wp_blit_underN shadowing: b. }
   (* Step case. *)
   { unfold Ni.
-    assert (ilt (_n - Ni) _n) by eauto using ilt_n_minus_N with lia.
     wp_op wp_blitN; unfold NZ; tc; last wp_shadow b.
     wp_op IH shadowing: b. wp_last Hb.
     seg_seg in Hb.
