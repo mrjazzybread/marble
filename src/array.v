@@ -1118,7 +1118,7 @@ Proof.
   wp_op wp_static_blit shadowing: b.
 Qed.
 
-(* A couple technical lemmas. *)
+(* The termination argument for [blit_aux]. *)
 
 Lemma ilt_n_minus_N {_n} :
   (_n <? Ni)%uint63 = false →
