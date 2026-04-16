@@ -84,51 +84,6 @@ let rec simple_blit_aux a _i b _j _n =
          (set b _j (get a _i)) (add _j (Uint63.of_int (1)))
          (sub _n (Uint63.of_int (1)))
 
-(** val simple_blit :
-    'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
-    Uint63.t -> 'a1 'a Parray.t **)
-
-let simple_blit =
-  simple_blit_aux
-
-(** val equations_blit :
-    'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
-    Uint63.t -> 'a1 'a Parray.t **)
-
-let equations_blit a a0 a1 a2 b =
-  let rec fix_F x =
-    let a3 = let pr1,_ = x in pr1 in
-    let _i = let pr1,_ = let _,pr2 = x in pr2 in pr1 in
-    let _j =
-      let pr1,_ =
-        let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
-      in
-      pr1
-    in
-    let _n =
-      let _,pr2 =
-        let _,pr2 = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr2
-      in
-      pr2
-    in
-    if eqb _n (Uint63.of_int (0))
-    then let pr1,_ = let _,pr2 = let _,pr2 = x in pr2 in pr2 in pr1
-    else let y =
-           a3,((add _i (Uint63.of_int (1))),((set
-                                               (let pr1,_ =
-                                                  let _,pr2 =
-                                                    let _,pr2 = x in pr2
-                                                  in
-                                                  pr2
-                                                in
-                                                pr1)
-                                               _j (get a3 _i)),((add _j
-                                                                (Uint63.of_int (1))),
-           (sub _n (Uint63.of_int (1))))))
-         in
-         fix_F y
-  in fix_F (a,(a0,(a1,(a2,b))))
-
 (** val ni : Uint63.t **)
 
 let ni =
@@ -160,104 +115,13 @@ let blitN a _i b _j =
       (add _j (Uint63.of_int (6))) (get a (add _i (Uint63.of_int (6)))))
     (add _j (Uint63.of_int (7))) (get a (add _i (Uint63.of_int (7))))
 
-(** val blit_underN :
-    'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
-    Uint63.t -> 'a1 'a Parray.t **)
-
-let blit_underN a _i b _j _n =
-  if ltb _n (Uint63.of_int (4))
-  then if ltb _n (Uint63.of_int (2))
-       then if ltb _n (Uint63.of_int (1))
-            then b
-            else set b (add _j (Uint63.of_int (0)))
-                   (get a (add _i (Uint63.of_int (0))))
-       else if ltb _n (Uint63.of_int (3))
-            then set
-                   (set b (add _j (Uint63.of_int (0)))
-                     (get a (add _i (Uint63.of_int (0)))))
-                   (add _j (Uint63.of_int (1)))
-                   (get a (add _i (Uint63.of_int (1))))
-            else set
-                   (set
-                     (set b (add _j (Uint63.of_int (0)))
-                       (get a (add _i (Uint63.of_int (0)))))
-                     (add _j (Uint63.of_int (1)))
-                     (get a (add _i (Uint63.of_int (1)))))
-                   (add _j (Uint63.of_int (2)))
-                   (get a (add _i (Uint63.of_int (2))))
-  else if ltb _n (Uint63.of_int (6))
-       then if ltb _n (Uint63.of_int (5))
-            then set
-                   (set
-                     (set
-                       (set b (add _j (Uint63.of_int (0)))
-                         (get a (add _i (Uint63.of_int (0)))))
-                       (add _j (Uint63.of_int (1)))
-                       (get a (add _i (Uint63.of_int (1)))))
-                     (add _j (Uint63.of_int (2)))
-                     (get a (add _i (Uint63.of_int (2)))))
-                   (add _j (Uint63.of_int (3)))
-                   (get a (add _i (Uint63.of_int (3))))
-            else set
-                   (set
-                     (set
-                       (set
-                         (set b (add _j (Uint63.of_int (0)))
-                           (get a (add _i (Uint63.of_int (0)))))
-                         (add _j (Uint63.of_int (1)))
-                         (get a (add _i (Uint63.of_int (1)))))
-                       (add _j (Uint63.of_int (2)))
-                       (get a (add _i (Uint63.of_int (2)))))
-                     (add _j (Uint63.of_int (3)))
-                     (get a (add _i (Uint63.of_int (3)))))
-                   (add _j (Uint63.of_int (4)))
-                   (get a (add _i (Uint63.of_int (4))))
-       else if ltb _n (Uint63.of_int (7))
-            then set
-                   (set
-                     (set
-                       (set
-                         (set
-                           (set b (add _j (Uint63.of_int (0)))
-                             (get a (add _i (Uint63.of_int (0)))))
-                           (add _j (Uint63.of_int (1)))
-                           (get a (add _i (Uint63.of_int (1)))))
-                         (add _j (Uint63.of_int (2)))
-                         (get a (add _i (Uint63.of_int (2)))))
-                       (add _j (Uint63.of_int (3)))
-                       (get a (add _i (Uint63.of_int (3)))))
-                     (add _j (Uint63.of_int (4)))
-                     (get a (add _i (Uint63.of_int (4)))))
-                   (add _j (Uint63.of_int (5)))
-                   (get a (add _i (Uint63.of_int (5))))
-            else set
-                   (set
-                     (set
-                       (set
-                         (set
-                           (set
-                             (set b (add _j (Uint63.of_int (0)))
-                               (get a (add _i (Uint63.of_int (0)))))
-                             (add _j (Uint63.of_int (1)))
-                             (get a (add _i (Uint63.of_int (1)))))
-                           (add _j (Uint63.of_int (2)))
-                           (get a (add _i (Uint63.of_int (2)))))
-                         (add _j (Uint63.of_int (3)))
-                         (get a (add _i (Uint63.of_int (3)))))
-                       (add _j (Uint63.of_int (4)))
-                       (get a (add _i (Uint63.of_int (4)))))
-                     (add _j (Uint63.of_int (5)))
-                     (get a (add _i (Uint63.of_int (5)))))
-                   (add _j (Uint63.of_int (6)))
-                   (get a (add _i (Uint63.of_int (6))))
-
 (** val blit_aux :
     'a1 'a Parray.t -> Uint63.t -> 'a1 'a Parray.t -> Uint63.t ->
     Uint63.t -> 'a1 'a Parray.t **)
 
 let rec blit_aux a _i b _j _n =
   if ltb _n ni
-  then blit_underN a _i b _j _n
+  then simple_blit_aux a _i b _j _n
   else blit_aux a (add _i ni) (blitN a _i b _j) (add _j ni) (sub _n ni)
 
 (** val blit :
