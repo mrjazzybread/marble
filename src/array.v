@@ -1041,47 +1041,6 @@ Proof.
     isArray. }
 Qed.
 
-(* In order to allow a fair comparison, let's define a third naive [blit],
-   this time using Equations, but without a higher-order function. *)
-
-(* A micro-benchmark (benchmark.v) suggests that, when running inside Rocq
-   using [vm_compute], [equations_blit] can be 75 times slower than
-   [simple_blit]. *)
-
-Section Code.
-Open Scope uint63.
-
-Equations equations_blit a _i b _j _n : array A
-by wf _n ilt :=
-equations_blit a _i b _j _n :=
-  IF _n =? 0 THEN
-    b
-  ELSE
-    do x ← get a _i ;
-    do b ← set b _j x ;
-    equations_blit a (_i + 1) b (_j + 1) (_n - 1).
-
-End Code.
-
-(* [equations_blit] is correct. *)
-
-Lemma wp_equations_blit :
-  ∀Int _n n,
-  blit_spec (λ a _i b _j, equations_blit a _i b _j _n) n.
-Proof.
-  by well-founded induction on _n along ilt.
-  unfold blit_spec. intros. arrays.
-  autorewrite with equations_blit.
-  wp_if.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Step case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IH shadowing: b.
-    isArray. }
-Qed.
-
 (* Now let us define specialized [blit] functions for small known
    sizes. We use natural numbers (and induction on them). They exist
    only at compile time and disappear in the residual code. *)
