@@ -160,8 +160,7 @@ let blit_baseline n : B.benchmark =
 let blit_benchmarks n : B.benchmark list = [
   blit_baseline n;
   (let module M = Make(UnsafeArray) in M.blit_benchmark n M.blit "blit" "UnsafeArray");
-  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.simple_blit "simple_blit" "UnsafeArray");
-  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.equations_blit "equations_blit" "UnsafeArray");
+  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.simple_blit_aux "simple_blit" "UnsafeArray");
   (let module M = Make(DefensiveArray) in M.blit_benchmark n M.blit "blit" "DefensiveArray");
   (let module M = Make(Parray) in M.blit_benchmark n M.blit "blit" "Parray");
 ]
