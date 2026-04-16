@@ -966,7 +966,7 @@ Fixpoint simple_blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
                     (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
 
 Definition simple_blit a _i b _j _n :=
-  simple_blit_aux a _i b _j _n (Wf_ilt _n).
+  simple_blit_aux a _i b _j _n ltac:(tc).
 
 (* A technical lemma: regardless of which proof [ACC] is used,
    [simple_blit_aux a _i b _j _n ACC] always returns the same
@@ -1228,7 +1228,7 @@ Fixpoint blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
                     (Acc_ilt_n_minus_N _n ACC Hlt).
 
 Definition blit a _i b _j _n :=
-  blit_aux a _i b _j _n (Wf_ilt _n).
+  blit_aux a _i b _j _n ltac:(tc).
 
 (* The fixed point equation. *)
 
