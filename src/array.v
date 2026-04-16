@@ -1405,9 +1405,6 @@ Qed.
 
 End Copy.
 
-Ltac wp_copy b :=
-  wp_op wp_copy introducing: b.
-
 (* -------------------------------------------------------------------------- *)
 
 (* Extracting a segment of an array: [sub]. *)
@@ -1438,9 +1435,6 @@ Proof.
 Qed.
 
 End Sub.
-
-Ltac wp_sub b :=
-  wp_op wp_sub introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1483,9 +1477,6 @@ Proof.
 Qed.
 
 End Append.
-
-Ltac wp_append c :=
-  wp_op wp_append introducing: c.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1653,9 +1644,6 @@ Goal
   Break 0%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
-Tactic Notation "wp_find_index" simple_intropattern(out) :=
-  wp_op wp_find_index introducing: out.
-
 (* -------------------------------------------------------------------------- *)
 
 (* [exist]. *)
@@ -1695,9 +1683,6 @@ Proof.
 Qed.
 
 End Exist.
-
-Ltac wp_exist b :=
-  wp_op wp_exist introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1740,9 +1725,6 @@ Proof.
 Qed.
 
 End ForAll.
-
-Ltac wp_for_all b :=
-  wp_op wp_for_all introducing: b.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1839,9 +1821,6 @@ Proof.
 Qed.
 
 End Equal.
-
-Ltac wp_equal b :=
-  wp_op wp_equal introducing: b.
 
 (* As a special case, we recover a simpler specification of [equal]
    in the case where the relation [≡] is equality. *)
@@ -1971,6 +1950,3 @@ Proof.
   (* Completion. *)
   { wp_shadow a. isArray. }
 Qed.
-
-Ltac wp_init a :=
-  wp_op wp_init introducing: a.
