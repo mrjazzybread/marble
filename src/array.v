@@ -764,14 +764,14 @@ Proof.
   (* The loop invariant. *)
   wp_op wp_list_iteri with invariant: (λ history a,
     isArray a (history ++ replicate (len xs - len history) inhabitant)
-  ).
+  ); last wp_shadow a.
   (* Preservation. *)
   { clear dependent _n a. wp_list_iteri_body a _i i x history.
     lengths. ulength in *.
     wp_set.
     isArray. }
   (* Completion. *)
-  { wp_shadow a. isArray. }
+  { isArray. }
 Qed.
 
 End OfList.
@@ -918,7 +918,8 @@ Lemma wp_naive_blit :
 Proof.
   unfold blit_spec, naive_blit. intros. arrays.
   wp_bind_eq.
-  wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i)).
+  wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i));
+  last wp_shadow b.
   (* Initialization. *)
   { isArray. }
   (* Preservation. *)
@@ -932,7 +933,7 @@ Proof.
        is unnecessary. *)
     wp_set. wp_ret. isArray. }
   (* Completion. *)
-  { wp_shadow b. isArray. }
+  { isArray. }
 Qed.
 
 (* We continue with a second naive [blit] function. The algorithm is
@@ -1139,7 +1140,7 @@ Lemma wp_blitN :
 Proof.
   unfold NZ, blit_spec. intros.
   change (blitN a _i b _j) with (static_blit a _i b _j N 0).
-  wp_op wp_static_blit; wp_shadow b; isArray.
+  wp_op wp_static_blit shadowing: b.
 Qed.
 
 (* [static_blit_under] handles all sizes [_n] comprised in the semi-open
@@ -1338,7 +1339,8 @@ Proof.
   (* Case [j ≤ i]. *)
   { wp_bind_eq.
     wp_op wp_iter_up
-      with invariant: (λ k, blit_post xs i xs j (k - i)).
+      with invariant: (λ k, blit_post xs i xs j (k - i));
+    last wp_shadow a.
     (* Initialization. *)
     { isArray. }
     (* Preservation. *)
@@ -1348,11 +1350,12 @@ Proof.
       wp_ret.
       isArray. }
     (* Completion. *)
-    { wp_shadow a. isArray. }}
+    { isArray. }}
   (* Case [i < j]. *)
   { wp_bind_eq.
     wp_op wp_iter_down
-      with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k)).
+      with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
+    last wp_shadow a.
     (* Initialization. *)
     { isArray. }
     (* Preservation. *)
@@ -1362,7 +1365,7 @@ Proof.
       wp_ret.
       isArray. }
     (* Completion. *)
-    { wp_shadow a. isArray. }}
+    { isArray. }}
 Qed.
 
 End Blit.
@@ -1513,7 +1516,7 @@ Proof.
   intros. arrays. unfold fill.
   wp_op wp_iter_up with invariant: (λ k a, isArray a
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
-  ).
+  ); last wp_shadow a.
   (* Initialization. *)
   { isArray. }
   (* Preservation. *)
@@ -1521,7 +1524,7 @@ Proof.
     wp_set.
     wp_ret. isArray. }
   (* Completion. *)
-  { wp_shadow a. isArray. }
+  { isArray. }
 Qed.
 
 End Fill.
@@ -1677,7 +1680,7 @@ Lemma wp_exist a xs :
   ).
 Proof.
   intros. unfold exist.
-  wp_find_index out.
+  wp_op wp_find_index introducing: out.
   destruct out as [ _i |]; unfold find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
@@ -1719,7 +1722,7 @@ Lemma wp_for_all a xs :
   ).
 Proof.
   intros. unfold for_all.
-  wp_find_index out.
+  wp_op wp_find_index introducing: out.
   destruct out as [ _i |]; unfold find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
@@ -1834,7 +1837,7 @@ Lemma wp_equal_equality `{Inhabited A}
   wp (equal eq a b) (λ o, isBool1 o (xs = ys)).
 Proof.
   intros.
-  wp_equal o. eapply isBool1_conseq; [ eauto |].
+  wp_op wp_equal introducing: o. eapply isBool1_conseq; [ eauto |].
   (* [Forall2 (@eq A)] is the same as [@eq (list A)]. *)
   symmetry. eapply list_eq_Forall2.
 Qed.
@@ -1941,12 +1944,12 @@ Proof.
   wp_make a.
   wp_op wp_iter_up with invariant: (λ k a,
     isArray a (listz.init k ψ ++ replicate (n - k) inhabitant)
-  ).
+  ); last wp_shadow a.
   (* The loop body. *)
   { clear dependent a. wp_iter_up_body _k k a.
     wp_op Hf introducing: x.
     wp_set.
     isArray. }
   (* Completion. *)
-  { wp_shadow a. isArray. }
+  { isArray. }
 Qed.
