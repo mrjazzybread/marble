@@ -1135,13 +1135,14 @@ Proof.
     isArray. }
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 (* Moving data within an array: [simple_blit']. *)
 
 (* The source and destination segments may overlap. *)
 
 Local Definition up    (i j : Z) := j ≤ i.
 Local Definition down  (i j : Z) := i ≤ j.
-Local Definition any   (i j : Z) := True.
 
 Definition blit'_spec blit' n (direction : Z → Z → Prop) :=
   ∀ a xs,
@@ -1155,8 +1156,6 @@ Definition blit'_spec blit' n (direction : Z → Z → Prop) :=
 
 Section Code.
 Open Scope uint63.
-
-(* TODO avoid [iter_down] *)
 
 (* [simple_blit'_up] is ALMOST the same, but NOT the same,
    as [simple_blit_aux]. It always reads from the latest
@@ -1176,12 +1175,22 @@ Fixpoint simple_blit'_up_aux a _i _j _n (ACC : Acc ilt _n) :=
 Definition simple_blit'_up a _i _j _n :=
   simple_blit'_up_aux a _i _j _n ltac:(tc).
 
+(* In [simple_blit'_down_aux], the meaning of [_i] and [_j] is not the
+   same as above. They point to the highest slot in the desired interval,
+   instead of the lowest slot. *)
+
+Fixpoint simple_blit'_down_aux a _i _j _n (ACC : Acc ilt _n) :=
+  IFC _n =? 0 THEN
+    λ _, a
+  ELSE
+    λ (Hnz : (_n =? 0) = false),
+    do x ← get a _i ;
+    do a ← set a _j x ;
+    simple_blit'_down_aux a (_i - 1) (_j - 1) (_n - 1)
+                          (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
+
 Definition simple_blit'_down a _i _j _n :=
-  do _delta ← _j - _i ;
-  iter_down _i (_i + _n) a @@ λ _k a,
-  do x ← get a _k ;
-  do a ← set a (_k + _delta) x ;
-  a.
+  simple_blit'_down_aux a (_i + _n - 1) (_j + _n - 1) _n ltac:(tc).
 
 Definition simple_blit' a _i _j _n :=
   if _j =? _i then
@@ -1211,21 +1220,27 @@ Proof.
     isArray. }
 Qed.
 
-Lemma wp_simple_blit'_down :
-  ∀Int _n n,
-  blit'_spec (λ a _i _j, simple_blit'_down a _i _j _n) n down.
+Lemma wp_simple_blit'_down _n ACC :
+  ∀ n, isInt _n n →
+  ∀ a xs,
+  isArray a xs →
+  ∀Int _i i,
+  ∀Int _j j,
+  i ≤ j →
+  valid_seg (i + 1 - n) (i + 1) xs →
+  valid_seg (j + 1 - n) (j + 1) xs →
+  wp (simple_blit'_down_aux a _i _j _n ACC)
+     (blit_post xs (i + 1 - n) xs (j + 1 - n) n).
 Proof.
-  unfold down, blit'_spec, simple_blit'_down. intros. arrays.
-  wp_bind_eq.
-  wp_op wp_iter_down
-    with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
-  last wp_shadow a;
-  try isArray.
-  (* Preservation. *)
-  { clear dependent a. wp_iter_down_body _k k a.
-    wp_get x. subst x.
+  by dependent induction on _n ACC. intros _n ? ?.
+  intros. arrays. simpl.
+  wp_if.
+  (* Base case. *)
+  { wp_ret. isArray. }
+  (* Step case. *)
+  { wp_get x.
     wp_set.
-    wp_ret.
+    wp_op IH shadowing: a.
     isArray. }
 Qed.
 
@@ -1239,16 +1254,17 @@ Lemma wp_simple_blit' :
   valid_seg j (j + n) xs →
   wp (simple_blit' a _i _j _n) (blit_post xs i xs j n).
 Proof.
-  unfold any, blit'_spec, simple_blit'. intros. arrays.
+  unfold simple_blit'. intros. arrays.
   wp_if.
   (* Case [j = i]. *)
   { subst j. wp_ret. isArray. }
   wp_if.
   (* Case [j ≤ i]. *)
   { unfold simple_blit'_up.
-    wp_apply wp_simple_blit'_up. }
+    wp_op wp_simple_blit'_up shadowing: a. }
   (* Case [i < j]. *)
-  { wp_apply wp_simple_blit'_down. unfold down. lia. }
+  { unfold simple_blit'_down.
+    wp_op wp_simple_blit'_down shadowing: a. }
 Qed.
 
 (* TODO temporary definitions, waiting for loop unrolling *)
