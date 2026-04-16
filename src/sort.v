@@ -1043,12 +1043,8 @@ Local Instance Wf_order _j1 _j2 : WellFounded (order _j1 _j2) :=
 
 Local Lemma Acc_order _j1 _j2 _i1 _i2 : Acc (order _j1 _j2) (_i1, _i2).
 Proof. eapply Wf_order. Qed.
-
-(* This hint let us write [ltac:(tc)] where a proof of accessibility
-   is expected. *)
 Local Hint Resolve Acc_order : marble.
 
-(* TODO this will become unused *)
 Local Hint Extern 1 (order _ _ _ _) =>
   unfold order, order1, order2, rigt, igt
 : marble.
@@ -1065,6 +1061,22 @@ Qed.
 Local Lemma order_right {_i1 _i2 _j1 _j2} :
   (_i2 + 1 <? _j2)%uint63 = true →
   order _j1 _j2 (_i1, _i2 + 1)%uint63 (_i1, _i2).
+Proof.
+  eauto with marble.
+Qed.
+
+(* The following lemmas are the proof obligations in [sortto]. *)
+
+Local Lemma split_left {_n} :
+  (_n ≤? 4)%uint63 = false →
+  ilt (_n / 2) _n.
+Proof.
+  eauto with marble.
+Qed.
+
+Local Lemma split_right {_n} :
+  (_n ≤? 4)%uint63 = false →
+  ilt (_n - _n / 2) _n.
 Proof.
   eauto with marble.
 Qed.
@@ -2031,17 +2043,15 @@ Open Scope uint63.
    we use the functions [sortto_segment_X]. The length must be at least 2;
    we do not handle lengths 0 and 1 in this function. *)
 
-Equations sortto' _dst _i _k _n : array A
-by wf _n ilt :=
-sortto' _dst _i _k _n :=
-  IF _n ≤? 4 THEN
+Fixpoint sortto' _dst _i _k _n (ACC : Acc ilt _n) : array A :=
+  IFC _n ≤? 4 THEN λ _,
     if _n =? 4 then
       sortto_segment_4 _dst _i _dst _k
     else if _n =? 3 then
       sortto_segment_3 _dst _i _dst _k
     else
       sortto_segment_2 _dst _i _dst _k
-  ELSE
+  ELSE λ Hn,
     (* Divide the source segment into two halves. The second half may
        be longer by one unit. *)
     let _n1 := _n / 2 in
@@ -2049,11 +2059,13 @@ sortto' _dst _i _k _n :=
     let _dm := _k + _n1 in
     (* Sort the second half of the source segment and move it to the
        second half of the destination segment. *)
-    do _dst ← sortto' _dst (_i + _n1) _dm _n2 ;
+    do _dst ← sortto' _dst (_i + _n1) _dm _n2
+                (Acc_inv ACC (split_right Hn)) ;
     (* Sort the first half of the source segment and move it to the second
        half of the source segment. This requires [n1 ≤ n2]. *)
     let _sm := _i + _n2 in
-    do _dst ← sortto' _dst _i _sm _n1 ;
+    do _dst ← sortto' _dst _i _sm _n1
+                (Acc_inv ACC (split_left Hn)) ;
     (* Merge the sorted halves, moving the data to the destination segment. *)
     do _dst ← optimistic_merge_12 _dst _sm (_sm + _n1) _dm (_dm + _n2) _k ;
     _dst.
@@ -2093,7 +2105,7 @@ Local Ltac elim_sortto'_post dst' :=
 
 (* The specification of [sortto']. *)
 
-Definition sortto'_spec _n :=
+Definition sortto'_spec _n ACC :=
   ∀ _dst dst _i i _k k n,
   isArray _dst dst →
   isInt _i i →
@@ -2104,15 +2116,14 @@ Definition sortto'_spec _n :=
   valid_seg k (k + n) dst →
   disjoint_seg i (i + n) k (k + n) →
   Sorted R' (seg i (i + n) dst) →
-  wp (sortto' _dst _i _k _n)
+  wp (sortto' _dst _i _k _n ACC)
      (sortto'_post dst i k n).
 
-Lemma wp_sortto' : ∀ _n, sortto'_spec _n.
+Lemma wp_sortto' _n ACC : sortto'_spec _n ACC.
 Proof.
-  simple eapply (well_founded_ind Wf_ilt).
-  intros _n IH.
+  by dependent induction on _n ACC. intros _n ? ?.
   unfold sortto'_spec. intros. arrays.
-  autorewrite with sortto'.
+  simpl.
   wp_if.
   (* Case [n ≤ 4]. *)
   { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
@@ -2179,10 +2190,8 @@ Qed.
 Section SortTo.
 Open Scope uint63.
 
-Equations sortto _src _dst _i _k _n : array A * array A
-by wf _n ilt :=
-sortto _src _dst _i _k _n :=
-  IF _n ≤? 4 THEN
+Fixpoint sortto _src _dst _i _k _n (ACC : Acc ilt _n) : array A * array A :=
+  IFC _n ≤? 4 THEN λ _,
     if _n =? 4 then
       do _dst ← sortto_segment_4 _src _i _dst _k ;
       (_src, _dst)
@@ -2192,7 +2201,7 @@ sortto _src _dst _i _k _n :=
     else
       do _dst ← sortto_segment_2 _src _i _dst _k ;
       (_src, _dst)
-  ELSE
+  ELSE λ Hn,
     (* Divide the source segment into two halves. The second half may
        be longer by one unit. *)
     let _n1 := _n / 2 in
@@ -2200,11 +2209,13 @@ sortto _src _dst _i _k _n :=
     let _dm := _k + _n1 in
     (* Sort the second half of the source segment and move it to the
        second half of the destination segment. *)
-    do (_src, _dst) ← sortto _src _dst (_i + _n1) _dm _n2 ;
+    do (_src, _dst) ← sortto _src _dst (_i + _n1) _dm _n2
+                        (Acc_inv ACC (split_right Hn)) ;
     (* Sort the first half of the source segment and move it to the second
        half of the source segment. This requires [n1 ≤ n2]. *)
     let _sm := _i + _n2 in
-    do _src ← sortto' _src _i _sm _n1 ;
+    do _src ← sortto' _src _i _sm _n1
+                (Acc_inv ACC (split_left Hn));
     (* Merge the sorted halves, moving the data to the destination segment. *)
     do _dst ← optimistic_merge_2 _src _sm (_sm + _n1) _dm (_dm + _n2) _dst _k ;
     (_src, _dst).
@@ -2239,7 +2250,7 @@ Local Ltac elim_sortto_post src' dst' :=
 
 (* The specification of [sortto]. *)
 
-Definition sortto_spec _n :=
+Definition sortto_spec _n ACC :=
   ∀ _src src _dst dst _i i _k k n,
   isArray _src src →
   isArray _dst dst →
@@ -2250,15 +2261,14 @@ Definition sortto_spec _n :=
   valid_seg i (i + n) src →
   valid_seg k (k + n) dst →
   Sorted R' (seg i (i + n) src) →
-  wp (sortto _src _dst _i _k _n)
+  wp (sortto _src _dst _i _k _n ACC)
      (sortto_post src dst i k n).
 
-Lemma wp_sortto : ∀ _n, sortto_spec _n.
+Lemma wp_sortto _n ACC : sortto_spec _n ACC.
 Proof.
-  simple eapply (well_founded_ind Wf_ilt).
-  intros _n IH.
+  by dependent induction on _n ACC. intros _n ? ?.
   unfold sortto_spec. intros. arrays.
-  autorewrite with sortto.
+  simpl.
   wp_if.
   (* Case [n ≤ 4]. *)
   { wp_if; [| wp_if; [| assert (n = 2) by lia ]]; subst n.
@@ -2337,10 +2347,10 @@ Definition sort_seg_aux a _i _n :=
     (* Allocate a temporary array that can host the second half. *)
     do t ← make _n2 inhabitant ;
     (* Sort the second half of [a] and move it to [t]. *)
-    do (a, t) ← sortto a t (_i + _n1) 0 _n2 ;
+    do (a, t) ← sortto a t (_i + _n1) 0 _n2 ltac:(tc) ;
     (* Sort the first half of [a] and move it to the second half of [a]. *)
     (* This requires [n1 ≤ n2]. *)
-    do a ← sortto' a _i (_i + _n2) _n1 ;
+    do a ← sortto' a _i (_i + _n2) _n1 ltac:(tc) ;
     (* Merge the sorted halves, moving the data to [a]. *)
     do a ← optimistic_merge_1 (_i + _n2) (_i + _n) t 0 _n2 a _i ;
     a.
