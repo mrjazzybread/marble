@@ -316,7 +316,7 @@ but provide a brief summary:
   the calling convention of the loop itself.
 
 + [`XITER`](iteration.v:Definition XITER) is a variant of `ITER` where the
-  loop is interruptible: the loop body has access to two continuations,
+  loop is exitable: the loop body has access to two continuations,
   `break` and `continue`, allowing it to indicate whether it wishes to
   terminate early or to continue.
 
@@ -350,6 +350,14 @@ We instantiate these general specifications for several common situations:
   when going up, it is the index that will be produced next;
   when going down, it is the index that has been produced last.
 
+It is worth noting that the type of the producer state is not necessarily
+the type of the elements that the consumer receives. Therefore,
+`ITER_Z` *can* be used to describe a loop where the
+consumer receives, say, machine integers
+(as in [`loop.iter_down`](loop.v:Lemma wp_iter_down)),
+or array elements
+(as in [`array.iteri`](array.v:Lemma wp_iteri)).
+
 We provide several tactics that help work with these specifications:
 
 + The tactics
@@ -370,7 +378,7 @@ We provide several tactics that help work with these specifications:
   [`array.iteri`](array.v:Definition iteri).
   This tactic should be used at the beginning of the loop body.
 
-+ In the body of an interruptible loop, the tactics
++ In the body of an exitable loop, the tactics
   [`wp_continue`](iteration.v:Ltac wp_continue) and
   [`wp_break`](iteration.v:Ltac wp_break)
   should be used to reason about calls to the continuations.
@@ -379,7 +387,85 @@ We provide several tactics that help work with these specifications:
 
 ## Iteration on Machine Integers
 
-TODO: `loop.v`
+The file [`loop.v`](../src/loop.v)
+offers several higher-order functions
+that implement loops over an interval of the machine integers.
+
+By convention,
+in loops that go *up*,
+the *current index* is the index that is about to be produced.
+In loops that go *down*,
+the *current index* is the last index that has been produced.
+This is visible in the definition of
+[`ITER_Z`](iteration.v:Definition ITER_Z)
+and in the auxiliary definition
+[`z_step`](iteration.v:Definition z_step)
+
++ [`iter_down _i _k s @@ body`](loop.v:Definition iter_down)
+  applies the loop body `body` to every machine
+  integer from `_k`, excluded, down to `_i`, included. A state of type `S`,
+  whose initial value is `s`, is transformed at each iteration
+  and eventually returned.
+
+  To reason about a call to `iter_down`, use the tactic
+  `wp_op wp_iter_down with invariant: ...`.
+  At the beginning of the loop body, use the tactic
+  [`wp_iter_down_body _j j s`](loop.v:Tactic Notation "wp_iter_down_body").
+  This tactic introduces the current index `_j` and its integer model `j`
+  as well as the current state `s`.
+
++ [`xiter_down _i _k s @@ body`](loop.v:Definition xiter_down)
+  applies the loop body `body` to every machine
+  integer from `_k`, excluded, down to `_i`, included. This is an exitable
+  loop. An invocation of the loop body takes the form `body _j s continue break`.
+  That is, the loop body receives two continuations `continue` and `break`,
+  and must invoke either `continue s` or `break s x`.
+  It is useful when one wishes to scan an interval
+  and stop as soon as something of interest is found.
+
+  To reason about a call to `xiter_down`, use the tactic
+  `wp_op wp_xiter_down with invariant: ...`.
+  At the beginning of the loop body, use the tactic
+  [`wp_xiter_down_body _j j s`](loop.v:Tactic Notation "wp_xiter_down_body").
+
++ [`uxiter_down _i _k @@ body`](loop.v:Definition uxiter_down)
+  is a variant of `xiter_down` without a state `s`.
+  It is useful when one wishes to scan an interval
+  and one does not need to accumulate information during the scan.
+
+  To reason about a call to `uxiter_down`, use the tactic
+  `wp_op wp_uxiter_down with invariant: ...`.
+  At the beginning of the loop body, use the tactic
+  [`wp_xiter_down_body _j j`](loop.v:Tactic Notation "wp_uxiter_down_body").
+
++ [`iter_up _i _k s @@ body`](loop.v:Definition iter_up)
+  applies the loop body `body` to every machine integer
+  from `_i`, included, up to `_k`, excluded.
+
+  To reason about a call to `iter_up`, use the tactic
+  `wp_op wp_iter_up with invariant: ...`.
+  At the beginning of the loop body, use the tactic
+  [`wp_iter_up_body _j j s`](loop.v:Tactic Notation "wp_iter_up_body").
+  This tactic introduces the current index `_j` and its integer model `j`
+  as well as the current state `s`.
+
++ [`xiter_up _i _k s @@ body`](loop.v:Definition xiter_up)
+  applies the loop body `body` to every machine integer
+  from `_i`, included, up to `_k`, excluded.
+  This is an exitable loop.
+
+  To reason about a call to `xiter_up`, use the tactic
+  `wp_op wp_xiter_up with invariant: ...`.
+  At the beginning of the loop body, use the tactic
+  [`wp_xiter_up_body _j j s`](loop.v:Tactic Notation "wp_xiter_up_body").
+
++ [`uxiter_up _i _k @@ body`](loop.v:Definition uxiter_up)
+  is a variant of `xiter_up` without a state `s`.
+
+  To reason about a call to `uxiter_up`, use the tactic
+  `wp_op wp_uxiter_up with invariant: ...`.
+  At the beginning of the loop body, use the tactic
+  [`wp_xiter_up_body _j j`](loop.v:Tactic Notation "wp_uxiter_up_body").
 
 <!--------------------------------------------------------------------------->
 
