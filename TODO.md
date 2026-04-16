@@ -71,12 +71,6 @@
   Test and benchmark to find the best strategy at the leaves
   and the best cutoff value.
 
-## Running inside Rocq
-
-* Find out why `compute` is unable to execute `down_aux`.
-
-* Find out how to enable `native_compute`.
-
 ## Documentation
 
 * Document the public API of every module.
