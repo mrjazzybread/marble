@@ -111,9 +111,17 @@ Fixpoint iter_down_aux _i _k s (ACC : Acc (rilt _i) _k) :=
 
 End Body.
 
+(* This notation hides the accessibility witness [ACC]. *)
+
+Notation iter_down_aux__ body _i _k s :=
+  (iter_down_aux body _i _k s (Acc_rilt _i _k)).
+
+(* This wrapper function handles the case where the interval is empty
+   by returning immediately in that case. *)
+
 Definition iter_down _i _k s body :=
   if _k ≤? _i then s
-  else iter_down_aux body _i _k s ltac:(tc).
+  else iter_down_aux__ body _i _k s.
 
 (* A specification of [iter_down_aux]. *)
 
