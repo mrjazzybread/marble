@@ -33,14 +33,21 @@ Local Ltac wp_intro_hook Hx ::=
    integer from [_k], excluded, down to [_i], included. A state of type [S]
    is carried, whose initial value is [s]. *)
 
-(* [iter_down_aux _i _k s body] applies the loop body [body] to every
-   machine integer from [_k], INCLUDED, down to [_i], included. *)
-
 Section IterDown.
 Context {S : Type}.
 Implicit Types s : S.
-Implicit Types body : int → S → S.
 Open Scope uint63.
+
+(* We make [body] a section variable so that it is lambda-abstracted above
+   [Fixpoint iter_down_aux]. In other words, it is not a parameter of the
+   fixed point itself. This allows us to later easily specialize the code
+   for a specific loop body, just by inlining. *)
+
+Section Body.
+Variable body : int → S → S.
+
+(* [iter_down_aux _i _k s] applies the loop body [body] to every
+   machine integer from [_k], INCLUDED, down to [_i], included. *)
 
 (* We are careful to test the condition [_k =? _i] before decrementing [_k].
    Because our semi-open intervals are closed at the bottom end, we cannot
@@ -59,17 +66,19 @@ Open Scope uint63.
    be unnatural and inconvenient to propose a specification that allows
    underflow to take place. *)
 
-Fixpoint iter_down_aux _i _k s body (ACC : Acc (rilt _i) _k) :=
+Fixpoint iter_down_aux _i _k s (ACC : Acc (rilt _i) _k) :=
   IFC _k =? _i THEN λ _,
     do s ← body _k s ;
     s
   ELSE λ Hki,
     do s ← body _k s ;
-    iter_down_aux _i (_k - 1) s body (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)).
+    iter_down_aux _i (_k - 1) s (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)).
+
+End Body.
 
 Definition iter_down _i _k s body :=
   if _k ≤? _i then s
-  else iter_down_aux _i (_k - 1) s body ltac:(tc).
+  else iter_down_aux body _i (_k - 1) s ltac:(tc).
 
 End IterDown.
 
@@ -86,7 +95,7 @@ Lemma wp_iter_down_aux {S} (body : int → S → S) :
   ∀ ACC,
   ITER_Z i (k + 1) Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_aux _i _k s body ACC) Q).
+    (λ s Q, wp (iter_down_aux body _i _k s ACC) Q).
 Proof.
   intros _i i ? ?.
   by well-founded induction on _k along (rilt _i).
@@ -143,8 +152,10 @@ Context {S A : Type}.
 Implicit Types s : S.
 Open Scope uint63.
 
+Section Body.
+Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
+
 Fixpoint xiter_down_aux _i _k s
-  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W)
   (ACC : Acc (rilt _i) _k)
 : S * outcome A :=
   IFC _k =? _i THEN λ _,
@@ -152,14 +163,16 @@ Fixpoint xiter_down_aux _i _k s
     let break s x := (s, Break x) in
     body _k s continue break
   ELSE λ Hki,
-    let continue s := xiter_down_aux _i (_k - 1) s (@body)
+    let continue s := xiter_down_aux _i (_k - 1) s
                         (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)) in
     let break s x := (s, Break x) in
     body _k s continue break.
 
+End Body.
+
 Definition xiter_down _i _k s body :=
   if _k ≤? _i then (s, Continue)
-  else xiter_down_aux _i (_k - 1) s body ltac:(tc).
+  else xiter_down_aux body _i (_k - 1) s ltac:(tc).
 
 End XIterDown.
 
@@ -173,7 +186,7 @@ Lemma wp_xiter_down_aux {S A}
   ∀ ACC,
   XITER_Z i (k + 1) Down
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_down_aux _i _k s (@body) ACC) Q).
+    (λ s Q, wp (xiter_down_aux (@body) _i _k s ACC) Q).
 Proof.
   intros _i i ? ?.
   by well-founded induction on _k along (rilt _i).
@@ -231,24 +244,26 @@ Section UXIterDown.
 Context {A : Type}.
 Open Scope uint63.
 
-Fixpoint uxiter_down_aux _i _k
-  (body : ∀ {W}, int → (unit → W) → (A → W) → W)
-  (ACC : Acc (rilt _i) _k)
-: outcome A :=
+Section Body.
+Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
+
+Fixpoint uxiter_down_aux _i _k (ACC : Acc (rilt _i) _k) : outcome A :=
   IFC _k =? _i THEN λ _,
     let continue '() := Continue in
     let break x := Break x in
     body _k continue break
   ELSE λ Hki,
-    let continue '() := uxiter_down_aux _i (_k - 1) (@body)
+    let continue '() := uxiter_down_aux _i (_k - 1)
                          (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)) in
     let break x := Break x in
     body _k continue break.
 
+End Body.
+
 Definition uxiter_down _i _k
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
   if _k ≤? _i then Continue
-  else uxiter_down_aux _i (_k - 1) (@body) ltac:(tc).
+  else uxiter_down_aux (@body) _i (_k - 1) ltac:(tc).
 
 End UXIterDown.
 
@@ -262,7 +277,7 @@ Lemma wp_uxiter_down_aux {A}
   ∀ ACC,
   UXITER_Z i (k + 1) Down
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_down_aux _i _k (@body) ACC) Q).
+    (λ Q, wp (uxiter_down_aux (@body) _i _k ACC) Q).
 Proof.
   intros _i i ? ?.
   by well-founded induction on _k along (rilt _i).
@@ -322,8 +337,10 @@ Tactic Notation "wp_uxiter_down_body"
 Section IterUp.
 Context {S : Type}.
 Implicit Types s : S.
-Implicit Types body : int → S → S.
 Open Scope uint63.
+
+Section Body.
+Variable body : int → S → S.
 
 (* We define [iter_up_aux] by well-founded recursion over a proof of
    accessibility of the index [_i]. In the first branch, the fact that
@@ -331,16 +348,18 @@ Open Scope uint63.
    less than [_i], a fact which itself is required by the termination
    argument. *)
 
-Fixpoint iter_up_aux _i _k s body (ACC : Acc igt _i) :=
+Fixpoint iter_up_aux _i _k s (ACC : Acc igt _i) :=
   IFC _i <? _k THEN λ Hik,
     do s ← body _i s ;
-    iter_up_aux (_i + 1) _k s body
+    iter_up_aux (_i + 1) _k s
                 (Acc_inv ACC (igt_n_plus_1 _i _k Hik))
   ELSE λ _,
     s.
 
+End Body.
+
 Definition iter_up _i _k s body :=
-  iter_up_aux _i _k s body ltac:(tc).
+  iter_up_aux body _i _k s ltac:(tc).
 
 (* The proof irrelevance and fixed point lemmas. *)
 
@@ -350,7 +369,7 @@ Definition iter_up _i _k s body :=
    directly, without proving proof irrelevance first. *)
 
 Lemma iter_up_aux_eq _i : ∀ _k s body (ACC : Acc igt _i),
-  iter_up_aux _i _k s body ACC =
+  iter_up_aux body _i _k s ACC =
   if _i <? _k then
     do s ← body _i s ;
     iter_up (_i + 1) _k s body
@@ -420,20 +439,22 @@ Context {S A : Type}.
 Implicit Types s : S.
 Open Scope uint63.
 
-Fixpoint xiter_up_aux _i _k s
-  (body : ∀ {W}, int → S → (S → W) → (S → A → W) → W)
-  (ACC : Acc igt _i)
-: S * outcome A :=
+Section Body.
+Variable body : ∀ {W}, int → S → (S → W) → (S → A → W) → W.
+
+Fixpoint xiter_up_aux _i _k s (ACC : Acc igt _i) : S * outcome A :=
   IFC _i <? _k THEN λ Hik,
-    let continue s := xiter_up_aux (_i + 1) _k s (@body)
+    let continue s := xiter_up_aux (_i + 1) _k s
                         (Acc_inv ACC (igt_n_plus_1 _i _k Hik)) in
     let break s x := (s, Break x) in
     body _i s continue break
   ELSE λ _,
     (s, Continue).
 
+End Body.
+
 Definition xiter_up _i _k s body :=
-  xiter_up_aux _i _k s body ltac:(tc).
+  xiter_up_aux body _i _k s ltac:(tc).
 
 End XiterUp.
 
@@ -455,7 +476,7 @@ Lemma wp_xiter_up_aux {S A}
   ∀ ACC,
   XITER_Z i k Up
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
-    (λ s Q, wp (xiter_up_aux _i _k s (@body) ACC) Q).
+    (λ s Q, wp (xiter_up_aux (@body) _i _k s ACC) Q).
 Proof.
   by well-founded induction on _i along igt.
   intros. XITER. expand_ITER in IH.
@@ -498,20 +519,22 @@ Section UXIterUp.
 Context {A : Type}.
 Open Scope uint63.
 
-Fixpoint uxiter_up_aux _i _k
-  (body : ∀ {W}, int → (unit → W) → (A → W) → W)
-  (ACC : Acc igt _i)
-: outcome A :=
+Section Body.
+Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
+
+Fixpoint uxiter_up_aux _i _k (ACC : Acc igt _i) : outcome A :=
   IFC _i <? _k THEN λ Hik,
-    let continue '() := uxiter_up_aux (_i + 1) _k (@body)
+    let continue '() := uxiter_up_aux (_i + 1) _k
                          (Acc_inv ACC (igt_n_plus_1 _i _k Hik)) in
     let break x := Break x in
     body _i continue break
   ELSE λ _,
     Continue.
 
+End Body.
+
 Definition uxiter_up _i _k body :=
-  uxiter_up_aux _i _k body ltac:(tc).
+  uxiter_up_aux body _i _k ltac:(tc).
 
 End UXIterUp.
 
@@ -524,7 +547,7 @@ Lemma wp_uxiter_up_aux {A}
   ∀ ACC,
   UXITER_Z i k Up
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
-    (λ Q, wp (uxiter_up_aux _i _k (@body) ACC) Q).
+    (λ Q, wp (uxiter_up_aux (@body) _i _k ACC) Q).
 Proof.
   by well-founded induction on _i along igt.
   intros. UXITER. expand_ITER in IH.
