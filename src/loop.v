@@ -5,6 +5,7 @@ From Stdlib Require Export ZifyNat.
 From Stdlib Require Import Uint63 ZifyUint63.
   (* [ZifyUint63] magically makes [lia] more powerful *)
 From Stdlib Require Import Wellfounded.Wellfounded.
+Notation Succ := S. (* avoid name clash *)
 From listz Require Import listz.
 From marble Require Import tactics bool wp iteration int.
 From marble Require Import equations.
@@ -34,7 +35,6 @@ Local Ltac wp_intro_hook Hx ::=
    is carried, whose initial value is [s]. *)
 
 Section IterDown.
-Notation Succ := S. (* avoid name clash *)
 Context {S : Type}.
 Implicit Types s : S.
 Open Scope uint63.
@@ -136,31 +136,33 @@ Qed.
 Section Body.
 Variable body : int → S → S.
 
-Fixpoint static_iter_down_aux _i s (n : nat) :=
+Fixpoint static_iter_down_aux _k s (n : nat) :=
   match n with
   | O =>
       s
   | Succ n =>
-      do s ← body (_i + of_nat n) s ;
-      static_iter_down_aux _i s n
+      do _k ← _k - 1 ;
+      do s ← body _k s ;
+      static_iter_down_aux _k s n
   end.
 
 Lemma wp_static_iter_down_aux :
-  ∀IntU _i i ,
   ∀ n,
-  ITER_Z i (i + Z.of_nat n) Down
+  ∀IntU _k k ,
+  unsigned (k - Z.of_nat n) →
+  ITER_Z (k - Z.of_nat n) k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (static_iter_down_aux _i s n) Q).
+    (λ s Q, wp (static_iter_down_aux _k s n) Q).
 Proof.
-  intros _i i ? ?.
   induction n as [| n]; simpl static_iter_down_aux;
   intros; ITER; z in *; [| expand_ITER in IHn ].
   (* Base case. *)
   { wp_ret. }
-  (* Case [k ≠ i]. *)
-  { wp_op Hbody shadowing: s.
+  (* Step case. *)
+  { wp_bind_eq.
+    wp_op Hbody shadowing: s.
     wp_op IHn shadowing: s.
-    eauto. }
+    tc. }
 Qed.
 
 End Body.
@@ -171,20 +173,23 @@ Definition N  : nat := 8.
 Definition NZ : Z   := Eval compute in Z.of_nat N.
 Definition Ni : int := Eval compute in Uint63.of_nat N.
 
-Definition iter_down_N _i s body :=
-  Eval compute -[bind] in static_iter_down_aux body _i s N.
+Definition iter_down_N _k s body :=
+  Eval compute -[bind] in static_iter_down_aux body _k s N.
 
 (* Print iter_down_N. *)
 
 Lemma wp_iter_down_N (body : int → S → S) :
-  ∀IntU _i i ,
-  ITER_Z i (i + NZ) Down
+  ∀IntU _k k ,
+  unsigned (k - NZ) →
+  ITER_Z (k - NZ) k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_N _i s body) Q).
+    (λ s Q, wp (iter_down_N _k s body) Q).
 Proof.
   intros. ITER.
-  change (iter_down_N _i s body) with (static_iter_down_aux body _i s N).
-  wp_apply wp_static_iter_down_aux.
+  change (iter_down_N _k s body) with (static_iter_down_aux body _k s N).
+  unfold NZ. z.
+  wp_op wp_static_iter_down_aux shadowing: s.
+  tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -208,10 +213,10 @@ Fixpoint iter_down_unrolled_aux _k _n s (ACC : Acc ilt _n) :=
   IFC _n <? Ni THEN λ _,
     iter_down (_k - _n) _k s body
   ELSE λ Hn,
-    do _k ← _k - Ni ;
     do s ← iter_down_N _k s body ;
-    iter_down_unrolled_aux _k (_n - Ni) s
-                           (Acc_inv ACC (ilt_n_minus_N Hn)).
+    do _k ← _k - Ni ;
+    let _n := _n - Ni in
+    iter_down_unrolled_aux _k _n s (Acc_inv ACC (ilt_n_minus_N Hn)).
 
 Lemma wp_iter_down_unrolled_aux :
   ∀IntU _n n ,
@@ -230,12 +235,14 @@ Proof.
   { wp_op wp_iter_down with invariant: inv; last wp_shadow s.
     eauto. }
   (* Case [N ≤ n]. *)
-  { wp_bind_eq.
-    wp_op wp_iter_down_N shadowing: s.
+  { wp_op wp_iter_down_N shadowing: s.
+    { unfold NZ. lia. }
     { clear dependent s.
       wp_body ? j s introducing: (fun _ => z_step; intros _j ?).
+      unfold NZ in *.
       wp_apply Hbody. }
-    subst.
+    subst. unfold NZ in *. z in *.
+    wp_bind_eq.
     wp_op IH shadowing: s.
     tc. }
 Qed.
