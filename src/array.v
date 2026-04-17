@@ -5,6 +5,7 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics bool int iteration loop wp logic.
 Implicit Types _i _j _k _n : int.
+From Corelib Require Derive.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -405,14 +406,31 @@ Implicit Types xs : list A.
 
 (* The code. *)
 
-Definition segment_to_list a _i _k :=
+Definition plain_segment_to_list a _i _k :=
   (* For [_j] ranging from [_k] (excluded) down to [_i],
      with running state [xs], initially empty, *)
-  iter_down _i _k [] @@ λ _j xs,
+  iter_down_unrolled _i _k [] @@ λ _j xs,
   (* Read the [_j]-th element of the array [a], *)
   do x ← a.[_j] ;
   (* and prepend it in front of [xs]. *)
   x :: xs.
+
+Section Specialize.
+Local Opaque Acc_inv ilt Acc_ilt.
+Local Opaque bind.
+
+  Derive segment_to_list
+  in (segment_to_list = plain_segment_to_list)
+  as segment_to_list_eq.
+  Proof.
+    match goal with |- _ = ?rhs => unfold rhs end.
+    unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
+    (* unfold iter_down, iter_down_aux. *)
+    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+  Defined.
+  (* Print segment_to_list. *)
+
+End Specialize.
 
 Definition to_list a :=
   (* Obtain the length [n] of the array. *)
@@ -437,9 +455,11 @@ Lemma wp_segment_to_list a xs :
 Proof.
   (* This proof relies on the lemmas [wp_length] and [wp_get].
      It does not need to unfold the definition of [isArray]. *)
-  intros. arrays. unfold segment_to_list.
+  intros. arrays.
+  rewrite segment_to_list_eq.
+  unfold plain_segment_to_list.
   (* The loop invariant. *)
-  wp_op wp_iter_down with invariant: (λ j ys, ys = seg j k xs);
+  wp_op wp_iter_down_unrolled with invariant: (λ j ys, ys = seg j k xs);
   last wp_intro ?.
   (* Initialization. *)
   { lego. }
