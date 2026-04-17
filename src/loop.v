@@ -176,6 +176,15 @@ Qed.
 (* A "static" variant of [iter_down], where the difference [k - i] is
    statically known and is represented by a natural number [n]. *)
 
+(* We COULD prove Hoare-style specifications (that is, [wp] judgements)
+   about the functions that we define below: [static_iter_down_aux],
+   [iter_down_N], [iter_down_unrolled_aux], and [iter_down_unrolled]. In
+   fact, we did so in an earlier version of this code. However, we now
+   instead prove a stronger result: an unrolled loop is equal to an
+   ordinary loop. This stronger result is more painful to prove, but more
+   useful, as it lets us decide after the fact (possibly at a call site)
+   whether we prefer to use an ordinary loop or an unrolled loop. *)
+
 Section Body.
 Variable body : int → S → S.
 
@@ -189,25 +198,6 @@ Fixpoint static_iter_down_aux _k s (n : nat) :=
       static_iter_down_aux _k s n
   end.
 
-Lemma wp_static_iter_down_aux :
-  ∀ n,
-  ∀IntU _k k ,
-  unsigned (k - Z.of_nat n) →
-  ITER_Z (k - Z.of_nat n) k Down
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (static_iter_down_aux _k s n) Q).
-Proof.
-  induction n as [| n]; simpl static_iter_down_aux;
-  intros; ITER; z in *; [| expand_ITER in IHn ].
-  (* Base case. *)
-  { wp_ret. }
-  (* Step case. *)
-  { wp_bind_eq.
-    wp_op Hbody shadowing: s.
-    wp_op IHn shadowing: s.
-    tc. }
-Qed.
-
 End Body.
 
 (* Specialize [static_iter_down] for [N]. *)
@@ -216,20 +206,6 @@ Definition iter_down_N _k s body :=
   Eval compute -[bind] in static_iter_down_aux body _k s N.
 
 (* Print iter_down_N. *)
-
-Lemma wp_iter_down_N (body : int → S → S) :
-  ∀IntU _k k ,
-  unsigned (k - NZ) →
-  ITER_Z (k - NZ) k Down
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_N _k s body) Q).
-Proof.
-  intros. ITER.
-  change (iter_down_N _k s body) with (static_iter_down_aux body _k s N).
-  unfold NZ. z.
-  wp_op wp_static_iter_down_aux shadowing: s.
-  tc.
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -251,55 +227,151 @@ Fixpoint iter_down_unrolled_aux _k _n s (ACC : Acc ilt _n) :=
     let _n := _n - Ni in
     iter_down_unrolled_aux _k _n s (Acc_inv ACC (ilt_n_minus_N Hn)).
 
-Lemma wp_iter_down_unrolled_aux :
-  ∀IntU _n n ,
-  ∀IntU _k k ,
-  n ≤ k →
-  ∀ ACC,
-  ITER_Z (k - n) k Down
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_unrolled_aux _k _n s ACC) Q).
-Proof.
-  by well-founded induction on _n along ilt.
-  intros. ITER. expand_ITER in IH.
-  intros; destruct ACC; simpl.
-  wp_if; z.
-  (* Case [n < N]. *)
-  { wp_op wp_iter_down with invariant: inv; last wp_shadow s.
-    eauto. }
-  (* Case [N ≤ n]. *)
-  { wp_op wp_iter_down_N shadowing: s.
-    { unfold NZ. lia. }
-    { clear dependent s.
-      wp_body ? j s introducing: (fun _ => z_step; intros _j ?).
-      unfold NZ in *.
-      wp_apply Hbody. }
-    subst. unfold NZ in *. z in *.
-    wp_bind_eq.
-    wp_op IH shadowing: s.
-    tc. }
-Qed.
-
 End Body.
 
 Definition iter_down_unrolled _i _k s body :=
   if _k ≤? _i then s
   else iter_down_unrolled_aux body _k (_k - _i) s ltac:(tc).
 
-Lemma wp_iter_down_unrolled :
-  ∀IntU _i i ,
-  ∀IntU _k k ,
-  ∀ body,
-  ITER_Z i k Down
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_down_unrolled _i _k s body) Q).
+(* -------------------------------------------------------------------------- *)
+
+(* An unrolled loop is equal to an ordinary loop. *)
+
+Section Eq.
+Variable body : int → S → S.
+Open Scope uint63.
+Local Opaque Acc_ilt Acc_rilt.
+Local Opaque bind.
+
+(* First, we prove that [iter_down_aux] satisfies its fixed point equation.
+   This is also a proof irrelevance result: [iter_down_aux] is a constant
+   function with respect to [ACC]. *)
+
+Lemma iter_down_aux_eq _i _k ACC : ∀ s,
+  iter_down_aux body _i _k s ACC =
+  if _k =? _i then
+    s
+  else
+    do s ← body (_k - 1) s ;
+    iter_down_aux__ body _i (_k - 1) s.
 Proof.
-  intros. ITER. unfold iter_down_unrolled.
-  wp_if.
-  { wp_ret. }
-  { z. wp_op wp_iter_down_unrolled_aux shadowing: s. eauto. }
+  by dependent induction on _k ACC. intros _k. intros. simpl.
+  eapply IFC_if; [ reflexivity | intro ].
+  eapply bind_bind_eq; [ reflexivity | intro ]. (* optional *)
+  (* [setoid_rewrite] rewrites both occurrences, thereby showing that
+     [iter_down_aux ...] does not depend on its argument [ACC]. *)
+  setoid_rewrite IH; tc.
 Qed.
 
+(* Then, we prove that [static_iter_down_aux _k s n] is equivalent to
+   an ordinary loop over the interval [k - n, k). We must assume that
+   the natural integer [n] lies in the interval of the machine integers. *)
+
+Lemma static_iter_down_aux_eq n : ∀ _k s,
+  unsigned (Z.of_nat n) →
+  static_iter_down_aux body _k s n =
+  iter_down_aux__ body (_k - of_nat n) _k s.
+Proof.
+  induction n as [| n ]; intros; simpl static_iter_down_aux.
+  { rewrite iter_down_aux_eq. resolve. reflexivity. }
+  { unfold bind at 1.
+    setoid_rewrite IHn; [ clear IHn | lia ].
+    rewrite iter_down_aux_eq. resolve.
+    replace (_k - of_nat (Succ n)) with
+            (_k - 1 - of_nat n) by lia.
+    reflexivity. }
+Qed.
+
+(* Next, we check that [iter_down_unrolled_aux] satisfies its fixed point
+   equation. In this equation, on the fly, we replace [iter_down_N] with
+   an equivalent call to [iter_down_aux]. *)
+
+Lemma iter_down_unrolled_aux_eq _n ACC : ∀ _k s,
+  iter_down_unrolled_aux body _k _n s ACC =
+  if _n <? Ni then
+    iter_down (_k - _n) _k s body
+  else
+    do s ← iter_down_aux__ body (_k - Ni) _k s ;
+    do _k ← _k - Ni ;
+    let _n := _n - Ni in
+    iter_down_unrolled_aux body _k _n s ltac:(tc).
+Proof.
+  by dependent induction on _n ACC. intros _n. intros.
+  simpl iter_down_unrolled_aux.
+  eapply IFC_if; [ reflexivity | intro ].
+  change (iter_down_N _k s body)
+    with (static_iter_down_aux body _k s N).
+  rewrite static_iter_down_aux_eq by (unfold N; lia).
+  setoid_rewrite IH; tc.
+Qed.
+
+(* This lemma expresses the key reason why unrolling a loop is possible:
+   iterating first from [_c] down to [_b], then from [_b] down to [_a],
+   is the same as iterating from [_c] down to [_a]. *)
+
+Lemma iter_down_aux_glue _a _b _c : ∀ s ACC,
+  (to_Z _a ≤ to_Z _b ≤ to_Z _c)%Z →
+  (
+    do s ← iter_down_aux body _b _c s ACC ;
+    iter_down_aux__ body _a _b s
+  )
+  = iter_down_aux__ body _a _c s.
+Proof.
+  by well-founded induction on _c along (rilt _b).
+  intros. rewrite iter_down_aux_eq.
+  destruct (_c =? _b) eqn:?.
+  (* Base case. *)
+  { unfold bind at 1.
+    assert (_c = _b) as -> by lia.
+    reflexivity. }
+  (* Step case. *)
+  { rewrite bind_bind.
+    rewrite iter_down_aux_eq. resolve.
+    eapply bind_bind_eq; [ reflexivity | intro ].
+    eapply IH; tc. }
+Qed.
+
+(* A first loop unrolling result: [iter_down_unrolled_aux] is equivalent
+   to [iter_down_aux] with suitable parameters. *)
+
+Lemma iter_down_unrolled_aux_equiv _n ACC : ∀ _k s,
+  unsigned (to_Z _k - to_Z _n)%Z →
+  iter_down_unrolled_aux body _k _n s ACC =
+  iter_down_aux__ body (_k - _n) _k s.
+Proof.
+  by dependent induction on _n ACC. intros _n. intros.
+  rewrite iter_down_unrolled_aux_eq.
+  destruct (_n <? Ni) eqn:?.
+  (* Base case. *)
+  { destruct (_n =? 0) eqn:?.
+    + unfold iter_down. resolve.
+      rewrite iter_down_aux_eq. resolve.
+      reflexivity.
+    + unfold iter_down. resolve.
+      reflexivity. }
+  (* Step case. *)
+  { unfold bind at 2.
+    setoid_rewrite IH; tc.
+    replace (_k - Ni - (_n - Ni)) with (_k - _n) by lia.
+    eapply iter_down_aux_glue. lia. }
+Qed.
+
+(* The desired loop unrolling result: [iter_down_unrolled] is equivalent
+   to [iter_down] with suitable parameters. *)
+
+Lemma iter_down_unrolled_eq _i _k s :
+  iter_down_unrolled _i _k s body =
+  iter_down _i _k s body.
+Proof.
+  unfold iter_down_unrolled, iter_down.
+  destruct (_k ≤? _i) eqn:?.
+  { reflexivity. }
+  { rewrite iter_down_unrolled_aux_equiv by lia.
+    replace (_k - (_k - _i)) with _i by lia.
+    reflexivity. }
+Qed.
+
+End Eq.
 End IterDown.
 
 (* -------------------------------------------------------------------------- *)
