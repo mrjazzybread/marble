@@ -1,78 +1,74 @@
 # To Do
 
-## Short term
+## Loops
+
+* Offer unrolled variants of `iter_down` and `iter_up`. Use one of them in
+  `array.init` and see whether this makes a difference in performance.
+
+## Arrays
 
 * Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
+  Is the cost at the leaves too high?
 
-* optimistic merge the other way around? (can blit if the two halves
-  are neatly exchanged)
-
-* `sort.v`: try to use uniform conventions regarding names and order
-   of parameters; also, regarding end offset versus length.
-
-* `sort.v`, `compare.v`: we may want to use a Hoare-style spec for
-   the comparison function, instead of `LebSpec`. E.g. think of the
-   case of a comparison function on machine integers.
-
-* In anticipation of vectors, many operations on arrays should also
-  work on array segments.
+* Many operations on arrays should also work on array segments.
   + `segment_find_index`
   + `segment_exist`
   + `segment_for_all`
 
-* Missing functions on arrays:
-  + a variant of `init` with a state
+* Missing functions:
+  + a variant of `init` that carries a state
   + `map`
   + `compare`
 
-* Offer a generic way of obtaining a 2-way
-  comparison out of a 3-way comparison?
+## Vectors
 
-* Once released (Rocq 9.2?), use `autorewrite*`.
+* Refactor the code to offer unboxed vectors, where the components
+  `n` and `a` are separately maintained by the user. Thus the user
+  can call `get` and `set` without allocating new pairs. Use this
+  API in `pqueue`.
 
-* Why is `of_to_Z` an axiom in the stdlib?
+## Rocq Technique
 
-* In `blit`, instead of calling `blit_underN` in the base case, one could just
-  use `simple_blit`. Try it and benchmark `sort`, where this could make a
-  difference.
+* Once released (Rocq 9.2?), use `autorewrite*`
+
+* The proof of `pqueue.move_down` is slow, perhaps due to conversion
+  problems with machine integers.
+
+* Why is `of_to_Z` an axiom in Rocq's stdlib?
 
 # OCaml Extraction
 
-* Set up extraction to use defensive, non-persistent arrays.
-  + Can offer more than just the 4 primitive operations,
-    e.g., `blit` should use OCaml's `Array.blit`.
+* Set up extraction in a clean way (via `dune`?)
+  so that the OCaml extracted code is neatly packaged.
 
-* Also set up extraction to use persistent arrays
-  and to use ordinary (non-persistent, non-defensive) arrays.
-  Benchmark.
+* Offer a choice between unsafe, defensive, and persistent arrays
+  at extraction time.
+
+* Optionally cheat by using unverified versions of `blit`.
 
 * Do Rocq's default persistent arrays have good behavior
   in the presence of a large number of updates?
   One should copy the whole array from time to time
-  so that the cost of reverting to an old version remains bounded.
+  so that the cost of switching between versions remains bounded.
   Test, and implement a new PArray module, if needed.
 
 ## Partial Evaluation / Specialization
 
 * Can the extracted code be improved?
-  + Specialization of higher-order functions (e.g., loops)
+  + Specialize of higher-order functions (e.g., loops)
   + Inline all small functions
   + Inline (not necessarily small) functions where useful
-  + Elimination of useless parameters (e.g., loop-carried state of type `unit`)
+  + Eliminate useless parameters (e.g., loop-carried state of type `unit`)
+  + Unroll loops
   Attempting to derive an improved version by using `Derive`
   and metavariables seems extremely difficult. Exercise:
   first define an improved version of `find_index`,
   then prove that it is equivalent to `find_index`.
   If successful then try to derive this code systematically.
 
-* In insertion sort and/or merge sort, define specialized versions
-  for the base cases where the length is statically known.
-  Test and benchmark to find the best strategy at the leaves
-  and the best cutoff value.
-
 ## Documentation
 
-* Document the public API of every module.
+* Complete the documentation (see TODOs there).
 
 * Explain the linear use discipline.
 
@@ -85,6 +81,7 @@
 * Explain the need to avoid aliasing. Aliasing of arrays is permitted
   only in the case where both arrays are only read.
 
+  Avoiding aliasing is
   necessary in order to ensure that the code always accesses the most
   recent version of the array, with time complexity O(1). If the same
   array was used as the source array and as the destination array in a
@@ -92,19 +89,13 @@
   persistent array is used, or would fail, if a defensive non-persistent
   array is used (in OCaml).
 
-* Explain the various extraction options.
+## Future Applications
 
-## Applications.
-
-* Vectors.
 * Hash sets, hash maps.
 * HAMTs.
 * B-Trees.
 * Chunked sequences.
-* Priority queue within a vector.
 * Doubly-linked list (permutation) inside an array or vector.
+* Union-find inside an array or vector.
 * Depth-first search, SCCs and other graph algorithms.
 * Congruence closure.
-
-* Ephemeral? Persistent? Transient?
-  Can we have efficient transient chunks?
