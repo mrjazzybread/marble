@@ -61,9 +61,6 @@ Open Scope uint63.
 Section Body.
 Variable body : int → S → S.
 
-(* [iter_down_aux _i _k s] applies the loop body [body] to every
-   machine integer from [_k], INCLUDED, down to [_i], included. *)
-
 (* We are careful to test the condition [_k =? _i] before decrementing [_k].
    Because our semi-open intervals are closed at the bottom end, we cannot
    first decrement and then test the condition [_k <? _i]. If [_i] is zero
@@ -83,17 +80,17 @@ Variable body : int → S → S.
 
 Fixpoint iter_down_aux _i _k s (ACC : Acc (rilt _i) _k) :=
   IFC _k =? _i THEN λ _,
-    do s ← body _k s ;
     s
   ELSE λ Hki,
-    do s ← body _k s ;
-    iter_down_aux _i (_k - 1) s (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)).
+    let _k' := _k - 1 in
+    do s ← body _k' s ;
+    iter_down_aux _i _k' s (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)).
 
 End Body.
 
 Definition iter_down _i _k s body :=
   if _k ≤? _i then s
-  else iter_down_aux body _i (_k - 1) s ltac:(tc).
+  else iter_down_aux body _i _k s ltac:(tc).
 
 (* A specification of [iter_down_aux]. *)
 
@@ -106,7 +103,7 @@ Lemma wp_iter_down_aux (body : int → S → S) :
   ∀IntU _k k ,
   i ≤ k →
   ∀ ACC,
-  ITER_Z i (k + 1) Down
+  ITER_Z i k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_down_aux body _i _k s ACC) Q).
 Proof.
@@ -116,8 +113,7 @@ Proof.
   intros; destruct ACC; simpl.
   wp_if; z.
   (* Case [k = i]. *)
-  { wp_op Hbody shadowing: s.
-    wp_ret. }
+  { wp_ret. }
   (* Case [k ≠ i]. *)
   { wp_op Hbody shadowing: s.
     wp_op IH shadowing: s.
