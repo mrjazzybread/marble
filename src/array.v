@@ -1187,10 +1187,25 @@ Implicit Types xs ys : list A.
 Section Code.
 Open Scope uint63.
 
-Definition fill a _i _n x :=
-  iter_up _i (_i + _n) a @@ λ _k a,
+Definition plain_fill a _i _n x :=
+  iter_up_unrolled _i (_i + _n) a @@ λ _k a,
   do a ← set a _k x ;
   a.
+
+Section Specialize.
+Local Opaque Acc_inv igt Acc_igt.
+Local Opaque bind.
+
+  Derive fill in (fill = plain_fill) as fill_eq.
+  Proof.
+    match goal with |- _ = ?rhs => unfold rhs end.
+    unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
+    unfold iter_up, iter_up_aux.
+    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+  Defined.
+  (* Print fill. *)
+
+End Specialize.
 
 End Code.
 
@@ -1205,18 +1220,13 @@ Lemma wp_fill a xs _i i _n n  x :
     (initial_seg i xs ++ replicate n x ++ final_seg (i + n) xs)
   ).
 Proof.
-  intros. arrays. unfold fill.
-  wp_op wp_iter_up with invariant: (λ k a, isArray a
+  intros. arrays. rewrite fill_eq. unfold plain_fill.
+  wp_op wp_iter_up_unrolled with invariant: (λ k a, isArray a
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
-  ); last wp_shadow a.
-  (* Initialization. *)
-  { isArray. }
+  ); last wp_shadow a; try solve [ isArray ].
   (* Preservation. *)
   { clear dependent a. wp_iter_up_body _k k a.
-    wp_set.
-    wp_ret. isArray. }
-  (* Completion. *)
-  { isArray. }
+    wp_set. wp_ret. isArray. }
 Qed.
 
 End Fill.
