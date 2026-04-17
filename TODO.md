@@ -2,10 +2,14 @@
 
 ## Loops
 
-* Offer unrolled variants of `iter_down` and `iter_up`. Use one of them in
-  `array.init` and see whether this makes a difference in performance.
+* Can we prove an equality between `iter_up` and `iter_up_unrolled`?
+  This would allow deciding a posteriori whether unrolling is desired.
 
 ## Arrays
+
+* Optimize `init` by inlining and/or unrolling.
+  Optimize `find_index` by inlining (not unrolling).
+  Optimize `exist` and `forall`.
 
 * Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
   Is the cost at the leaves too high?
