@@ -205,9 +205,9 @@ Qed.
 
 Lemma move_up'_remark n j y xs x :
   heap xs →
-  n = len xs →
-  j = parent n →
   y = xs !!! j →
+  j = parent n →
+  n = len xs →
   x < y →
   dominates_children x j (xs ++ {[y]}).
 Proof.
@@ -431,9 +431,9 @@ Qed.
 
 Lemma quasi_heap_insert_deep x n xs y :
   heap xs →
-  n = len xs →
-  y = xs !!! parent n →
   y ≤ x →
+  y = xs !!! parent n →
+  n = len xs →
   heap (xs ++ {[x]}).
 Proof.
   intros. destructHeap.
@@ -447,10 +447,10 @@ Qed.
 (* Moving an element [y] from slot [parent n] down to slot [n],
    where [n] is the final uninitialized slot, is permitted. *)
 
-Lemma quasi_heap_move_down x n xs y :
+Lemma quasi_heap_move_down n xs y :
   heap xs →
-  n = len xs →
   y = xs !!! parent n →
+  n = len xs →
   heap (xs ++ {[y]}).
 Proof.
   intros. dupHeap. destructHeap. subst y.
@@ -594,7 +594,6 @@ Fixpoint move_up a _i x (ACC : Acc ilt _i) : array A :=
 Definition insert q x :=
   do q ← vector.reserve q ;
   (* Open up the vector, so as to get direct access to the array. *)
-  (* We could use a [borrow] function; instead, we inline it. *)
   let '(_n, a) := q in
   do a ← move_up a (_n - 1) x ltac:(tc) ;
   (* Reconstruct a vector. *)
@@ -607,9 +606,9 @@ End Code.
 (* The effect of [move_up] and [move_down] is to write [x] into slot [i]
    and then permute the elements so that they form a heap again. *)
 
-Definition move_post a xs unoccupied i x :=
+Definition move_post _n a xs i x :=
   ∃ xs',
-  isArray a (xs' ++ unoccupied) ∧
+  isUnboxedVector _n a xs' ∧
   <[i := x]>xs ≃ xs' ∧
   heap xs'.
 
@@ -626,13 +625,13 @@ Local Ltac elim_move_post xs' :=
    writing [y] into slot [i] and calling [move_up a _j x] establishes
    the desired postcondition. *)
 
-Lemma move_post_insert a i y xs unoccupied j x :
-  move_post a (<[i:=y]> xs) unoccupied j x →
+Lemma move_post_insert _n a i y xs j x :
+  move_post _n a (<[i:=y]> xs) j x →
   valid i xs →
   valid j xs →
   i ≠ j →
   y = xs !!! j →
-  move_post a xs unoccupied i x.
+  move_post _n a xs i x.
 Proof.
   intros. elim_move_post xs'. intro_move_post.
   (* A permutation goal. *)
@@ -657,33 +656,33 @@ Qed.
    uninitialized and contains an arbitrary value. To deal with this
    situation, we give a second specification of [move_up] below. *)
 
-Lemma wp_move_up unoccupied _i :
-  ∀ a x ACC xs ,
-  isArray a (xs ++ unoccupied) →
+Lemma wp_move_up _i :
+  ∀ _n a x ACC xs ,
+  isUnboxedVector _n a xs →
   heap xs →
   ∀ i, isInt _i i →
   valid i xs →
   dominates_children x i xs →
-  wp (move_up a _i x ACC) (λ a, move_post a xs unoccupied i x).
+  wp (move_up a _i x ACC) (λ a, move_post _n a xs i x).
 Proof.
   by well-founded induction on _i along ilt.
-  intros. unpack. arrays. lengths. ulength in *.
+  intros. unpack. vectors.
   destruct ACC; simpl.
   wp_if.
   (* Case [i = 0]. *)
-  { wp_set.
+  { wp_op vector.unboxed.wp_set shadowing: a. (* unboxed vector API *)
     intro_move_post; eauto using heap_insert_at_root. }
   (* Case [i ≠ 0]. *)
   set (_j := (_parent _i)).
   set (j := parent i).
   assert (isInt _j j) by tc3.
-  wp_get y.
+  wp_op vector.unboxed.wp_get introducing: y.
   wp_if.
   (* Subcase: [y ≤ x]. *)
-  { wp_set.
+  { wp_op vector.unboxed.wp_set shadowing: a.
     intro_move_post; eauto using heap_insert_deep. }
   (* Subcase: [x < y]. *)
-  { wp_set.
+  { wp_op vector.unboxed.wp_set shadowing: a.
     assert (dominates_children x (parent i) (<[i:=y]> xs))
       by eauto using move_up_remark.
     assert (heap (<[i:=y]> xs))
@@ -694,44 +693,46 @@ Qed.
 
 (* This is the second specification of [move_up]. If [xs] forms a heap
    and if the vector contains the sequence [xs ++ {[dummy]}] then
-   [move_up v _n x] can be called. *)
+   [move_up a _n x] can be called. *)
 
 (* The proof is essentially the same as above, with small changes. *)
 
-Lemma wp_move_up' unoccupied _n n :
+Lemma wp_move_up' :
+  ∀IntU _n n,
   ∀ a x ACC xs dummy ,
-  isArray a (xs ++ {[dummy]} ++ unoccupied) →
+  isUnboxedVector _n a (xs ++ {[dummy]}) →
   heap xs →
-  isInt _n n →
-  n = len xs →
-  wp (move_up a _n x ACC) (λ a,
-    move_post a (xs ++ {[dummy]}) unoccupied n x
+  wp (move_up a (_n - 1) x ACC) (λ a,
+    move_post _n a (xs ++ {[dummy]}) (n - 1) x
   ).
 Proof.
-  intros. arrays. lengths. length in *.
+  intros. vectors. lengths.
+  assert (n = len (xs ++ {[dummy]}))
+    by eauto using vector.unboxed.wp_length'.
+  length in *.
   destruct ACC; simpl.
   wp_if.
   (* Case [n = 0]. *)
-  { subst n. lengths. list.
-    wp_set.
+  { subst n. z in *. lengths. list.
+    wp_op vector.unboxed.wp_set shadowing: a.
     intro_move_post; eauto using singleton_heap. }
   (* Case [n ≠ 0]. *)
-  set (_j := (_parent _n)).
-  set (j := parent n).
+  set (_j := (_parent (_n - 1))).
+  set (j := parent (n - 1)).
   assert (isInt _j j) by tc.
-  wp_get y.
+  wp_op vector.unboxed.wp_get introducing: y.
   wp_if.
   (* Subcase: [y ≤ x]. *)
-  { wp_set.
-    intro_move_post; list; eauto using quasi_heap_insert_deep. }
+  { wp_op vector.unboxed.wp_set shadowing: a.
+    intro_move_post; list; eauto.
+    eapply quasi_heap_insert_deep; tc. }
   (* Subcase: [x < y]. *)
-  { wp_set.
-    assert (heap (xs ++ {[y]}))
-      by eauto using quasi_heap_move_down.
-    assert (dominates_children x j (xs ++ {[y]}))
-      by eauto using move_up'_remark.
-    wp_op (wp_move_up unoccupied) shadowing: a.
-    { isArray. }
+  { wp_op vector.unboxed.wp_set shadowing: a.
+    assert (heap (xs ++ {[y]})).
+    { eapply quasi_heap_move_down; tc. }
+    assert (dominates_children x j (xs ++ {[y]})).
+    { eapply move_up'_remark; tc. }
+    wp_op wp_move_up shadowing: a.
     elim_move_post xs'. intro_move_post.
     (* Permutation. *)
     use_permutation_hypothesis. list.
@@ -747,15 +748,16 @@ Lemma wp_insert q y ys :
   (len ys + 1 ≤ max_array_length)%Z →
   wp (insert q y) (λ q, isQueue q (ys ++ {[y]})).
 Proof.
-  intros. destructQueue xs. lengths. unfold insert.
+  intros. destructQueue xs. vectors. lengths. unfold insert.
   wp_op vector.wp_reserve shadowing: q.
-  (* Because we have inlined [borrow], we must open up the vector. *)
-  destructIsVector. destructIsVectorCap.
+  (* Open up the vector. *)
+  destruct q as (_n & a).
+  assert (isInt _n (len (xs ++ {[x]})))
+    by eauto using vector.unboxed.wp_length.
+  length in *.
   wp_op wp_move_up' shadowing: a. wp_last Hpost.
   elim_move_post xs'. list in Hpost0.
-  introQueue; [ | | eassumption ].
-  (* Vector. *)
-  { lengths. length in *. introIsVector. introIsVectorCap; tc. }
+  introQueue; eauto 1.
   (* Permutation. *)
   { use_permutation_hypothesis. simplify_list_permutation_goal. eauto. }
 Qed.
@@ -849,8 +851,7 @@ Definition extract_nonempty q : A * queue A :=
     (x, q)
   else
     (* Open up the vector, so as to get direct access to the array. *)
-    (* We could use a [borrow] function; instead, we inline it. *)
-    let '(_n, a) := q in
+    let '(_, a) := q in
     (* Read the first element [m] of the vector. *)
     (* This is the root of the tree. *)
     do m ← PArray.get a 0 ;
@@ -871,20 +872,20 @@ End Code.
 
 (* The specification of [move_down]. *)
 
-Lemma wp_move_down unoccupied :
+Lemma wp_move_down :
   ∀IntU _n n,
   ∀IntU _i i,
   ∀ a xs x ACC,
-  isArray a (xs ++ unoccupied) →
+  isUnboxedVector _n a xs →
   n = len xs →
   valid i xs →
   heap xs →
   ((0 < i)%Z → xs !!! parent i < x) →
-  wp (move_down _n a _i x ACC) (λ a, move_post a xs unoccupied i x).
+  wp (move_down _n a _i x ACC) (λ a, move_post _n a xs i x).
 Proof.
   intros _n n ? ?.
   by well-founded induction on _i along (rigt _n).
-  intros. arrays. lengths.
+  intros. vectors. lengths.
   destruct ACC; simpl.
   set (_i1 :=  _left _i).
   set (_i2 := _right _i).
@@ -893,24 +894,24 @@ Proof.
   (* Now examine the code. *)
   wp_if.
   (* Case [n / 2 ≤ i]. There are no children. *)
-  { wp_set.
+  { wp_op vector.unboxed.wp_set shadowing: a.
     intro_move_post.
     eapply heap_insert; eauto 3 with marble order. }
   (* Case [i < n / 2]. There is a left child. *)
   (* assert (rigt _n _i1 _i). { unfold rigt, igt. lia. } TODO *)
   wp_if.
   (* Case [(n - 1) / 2 ≤ i]. There is only a left child. *)
-  { wp_get y.
+  { wp_op vector.unboxed.wp_get introducing: y.
     (* BEGIN COPY 1 *)
     wp_if.
     (* Case [x ≤ y]. [x] can settle here. *)
-    { wp_set.
+    { wp_op vector.unboxed.wp_set shadowing: a.
       intro_move_post.
       assert (dominates_children x i xs).
       { subst y. split; intro; [ eauto 2 | lia ]. }
       eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
-    { wp_set.
+    { wp_op vector.unboxed.wp_set shadowing: a.
       assert (dominates_children y i xs).
       { split; eauto 2 with order lia. }
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
@@ -926,22 +927,22 @@ Proof.
   (* Case [i < (n - 1) / 2]. There are two children. *)
   (* assert (rigt _n _i1 _i) by tc3. *) (* TODO *)
   (* assert (rigt _n _i2 _i) by tc3. *)
-  wp_get y1.
-  wp_get y2.
+  wp_op vector.unboxed.wp_get introducing: y1.
+  wp_op vector.unboxed.wp_get introducing: y2.
   wp_if.
   (* Subcase [y1 ≤ y2]. The left child is smaller. *)
   {
     (* BEGIN COPY 2 *)
     wp_if.
     (* Case [x ≤ y]. [x] can settle here. *)
-    { wp_set.
+    { wp_op vector.unboxed.wp_set shadowing: a.
       intro_move_post.
       assert (dominates_children x i xs).
       { split; eauto 3 with order. }
       eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { set (y := y1).
-      wp_set.
+      wp_op vector.unboxed.wp_set shadowing: a.
       assert (dominates_children y i xs) by (split; eauto 2 with order).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := left i);
@@ -958,14 +959,14 @@ Proof.
     (* BEGIN COPY 3 *)
     wp_if.
     (* Case [x ≤ y]. [x] can settle here. *)
-    { wp_set.
+    { wp_op vector.unboxed.wp_set shadowing: a.
       intro_move_post.
       assert (dominates_children x i xs).
       { split; eauto 4 with order. }
       eapply heap_insert; eauto 3 with order. }
     (* Case [y < x]. [y] moves up; [x] continues to move down. *)
     { set (y := y2).
-      wp_set.
+      wp_op vector.unboxed.wp_set shadowing: a.
       assert (dominates_children y i xs) by (split; eauto 3 with order).
       assert ((0 < i)%Z → xs !!! parent i ≤ y).
       { intro. eapply grandparent_dominates_grandchild with (j := right i);
@@ -1012,16 +1013,16 @@ Proof.
     use_permutation_hypothesis. autorewrite with pairwise.
     reflexivity. }
   (* Case [0 < n]. *)
-  (* Because we have inlined [borrow], we must open up the vector. *)
-  destructIsVector. destructIsVectorCap. lengths.
-  wp_get m.
+  (* Open up the vector. *)
+  destruct q as (_n' & a).
+  (* Its length is still [_n]. *)
+  assert (_n' = _n) as ->
+    by eauto using isInt_inj_1, vector.unboxed.wp_length.
+  wp_op vector.unboxed.wp_get introducing: m.
   wp_op wp_move_down shadowing: a.
   { eapply heap_pop. eassumption. }
   elim_move_post xs'.
   intro_extract_post.
-  (* Vector. *)
-  { introIsVector. introIsVectorCap; [ idtac | eauto | eauto ].
-    lengths. ulength in *. tc. }
   (* Permutation. *)
   { symmetry. eassumption. }
   (* Heap. *)

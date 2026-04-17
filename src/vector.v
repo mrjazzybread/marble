@@ -15,7 +15,9 @@ Local Ltac wp_intro_hook Hx ::=
 
 (* -------------------------------------------------------------------------- *)
 
-(* A vector is a pair of a logical length [_n] and an array [a]. *)
+(* A (boxed) vector is a pair of a logical length [_n] and an array [a]. *)
+
+(* Further down in this file, we also offer an unboxed-vector API. *)
 
 Definition vector (A : Type) :=
   (int * array A)%type.
@@ -44,28 +46,25 @@ Definition isVector `{Inhabited A} (v : vector A) (xs : list A) :=
 
 (* These tactics and lemmas help work with the above propositions. *)
 
-(* They should be local; yet we expose them because [pqueue] opens up
-   the vector abstraction. *)
-
-Ltac introIsVector :=
+Local Ltac introIsVector :=
   unfold isVector; eexists.
 
-Ltac introIsVectorCap :=
+Local Ltac introIsVectorCap :=
   unfold isVectorCap; eexists; list;
   split; [| split ].
 
-Ltac introIsVectorCapWithWitness unoccupied :=
+Local Ltac introIsVectorCapWithWitness unoccupied :=
   unfold isVectorCap; exists unoccupied; list;
   split; [| split ].
 
-Ltac destructIsVector :=
+Local Ltac destructIsVector :=
   match goal with h: isVector ?v _ |- _ =>
     unfold isVector in h;
     let c := fresh "c" in
     destruct h as (c&?)
   end.
 
-Ltac destructVector v :=
+Local Ltac destructVector v :=
   match v with
   | (_, _) => idtac
   | _ =>
@@ -74,14 +73,14 @@ Ltac destructVector v :=
     destruct v as [ _n a ]
   end.
 
-Ltac destructIsVectorCap :=
+Local Ltac destructIsVectorCap :=
   match goal with h: isVectorCap ?v _ _ |- _ =>
     destructVector v;
     let u := fresh "unoccupied" in
     destruct h as (u&?&?&?)
   end.
 
-Ltac destructAndKeepIsVectorCap :=
+Local Ltac destructAndKeepIsVectorCap :=
   match goal with h: isVectorCap ?v _ _ |- _ =>
     destructVector v;
     let u := fresh "unoccupied" in
@@ -89,11 +88,20 @@ Ltac destructAndKeepIsVectorCap :=
     intros (u&?&?&?)
   end.
 
+Local Ltac introIsVectorLayers :=
+  introIsVector; introIsVectorCap.
+
+Local Ltac introIsVectorLayersWithWitness xs :=
+  introIsVector; introIsVectorCapWithWitness xs.
+
+Local Ltac destructIsVectorLayers :=
+  destructIsVector; destructIsVectorCap.
+
 Lemma isVector_bounded_length `{Inhabited A} (a : vector A) xs :
   isVector a xs →
   0 ≤ len xs ≤ max_array_length.
 Proof.
-  intros. destructIsVector. destructIsVectorCap.
+  intros. destructIsVectorLayers.
   arrays. lengths. ulength in *. lia.
 Qed.
 
@@ -164,7 +172,7 @@ Lemma wp_create :
   wp (create ()) (λ v, isVector v []).
 Proof.
   unfold create. wp_make a. wp_ret.
-  introIsVector. introIsVectorCap; tc.
+  introIsVectorLayers; tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -179,8 +187,7 @@ Lemma wp_length v xs :
   isVector v xs →
   wp (length v) (λ _n, isInt _n (len xs)).
 Proof.
-  intros. destructIsVector. destructIsVectorCap.
-  unfold length. wp_ret.
+  intros. destructIsVectorLayers. unfold length. wp_ret.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -197,9 +204,7 @@ Lemma wp_get v xs _i i :
   valid i xs →
   wp (get v _i) (λ x, x = xs !!! i).
 Proof.
-  intros. unfold get.
-  destructIsVector. destructIsVectorCap.
-  wp_get x.
+  intros. unfold get. destructIsVectorLayers. wp_get x.
 Qed.
 
 Definition set v _i x : vector A :=
@@ -213,10 +218,9 @@ Lemma wp_set v xs _i i x :
   valid i xs →
   wp (set v _i x) (λ v', isVector v' (<[i := x]>xs)).
 Proof.
-  intros. unfold set.
-  destructIsVector. destructIsVectorCap.
+  intros. unfold set. destructIsVectorLayers.
   wp_set. wp_ret.
-  introIsVector. introIsVectorCap; eauto.
+  introIsVectorLayers; eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -247,10 +251,9 @@ Lemma wp_pop v xs :
   ).
 Proof.
   intros. unfold pop.
-  destructIsVector. destructIsVectorCap.
+  destructIsVectorLayers.
   wp_get x. wp_ret. split; [ eauto |].
-  introIsVector.
-  introIsVectorCapWithWitness ({[x]} ++ unoccupied); tc.
+  introIsVectorLayersWithWitness ({[x]} ++ unoccupied); tc.
   subst x. isArray.
 Qed.
 
@@ -295,10 +298,9 @@ Local Lemma wp_grow _n a xs _c c :
   ).
 Proof.
   intros. unfold grow.
-  destructIsVector. destructIsVectorCap.
+  destructIsVectorLayers.
   wp_make b. wp_blit. wp_ret.
-  introIsVectorCap; eauto.
-  lia.
+  introIsVectorCap; tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -417,8 +419,7 @@ Proof.
   destructIsVectorCap.
   (* Write; return. *)
   wp_set. wp_ret.
-  introIsVector.
-  introIsVectorCapWithWitness (final_seg 1 unoccupied); tc.
+  introIsVectorLayersWithWitness (final_seg 1 unoccupied); tc.
   isArray.
 Qed.
 
@@ -463,8 +464,7 @@ Proof.
   destructIsVectorCap.
   wp_ret.
   set (x := unoccupied !!! 0). exists x.
-  introIsVector.
-  introIsVectorCapWithWitness (final_seg 1 unoccupied); tc.
+  introIsVectorLayersWithWitness (final_seg 1 unoccupied); tc.
   isArray.
 Qed.
 
@@ -499,7 +499,7 @@ Lemma wp_segment_iteri v xs f :
     (λ s Q, wp (segment_iteri v _i _k s f) Q).
 Proof.
   intros. ITER. unfold segment_iteri.
-  destructIsVector. destructIsVectorCap.
+  destructIsVectorLayers.
   wp_op array.wp_segment_iteri introducing: ?.
   (* The loop body. *)
   { clear dependent s. wp_segment_iteri_body _j j x s. }
@@ -515,7 +515,7 @@ Lemma wp_iteri v xs f :
     (λ s Q, wp (iteri v s f) Q).
 Proof.
   intros. ITER. unfold iteri.
-  destructIsVector. destructIsVectorCap.
+  destructIsVectorLayers.
   wp_op array.wp_segment_iteri introducing: ?.
   (* The loop body. *)
   { clear dependent s. wp_iteri_body _j j x s. }
@@ -550,8 +550,7 @@ Proof.
   intros. unfold steal_array.
   wp_length _n.
   wp_ret.
-  introIsVector.
-  introIsVectorCapWithWitness ([] : list A); tc.
+  introIsVectorLayersWithWitness ([] : list A); tc.
 Qed.
 
 (* The public specification of [of_array]. *)
@@ -564,68 +563,6 @@ Proof.
   wp_op wp_copy introducing: b.
   eapply wp_steal_array.
   eauto.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-(* Borrowing an array from a vector. *)
-
-(* [read_borrow] allows the array to be read by the function [body].
-   The unoccupied space has unspecified length and therefore cannot
-   be accessed. *)
-
-Definition read_borrow {B} v (body : array A → B) : B :=
-  let (_n, a) := v in
-  body a.
-
-(* The public specification of [read_borrow]. *)
-
-Lemma wp_read_borrow {B} v xs body (Q : B → Prop) :
-  isVector v xs →
-  ( ∀ a unoccupied,
-    isArray a (xs ++ unoccupied) →
-    wp (body a) Q
-  ) →
-  wp (read_borrow v body) Q.
-Proof.
-  intros. destructIsVector. destructIsVectorCap. unfold read_borrow.
-  eauto.
-Qed.
-
-(* [read_write_borrow] allows the array to be read and updated by
-   the function [body]. This function must return a pair of its
-   main result and the updated array. The unoccupied space has
-   unspecified length and therefore cannot be accessed. *)
-
-Definition read_write_borrow {B} v (body : array A → B * array A)
-: B * vector A :=
-  let (_n, a) := v in
-  do (b, a) ← body a ;
-  let v := (_n, a) in
-  (b, v).
-
-(* The public specification of [read_write_borrow]. *)
-
-Lemma wp_read_write_borrow {B} v xs body (Q  : B * vector A → Prop) :
-  isVector v xs →
-  ( ∀ a unoccupied,
-    isArray a (xs ++ unoccupied) →
-    wp (body a) (λ '(b, a),
-      ∃ xs',
-      isArray a (xs' ++ unoccupied) ∧
-      len xs = len xs' ∧
-      (∀ v, isVector v xs' → Q (b, v))
-    )
-  ) →
-  wp (read_write_borrow v body) Q.
-Proof.
-  intros ? Hbody.
-  destructIsVector. destructIsVectorCap. unfold read_write_borrow.
-  wp_op Hbody. clear dependent a. intros (b & a).
-  intros (xs' & ? & ? & HQ).
-  wp_ret.
-  eapply HQ. introIsVector.
-  introIsVectorCap; eauto. congruence.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -690,3 +627,108 @@ End OfList.
 
 Ltac wp_of_list v :=
   wp_op wp_of_list introducing: v.
+
+(* -------------------------------------------------------------------------- *)
+
+(* An unboxed-vector API. *)
+
+(* In this API, the two components of a vector, namely [_n] and [a],
+   are not necessarily stored together in a pair. It is up to the user
+   to decide whether and where they are stored. This API allows
+   updating a vector via a primitive array [set] operation, as opposed
+   to a [vector.set] operation, which allocates a new pair. *)
+
+(* The assertion [isUnboxedVector _n a xs] means that [_n] and [a]
+   together form an unboxed vector. *)
+
+Notation isUnboxedVector _n a xs :=
+  (isVector (_n, a) xs).
+
+Module unboxed.
+Section U.
+Context `{Inhabited A}.
+Implicit Types a : array A.
+
+(* The length of an unboxed vector is represented by [_n]. *)
+
+Lemma wp_length _n a xs :
+  isUnboxedVector _n a xs →
+  isInt _n (len xs).
+Proof.
+  intros. destructIsVectorLayers. eauto.
+Qed.
+
+Lemma wp_length' _n a xs :
+  isUnboxedVector _n a xs →
+  ∀ n, isInt _n n → unsigned n →
+  n = len xs.
+Proof.
+  intros. destructIsVectorLayers. eapply isInt_inj_2; tc.
+Qed.
+
+(* An unboxed vector can be converted (at no cost) to an array,
+   and back. This can be understood as "borrowing" the array
+   from the vector and returning it. *)
+
+Lemma wp_borrow_begin :
+  ∀Int _n n,
+  ∀ a xs,
+  isUnboxedVector _n a xs →
+  ∃ unoccupied,
+  isArray a (xs ++ unoccupied).
+Proof.
+  intros. destructIsVectorLayers. eauto.
+Qed.
+
+Lemma wp_borrow_end :
+  ∀Int _n n,
+  ∀ a xs unoccupied,
+  n = len xs →
+  isArray a (xs ++ unoccupied) →
+  isUnboxedVector _n a xs.
+Proof.
+  intros. subst. introIsVectorLayers; eauto.
+Qed.
+
+Lemma wp_get _n a xs :
+  isUnboxedVector _n a xs →
+  ∀Int _i i,
+  valid i xs →
+  wp a.[_i] (λ x, x = xs !!! i).
+Proof.
+  intros. destructIsVectorLayers. wp_get x.
+Qed.
+
+Lemma wp_set _n a xs x :
+  isUnboxedVector _n a xs →
+  ∀Int _i i,
+  valid i xs →
+  wp (a.[_i <- x]) (λ a, isUnboxedVector _n a (<[i := x]>xs)).
+Proof.
+  intros. destructIsVectorLayers. wp_set. introIsVectorLayers; eauto.
+Qed.
+
+Lemma wp_truncate _n a xs :
+  isUnboxedVector _n a xs →
+  ∀Int _i i ,
+  0 ≤ i ≤ len xs →
+  isUnboxedVector _i a (initial_seg i xs).
+Proof.
+  intros. destructIsVectorLayers.
+  introIsVectorLayersWithWitness (final_seg i xs ++ unoccupied); tc.
+  isArray.
+Qed.
+
+Lemma wp_pop _n a xs x :
+  isUnboxedVector _n a (xs ++ {[x]}) →
+  isUnboxedVector (_n - 1)%uint63 a xs.
+Proof.
+  intros.
+  replace xs with (initial_seg (len xs) (xs ++ {[x]})) by lego.
+  eapply wp_truncate; tc.
+  { assert (isInt _n (len (xs ++ {[x]}))) by eauto using wp_length.
+    length in *. replace (len xs) with (len xs + 1 - 1) by lia. tc. }
+Qed.
+
+End U.
+End unboxed.
