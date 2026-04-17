@@ -409,7 +409,7 @@ Implicit Types xs : list A.
 Definition plain_segment_to_list a _i _k :=
   (* For [_j] ranging from [_k] (excluded) down to [_i],
      with running state [xs], initially empty, *)
-  iter_down_unrolled _i _k [] @@ λ _j xs,
+  iter_down _i _k [] @@ λ _j xs,
   (* Read the [_j]-th element of the array [a], *)
   do x ← a.[_j] ;
   (* and prepend it in front of [xs]. *)
@@ -420,13 +420,15 @@ Local Opaque Acc_inv ilt Acc_ilt.
 Local Opaque bind.
 
   Derive segment_to_list
-  in (segment_to_list = plain_segment_to_list)
+  in (∀ a _i _k, segment_to_list a _i _k = plain_segment_to_list a _i _k)
   as segment_to_list_eq.
   Proof.
-    match goal with |- _ = ?rhs => unfold rhs end.
+    intros.
+    unfold plain_segment_to_list.
+    rewrite <- iter_down_unrolled_eq.
     unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
     (* unfold iter_down, iter_down_aux. *)
-    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+    unfold segment_to_list; reflexivity.
   Defined.
   (* Print segment_to_list. *)
 
@@ -459,7 +461,7 @@ Proof.
   rewrite segment_to_list_eq.
   unfold plain_segment_to_list.
   (* The loop invariant. *)
-  wp_op wp_iter_down_unrolled with invariant: (λ j ys, ys = seg j k xs);
+  wp_op wp_iter_down with invariant: (λ j ys, ys = seg j k xs);
   last wp_intro ?.
   (* Initialization. *)
   { lego. }
@@ -497,9 +499,9 @@ Proof.
   (* This proof is based directly on the definition of [isArray a xs].
      It does not rely on the lemmas [wp_length] and [wp_get]. *)
   intros. unfold to_list.
-  rewrite segment_to_list_eq. unfold plain_segment_to_list.
   (* Obtain the length of the array. *)
   eapply wp_bind_eq. intros _n Hn.
+  rewrite segment_to_list_eq. unfold plain_segment_to_list.
   set (n := to_Z _n).
   assert (isInt _n n) by eauto using introIsInt.
   assert (0 ≤ n ≤ max_array_length).
@@ -507,7 +509,7 @@ Proof.
   (* The loop invariant: when the loop index is [j] and the state is
      [ys], the length of [ys] is [n - j] and the elements of [ys] are
      the elements found at indices [j, n) in the array [a]. *)
-  wp_op wp_iter_down_unrolled with invariant: (λ j ys,
+  wp_op wp_iter_down with invariant: (λ j ys,
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_Z o] = ys !!! (o - j)
   ).
@@ -993,7 +995,7 @@ Definition plain_blit'_up a _i _j _n :=
 
 Definition plain_blit'_down a _i _j _n :=
   do _delta ← _j - _i ;
-  iter_down_unrolled _i (_i + _n) a @@ λ _k a,
+  iter_down _i (_i + _n) a @@ λ _k a,
   do x ← get a _k ;
   do a ← set a (_k + _delta) x ;
   a.
@@ -1010,18 +1012,22 @@ Section Specialize.
 Local Opaque Acc_inv ilt igt Acc_ilt Acc_igt.
 Local Opaque bind.
 
-  Derive blit' in (blit' = plain_blit') as blit'_eq.
+  Derive blit' in
+    (∀ a _i _j _n, blit' a _i _j _n = plain_blit' a _i _j _n)
+  as blit'_eq.
   Proof.
-    match goal with |- _ = ?rhs => unfold rhs end.
+    intros.
+    unfold plain_blit'.
     unfold plain_blit'_up, plain_blit'_down.
     unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
     unfold iter_up, iter_up_aux.
+    setoid_rewrite <- iter_down_unrolled_eq.
     unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
     unfold iter_down, iter_down_aux.
-    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+    unfold blit'; reflexivity.
   Defined.
-  (* Print blit'. *)
   (* About 110 lines of code! *)
+  (* Print blit'. *)
 
 End Specialize.
 
@@ -1052,7 +1058,7 @@ Proof.
   (* Case [i < j]. Blit downwards. *)
   { unfold plain_blit'_down.
     wp_bind_eq.
-    wp_op wp_iter_down_unrolled
+    wp_op wp_iter_down
       with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
     last wp_shadow a; try solve [ isArray ].
     (* Preservation. *)
