@@ -496,7 +496,8 @@ Lemma wp_to_list' a :
 Proof.
   (* This proof is based directly on the definition of [isArray a xs].
      It does not rely on the lemmas [wp_length] and [wp_get]. *)
-  intros. unfold to_list, segment_to_list.
+  intros. unfold to_list.
+  rewrite segment_to_list_eq. unfold plain_segment_to_list.
   (* Obtain the length of the array. *)
   eapply wp_bind_eq. intros _n Hn.
   set (n := to_Z _n).
@@ -506,7 +507,7 @@ Proof.
   (* The loop invariant: when the loop index is [j] and the state is
      [ys], the length of [ys] is [n - j] and the elements of [ys] are
      the elements found at indices [j, n) in the array [a]. *)
-  wp_op wp_iter_down with invariant: (λ j ys,
+  wp_op wp_iter_down_unrolled with invariant: (λ j ys,
     len ys = n - j ∧
     ∀ o, j ≤ o < n → a.[of_Z o] = ys !!! (o - j)
   ).
@@ -555,18 +556,25 @@ Section ListIteri.
 Context {S A : Type}.
 Implicit Types s : S.
 Implicit Types xs : list A.
-Implicit Types f : S → int → A → S.
+
+Section Body.
+Variable body : S → int → A → S.
 
 (* The code. *)
 
-Fixpoint list_iteri _i xs s f :=
+Fixpoint list_iteri_aux _i xs s :=
   match xs with
   | [] =>
       s
   | x :: xs =>
-      do s ← f s _i x ;
-      list_iteri (_i + 1) xs s f
+      do s ← body s _i x ;
+      list_iteri_aux (_i + 1) xs s
   end.
+
+End Body.
+
+Definition list_iteri _i xs s body :=
+  list_iteri_aux body _i xs s.
 
 (* Local lemmas about `prefix_of`. *)
 
@@ -586,19 +594,19 @@ Qed.
    state [s]. It does not need to be parameterized with the current
    index [i], because [i] is just the length of the list [history]. *)
 
-Local Lemma wp_list_iteri_aux xs f :
+Local Lemma wp_list_iteri_aux xs body :
   ∀ future history,
   ∀Int _i i,
   xs = history ++ future →
   i = len history →
   ITERI_LIST
     history xs
-    (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
-    (λ s Q, wp (list_iteri _i future s f) Q).
+    (λ x i s Q, ∀ _i, isInt _i i → wp (body s _i x) Q)
+    (λ s Q, wp (list_iteri_aux body _i future s) Q).
 (* Hints for this proof. *)
 Local Hint Resolve prefix_reflexive prefix_app_l prefix_of_app_l : marble.
 Proof.
-  induction future as [| x future ]; simpl list_iteri; intros;
+  induction future as [| x future ]; simpl list_iteri_aux; intros;
   ITER; subst xs; list in *.
   (* Case: the future is empty. *)
   { wp_ret. }
@@ -609,11 +617,11 @@ Qed.
 
 (* The public specification of [list_iteri]. *)
 
-Lemma wp_list_iteri xs s f :
+Lemma wp_list_iteri xs s body :
   ITERI_LIST
     [] xs
-    (λ x i s Q, ∀ _i, isInt _i i → wp (f s _i x) Q)
-    (λ s Q, wp (list_iteri 0 xs s f) Q).
+    (λ x i s Q, ∀ _i, isInt _i i → wp (body s _i x) Q)
+    (λ s Q, wp (list_iteri 0 xs s body) Q).
 Proof.
   unfold ITERI_LIST. eapply wp_list_iteri_aux; tc3.
 Qed.
@@ -885,274 +893,80 @@ Context `{Inhabited A}.
 Implicit Types a b : array A.
 Implicit Types xs ys : list A.
 
+Section Code.
+Open Scope uint63.
+
+(* We compute [_delta] outside of the loop so as to save one addition
+   inside the loop. This is a bit subtle, as the difference [_j - _i]
+   might be negative, yet we compute it as an unsigned integer. This
+   yields the correct result in the end anyway. *)
+
+Definition plain_blit a _i b _j _n :=
+  do _delta ← _j - _i ;
+  iter_up_unrolled _i (_i + _n) b @@ λ _k b,
+  do x ← get a _k ;
+  do b ← set b (_k + _delta) x ;
+  b.
+
+End Code.
+
+Section Specialize.
+Local Opaque Acc_inv igt Acc_igt.
+Local Opaque bind.
+
+  Derive blit in (blit = plain_blit) as blit_eq.
+  Proof.
+    match goal with |- _ = ?rhs => unfold rhs end.
+    unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
+    unfold iter_up, iter_up_aux.
+    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+  Defined.
+  (* Print blit. *)
+
+End Specialize.
+
 (* The postcondition of a [blit] function. *)
 
-Notation blit_post xs i ys j n := (
+Local Notation blit_post xs i ys j n := (
   λ b,
     isArray b
       (initial_seg j ys ++ seg i (i + n) xs ++ final_seg (j + n) ys)
 ).
 
-(* The specification of a a [blit] function. *)
-
-(* We have several [blit] functions, so it is worth isolating this
-   definition. *)
-
-Definition blit_spec (blit : array A → int → array A → int → array A) n :=
-  ∀ a xs b ys,
-  isArray a xs →
-  ∀Int _i i,
-  isArray b ys →
-  ∀Int _j j,
-  valid_seg i (i + n) xs →
-  valid_seg j (j + n) ys →
-  wp (blit a _i b _j) (blit_post xs i ys j n).
-
-(* We begin with a simple [blit] function. Although we could, we do not
-   use the higher-order function [iter_up]. Thus we hope to save the cost
-   of using a higher-order iteration function. *)
-
-(* We use a formulation as a tail-recursive function where the parameter
-   [_n] decreases. This lets us use well-founded recursion over [_n]. *)
-
-(* We use structural induction over a proof of accessibility, as
-   described by Xavier Leroy:
-   https://xavierleroy.org/publi/wf-recursion.pdf *)
-
-(* In the second branch, [Hnz] is a proof that [_n] is nonzero. We use
-   it to build a proof that [_n - 1] is less than [_n]. This proof is
-   used to argue that the recursive call is permitted. *)
-
-Section Code.
-Open Scope uint63.
-
-Fixpoint simple_blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
-  IFC _n =? 0 THEN
-    λ _, b
-  ELSE
-    λ (Hnz : (_n =? 0) = false),
-    do x ← get a _i ;
-    do b ← set b _j x ;
-    simple_blit_aux a (_i + 1) b (_j + 1) (_n - 1)
-                    (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
-
-Definition simple_blit a _i b _j _n :=
-  simple_blit_aux a _i b _j _n ltac:(tc).
-
-(* A technical lemma: regardless of which proof [ACC] is used,
-   [simple_blit_aux a _i b _j _n ACC] always returns the same
-   result, which can be expressed in terms of [simple_blit]. *)
-
-(* This is a proof irrelevance result. *)
-
-(* As an immediate consequence of this lemma, [simple_blit]
-   satisfies the desired fixed point equation. *)
-
-Lemma simple_blit_aux_eq _n ACC :
-  ∀ a _i b _j,
-  simple_blit_aux a _i b _j _n ACC =
-  if _n =? 0 then
-    b
-  else
-    do x ← get a _i ;
-    do b ← set b _j x ;
-    simple_blit a (_i + 1) b (_j + 1) (_n - 1).
-Proof.
-  (* Following Leroy's paper, page 2, top right,
-     we COULD begin the proof like this: *)
-    (* by well-founded induction on _n along ilt. *)
-    (* intros; destruct ACC; simpl. *)
-
-  (* However, such a start is slightly unsatisfactory, insofar as it
-     relies on the fact that the relation [ilt] is well-founded. Yet
-     we should not need to use this fact: [ACC] is a witness of
-     accessibility of [_n], so it should suffice to do (dependent)
-     induction on [ACC]. Here is how (see equations.v): *)
-  by dependent induction on _n ACC.
-  intros. simpl.
-
-  (* Then Xavier's method falls short! [destruct] does not work. *)
-    (* Fail destruct (_n =? 0). *)
-  (* The reason why [destruct] works in Xavier's setting is that he
-     uses a non-dependent [match] construct to analyse the result of
-     the test [Nat.eq_dec b 0], whose type is [{b = 0} + {b <> 0}];
-     whereas we use a dependent [if] construct to analyze the result
-     of the test [n =? 0], whose type is [bool]. *)
-
-  (* Our work-around is to apply the lemma [IFC_if]. *)
-  eapply IFC_if; [ eauto | intro ].
-
-  (* There remains to prove the equality of the second branches.
-     Fortunately, the induction hypothesis [IH] is exactly what
-     is needed for this purpose. [setoid_rewrite] is used to
-     rewrite in the continuation of [bind]. *)
-  setoid_rewrite IH; [| tc2 | tc2 ].
-  (* The goal is now trivial. *)
-  reflexivity.
-Qed.
-
-End Code.
-
-(* [simple_blit] is correct. *)
-
-Lemma wp_simple_blit :
-  ∀Int _n n,
-  blit_spec (λ a _i b _j, simple_blit a _i b _j _n) n.
-Proof.
-  by well-founded induction on _n along ilt.
-  unfold blit_spec, simple_blit. intros. arrays.
-  rewrite simple_blit_aux_eq.
-  wp_if.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Step case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IH shadowing: b.
-    isArray. }
-Qed.
-
-(* Now let us define specialized [blit] functions for small known
-   sizes. We use natural numbers (and induction on them). They exist
-   only at compile time and disappear in the residual code. *)
-
-(* Using two compile-time parameters [n] and [o] lets us compute
-   all offsets at compile-time; thus we avoid creating chains of
-   additions of the form [_i + 1 + 1 ... + 1]. *)
-
-Fixpoint static_blit a _i b _j (n : nat) (o : nat) :=
-  match n with
-  | O =>
-      b
-  | S n =>
-      do x ← get a (_i + of_nat o) ;
-      do b ← set b (_j + of_nat o) x ;
-      static_blit a _i b _j n (S o)
-  end.
-
-(* [static_blit] is correct. *)
-
-(* We cannot use [blit_spec] in this statement because of the offset [o].
-   The indices [i] and [j] must be adjusted using [o]. *)
-
-Lemma wp_static_blit :
-  ∀ n o a xs b ys,
-  isArray a xs →
-  ∀Int _i i,
-  let i := i + Z.of_nat o in
-  isArray b ys →
-  ∀Int _j j,
-  let j := j + Z.of_nat o in
-  valid_seg i (i + Z.of_nat n) xs →
-  valid_seg j (j + Z.of_nat n) ys →
-  wp (static_blit a _i b _j n o) (blit_post xs i ys j (Z.of_nat n)).
-Proof.
-  induction n as [| n ]; simpl static_blit; intros.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Inductive case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IHn shadowing: b; wp_last Hpost; z. (* a bit slow *)
-    (* Clean up Hpost. *)
-    subst x. rewrite singleton_is_seg in Hpost by lia.
-    isArray. (* a bit slow *) }
-Qed.
-
-(* The parameter [N] is the unrolling factor of the main loop in [blit]. *)
-
-(* When executing OCaml code, with OCaml's native mutable arrays, loop
-   unrolling yields the following performance gains. With [N = 4], the
-   performance increase is approximately 33%. With [N = 8], it moves up
-   to 40%. Using [N = 16] does not yield further gains. *)
-
-Definition N  : nat := 8.
-Definition NZ : Z   := Eval compute in Z.of_nat N.
-Definition Ni : int := Eval compute in Uint63.of_nat N.
-
-(* Generate [blitN], which deals just with size [N]. *)
-
-Definition blitN a _i b _j :=
-  Eval compute -[bind] in static_blit a _i b _j N 0.
-
-(* Disable Notation "t .[ i ]" := (get t i). *)
-(* Disable Notation "t .[ i <- a ]" := (set t i a). *)
-(* Print blitN. *)
-
-(* [blitN] is correct. *)
-
-Lemma wp_blitN :
-  blit_spec blitN NZ.
-Proof.
-  unfold NZ, blit_spec. intros.
-  change (blitN a _i b _j) with (static_blit a _i b _j N 0).
-  wp_op wp_static_blit shadowing: b.
-Qed.
-
-(* The termination argument for [blit_aux]. *)
-
-Lemma ilt_n_minus_N {_n} :
-  (_n <? Ni)%uint63 = false →
-  ilt (_n - Ni)%uint63 _n.
-Proof.
-  unfold Ni. eauto with marble.
-Qed.
-
-(* We are now ready to define an optimized [blit],
-   where the main loop is unrolled [N] times. *)
-
-Section Code.
-Open Scope uint63.
-
-Fixpoint blit_aux a _i b _j _n (ACC : Acc ilt _n) :=
-  IFC _n <? Ni THEN
-    λ _, simple_blit a _i b _j _n
-  ELSE
-    λ (Hlt : (_n <? Ni) = false),
-    do b ← blitN a _i b _j ;
-    blit_aux a (_i + Ni) b (_j + Ni) (_n - Ni)
-             (Acc_inv ACC (ilt_n_minus_N Hlt)).
-
-Definition blit a _i b _j _n :=
-  blit_aux a _i b _j _n ltac:(tc).
-
-(* The fixed point equation. *)
-
-Lemma blit_aux_eq _n :
-  ∀ a _i b _j ACC,
-  blit_aux a _i b _j _n ACC =
-  if _n <? Ni then
-    simple_blit a _i b _j _n
-  else
-    do b ← blitN a _i b _j ;
-    blit a (_i + Ni) b (_j + Ni) (_n - Ni).
-Proof.
-  by well-founded induction on _n along ilt.
-  intros; destruct ACC; simpl. unfold Ni.
-  eapply IFC_if; [ eauto |]. intro.
-  setoid_rewrite IH; tc2.
-Qed.
-
-End Code.
-
 (* [blit] is correct. *)
 
 Lemma wp_blit :
+  ∀ a xs,
+  isArray a xs →
+  ∀Int _i i,
+  ∀ b ys,
+  isArray b ys →
+  ∀Int _j j,
   ∀Int _n n,
-  blit_spec (λ a _i b _j, blit a _i b _j _n) n.
+  valid_seg i (i + n) xs →
+  valid_seg j (j + n) ys →
+  wp (blit a _i b _j _n) (blit_post xs i ys j n).
 Proof.
-  by well-founded induction on _n along ilt.
-  unfold blit_spec, blit. intros. arrays. lengths.
-  rewrite blit_aux_eq.
-  wp_if.
-  (* Base case. *)
-  { wp_op wp_simple_blit shadowing: b. }
-  (* Step case. *)
-  { unfold Ni.
-    wp_op wp_blitN; unfold NZ; tc; last wp_shadow b.
-    wp_op IH shadowing: b. wp_last Hb.
-    seg_seg in Hb.
-    isArray. }
+  intros. arrays. lengths.
+  rewrite blit_eq. unfold plain_blit.
+  wp_bind_eq.
+  wp_op wp_iter_up_unrolled
+    with invariant: (λ k, blit_post xs i ys j (k - i));
+  last wp_shadow b.
+  (* Initialization. *)
+  { isArray. }
+  (* Preservation. *)
+  { clear dependent b. wp_iter_up_body _k k b.
+    wp_get x. subst x.
+    (* The use of unsigned arithmetic in the computation of [_delta]
+       does not cause any problem. Once upon a time, this proof used
+       natural numbers as the logical model of machine integers; then
+       we had to explicitly say [rewrite int.add_sub_exch] in order to
+       pretend that we never created a negative number. Now this trick
+       is unnecessary. *)
+    wp_set. wp_ret. isArray. }
+  (* Completion. *)
+  { isArray. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
