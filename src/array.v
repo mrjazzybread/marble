@@ -973,302 +973,59 @@ Qed.
 
 (* Moving data within an array: [blit']. *)
 
-(* The amount of effort that I have expended on [blit] and [blit']
-   is really unreasonable, but oh, well. *)
-
 (* The source and destination segments may overlap. *)
 
-Local Definition up    (i j : Z) := j ≤ i.
-Local Definition down  (i j : Z) := i ≤ j.
-
-Definition blit'_spec blit' n (direction : Z → Z → Prop) :=
-  ∀ a xs,
-  isArray a xs →
-  ∀Int _i i,
-  ∀Int _j j,
-  valid_seg i (i + n) xs →
-  valid_seg j (j + n) xs →
-  direction i j →
-  wp (blit' a _i _j) (blit_post xs i xs j n).
+(* [blit'] LOOKS LIKE, but IS NOT, a special case of [blit]. It always
+   reads from the latest version of the array, which is both the
+   source and the destination array. If one attempted to use a call of
+   the form [blit a _i a _j _n] then one would read from outdated
+   versions of the array [a]. *)
 
 Section Code.
 Open Scope uint63.
 
-(* [simple_blit'_up] is ALMOST the same, but NOT the same,
-   as [simple_blit_aux]. It always reads from the latest
-   version of the array, which is both the source and the
-   destination array. *)
+Definition plain_blit'_up a _i _j _n :=
+  do _delta ← _j - _i ;
+  iter_up_unrolled _i (_i + _n) a @@ λ _k a,
+  do x ← get a _k ;
+  do a ← set a (_k + _delta) x ;
+  a.
 
-Fixpoint simple_blit'_up_aux a _i _j _n (ACC : Acc ilt _n) :=
-  IFC _n =? 0 THEN
-    λ _, a
-  ELSE
-    λ (Hnz : (_n =? 0) = false),
-    do x ← get a _i ;
-    do a ← set a _j x ;
-    simple_blit'_up_aux a (_i + 1) (_j + 1) (_n - 1)
-                        (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
+Definition plain_blit'_down a _i _j _n :=
+  do _delta ← _j - _i ;
+  iter_down_unrolled _i (_i + _n) a @@ λ _k a,
+  do x ← get a _k ;
+  do a ← set a (_k + _delta) x ;
+  a.
 
-Definition simple_blit'_up a _i _j _n :=
-  simple_blit'_up_aux a _i _j _n ltac:(tc).
-
-(* In [simple_blit'_down_aux], the meaning of [_i] and [_j] is not the
-   same as above. They point to the highest slot in the desired interval,
-   instead of the lowest slot. *)
-
-Fixpoint simple_blit'_down_aux a _i _j _n (ACC : Acc ilt _n) :=
-  IFC _n =? 0 THEN
-    λ _, a
-  ELSE
-    λ (Hnz : (_n =? 0) = false),
-    do x ← get a _i ;
-    do a ← set a _j x ;
-    simple_blit'_down_aux a (_i - 1) (_j - 1) (_n - 1)
-                          (Acc_inv ACC (ilt_n_minus_1 _n Hnz)).
-
-Definition simple_blit'_down a _i _j _n :=
-  simple_blit'_down_aux a (_i + _n - 1) (_j + _n - 1) _n ltac:(tc).
-
-Definition simple_blit' a _i _j _n :=
-  if _j =? _i then
-    a
-  else if _j <=? _i then
-    simple_blit'_up a _i _j _n
+Definition plain_blit' a _i _j _n :=
+  if _j <=? _i then
+    plain_blit'_up a _i _j _n
   else
-    simple_blit'_down a _i _j _n.
+    plain_blit'_down a _i _j _n.
 
 End Code.
 
-(* Correctness of [simple_blit']. *)
+Section Specialize.
+Local Opaque Acc_inv ilt igt Acc_ilt Acc_igt.
+Local Opaque bind.
 
-Lemma wp_simple_blit'_up _n ACC :
-  ∀ n, isInt _n n →
-  blit'_spec (λ a _i _j, simple_blit'_up_aux a _i _j _n ACC) n up.
-Proof.
-  by dependent induction on _n ACC. intros _n ? ?.
-  unfold up in *. unfold blit'_spec. intros. arrays. simpl.
-  wp_if.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Step case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IH shadowing: a.
-    isArray. }
-Qed.
+  Derive blit' in (blit' = plain_blit') as blit'_eq.
+  Proof.
+    match goal with |- _ = ?rhs => unfold rhs end.
+    unfold plain_blit'_up, plain_blit'_down.
+    unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
+    unfold iter_up, iter_up_aux.
+    unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
+    unfold iter_down, iter_down_aux.
+    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+  Defined.
+  (* Print blit'. *)
+  (* About 110 lines of code! *)
 
-Lemma wp_simple_blit'_down _n ACC :
-  ∀ n, isInt _n n →
-  ∀ a xs,
-  isArray a xs →
-  ∀Int _i i,
-  ∀Int _j j,
-  i ≤ j →
-  valid_seg (i + 1 - n) (i + 1) xs →
-  valid_seg (j + 1 - n) (j + 1) xs →
-  wp (simple_blit'_down_aux a _i _j _n ACC)
-     (blit_post xs (i + 1 - n) xs (j + 1 - n) n).
-Proof.
-  by dependent induction on _n ACC. intros _n ? ?.
-  intros. arrays. simpl.
-  wp_if.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Step case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IH shadowing: a.
-    isArray. }
-Qed.
+End Specialize.
 
-Lemma wp_simple_blit' :
-  ∀ a xs,
-  isArray a xs →
-  ∀Int _i i,
-  ∀Int _j j,
-  ∀Int _n n,
-  valid_seg i (i + n) xs →
-  valid_seg j (j + n) xs →
-  wp (simple_blit' a _i _j _n) (blit_post xs i xs j n).
-Proof.
-  unfold simple_blit'. intros. arrays.
-  wp_if.
-  (* Case [j = i]. *)
-  { subst j. wp_ret. isArray. }
-  wp_if.
-  (* Case [j ≤ i]. *)
-  { unfold simple_blit'_up.
-    wp_op wp_simple_blit'_up shadowing: a. }
-  (* Case [i < j]. *)
-  { unfold simple_blit'_down.
-    wp_op wp_simple_blit'_down shadowing: a. }
-Qed.
-
-(* Specialize [blit'] for known sizes. *)
-
-Fixpoint static_blit'_up a _i _j (n : nat) (o : nat) :=
-  match n with
-  | O =>
-      a
-  | S n =>
-      do x ← get a (_i + of_nat o) ;
-      do a ← set a (_j + of_nat o) x ;
-      static_blit'_up a _i _j n (S o)
-  end.
-
-Fixpoint static_blit'_down a _i _j (n : nat) :=
-  match n with
-  | O =>
-      a
-  | S n =>
-      do x ← get a (_i + of_nat n) ;
-      do a ← set a (_j + of_nat n) x ;
-      static_blit'_down a _i _j n
-  end.
-
-Definition blit'N_up a _i _j :=
-  Eval compute -[bind] in static_blit'_up a _i _j N 0.
-
-Definition blit'N_down a _i _j :=
-  Eval compute -[bind] in static_blit'_down a _i _j N.
-
-Lemma wp_static_blit'_up :
-  ∀ n o a xs,
-  isArray a xs →
-  ∀Int _i i,
-  let i := i + Z.of_nat o in
-  ∀Int _j j,
-  let j := j + Z.of_nat o in
-  valid_seg i (i + Z.of_nat n) xs →
-  valid_seg j (j + Z.of_nat n) xs →
-  j ≤ i →
-  wp (static_blit'_up a _i _j n o) (blit_post xs i xs j (Z.of_nat n)).
-Proof.
-  induction n as [| n ]; simpl static_blit'_up; intros.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Inductive case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IHn shadowing: a; wp_last Hpost; z.
-    subst x. isArray. }
-Qed.
-
-Lemma wp_static_blit'_down :
-  ∀ n a xs,
-  isArray a xs →
-  ∀Int _i i,
-  ∀Int _j j,
-  valid_seg i (i + Z.of_nat n) xs →
-  valid_seg j (j + Z.of_nat n) xs →
-  i ≤ j →
-  wp (static_blit'_down a _i _j n) (blit_post xs i xs j (Z.of_nat n)).
-Proof.
-  induction n as [| n ]; simpl static_blit'_down; intros.
-  (* Base case. *)
-  { wp_ret. isArray. }
-  (* Inductive case. *)
-  { wp_get x.
-    wp_set.
-    wp_op IHn shadowing: a; wp_last Hpost; z.
-    subst x. isArray. }
-Qed.
-
-Lemma wp_blit'N_up :
-  blit'_spec blit'N_up NZ up.
-Proof.
-  unfold NZ, blit'_spec. intros.
-  change (blit'N_up a _i _j) with (static_blit'_up a _i _j N 0).
-  wp_op wp_static_blit'_up shadowing: a.
-Qed.
-
-Lemma wp_blit'N_down :
-  blit'_spec blit'N_down NZ down.
-Proof.
-  unfold NZ, blit'_spec. intros.
-  change (blit'N_down a _i _j) with (static_blit'_down a _i _j N).
-  wp_op wp_static_blit'_down shadowing: a.
-Qed.
-
-(* Loop unrolling. *)
-
-Section Code.
-Open Scope uint63.
-
-Fixpoint blit'_up_aux a _i _j _n (ACC : Acc ilt _n) :=
-  IFC _n <? Ni THEN
-    λ _, simple_blit'_up a _i _j _n
-  ELSE
-    λ (Hlt : (_n <? Ni) = false),
-    do a ← blit'N_up a _i _j ;
-    blit'_up_aux a (_i + Ni) (_j + Ni) (_n - Ni)
-                 (Acc_inv ACC (ilt_n_minus_N Hlt)).
-
-Definition blit'_up a _i _j _n :=
-  blit'_up_aux a _i _j _n ltac:(tc).
-
-Fixpoint blit'_down_aux a _i _j _n (ACC : Acc ilt _n) :=
-  IFC _n <? Ni THEN
-    λ _, simple_blit'_down a _i _j _n
-  ELSE
-    λ (Hlt : (_n <? Ni) = false),
-    do a ← blit'N_down a (_i + _n - Ni) (_j + _n - Ni) ;
-    blit'_down_aux a _i _j (_n - Ni)
-                   (Acc_inv ACC (ilt_n_minus_N Hlt)).
-
-Definition blit'_down a _i _j _n :=
-  blit'_down_aux a _i _j _n ltac:(tc).
-
-Definition blit' a _i _j _n :=
-  if _j =? _i then
-    a
-  else if _j <=? _i then
-    blit'_up a _i _j _n
-  else
-    blit'_down a _i _j _n.
-
-End Code.
-
-(* Correctness. *)
-
-Lemma wp_blit'_up _n ACC :
-  ∀ n, isInt _n n →
-  blit'_spec (λ a _i _j, blit'_up_aux a _i _j _n ACC) n up.
-Proof.
-  by dependent induction on _n ACC. intros _n ? ?.
-  unfold up in *. unfold blit'_spec. intros. arrays. lengths.
-  simpl.
-  wp_if.
-  (* Base case. *)
-  { unfold simple_blit'_up.
-    wp_op wp_simple_blit'_up shadowing: a. }
-  (* Step case. *)
-  { unfold Ni.
-    wp_op wp_blit'N_up; unfold NZ; tc; last wp_shadow a.
-    wp_op IH shadowing: a. wp_last Ha.
-    seg_seg in Ha.
-    isArray. }
-Qed.
-
-Lemma wp_blit'_down _n ACC :
-  ∀ n, isInt _n n →
-  blit'_spec (λ a _i _j, blit'_down_aux a _i _j _n ACC) n down.
-Proof.
-  by dependent induction on _n ACC. intros _n ? ?.
-  unfold down in *. unfold blit'_spec. intros. arrays. lengths.
-  simpl.
-  wp_if.
-  (* Base case. *)
-  { unfold simple_blit'_down.
-    wp_op wp_simple_blit'_down shadowing: a. }
-  (* Step case. *)
-  { unfold Ni.
-    wp_op wp_blit'N_down; unfold NZ; tc; last wp_shadow a.
-    { unfold down. lia. }
-    wp_op IH shadowing: a. wp_last Ha.
-    seg_seg in Ha.
-    isArray. }
-Qed.
+(* [blit'] is correct. *)
 
 Lemma wp_blit' :
   ∀ a xs,
@@ -1280,17 +1037,27 @@ Lemma wp_blit' :
   valid_seg j (j + n) xs →
   wp (blit' a _i _j _n) (blit_post xs i xs j n).
 Proof.
-  unfold blit'. intros. arrays.
+  intros. arrays. lengths.
+  rewrite blit'_eq. unfold plain_blit'.
   wp_if.
-  (* Case [j = i]. *)
-  { subst j. wp_ret. isArray. }
-  wp_if.
-  (* Case [j ≤ i]. *)
-  { unfold blit'_up.
-    wp_op wp_blit'_up shadowing: a. }
-  (* Case [i < j]. *)
-  { unfold blit'_down.
-    wp_op wp_blit'_down shadowing: a. unfold down. lia. }
+  (* Case [j ≤ i]. Blit upwards. *)
+  { unfold plain_blit'_up.
+    wp_bind_eq.
+    wp_op wp_iter_up_unrolled
+      with invariant: (λ k, blit_post xs i xs j (k - i));
+    last wp_shadow a; try solve [ isArray ].
+    (* Preservation. *)
+    { clear dependent a. wp_iter_up_body _k k a.
+      wp_get x. subst x. wp_set. wp_ret. isArray. }}
+  (* Case [i < j]. Blit downwards. *)
+  { unfold plain_blit'_down.
+    wp_bind_eq.
+    wp_op wp_iter_down_unrolled
+      with invariant: (λ k, blit_post xs k xs (k + j - i) (i + n - k));
+    last wp_shadow a; try solve [ isArray ].
+    (* Preservation. *)
+    { clear dependent a. wp_iter_down_body _k k a.
+      wp_get x. subst x. wp_set. wp_ret. isArray. }}
 Qed.
 
 End Blit.

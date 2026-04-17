@@ -33,9 +33,9 @@ Time Definition b : array int :=
   init n data.
     (* same as [a] *)
 
-Time Definition time_simple_blit :=
+Time Definition time_plain_blit :=
   Eval vm_compute in
-  (simple_blit a 0 b 0 n)%uint63.
+  (plain_blit a 0 b 0 n)%uint63.
     (* 0.06 seconds : 830,000 elements/second *)
 
 Time Definition b' : array int :=
