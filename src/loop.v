@@ -34,6 +34,7 @@ Local Ltac wp_intro_hook Hx ::=
    is carried, whose initial value is [s]. *)
 
 Section IterDown.
+Notation Succ := S. (* avoid name clash *)
 Context {S : Type}.
 Implicit Types s : S.
 Open Scope uint63.
@@ -80,15 +81,13 @@ Definition iter_down _i _k s body :=
   if _k ≤? _i then s
   else iter_down_aux body _i (_k - 1) s ltac:(tc).
 
-End IterDown.
-
 (* A specification of [iter_down_aux]. *)
 
 (* This specification requires [i ≤ k]: that is, the top index [k] must
    be greater than or equal to the bottom index [i]. This hypothesis is
    natural: it is required to guarantee that no underflow takes place. *)
 
-Lemma wp_iter_down_aux {S} (body : int → S → S) :
+Lemma wp_iter_down_aux (body : int → S → S) :
   ∀IntU _i i ,
   ∀IntU _k k ,
   i ≤ k →
@@ -113,7 +112,7 @@ Qed.
 
 (* A specification of [iter_down]. *)
 
-Lemma wp_iter_down {S} (body : int → S → S) :
+Lemma wp_iter_down (body : int → S → S) :
   ∀IntU _i i ,
   ∀IntU _k k ,
   ITER_Z i k Down
@@ -128,6 +127,143 @@ Proof.
   { wp_op wp_iter_down_aux shadowing: s.
     eauto. }
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A "static" variant of [iter_down], where the difference [k - i] is
+   statically known and is represented by a natural number [n]. *)
+
+Section Body.
+Variable body : int → S → S.
+
+Fixpoint static_iter_down_aux _i s (n : nat) :=
+  match n with
+  | O =>
+      s
+  | Succ n =>
+      do s ← body (_i + of_nat n) s ;
+      static_iter_down_aux _i s n
+  end.
+
+Lemma wp_static_iter_down_aux :
+  ∀IntU _i i ,
+  ∀ n,
+  ITER_Z i (i + Z.of_nat n) Down
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (static_iter_down_aux _i s n) Q).
+Proof.
+  intros _i i ? ?.
+  induction n as [| n]; simpl static_iter_down_aux;
+  intros; ITER; z in *; [| expand_ITER in IHn ].
+  (* Base case. *)
+  { wp_ret. }
+  (* Case [k ≠ i]. *)
+  { wp_op Hbody shadowing: s.
+    wp_op IHn shadowing: s.
+    eauto. }
+Qed.
+
+End Body.
+
+(* [static_iter_down] can be specialized for a fixed [N], say 8. *)
+
+Definition N  : nat := 8.
+Definition NZ : Z   := Eval compute in Z.of_nat N.
+Definition Ni : int := Eval compute in Uint63.of_nat N.
+
+Definition iter_down_N _i s body :=
+  Eval compute -[bind] in static_iter_down_aux body _i s N.
+
+(* Print iter_down_N. *)
+
+Lemma wp_iter_down_N (body : int → S → S) :
+  ∀IntU _i i ,
+  ITER_Z i (i + NZ) Down
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_down_N _i s body) Q).
+Proof.
+  intros. ITER.
+  change (iter_down_N _i s body) with (static_iter_down_aux body _i s N).
+  wp_apply wp_static_iter_down_aux.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* An unrolled variant of [iter_down]. *)
+
+(* [iter_down_N] is used at each iteration, so the cost of the
+   comparison and conditional jump is paid only once in [N]
+   iterations. *)
+
+Section Body.
+Variable body : int → S → S.
+
+Lemma ilt_n_minus_N {_n} :
+  (_n <? Ni)%uint63 = false →
+  ilt (_n - Ni)%uint63 _n.
+Proof. unfold Ni. eauto with marble. Qed.
+Local Hint Resolve ilt_n_minus_N : marble.
+
+Fixpoint iter_down_unrolled_aux _k _n s (ACC : Acc ilt _n) :=
+  IFC _n <? Ni THEN λ _,
+    iter_down (_k - _n) _k s body
+  ELSE λ Hn,
+    do _k ← _k - Ni ;
+    do s ← iter_down_N _k s body ;
+    iter_down_unrolled_aux _k (_n - Ni) s
+                           (Acc_inv ACC (ilt_n_minus_N Hn)).
+
+Lemma wp_iter_down_unrolled_aux :
+  ∀IntU _n n ,
+  ∀IntU _k k ,
+  n ≤ k →
+  ∀ ACC,
+  ITER_Z (k - n) k Down
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_down_unrolled_aux _k _n s ACC) Q).
+Proof.
+  by well-founded induction on _n along ilt.
+  intros. ITER. expand_ITER in IH.
+  intros; destruct ACC; simpl.
+  wp_if; z.
+  (* Case [n < N]. *)
+  { wp_op wp_iter_down with invariant: inv; last wp_shadow s.
+    eauto. }
+  (* Case [N ≤ n]. *)
+  { wp_bind_eq.
+    wp_op wp_iter_down_N shadowing: s.
+    { clear dependent s.
+      wp_body ? j s introducing: (fun _ => z_step; intros _j ?).
+      wp_apply Hbody. }
+    subst.
+    wp_op IH shadowing: s.
+    tc. }
+Qed.
+
+End Body.
+
+Definition iter_down_unrolled _i _k s body :=
+  if _k ≤? _i then s
+  else iter_down_unrolled_aux body _k (_k - _i) s ltac:(tc).
+
+Lemma wp_iter_down_unrolled :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  i ≤ k →
+  ∀ s body,
+  ITER_Z i k Down
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_down_unrolled _i _k s body) Q).
+Proof.
+  intros. ITER. unfold iter_down_unrolled.
+  wp_if.
+  { wp_ret. }
+  { z. wp_op wp_iter_down_unrolled_aux shadowing: s. eauto. }
+Qed.
+
+End IterDown.
+
+(* -------------------------------------------------------------------------- *)
 
 (* The tactic [wp_iter_down_body _j j s] should be used upon entry into
    the loop body. It introduces the index [_j] and its integer model [j]
