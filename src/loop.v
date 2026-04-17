@@ -28,6 +28,29 @@ Local Ltac wp_intro_hook Hx ::=
 
 (* -------------------------------------------------------------------------- *)
 
+(* This tactic uses [lia] to resolve comparisons among machine integers. *)
+
+(* We do not need it when we reason in Hoare style, because the reasoning
+   rule [wp_if] and the type class [isBool] do the job then. We do need it
+   when we perform equational reasoning. We use this style of reasoning
+   to prove that an unrolled loop is equal to an ordinary loop. *)
+
+Local Ltac resolve :=
+  match goal with
+  | |- context[(?lhs =? ?rhs)%uint63] =>
+    first [
+      replace (lhs =? rhs)%uint63 with true by lia
+    | replace (lhs =? rhs)%uint63 with false by lia
+    ]
+  | |- context[(?lhs ≤? ?rhs)%uint63] =>
+    first [
+      replace (lhs ≤? rhs)%uint63 with true by lia
+    | replace (lhs ≤? rhs)%uint63 with false by lia
+    ]
+  end.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [N] is the unrolling factor that we use in our unrolled loops. *)
 
 Definition N  : nat := 8.
