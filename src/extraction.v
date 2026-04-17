@@ -13,11 +13,15 @@ Extraction Inline did_break did_not_break.
 
 From marble Require Import int loop.
 Extraction Inline iter_down iter_up xiter_up uxiter_up.
+Extraction Inline Ni.
+Extraction Inline iter_down_unrolled iter_up_unrolled.
+Extraction Inline iter_down_N iter_upN.
 
 (* Recursive Extraction iter_down iter_up xiter_up uxiter_up. *)
 
 From Stdlib Require ExtrOCamlPArray.
 From marble Require Import array.
+Extraction Inline to_list.
 Extraction Inline Ni.
 Extraction Inline simple_blit blitN.
 Extraction Inline simple_blit'_up simple_blit'_down.
