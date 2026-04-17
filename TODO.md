@@ -38,6 +38,11 @@
 
 # OCaml Extraction
 
+* Why does extraction sometimes change `if` to `match`?
+
+* Are `let` constructs preserved through extraction?
+  Check that no serious computation is duplicated.
+
 * Set up extraction in a clean way (via `dune`?)
   so that the OCaml extracted code is neatly packaged.
 
