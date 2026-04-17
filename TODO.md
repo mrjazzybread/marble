@@ -99,3 +99,8 @@
 * Union-find inside an array or vector.
 * Depth-first search, SCCs and other graph algorithms.
 * Congruence closure.
+
+## Open Ideas
+
+* Would it be possible, and make sense, to axiomatize the OCaml library
+  `Store` in Rocq?
