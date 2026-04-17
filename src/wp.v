@@ -73,6 +73,14 @@ Proof.
   repeat intro. unfold bind. congruence.
 Qed.
 
+Lemma bind_bind_eq {A B} (a1 a2 : A) (k1 k2 : A → B) :
+  a1 = a2 →
+  (∀ a, k1 a = k2 a) →
+  bind a1 k1 = bind a2 k2.
+Proof.
+  intros. unfold bind. congruence.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [wp] has type [A → WP A]. *)
