@@ -28,6 +28,20 @@ Local Ltac wp_intro_hook Hx ::=
 
 (* -------------------------------------------------------------------------- *)
 
+(* [N] is the unrolling factor that we use in our unrolled loops. *)
+
+Definition N  : nat := 8.
+Definition NZ : Z   := Eval compute in Z.of_nat N.
+Definition Ni : int := Eval compute in Uint63.of_nat N.
+
+Lemma ilt_n_minus_N {_n} :
+  (_n <? Ni)%uint63 = false →
+  ilt (_n - Ni)%uint63 _n.
+Proof. unfold Ni. eauto with marble. Qed.
+Local Hint Resolve ilt_n_minus_N : marble.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A loop, counting down, using machine integers. *)
 
 (* [iter_down _i _k s body] applies the loop body [body] to every machine
@@ -167,11 +181,7 @@ Qed.
 
 End Body.
 
-(* [static_iter_down] can be specialized for a fixed [N], say 8. *)
-
-Definition N  : nat := 8.
-Definition NZ : Z   := Eval compute in Z.of_nat N.
-Definition Ni : int := Eval compute in Uint63.of_nat N.
+(* Specialize [static_iter_down] for [N]. *)
 
 Definition iter_down_N _k s body :=
   Eval compute -[bind] in static_iter_down_aux body _k s N.
@@ -202,12 +212,6 @@ Qed.
 
 Section Body.
 Variable body : int → S → S.
-
-Lemma ilt_n_minus_N {_n} :
-  (_n <? Ni)%uint63 = false →
-  ilt (_n - Ni)%uint63 _n.
-Proof. unfold Ni. eauto with marble. Qed.
-Local Hint Resolve ilt_n_minus_N : marble.
 
 Fixpoint iter_down_unrolled_aux _k _n s (ACC : Acc ilt _n) :=
   IFC _n <? Ni THEN λ _,
@@ -256,8 +260,7 @@ Definition iter_down_unrolled _i _k s body :=
 Lemma wp_iter_down_unrolled :
   ∀IntU _i i ,
   ∀IntU _k k ,
-  i ≤ k →
-  ∀ s body,
+  ∀ body,
   ITER_Z i k Down
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_down_unrolled _i _k s body) Q).
@@ -536,11 +539,9 @@ Proof.
   unfold iter_up. eapply iter_up_aux_eq.
 Qed.
 
-End IterUp.
-
 (* A specification of [iter_up]. *)
 
-Lemma wp_iter_up {S} (body : int → S → S) :
+Lemma wp_iter_up (body : int → S → S) :
   ∀IntU _i i ,
   ∀IntU _k k ,
   ITER_Z i k Up
@@ -558,6 +559,133 @@ Proof.
   (* Case [¬ i < k]. *)
   { wp_ret. }
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A "static" variant of [iter_up], where the difference [k - i] is
+   statically known and is represented by a natural number [n]. *)
+
+Section Body.
+Variable body : int → S → S.
+
+Fixpoint static_iter_up_aux _i s (n : nat) :=
+  match n with
+  | O =>
+      s
+  | Succ n =>
+      do s ← body _i s ;
+      do _i ← _i + 1 ;
+      static_iter_up_aux _i s n
+  end.
+
+Lemma wp_static_iter_up_aux :
+  ∀ n,
+  ∀IntU _i i ,
+  unsigned (i + Z.of_nat n) →
+  ITER_Z i (i + Z.of_nat n) Up
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (static_iter_up_aux _i s n) Q).
+Proof.
+  induction n as [| n]; simpl static_iter_up_aux;
+  intros; ITER; z in *; [| expand_ITER in IHn ].
+  (* Base case. *)
+  { wp_ret. }
+  (* Step case. *)
+  { wp_op Hbody shadowing: s.
+    wp_bind_eq.
+    wp_op IHn shadowing: s.
+    tc. }
+Qed.
+
+End Body.
+
+(* Specialize [static_iter_up] for [N]. *)
+
+Definition iter_up_N _i s body :=
+  Eval compute -[bind] in static_iter_up_aux body _i s N.
+
+(* Print iter_up_N. *)
+
+Lemma wp_iter_up_N (body : int → S → S) :
+  ∀IntU _i i ,
+  unsigned (i + NZ) →
+  ITER_Z i (i + NZ) Up
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_up_N _i s body) Q).
+Proof.
+  intros. ITER.
+  change (iter_up_N _i s body) with (static_iter_up_aux body _i s N).
+  wp_apply wp_static_iter_up_aux.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* An unrolled variant of [iter_up]. *)
+
+Section Body.
+Variable body : int → S → S.
+
+Fixpoint iter_up_unrolled_aux _i _n s (ACC : Acc ilt _n) :=
+  IFC _n <? Ni THEN λ _,
+    iter_up _i (_i + _n) s body
+  ELSE λ Hn,
+    do s ← iter_up_N _i s body ;
+    do _i ← _i + Ni ;
+    let _n := _n - Ni in
+    iter_up_unrolled_aux _i _n s (Acc_inv ACC (ilt_n_minus_N Hn)).
+
+Lemma wp_iter_up_unrolled_aux :
+  ∀IntU _n n ,
+  ∀IntU _i i ,
+  unsigned (i + n) →
+  ∀ ACC,
+  ITER_Z i (i + n) Up
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_up_unrolled_aux _i _n s ACC) Q).
+Proof.
+  by well-founded induction on _n along ilt.
+  intros. ITER. expand_ITER in IH.
+  intros; destruct ACC; simpl.
+  wp_if; z.
+  (* Case [n < N]. *)
+  { wp_op wp_iter_up with invariant: inv; last wp_shadow s.
+    eauto. }
+  (* Case [N ≤ n]. *)
+  { wp_op wp_iter_up_N shadowing: s.
+    { unfold NZ. lia. }
+    { clear dependent s.
+      wp_body ? j s introducing: (fun _ => z_step; intros _j ?).
+      unfold NZ in *.
+      wp_apply Hbody. }
+    subst. unfold NZ in *. z in *.
+    wp_bind_eq.
+    wp_op IH shadowing: s.
+    tc. }
+Qed.
+
+End Body.
+
+Definition iter_up_unrolled _i _k s body :=
+  if _k ≤? _i then s
+  else iter_up_unrolled_aux body _i (_k - _i) s ltac:(tc).
+
+Lemma wp_iter_up_unrolled :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  ∀ s body,
+  ITER_Z i k Up
+    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
+    (λ s Q, wp (iter_up_unrolled _i _k s body) Q).
+Proof.
+  intros. ITER. unfold iter_up_unrolled.
+  wp_if.
+  { wp_ret. }
+  { z. wp_op wp_iter_up_unrolled_aux shadowing: s. eauto. }
+Qed.
+
+End IterUp.
+
+(* -------------------------------------------------------------------------- *)
 
 (* The tactic [wp_iter_up_body _j j s] should be used upon entry into the
    loop body. It introduces the index [_j] and its integer model [j] as well
