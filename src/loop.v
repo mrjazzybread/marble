@@ -94,12 +94,12 @@ Variable body : int → S → S.
    order to prove that [_k - 1] is less than [_k], a fact which itself is
    required by the termination argument. *)
 
-(* It is worth noting that the termination argument does not need the
-   hypothesis [φ _i ≤ φ _k]. Even in the absence of this hypothesis,
-   termination is guaranteed, thanks to underflow. This said, later on, when
-   we give a specification of [iter_down_aux], we assume [i ≤ k]. It would
-   be unnatural and inconvenient to propose a specification that allows
-   underflow to take place. *)
+(* The termination argument does not need the hypothesis [φ _i ≤ φ _k].
+   Even in the absence of this hypothesis, termination is guaranteed,
+   thanks to underflow. This said, later on, when we give a specification
+   of [iter_down_aux], we assume [i ≤ k]. It would be unnatural and
+   inconvenient to propose a specification that allows underflow to take
+   place. *)
 
 Fixpoint iter_down_aux _i _k s (ACC : Acc (rilt _i) _k) :=
   IFC _k =? _i THEN λ _,
@@ -144,6 +144,8 @@ Proof.
 Qed.
 
 (* A specification of [iter_down]. *)
+
+(* Here, [i ≤ k] is not required. The interval may be empty. *)
 
 Lemma wp_iter_down (body : int → S → S) :
   ∀IntU _i i ,
