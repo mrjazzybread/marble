@@ -150,6 +150,24 @@ Local Ltac Zify.zify_pre_hook ::=
 
 (* -------------------------------------------------------------------------- *)
 
+(* The tactic [isVector] is applicable when the goal is [isVector v ys]
+   and there is a hypothesis [isVector v xs]. The goal is then reduced
+   to the equation [xs = ys], and this equation is simplified. If the
+   equation is trivial then the goal is solved. *)
+
+Ltac isVector :=
+  match goal with
+  | h: isVector ?v ?xs |- isVector ?v ?ys =>
+    cut (xs = ys); [
+      let Heq := fresh in intro Heq; try rewrite <- Heq; exact h
+    | clear h;
+      try subst; (* this can help *)
+      lego
+    ]
+  end.
+
+(* -------------------------------------------------------------------------- *)
+
 Section Operations.
 Context `{Inhabited A}.
 Implicit Types v : vector A.
