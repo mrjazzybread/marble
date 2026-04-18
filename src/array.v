@@ -423,8 +423,7 @@ Local Opaque bind.
     in (∀ a _i _k, segment_to_list a _i _k = plain_segment_to_list a _i _k)
     as segment_to_list_eq.
   Proof.
-    intros.
-    unfold plain_segment_to_list.
+    intros. unfold plain_segment_to_list.
     rewrite <- iter_down_unrolled_eq.
     unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
     (* unfold iter_down, iter_down_aux. *)
@@ -1014,8 +1013,7 @@ Local Opaque bind.
     (∀ a _i _j _n, blit' a _i _j _n = plain_blit' a _i _j _n)
     as blit'_eq.
   Proof.
-    intros.
-    unfold plain_blit'.
+    intros. unfold plain_blit'.
     unfold plain_blit'_up, plain_blit'_down.
     setoid_rewrite <- iter_up_unrolled_eq.
     setoid_rewrite <- iter_down_unrolled_eq.
@@ -1259,11 +1257,21 @@ Variable f : A → bool.
 
 (* The code. *)
 
-Definition find_index a : outcome int :=
+Definition plain_find_index a : outcome int :=
   do _n ← length a ;
   uxiter_up 0 _n @@ λ _ _i continue break,
   do x ← get a _i ;
   if f x then break _i else continue ().
+
+Derive find_index
+  in (∀ a, find_index a = plain_find_index a)
+  as find_index_eq.
+Proof.
+  intros. unfold plain_find_index.
+  unfold uxiter_up, uxiter_up_aux.
+  unfold find_index; reflexivity.
+Defined.
+(* Print find_index. *)
 
 (* Our hypothesis about [f]. *)
 
@@ -1299,7 +1307,7 @@ Lemma wp_find_index a xs :
   isArray a xs →
   wp (find_index a) (λ out, find_index_inv xs (len xs) out).
 Proof.
-  intros. arrays. unfold find_index.
+  intros. arrays. rewrite find_index_eq. unfold plain_find_index.
   wp_length _n.
   wp_op wp_uxiter_up with invariant: (find_index_inv xs);
   unfold find_index_inv in *.
