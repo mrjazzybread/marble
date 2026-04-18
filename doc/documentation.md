@@ -735,14 +735,10 @@ goal has the form `isArray a ys` and there is a hypothesis of the form
 this equation is simplified. If the equation is found to be true then
 the goal is solved.
 
-The tactic [`arrays`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L159) looks for every hypothesis
-of the form `isArray a xs` and introduces the fact `representable (len
-xs)`. This fact is then possibly simplified (in cases where `xs` is a
-complex expression). Using this tactic at the beginning of a proof can
-help preserve information about the fact that certain integers are
-representable. This information could otherwise become obscured as the
-array `a` is updated and the assertion `isArray a _` becomes more
-complex.
+The tactic [`arrays`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L159) looks for every hypothesis of the
+form `isArray a xs` and introduces the fact `0 ≤ len xs ≤ max_array_length`.
+It also introduces the fact `unsigned max_array_length`. It is often useful
+to invoke this tactic once at the beginning of a proof.
 
 <!--------------------------------------------------------------------------->
 
@@ -825,7 +821,135 @@ users of the library.
 
 ## Vectors
 
-TODO: `vector.v`
+A vector is an abstract data structure, which holds a sequence of elements.
+Internally, these elements are stored in an array, whose length is possibly
+greater than the length of the sequence. The length of this array is usually
+known as the vector's *capacity*, whereas the length of the sequence is
+known as the vector's *length*.
+
+The proposition [`isVector v xs`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L56)
+means that the vector `v` stores the sequence `xs`.
+
+### Operations
+
++ [`create()`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L194)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L201))
+  creates a new empty vector.
+
++ [`length v`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L212)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L216))
+  returns the length of the vector `v`.
+
++ [`get v _i`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L227)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L231))
+  returns the element found at index `_i` in the vector `v`.
+
++ [`set v _i x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L240)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L245))
+  writes the element `x` at index `_i` in the vector `v`.
+  An updated vector is returned.
+
+  To reason about this operation, use the tactic
+  `wp_op vector.wp_set shadowing: v`,
+  where `v` is the name of the vector.
+
++ [`pop v`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L265)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L275);
+   [alternate specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L292))
+  extracts and the last element of the vector `v`.
+  The vector must be nonempty.
+  A pair of the extracted element
+  and an updated vector is returned.
+
++ [`push v x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L414)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L429))
+  appends the element `x` onto the vector `v`.
+  An updated vector is returned.
+
+  To reason about this operation, use the tactic
+  `wp_op vector.wp_push shadowing: v`,
+  where `v` is the name of the vector.
+
++ [`reserve v`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L465)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L479))
+  reserves a new slot at the end of the vector `v`,
+  but does not initialize it.
+  An updated vector is returned.
+
+  To reason about this operation, use the tactic
+  `wp_op vector.wp_reserve shadowing: v`,
+  where `v` is the name of the vector.
+
++ [`segment_iteri v _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L512)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L522))
+  is a loop over the segment determined by the vector `v`,
+  start index `_i`, and end index `_k`,
+  with initial state `s`.
+
+  To reason about this operation, use the tactic
+  `wp_op vector.wp_segment_iteri`.
+  At the beginning of the loop body, use the tactic
+  [`wp_segment_iteri_body _j j x s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1650).
+
++ [`iteri v s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L516)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L540))
+  is a loop over the vector `v`
+  with initial state `s`.
+
+  To reason about this operation, use the tactic
+  `wp_op vector.wp_iteri`.
+  At the beginning of the loop body, use the tactic
+  [`wp_iteri_body _j j x s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/array.v?ref_type=heads#L1655).
+
++ [`steal_array a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L566)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L576))
+  and
+  [`of_array a`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L570)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L588))
+  both convert an array to a vector.
+  In `steal_array`, the array becomes part of the representation
+  of the vector, and should no longer be used.
+  In `of_array`, the array is copied, so the array and the vector
+  can be used independently.
+
++ [`of_list xs`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L641)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L647))
+  converts a list to a vector.
+
+### The Unboxed Vector API
+
+The [unboxed-vector API](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L663)
+allows the two components of a vector,
+namely its length `_n` and its backing array `a`,
+to be separately maintained by the user.
+This contrasts with the normal vector API,
+where these components must form a pair `(_n, a)`.
+
+The unboxed-vector API offers direct access to the array `a` and allows the
+user to avoid needless allocations of pairs. This API is purely logical. It
+does not offer any operations of its own. Instead, it offers a set of
+reasoning rules, which allow the user to access the array `a` directly, while
+still reasoning at the level of abstraction of the vector.
+
+We do not describe this API here. For an example of its use,
+see the file [`pqueue.v`](../src/pqueue.v),
+where the function [`move_up`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L582)
+uses direct array accesses,
+and the [proof](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L671) of this function
+uses the unboxed-vector API.
+
+### Tactics
+
+The tactic [`isVector`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L158) is applicable when the
+goal has the form `isVector v ys` and there is a hypothesis of the form
+`isVector v xs`. The goal is then reduced to the equation `xs = ys` and
+this equation is simplified. If the equation is found to be true then
+the goal is solved.
+
+The tactic [`vectors`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L131) looks for every hypothesis of
+the form `isVector v xs` and introduces the fact `0 ≤ len xs ≤ max_array_length`.
+It also introduces the fact `unsigned max_array_length`.
+It is often useful to invoke this tactic once at the beginning of a proof.
 
 <!--------------------------------------------------------------------------->
 

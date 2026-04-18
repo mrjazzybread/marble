@@ -660,7 +660,7 @@ Ltac wp_of_list v :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* An unboxed-vector API. *)
+(* The unboxed-vector API. *)
 
 (* In this API, the two components of a vector, namely [_n] and [a],
    are not necessarily stored together in a pair. It is up to the user
