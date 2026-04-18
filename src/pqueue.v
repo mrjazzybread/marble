@@ -36,6 +36,16 @@ Set Universe Polymorphism.
 Ltac wp_intro_hook Hx ::=
   list in Hx; unpack in Hx.
 
+(* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
+   a permutation of their elements. In other words, [xs ≃ ys] means that
+   the multisets [xs] and [ys] are equal. *)
+
+Local Infix "≃" := Permutation
+  (at level 70, no associativity).
+
+Local Ltac use_permutation_hypothesis :=
+  match goal with h: _ ≃ _ |- _ => rewrite <- h; clear h end.
+
 Section PQueue.
 
 (* -------------------------------------------------------------------------- *)
@@ -91,16 +101,6 @@ Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
 
 Local Lemma equiv_lt_lt x y z : x ≡ y → y < z → x < z.
 Proof. unfold equivalent, strict. intros; unpack; split; eauto with order. Qed.
-
-(* We write [xs ≃ ys] when the lists [xs] and [ys] are equivalent up to
-   a permutation of their elements. In other words, [xs ≃ ys] means that
-   the multisets [xs] and [ys] are equal. *)
-
-Local Infix "≃" := (@Permutation A)
-  (at level 70, no associativity).
-
-Local Ltac use_permutation_hypothesis :=
-  match goal with h: _ ≃ _ |- _ => rewrite <- h; clear h end.
 
 (* We write [xs ≼ ys] when every element of the list [xs] is less than
    or equal to every element of the list [ys]. *)
@@ -775,7 +775,7 @@ Qed.
 
 Lemma wp_insert q y ys :
   isQueue q ys →
-  (len ys + 1 ≤ max_array_length)%Z →
+  (len ys < max_array_length)%Z →
   wp (insert q y) (λ q, isQueue q (ys ++ {[y]})).
 Proof.
   intros. destructQueue xs. vectors. lengths. unfold insert.
@@ -1127,3 +1127,43 @@ Qed.
 (* -------------------------------------------------------------------------- *)
 
 End PQueue.
+
+(* From this point on, one must write [isQueue R q ys],
+   where [R] is the pre-order. *)
+
+Arguments isQueue {A H} R q ys.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The tactic [isQueue] is applicable when the goal is [isQueue q ys]
+   and there is a hypothesis [isQueue v xs]. The goal is then reduced
+   to the permutation goal [xs ≃ ys]. This goal is simplified and
+   possibly solved. *)
+
+Ltac isQueue :=
+  match goal with
+  | h: isQueue ?R ?q ?xs |- isQueue ?R ?q ?ys =>
+    cut (xs ≃ ys); [
+      let Heq := fresh in intro Heq; try rewrite <- Heq; exact h
+    | clear h;
+      try subst; (* this can help *)
+      simplify_list_permutation_goal
+    ]
+  end.
+
+(* Tests. *)
+
+Goal ∀ `{Inhabited A} R q (xs ys : list A),
+  isQueue R q (xs ++ ys) →
+  isQueue R q (ys ++ xs).
+Proof.
+  intros. isQueue. eauto using Permutation_app_comm.
+Qed.
+
+Goal ∀ `{Inhabited A} R q (xs ys : list A) x,
+  isQueue R q (xs ++ {[x]}) →
+  xs ≃ ys →
+  isQueue R q (ys ++ {[x]}).
+Proof.
+  intros. isQueue. eauto.
+Qed.
