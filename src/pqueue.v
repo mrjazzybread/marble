@@ -1135,10 +1135,9 @@ Arguments isQueue {A H} R q ys.
 
 (* -------------------------------------------------------------------------- *)
 
-(* The tactic [isQueue] is applicable when the goal is [isQueue q ys]
-   and there is a hypothesis [isQueue v xs]. The goal is then reduced
-   to the permutation goal [xs ≃ ys]. This goal is simplified and
-   possibly solved. *)
+(* The tactic [isQueue] is applicable when the goal is [isQueue R q ys] and
+   there is a hypothesis [isQueue R v xs]. The goal is then reduced to the
+   permutation goal [xs ≃ ys]. This goal is simplified and possibly solved. *)
 
 Ltac isQueue :=
   match goal with
