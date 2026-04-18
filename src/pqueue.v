@@ -520,6 +520,24 @@ Proof.
   lia.
 Qed.
 
+(* Although [ys] has type [list A], it should be regarded as an unordered
+   list. The order of the elements in [ys] is irrelevant. *)
+
+Lemma isQueue_unordered q ys1 ys2 :
+  isQueue q ys1 →
+  ys1 ≃ ys2 →
+  isQueue q ys2.
+Proof.
+  intros. destructQueue xs.
+  introQueue; eauto using Permutation_trans.
+Qed.
+
+Global Instance Proper_isQueue :
+  Proper (eq ==> Permutation ==> impl) isQueue.
+Proof.
+  repeat intro. subst. eauto using isQueue_unordered.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The tactic [queues] looks for hypotheses of the form [isQueue q xs]
