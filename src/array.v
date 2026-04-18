@@ -1636,19 +1636,35 @@ Tactic Notation "wp_iteri_body"
 
 (* This resembles [of_list]. *)
 
-Definition init `{Inhabited A} _n (f : int → A) : array A :=
+Section Init.
+Context `{Inhabited A}.
+Implicit Types f : int → A.
+
+Definition plain_init _n f : array A :=
   do a ← make _n inhabitant ;
   iter_up 0 _n a @@ λ _i a ,
   do x ← f _i ;
   set a _i x.
 
-Lemma wp_init `{Inhabited A} _n n (f : int → A) (ψ : Z → A) :
+Derive init in
+  (∀ _n f, init _n f = plain_init _n f)
+  as init_eq.
+Proof.
+  intros. unfold plain_init.
+  setoid_rewrite <- iter_up_unrolled_eq.
+  unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
+  unfold iter_up, iter_up_aux.
+  unfold init; reflexivity.
+Defined.
+(* Print init. *)
+
+Lemma wp_init _n n f (ψ : Z → A) :
   isInt _n n →
   0 ≤ n ≤ max_array_length →
   ( ∀IntU _i i, wp (f _i) (eq (ψ i)) ) →
   wp (init _n f) (λ a, isArray a (listz.init n ψ)).
 Proof.
-  intros. unfold init. wp_last Hf.
+  intros. rewrite init_eq. unfold plain_init. wp_last Hf.
   wp_make a.
   wp_op wp_iter_up with invariant: (λ k a,
     isArray a (listz.init k ψ ++ replicate (n - k) inhabitant)
@@ -1661,3 +1677,5 @@ Proof.
   (* Completion. *)
   { isArray. }
 Qed.
+
+End Init.
