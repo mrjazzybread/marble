@@ -1,3 +1,15 @@
+(******************************************************************************)
+(*                                                                            *)
+(*                                  Marble                                    *)
+(*                                                                            *)
+(*                       François Pottier, Inria Paris                        *)
+(*                                                                            *)
+(*       Copyright 2026--2026 Inria. All rights reserved. This file is        *)
+(*       distributed under the terms of the GNU Library General Public        *)
+(*       License, with an exception, as described in the file LICENSE.        *)
+(*                                                                            *)
+(******************************************************************************)
+
 Require Import stdpp.orders.
 
 (* This file establishes some properties of ordering relations. *)
