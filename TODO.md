@@ -7,10 +7,6 @@
 
 ## Arrays
 
-* Optimize `init` by inlining and/or unrolling.
-  Optimize `find_index` by inlining (not unrolling).
-  Optimize `exist` and `forall`.
-
 * Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
   Is the cost at the leaves too high?
 
