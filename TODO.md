@@ -103,6 +103,8 @@
 * Doubly-linked list (permutation) inside an array or vector.
 * Union-find inside an array or vector.
 * Depth-first search, SCCs and other graph algorithms.
+  Number vertices from `0` to `n-1` and use arrays everywhere.
+* Algorithms from `fix`.
 * Congruence closure.
 
 ## Open Ideas
