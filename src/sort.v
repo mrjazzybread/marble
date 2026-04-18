@@ -2622,12 +2622,12 @@ End Sorting.
 
 (* Repeated tactics, for our end users. *)
 
-Global Ltac elim_sort_seg_post xs' :=
+Ltac elim_sort_seg_post xs' :=
   match goal with h: sort_seg_post _ _ _ _ |- _ =>
     destruct h as (xs' & h); unpack in h
   end.
 
-Global Ltac elim_sort_post xs' :=
+Ltac elim_sort_post xs' :=
   match goal with h: sort_post _ _ |- _ =>
     destruct h as (xs' & h); unpack in h
   end.
@@ -2772,11 +2772,14 @@ Qed.
 
 End NoStability.
 
-Global Ltac wp_sort_seg a :=
-  wp_op wp_sort_seg' shadowing: a.
+Ltac wp_sort_seg :=
+  match goal with
+  | |- context[sort_seg ?a _ _] =>
+      wp_op wp_sort_seg' shadowing: a
+  end.
 
-Global Ltac wp_sort a :=
-  wp_op wp_sort' shadowing: a.
-
-Global Ltac wp_merge c :=
-  wp_op wp_merge' introducing: c.
+Ltac wp_sort :=
+  match goal with
+  | |- context[sort ?a] =>
+      wp_op wp_sort' shadowing: a
+  end.
