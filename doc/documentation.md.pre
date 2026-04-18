@@ -541,7 +541,7 @@ There are four primitive operations on arrays:
 
 ### More Operations
 
-* [`segment_to_list a _i _k`](array.v:Definition segment_to_list)
+* [`segment_to_list a _i _k`](array.v:Definition plain_segment_to_list)
   [(specification)](array.v:Lemma wp_segment_to_list)
   converts the array segment determined by the array `a`
   and the start and end indices `_i` and `_k` into a list.
@@ -578,7 +578,7 @@ There are four primitive operations on arrays:
   because an array is defined not only by its content
   but also by its default value.
 
-* [`init _n @@ body`](array.v:Definition init)
+* [`init _n @@ body`](array.v:Definition plain_init)
   ([specification](array.v:Lemma wp_init))
   creates an array of length `_n` whose elements
   are computed by the function `body`.
@@ -593,7 +593,7 @@ There are four primitive operations on arrays:
   Although this is not an operation on arrays, it can be useful.
   It is used in the implementation of `of_list`.
 
-* [`list_iteri _i xs s @@ body`](array.v:Fixpoint list_iteri)
+* [`list_iteri _i xs s @@ body`](array.v:Fixpoint list_iteri_aux)
   ([specification](array.v:Lemma wp_list_iteri))
   is a loop on the list `xs`, with initial index `_i` and initial state `s`.
   At each iteration, the loop body `body : S → int → A → S`
@@ -603,7 +603,7 @@ There are four primitive operations on arrays:
   Although this is not an operation on arrays, it can be useful.
   It is used in the implementation of `of_list`.
 
-* [`blit a _i b _j _n`](array.v:Definition blit)
+* [`blit a _i b _j _n`](array.v:Definition plain_blit)
   [(specification)](array.v:Lemma wp_blit)
   copies the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
@@ -621,7 +621,7 @@ There are four primitive operations on arrays:
   and names the new array `b` in the proof.
   It behaves like `wp_op wp_blit shadowing: b`.
 
-* [`blit' a _i _j _n`](array.v:Definition blit')
+* [`blit' a _i _j _n`](array.v:Definition plain_blit')
   [(specification)](array.v:Lemma wp_blit')
   copies the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
@@ -655,7 +655,7 @@ There are four primitive operations on arrays:
   creates a new array whose content is the concatenation
   of the content of the arrays `a` and `b`.
 
-* [`fill a _i _n x`](array.v:Definition fill)
+* [`fill a _i _n x`](array.v:Definition plain_fill)
   [(specification)](array.v:Lemma wp_fill)
   fills the array segment determined by the array `a`,
   the start index `_i`, and the length `_n`
@@ -668,7 +668,7 @@ There are four primitive operations on arrays:
   and names the new array `a` in the proof.
   It behaves like `wp_op wp_fill shadowing: a`.
 
-* [`find_index f a`](array.v:Definition find_index)
+* [`find_index f a`](array.v:Definition plain_find_index)
   [(specification)](array.v:Lemma wp_find_index)
   searches the array `a`, from left to right,
   for an element `x` such that `f x` is true.
@@ -697,7 +697,7 @@ There are four primitive operations on arrays:
   A [simpler specification](array.v:Lemma wp_equal) is given
   in the case where the function `eq` is an equality test.
 
-* [`segment_iteri a _i _k s @@ body`](array.v:Definition segment_iteri)
+* [`segment_iteri a _i _k s @@ body`](array.v:Definition plain_segment_iteri)
   ([specification](array.v:Lemma wp_segment_iteri))
   is a loop over the array segment determined by the array `a`,
   start index `_i`, and end index `_k`,
@@ -747,8 +747,78 @@ complex.
 
 ## Sorting
 
-TODO: `sorting.v`
-TODO: `sort.v`
+The file [`sort.v`](../src/sort.v) contains algorithms that sort arrays and
+merge sorted arrays.
+
+The desired ordering, and comparison function, are provided in an implicit
+way, via type class instances. The type class [`Leb`](compare.v:Class Leb)
+provides a two-way comparison function; the type class
+[`LebSpec`](compare.v:Class LebSpec) provides a proof that this function is
+correct with respect to a certain pre-order `≤`. It is up to you, as a user,
+to provide suitable instances of these type classes.
+
++ [`isortto`](sort.v:Definition isortto) and
+  [`isortto'`](sort.v:Definition isortto') are
+  insertion sort algorithms.
+  They read an array segment, sort it,
+  and write the sorted data into another array segment.
+  They do not scale (they have quadratic complexity),
+  but may be interesting when one wishes to sort very short arrays.
+  They are currently unused, though one could decide to use them
+  at the leaves of the merge sort algorithms.
+
++ [`sort_seg a _i _n`](sort.v:Definition sort_seg )
+  ([specification](sort.v:Lemma wp_sort_seg ))
+  is a merge sort algorithm.
+  It sorts the array segment described by the array `a`,
+  start index `_i`, and length `_n`.
+  The data is sorted in place; an updated array is returned.
+  This is a stable sort: if two elements are equivalent
+  according to the pre-order `≤` then they are not exchanged.
+  When stability is not useful,
+  [a simpler specification](sort.v:Lemma wp_sort_seg')
+  can be used.
+
+  To reason about this operation, use the tactic
+  [`wp_sort_seg`](sort.v:Ltac wp_sort_seg).
+  It intentionally shadows the array `a`.
+  It uses the simpler specification of `sort_seg`, without stability.
+
++ [`sort a`](sort.v:Definition sort )
+  ([specification](sort.v:Lemma wp_sort ))
+  is a merge sort algorithm.
+  It sorts the array `a`.
+  The data is sorted in place; an updated array is returned.
+  This is a stable sort: if two elements are equivalent
+  according to the pre-order `≤` then they are not exchanged.
+  When stability is not useful,
+  [a simpler specification](sort.v:Lemma wp_sort')
+  can be used.
+
+  To reason about this operation, use the tactic
+  [`wp_sort`](sort.v:Ltac wp_sort ).
+  It intentionally shadows the array `a`.
+  It uses the simpler specification of `sort`, without stability.
+
++ [`merge a b`](sort.v:Definition merge )
+  ([specification](sort.v:Lemma wp_merge ))
+  merges the sorted arrays `a` and `b`.
+  In other words, `merge a b` first constructs a new array by concatenating
+  the arrays `a` and `b`, then sorts this array.
+  This is a stable merge: if two elements are equivalent
+  according to the pre-order `≤` then they are not exchanged.
+  When stability is not useful,
+  [a simplified specification](sort.v:Lemma wp_merge')
+  can be used.
+
+  To reason about this operation, use the tactic
+  `wp_op wp_merge sort introducing: c`
+  where `c` is the name under which you would like
+  the new array to be known in the proof.
+
+A number of definitions, lemmas, and tactics related to sorting exist in the
+file [`sorting.v`](../src/sorting.v). They are not intended to be used by end
+users of the library.
 
 <!--------------------------------------------------------------------------->
 
