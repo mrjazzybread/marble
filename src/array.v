@@ -1255,6 +1255,9 @@ Derive find_index
   as find_index_eq.
 Proof.
   intros. unfold plain_find_index.
+  (* Inlining our loop body into [ux_iter_up] allows quite a lot of
+     simplification; the continuations and the [Continue] messages
+     disappear. *)
   unfold uxiter_up, uxiter_up_aux.
   unfold find_index; reflexivity.
 Defined.
