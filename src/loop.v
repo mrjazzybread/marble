@@ -35,18 +35,20 @@ Local Ltac wp_intro_hook Hx ::=
    when we perform equational reasoning. We use this style of reasoning
    to prove that an unrolled loop is equal to an ordinary loop. *)
 
+Local Ltac resolve_aux b :=
+  first [
+    replace b with true by lia
+  | replace b with false by lia
+  ].
+
 Local Ltac resolve :=
   match goal with
   | |- context[(?lhs =? ?rhs)%uint63] =>
-    first [
-      replace (lhs =? rhs)%uint63 with true by lia
-    | replace (lhs =? rhs)%uint63 with false by lia
-    ]
+      resolve_aux (lhs =? rhs)%uint63
   | |- context[(?lhs ≤? ?rhs)%uint63] =>
-    first [
-      replace (lhs ≤? rhs)%uint63 with true by lia
-    | replace (lhs ≤? rhs)%uint63 with false by lia
-    ]
+      resolve_aux (lhs ≤? rhs)%uint63
+  | |- context[(?lhs <? ?rhs)%uint63] =>
+      resolve_aux (lhs <? rhs)%uint63
   end.
 
 (* -------------------------------------------------------------------------- *)
@@ -609,40 +611,11 @@ Fixpoint iter_up_aux _i _k s (ACC : Acc igt _i) :=
 
 End Body.
 
+Notation iter_up_aux__ body _i _k s :=
+  (iter_up_aux body _i _k s (Acc_igt _i)).
+
 Definition iter_up _i _k s body :=
   iter_up_aux body _i _k s ltac:(tc).
-
-(* The proof irrelevance and fixed point lemmas. *)
-
-(* I keep these lemmas for the record, but one could establish the
-   Hoare-style reasoning rules [wp_iter_up_aux] and [wp_iter_up] without
-   using them. See [xiter_up], where the reasoning rules are established
-   directly, without proving proof irrelevance first. *)
-
-Lemma iter_up_aux_eq _i : ∀ _k s body (ACC : Acc igt _i),
-  iter_up_aux body _i _k s ACC =
-  if _i <? _k then
-    do s ← body _i s ;
-    iter_up (_i + 1) _k s body
-  else
-    s.
-Proof.
-  by well-founded induction on _i along igt.
-  intros; destruct ACC; simpl.
-  eapply IFC_if; [| eauto ]. intro.
-  setoid_rewrite IH; tc2.
-Qed.
-
-Lemma iter_up_eq _i _k s body :
-  iter_up _i _k s body =
-  if _i <? _k then
-    do s ← body _i s ;
-    iter_up (_i + 1) _k s body
-  else
-    s.
-Proof.
-  unfold iter_up. eapply iter_up_aux_eq.
-Qed.
 
 (* A specification of [iter_up]. *)
 
@@ -653,9 +626,12 @@ Lemma wp_iter_up (body : int → S → S) :
     (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
     (λ s Q, wp (iter_up _i _k s body) Q).
 Proof.
-  by well-founded induction on _i along igt.
-  intros. ITER. expand_ITER in IH.
-  unfold iter_up. rewrite iter_up_aux_eq.
+  (* Transform this into a statement about [iter_up_aux]. *)
+  unfold iter_up.
+  intro _i. generalize (Acc_igt _i); intro ACC.
+  (* Now prove it. *)
+  by dependent induction on _i ACC.
+  intros. ITER. expand_ITER in IH. simpl.
   wp_if.
   (* Case [i < k]. *)
   { wp_op Hbody shadowing: s.
@@ -683,25 +659,6 @@ Fixpoint static_iter_up_aux _i s (n : nat) :=
       static_iter_up_aux _i s n
   end.
 
-Lemma wp_static_iter_up_aux :
-  ∀ n,
-  ∀IntU _i i ,
-  unsigned (i + Z.of_nat n) →
-  ITER_Z i (i + Z.of_nat n) Up
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (static_iter_up_aux _i s n) Q).
-Proof.
-  induction n as [| n]; simpl static_iter_up_aux;
-  intros; ITER; z in *; [| expand_ITER in IHn ].
-  (* Base case. *)
-  { wp_ret. }
-  (* Step case. *)
-  { wp_op Hbody shadowing: s.
-    wp_bind_eq.
-    wp_op IHn shadowing: s.
-    tc. }
-Qed.
-
 End Body.
 
 (* Specialize [static_iter_up] for [N]. *)
@@ -710,18 +667,6 @@ Definition iter_up_N _i s body :=
   Eval compute -[bind] in static_iter_up_aux body _i s N.
 
 (* Print iter_up_N. *)
-
-Lemma wp_iter_up_N (body : int → S → S) :
-  ∀IntU _i i ,
-  unsigned (i + NZ) →
-  ITER_Z i (i + NZ) Up
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_up_N _i s body) Q).
-Proof.
-  intros. ITER.
-  change (iter_up_N _i s body) with (static_iter_up_aux body _i s N).
-  wp_apply wp_static_iter_up_aux.
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -739,55 +684,144 @@ Fixpoint iter_up_unrolled_aux _i _n s (ACC : Acc ilt _n) :=
     let _n := _n - Ni in
     iter_up_unrolled_aux _i _n s (Acc_inv ACC (ilt_n_minus_N Hn)).
 
-Lemma wp_iter_up_unrolled_aux :
-  ∀IntU _n n ,
-  ∀IntU _i i ,
-  unsigned (i + n) →
-  ∀ ACC,
-  ITER_Z i (i + n) Up
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_up_unrolled_aux _i _n s ACC) Q).
-Proof.
-  by well-founded induction on _n along ilt.
-  intros. ITER. expand_ITER in IH.
-  intros; destruct ACC; simpl.
-  wp_if; z.
-  (* Case [n < N]. *)
-  { wp_op wp_iter_up with invariant: inv; last wp_shadow s.
-    eauto. }
-  (* Case [N ≤ n]. *)
-  { wp_op wp_iter_up_N shadowing: s.
-    { unfold NZ. lia. }
-    { clear dependent s.
-      wp_body ? j s introducing: (fun _ => z_step; intros _j ?).
-      unfold NZ in *.
-      wp_apply Hbody. }
-    subst. unfold NZ in *. z in *.
-    wp_bind_eq.
-    wp_op IH shadowing: s.
-    tc. }
-Qed.
-
 End Body.
 
 Definition iter_up_unrolled _i _k s body :=
   if _k ≤? _i then s
   else iter_up_unrolled_aux body _i (_k - _i) s ltac:(tc).
 
-Lemma wp_iter_up_unrolled :
-  ∀IntU _i i ,
-  ∀IntU _k k ,
-  ∀ s body,
-  ITER_Z i k Up
-    (λ j s Q, ∀ _j, isInt _j j → wp (body _j s) Q)
-    (λ s Q, wp (iter_up_unrolled _i _k s body) Q).
+(* -------------------------------------------------------------------------- *)
+
+(* An unrolled loop is equal to an ordinary loop. *)
+
+Section Eq.
+Variable body : int → S → S.
+Open Scope uint63.
+Local Opaque Acc_ilt Acc_igt.
+Local Opaque bind.
+
+(* [iter_up_aux] satisfies its fixed point equation. *)
+
+Lemma iter_up_aux_eq _i ACC : ∀ _k s,
+  iter_up_aux body _i _k s ACC =
+  if _i <? _k then
+    do s ← body _i s ;
+    iter_up_aux__ body (_i + 1) _k s
+  else
+    s.
 Proof.
-  intros. ITER. unfold iter_up_unrolled.
-  wp_if.
-  { wp_ret. }
-  { z. wp_op wp_iter_up_unrolled_aux shadowing: s. eauto. }
+  by dependent induction on _i ACC. intros _i. intros. simpl.
+  eapply IFC_if; [ intro | reflexivity ].
+  eapply bind_bind_eq; [ reflexivity | intro ]. (* optional *)
+  setoid_rewrite IH; tc.
 Qed.
 
+(* [static_iter_up_aux _i s n] is equivalent to
+   an ordinary loop over the interval [i, i + n). *)
+
+(* In contrast with [static_iter_down_aux_eq], where we require
+   just [unsigned (Z.of_nat n)], here, we must require
+   [unsigned (to_Z _i + Z.of_nat n)]. This asymmetry appears because
+   [iter_down] uses an equality test [=?] whereas [iter_up] uses
+   a strict ordering test [<?]. *)
+
+Lemma static_iter_up_aux_eq n : ∀ _i s,
+  unsigned (to_Z _i + Z.of_nat n) →
+  static_iter_up_aux body _i s n =
+  iter_up_aux__ body _i (_i + of_nat n) s.
+Proof.
+  induction n as [| n ]; intros; simpl static_iter_up_aux.
+  { rewrite iter_up_aux_eq. resolve. reflexivity. }
+  { unfold bind at 2.
+    setoid_rewrite IHn; [ clear IHn | lia ].
+    rewrite iter_up_aux_eq. resolve.
+    replace (_i + of_nat (Succ n)) with
+            (_i + 1 + of_nat n) by lia.
+    reflexivity. }
+Qed.
+
+(* [iter_up_unrolled_aux] satisfies its fixed point equation. *)
+
+Lemma iter_up_unrolled_aux_eq _n ACC : ∀ _i s,
+  unsigned (to_Z _i + to_Z _n) →
+  iter_up_unrolled_aux body _i _n s ACC =
+  if _n <? Ni then
+    iter_up _i (_i + _n) s body
+  else
+    do s ← iter_up_aux__ body _i (_i + Ni) s ;
+    do _i ← _i + Ni ;
+    let _n := _n - Ni in
+    iter_up_unrolled_aux body _i _n s ltac:(tc).
+Proof.
+  by dependent induction on _n ACC. intros _n. intros.
+  simpl iter_up_unrolled_aux.
+  eapply IFC_if; [ reflexivity | intro ].
+  change (iter_up_N _i s body)
+    with (static_iter_up_aux body _i s N).
+  unfold Ni, N in *.
+  rewrite static_iter_up_aux_eq by lia.
+  unfold bind at 2 4.
+  setoid_rewrite IH; tc.
+Qed.
+
+(* iterating first from [_a] up to [_b], then from [_b] up to [_c],
+   is the same as iterating from [_a] up to [_c]. *)
+
+Lemma iter_up_aux_glue _a : ∀ _b _c s ACC,
+  (to_Z _a ≤ to_Z _b ≤ to_Z _c)%Z →
+  (
+    do s ← iter_up_aux body _a _b s ACC ;
+    iter_up_aux__ body _b _c s
+  )
+  = iter_up_aux__ body _a _c s.
+Proof.
+  by well-founded induction on _a along igt.
+  intros. rewrite iter_up_aux_eq.
+  destruct (_a <? _b) eqn:?.
+  (* Step case. *)
+  { rewrite bind_bind.
+    rewrite iter_up_aux_eq. resolve.
+    eapply bind_bind_eq; [ reflexivity | intro ].
+    eapply IH; tc. }
+  (* Base case. *)
+  { assert (_a = _b) as -> by lia.
+    reflexivity. }
+Qed.
+
+(* [iter_up_unrolled_aux] is equivalent to [iter_up_aux]. *)
+
+Lemma iter_up_unrolled_aux_equiv _n ACC : ∀ _i s,
+  unsigned (to_Z _i + to_Z _n)%Z →
+  iter_up_unrolled_aux body _i _n s ACC =
+  iter_up_aux__ body _i (_i + _n) s.
+Proof.
+  by dependent induction on _n ACC. intros _n. intros.
+  rewrite iter_up_unrolled_aux_eq by lia.
+  destruct (_n <? Ni) eqn:?.
+  (* Base case. *)
+  { reflexivity. }
+  (* Step case. *)
+  { unfold bind at 2.
+    setoid_rewrite IH; tc.
+    replace (_i + Ni + (_n - Ni)) with (_i + _n) by lia.
+    eapply iter_up_aux_glue. lia. }
+Qed.
+
+(* [iter_up_unrolled] is equivalent to [iter_up]. *)
+
+Lemma iter_up_unrolled_eq _i _k s :
+  iter_up_unrolled _i _k s body =
+  iter_up _i _k s body.
+Proof.
+  unfold iter_up_unrolled, iter_up.
+  destruct (_k ≤? _i) eqn:?.
+  { rewrite iter_up_aux_eq. resolve. reflexivity. }
+  { rewrite iter_up_unrolled_aux_equiv by lia.
+    replace (_i + (_k - _i)) with _k by lia.
+    reflexivity. }
+Qed.
+
+End Eq.
 End IterUp.
 
 (* -------------------------------------------------------------------------- *)

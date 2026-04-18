@@ -420,8 +420,8 @@ Local Opaque Acc_inv ilt Acc_ilt.
 Local Opaque bind.
 
   Derive segment_to_list
-  in (∀ a _i _k, segment_to_list a _i _k = plain_segment_to_list a _i _k)
-  as segment_to_list_eq.
+    in (∀ a _i _k, segment_to_list a _i _k = plain_segment_to_list a _i _k)
+    as segment_to_list_eq.
   Proof.
     intros.
     unfold plain_segment_to_list.
@@ -905,7 +905,7 @@ Open Scope uint63.
 
 Definition plain_blit a _i b _j _n :=
   do _delta ← _j - _i ;
-  iter_up_unrolled _i (_i + _n) b @@ λ _k b,
+  iter_up _i (_i + _n) b @@ λ _k b,
   do x ← get a _k ;
   do b ← set b (_k + _delta) x ;
   b.
@@ -916,12 +916,15 @@ Section Specialize.
 Local Opaque Acc_inv igt Acc_igt.
 Local Opaque bind.
 
-  Derive blit in (blit = plain_blit) as blit_eq.
+  Derive blit in
+    (∀ a _i b _j _n, blit a _i b _j _n = plain_blit a _i b _j _n)
+    as blit_eq.
   Proof.
-    match goal with |- _ = ?rhs => unfold rhs end.
+    intros. unfold plain_blit.
+    setoid_rewrite <- iter_up_unrolled_eq.
     unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
     unfold iter_up, iter_up_aux.
-    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+    unfold blit; reflexivity.
   Defined.
   (* Print blit. *)
 
@@ -952,23 +955,18 @@ Proof.
   intros. arrays. lengths.
   rewrite blit_eq. unfold plain_blit.
   wp_bind_eq.
-  wp_op wp_iter_up_unrolled
-    with invariant: (λ k, blit_post xs i ys j (k - i));
-  last wp_shadow b.
-  (* Initialization. *)
-  { isArray. }
+  wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i));
+  last wp_shadow b; try solve [ isArray ].
   (* Preservation. *)
   { clear dependent b. wp_iter_up_body _k k b.
     wp_get x. subst x.
+    wp_set. wp_ret. isArray. }
     (* The use of unsigned arithmetic in the computation of [_delta]
        does not cause any problem. Once upon a time, this proof used
        natural numbers as the logical model of machine integers; then
        we had to explicitly say [rewrite int.add_sub_exch] in order to
        pretend that we never created a negative number. Now this trick
        is unnecessary. *)
-    wp_set. wp_ret. isArray. }
-  (* Completion. *)
-  { isArray. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -988,7 +986,7 @@ Open Scope uint63.
 
 Definition plain_blit'_up a _i _j _n :=
   do _delta ← _j - _i ;
-  iter_up_unrolled _i (_i + _n) a @@ λ _k a,
+  iter_up _i (_i + _n) a @@ λ _k a,
   do x ← get a _k ;
   do a ← set a (_k + _delta) x ;
   a.
@@ -1014,14 +1012,15 @@ Local Opaque bind.
 
   Derive blit' in
     (∀ a _i _j _n, blit' a _i _j _n = plain_blit' a _i _j _n)
-  as blit'_eq.
+    as blit'_eq.
   Proof.
     intros.
     unfold plain_blit'.
     unfold plain_blit'_up, plain_blit'_down.
+    setoid_rewrite <- iter_up_unrolled_eq.
+    setoid_rewrite <- iter_down_unrolled_eq.
     unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
     unfold iter_up, iter_up_aux.
-    setoid_rewrite <- iter_down_unrolled_eq.
     unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
     unfold iter_down, iter_down_aux.
     unfold blit'; reflexivity.
@@ -1049,7 +1048,7 @@ Proof.
   (* Case [j ≤ i]. Blit upwards. *)
   { unfold plain_blit'_up.
     wp_bind_eq.
-    wp_op wp_iter_up_unrolled
+    wp_op wp_iter_up
       with invariant: (λ k, blit_post xs i xs j (k - i));
     last wp_shadow a; try solve [ isArray ].
     (* Preservation. *)
@@ -1194,7 +1193,7 @@ Section Code.
 Open Scope uint63.
 
 Definition plain_fill a _i _n x :=
-  iter_up_unrolled _i (_i + _n) a @@ λ _k a,
+  iter_up _i (_i + _n) a @@ λ _k a,
   do a ← set a _k x ;
   a.
 
@@ -1202,12 +1201,15 @@ Section Specialize.
 Local Opaque Acc_inv igt Acc_igt.
 Local Opaque bind.
 
-  Derive fill in (fill = plain_fill) as fill_eq.
+  Derive fill in
+    (∀ a _i _n x, fill a _i _n x = plain_fill a _i _n x)
+    as fill_eq.
   Proof.
-    match goal with |- _ = ?rhs => unfold rhs end.
+    intros. unfold plain_fill.
+    rewrite <- iter_up_unrolled_eq.
     unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
     unfold iter_up, iter_up_aux.
-    match goal with |- ?lhs = _ => unfold lhs; reflexivity end.
+    unfold fill; reflexivity.
   Defined.
   (* Print fill. *)
 
@@ -1227,7 +1229,7 @@ Lemma wp_fill a xs _i i _n n  x :
   ).
 Proof.
   intros. arrays. rewrite fill_eq. unfold plain_fill.
-  wp_op wp_iter_up_unrolled with invariant: (λ k a, isArray a
+  wp_op wp_iter_up with invariant: (λ k a, isArray a
     (initial_seg i xs ++ replicate (k - i) x ++ final_seg k xs)
   ); last wp_shadow a; try solve [ isArray ].
   (* Preservation. *)
