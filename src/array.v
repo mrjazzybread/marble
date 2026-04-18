@@ -415,23 +415,17 @@ Definition plain_segment_to_list a _i _k :=
   (* and prepend it in front of [xs]. *)
   x :: xs.
 
-Section Specialize.
-Local Opaque Acc_inv ilt Acc_ilt.
-Local Opaque bind.
-
-  Derive segment_to_list
-    in (∀ a _i _k, segment_to_list a _i _k = plain_segment_to_list a _i _k)
-    as segment_to_list_eq.
-  Proof.
-    intros. unfold plain_segment_to_list.
-    rewrite <- iter_down_unrolled_eq.
-    unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
-    (* unfold iter_down, iter_down_aux. *)
-    unfold segment_to_list; reflexivity.
-  Defined.
-  (* Print segment_to_list. *)
-
-End Specialize.
+Derive segment_to_list
+  in (∀ a _i _k, segment_to_list a _i _k = plain_segment_to_list a _i _k)
+  as segment_to_list_eq.
+Proof.
+  intros. unfold plain_segment_to_list.
+  rewrite <- iter_down_unrolled_eq.
+  unfold iter_down_unrolled, iter_down_unrolled_aux, iter_down_N.
+  (* unfold iter_down, iter_down_aux. *)
+  unfold segment_to_list; reflexivity.
+Defined.
+(* Print segment_to_list. *)
 
 Definition to_list a :=
   (* Obtain the length [n] of the array. *)
