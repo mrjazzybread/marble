@@ -1585,11 +1585,24 @@ Implicit Types f : int → A → S → S.
 
 (* The code. *)
 
-Definition segment_iteri a _i _k s f : S :=
+Definition plain_segment_iteri a _i _k s f : S :=
   iter_up _i _k s @@ λ _j s ,
   do x ← get a _j ;
   do s ← f _j x s ;
   s.
+
+Derive segment_iteri in
+  (∀ a _i _k s f,
+    segment_iteri a _i _k s f = plain_segment_iteri a _i _k s f)
+  as segment_iteri_eq.
+Proof.
+  intros. unfold plain_segment_iteri.
+  setoid_rewrite <- iter_up_unrolled_eq.
+  unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
+  unfold iter_up, iter_up_aux.
+  unfold segment_iteri; reflexivity.
+Defined.
+(* Print segment_iteri. *)
 
 Definition iteri a s f :=
   do _n ← length a ;
@@ -1606,7 +1619,8 @@ Lemma wp_segment_iteri a xs f :
     (λ j s Q, ∀ _j, isInt _j j → ∀ x, x = xs !!! j → wp (f _j x s) Q)
     (λ s Q, wp (segment_iteri a _i _k s f) Q).
 Proof.
-  intros. arrays. ITER. unfold segment_iteri.
+  intros. arrays. ITER.
+  rewrite segment_iteri_eq. unfold plain_segment_iteri.
   wp_op wp_iter_up introducing: ?.
   (* The loop body. *)
   { clear dependent s. wp_iter_up_body _j j s.
