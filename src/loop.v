@@ -180,10 +180,14 @@ Qed.
    about the functions that we define below: [static_iter_down_aux],
    [iter_down_N], [iter_down_unrolled_aux], and [iter_down_unrolled]. In
    fact, we did so in an earlier version of this code. However, we now
-   instead prove a stronger result: an unrolled loop is equal to an
-   ordinary loop. This stronger result is more painful to prove, but more
-   useful, as it lets us decide after the fact (possibly at a call site)
-   whether we prefer to use an ordinary loop or an unrolled loop. *)
+   instead prove an equivalence result: an unrolled loop is equal to an
+   ordinary loop. This result is more painful to prove, but more useful,
+   as it lets us decide after the fact (possibly at a call site) whether
+   we prefer to use an ordinary loop or an unrolled loop. *)
+
+(* Perhaps we could have obtained equivalence via the Hoare-style rules,
+   reasoning in Hoare style about the unrolled loop and stating (in its
+   postcondition) that it returns the same result as an ordinary loop. *)
 
 Section Body.
 Variable body : int → S → S.
