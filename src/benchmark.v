@@ -20,6 +20,9 @@ Open Scope uint63.
 
 (* The times in comments use OCaml 4.14.2+flambda. *)
 
+(* There is great variation in the times, easily up to 2x.
+   I record the best observed time. *)
+
 (* Time Definition test_make : array int := *)
 (*   Eval vm_compute in *)
 (*   make 3_000_000 0. *)
@@ -72,4 +75,4 @@ Time Definition time_sort : array int :=
   sort c.
     (* 1600: 0.02 seconds (used to be 1.5 seconds with Equations) *)
     (* 16000:  0.14 (used to be 22 seconds : 727 elements/second) *)
-    (* 50000:  0.44 seconds (110,000 elements/second) *)
+    (* 50000:  0.40 seconds (125,000 elements/second) *)
