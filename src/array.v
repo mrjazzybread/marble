@@ -1257,7 +1257,8 @@ Proof.
   intros. unfold plain_find_index.
   (* Inlining our loop body into [ux_iter_up] allows quite a lot of
      simplification; the continuations and the [Continue] messages
-     disappear. *)
+     disappear. In other words, the overhead of using a higher-order
+     function is eliminated. *)
   unfold uxiter_up, uxiter_up_aux.
   unfold find_index; reflexivity.
 Defined.
