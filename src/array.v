@@ -906,8 +906,7 @@ Definition plain_blit a _i b _j _n :=
 End Code.
 
 Section Specialize.
-Local Opaque Acc_inv igt Acc_igt.
-Local Opaque bind.
+Local Opaque bind. (* prevents duplicating the computation of [delta] *)
 
   Derive blit in
     (∀ a _i b _j _n, blit a _i b _j _n = plain_blit a _i b _j _n)
@@ -1001,7 +1000,7 @@ End Code.
 
 Section Specialize.
 Local Opaque Acc_inv ilt igt Acc_ilt Acc_igt.
-Local Opaque bind.
+Local Opaque bind. (* prevents duplicating the computation of [delta] *)
 
   Derive blit' in
     (∀ a _i _j _n, blit' a _i _j _n = plain_blit' a _i _j _n)
