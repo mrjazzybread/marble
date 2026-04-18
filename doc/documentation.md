@@ -742,7 +742,7 @@ to invoke this tactic once at the beginning of a proof.
 
 <!--------------------------------------------------------------------------->
 
-## Sorting
+## Sorting Arrays
 
 The file [`sort.v`](../src/sort.v) contains algorithms that sort arrays and
 merge sorted arrays.
@@ -933,9 +933,9 @@ still reasoning at the level of abstraction of the vector.
 
 We do not describe this API here. For an example of its use,
 see the file [`pqueue.v`](../src/pqueue.v),
-where the function [`move_up`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L582)
+where the function [`move_up`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L600)
 uses direct array accesses,
-and the [proof](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L671) of this function
+and the [proof](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L689) of this function
 uses the unboxed-vector API.
 
 ### Tactics
@@ -955,7 +955,73 @@ It is often useful to invoke this tactic once at the beginning of a proof.
 
 ## Priority Queues
 
-TODO: `pqueue.v`
+A priority queue is an abstract data structure, which holds a multiset
+of elements (that is, an unordered list of elements). It supports
+inserting a new element and extracting a minimal element.
+
+The elements of the priority queue must be equipped with a pre-order, which is
+denoted by `R` or `≤`. The desired pre-order and comparison function are
+provided in an implicit way, via type class instances. The type class
+[`Leb`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/compare.v?ref_type=heads#L33) provides a two-way comparison function; the type
+class [`LebSpec`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/compare.v?ref_type=heads#L90) provides a proof that this function
+is correct. It is up to you, as a user, to provide suitable instances of these
+type classes.
+
+The proposition [`isQueue R v xs`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/vector.v?ref_type=heads#L56)
+means that the queue `q` obeys the pre-order `R`
+and stores the multiset `xs`.
+Although the type of `xs` is `list A`,
+it should be understood as an unordered sequence.
+
+Our implementation uses a binary heap, stored inside a vector. We
+adapt Jean-Christophe Filliâtre's code, which is found in the module
+[`Pqueue`](https://github.com/ocaml/ocaml/blob/trunk/stdlib/pqueue.ml)
+of OCaml's standard library.
+We also take inspiration from
+the [verified priority queue](https://gitlab.inria.fr/why3/why3/-/blob/master/examples/pqueue.mlw)
+by Aymeric Walch, Mário Pereira and Jean-Christophe Filliâtre.
+
+### Operations
+
++ [`create()`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L570)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L573))
+  creates a new empty queue.
+
++ [`insert q x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L624)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L776))
+  inserts the element `x` into the queue `q`.
+  An updated queue is returned.
+
++ [`extract_nonempty q`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L875)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L1030))
+  extracts a minimal element out of a nonempty queue.
+  A pair of the extracted element
+  and an updated queue is returned.
+
++ [`extract q`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L895)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L1070))
+  attempts to extract a minimal element out of
+  a possibly empty queue.
+  This operation returns either nothing
+  or a pair of the extracted element
+  and an updated queue.
+
++ [`iter q s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L1103)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L1107))
+  iterates over the elements of the queue `q`
+  in an unspecified order.
+
+### Tactics
+
+The tactic [`isQueue`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L1142) is applicable when the goal has
+the form `isQueue R q ys` and there is a hypothesis of the form `isQueue R q xs`.
+The goal is then reduced to `xs ≃ ys`. This permutation goal is then
+simplified and possibly solved.
+
+The tactic [`queues`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/pqueue.v?ref_type=heads#L546) looks for every hypothesis of
+the form `isQueue q xs` and introduces the fact `0 ≤ len xs ≤ max_array_length`.
+It also introduces the fact `unsigned max_array_length`.
+It is often useful to invoke this tactic once at the beginning of a proof.
 
 <!--------------------------------------------------------------------------->
 

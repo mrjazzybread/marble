@@ -741,7 +741,7 @@ to invoke this tactic once at the beginning of a proof.
 
 <!--------------------------------------------------------------------------->
 
-## Sorting
+## Sorting Arrays
 
 The file [`sort.v`](../src/sort.v) contains algorithms that sort arrays and
 merge sorted arrays.
@@ -954,7 +954,73 @@ It is often useful to invoke this tactic once at the beginning of a proof.
 
 ## Priority Queues
 
-TODO: `pqueue.v`
+A priority queue is an abstract data structure, which holds a multiset
+of elements (that is, an unordered list of elements). It supports
+inserting a new element and extracting a minimal element.
+
+The elements of the priority queue must be equipped with a pre-order, which is
+denoted by `R` or `≤`. The desired pre-order and comparison function are
+provided in an implicit way, via type class instances. The type class
+[`Leb`](compare.v:Class Leb) provides a two-way comparison function; the type
+class [`LebSpec`](compare.v:Class LebSpec) provides a proof that this function
+is correct. It is up to you, as a user, to provide suitable instances of these
+type classes.
+
+The proposition [`isQueue R v xs`](vector.v:Definition isVector )
+means that the queue `q` obeys the pre-order `R`
+and stores the multiset `xs`.
+Although the type of `xs` is `list A`,
+it should be understood as an unordered sequence.
+
+Our implementation uses a binary heap, stored inside a vector. We
+adapt Jean-Christophe Filliâtre's code, which is found in the module
+[`Pqueue`](https://github.com/ocaml/ocaml/blob/trunk/stdlib/pqueue.ml)
+of OCaml's standard library.
+We also take inspiration from
+the [verified priority queue](https://gitlab.inria.fr/why3/why3/-/blob/master/examples/pqueue.mlw)
+by Aymeric Walch, Mário Pereira and Jean-Christophe Filliâtre.
+
+### Operations
+
++ [`create()`](pqueue.v:Definition create)
+  ([specification](pqueue.v:Lemma wp_create))
+  creates a new empty queue.
+
++ [`insert q x`](pqueue.v:Definition insert)
+  ([specification](pqueue.v:Lemma wp_insert))
+  inserts the element `x` into the queue `q`.
+  An updated queue is returned.
+
++ [`extract_nonempty q`](pqueue.v:Definition extract_nonempty)
+  ([specification](pqueue.v:Lemma wp_extract_nonempty))
+  extracts a minimal element out of a nonempty queue.
+  A pair of the extracted element
+  and an updated queue is returned.
+
++ [`extract q`](pqueue.v:Definition extract )
+  ([specification](pqueue.v:Lemma wp_extract ))
+  attempts to extract a minimal element out of
+  a possibly empty queue.
+  This operation returns either nothing
+  or a pair of the extracted element
+  and an updated queue.
+
++ [`iter q s @@ body`](pqueue.v:Definition iter)
+  ([specification](pqueue.v:Lemma wp_iter ))
+  iterates over the elements of the queue `q`
+  in an unspecified order.
+
+### Tactics
+
+The tactic [`isQueue`](pqueue.v:Ltac isQueue) is applicable when the goal has
+the form `isQueue R q ys` and there is a hypothesis of the form `isQueue R q xs`.
+The goal is then reduced to `xs ≃ ys`. This permutation goal is then
+simplified and possibly solved.
+
+The tactic [`queues`](pqueue.v:Ltac queues) looks for every hypothesis of
+the form `isQueue q xs` and introduces the fact `0 ≤ len xs ≤ max_array_length`.
+It also introduces the fact `unsigned max_array_length`.
+It is often useful to invoke this tactic once at the beginning of a proof.
 
 <!--------------------------------------------------------------------------->
 
