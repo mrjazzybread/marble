@@ -1188,23 +1188,17 @@ Definition plain_fill a _i _n x :=
   do a ← set a _k x ;
   a.
 
-Section Specialize.
-Local Opaque Acc_inv igt Acc_igt.
-Local Opaque bind.
-
-  Derive fill in
-    (∀ a _i _n x, fill a _i _n x = plain_fill a _i _n x)
-    as fill_eq.
-  Proof.
-    intros. unfold plain_fill.
-    rewrite <- iter_up_unrolled_eq.
-    unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
-    unfold iter_up, iter_up_aux.
-    unfold fill; reflexivity.
-  Defined.
-  (* Print fill. *)
-
-End Specialize.
+Derive fill in
+  (∀ a _i _n x, fill a _i _n x = plain_fill a _i _n x)
+  as fill_eq.
+Proof.
+  intros. unfold plain_fill.
+  rewrite <- iter_up_unrolled_eq.
+  unfold iter_up_unrolled, iter_up_unrolled_aux, iter_up_N.
+  unfold iter_up, iter_up_aux.
+  unfold fill; reflexivity.
+Defined.
+(* Print fill. *)
 
 End Code.
 
