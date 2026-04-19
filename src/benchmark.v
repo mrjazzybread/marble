@@ -67,7 +67,7 @@ From marble Require Import sort.
 
 Time Definition c : array int :=
   Eval vm_compute in
-  init 50000 data.
+  init 100000 data.
     (* 0.07 seconds at best, often 0.12 seconds (why?) *)
 
 Time Definition time_sort : array int :=
@@ -76,3 +76,4 @@ Time Definition time_sort : array int :=
     (* 1600: 0.02 seconds (used to be 1.5 seconds with Equations) *)
     (* 16000:  0.14 (used to be 22 seconds : 727 elements/second) *)
     (* 50000:  0.40 seconds (125,000 elements/second) *)
+    (* 100000: 1.15 seconds *)

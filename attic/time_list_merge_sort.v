@@ -30,14 +30,17 @@ Definition init {A} (n : nat) (f : nat → A) : list A :=
   init_segment 0 n f.
 
 Definition n : nat :=
-  32_000.
+  100_000.
 
 Time Definition time_init : list int :=
   Eval vm_compute in
   init n (λ (i : nat), 0%uint63).
     (* 32,000: 0.16 seconds *)
+    (* 50,000: 0.25 seconds *)
 
 Time Definition time_sort : list int :=
   Eval vm_compute in
   Sort.sort time_init.
     (* 32,000: 0.16 seconds *)
+    (* 50,000: 0.3 seconds *)
+    (* 100,000: 0.6 seconds *)
