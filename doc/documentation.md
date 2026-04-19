@@ -1108,7 +1108,24 @@ help verify that the linear use discipline is respected.
 
 ## Execution inside Rocq
 
-TODO
+The code in this library can be executed inside Rocq using Rocq's
+execution commands, such as `Eval compute`, `Eval vm_compute`, and
+`Eval native_compute`.
+
+Performance can be somewhat disappointing.
+For example, using the merge sort algorithm in Rocq's standard library,
+sorting a list of 100,000 elements takes about 0.6 seconds,
+whereas using our merge sort algorithm,
+sorting an array of 100,000 elements takes about 1.2 seconds.
+This is likely due to the use of persistent arrays:
+even though we actually do not exploit persistence,
+the use of persistent arrays (as opposed to raw mutable arrays)
+causes extra memory allocations and memory writes
+that introduce a certain overhead.
+
+Arrays should nevertheless be useful in applications where random
+access (that is, constant-time access to elements at arbitrary
+indices) is needed. Hash tables are an example.
 
 <!--------------------------------------------------------------------------->
 
