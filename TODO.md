@@ -75,25 +75,6 @@
 
 * Complete the documentation (see TODOs there).
 
-* Explain the linear use discipline.
-
-  While iterating on a collection (`array.iteri`, `vector.iteri`)
-  one must not modify the collection (i.e., the state must not
-  contain the array itself). [One could enforce this in a tactic
-  by clearing `isArray a xs` in the subgoal that establishes the
-  initial state.]
-
-* Explain the need to avoid aliasing. Aliasing of arrays is permitted
-  only in the case where both arrays are only read.
-
-  Avoiding aliasing is
-  necessary in order to ensure that the code always accesses the most
-  recent version of the array, with time complexity O(1). If the same
-  array was used as the source array and as the destination array in a
-  call to [isortto] then every array access would become expensive, if a
-  persistent array is used, or would fail, if a defensive non-persistent
-  array is used (in OCaml).
-
 ## Future Applications
 
 * Hash sets, hash maps.
