@@ -1018,7 +1018,7 @@ The goal is then reduced to `xs ≃ ys`. This permutation goal is then
 simplified and possibly solved.
 
 The tactic [`queues`](pqueue.v:Ltac queues) looks for every hypothesis of
-the form `isQueue q xs` and introduces the fact `0 ≤ len xs ≤ max_array_length`.
+the form `isQueue R q xs` and introduces the fact `0 ≤ len xs ≤ max_array_length`.
 It also introduces the fact `unsigned max_array_length`.
 It is often useful to invoke this tactic once at the beginning of a proof.
 
@@ -1026,7 +1026,82 @@ It is often useful to invoke this tactic once at the beginning of a proof.
 
 ## The Linear Use Discipline
 
-TODO
+This library makes heavy use of Rocq's
+[primitive arrays](https://rocq-prover.org/doc/master/refman/language/core/primitive.html#primitive-arrays).
+
+This data structure is persistent: this means that updating an array *appears*
+to create a new array, and does not destroy or modify the original array,
+which can still be accessed and still appears to contain the same data. In
+other words, updating an array creates a new *version* of this array. Earlier
+versions can still be accessed, that is, read or updated.
+
+In principle, this sounds great: all versions are available at all times. In
+reality, however, only the latest version of an array can be *efficiently*
+accessed. A read or write access to the latest version has time complexity
+*O(1)*: it takes a constant amount of time. A read or write access to an old
+version requires first restoring this old version, that is, making it current
+again. This involves undoing all of the updates that have taken place since
+that version was current. This takes time *O(d)* where *d* is the distance
+between the two versions, that is, the number of updates that have taken place
+between them. In a particularly bad scenario, if a program keeps accessing
+*two* versions of an array in an alternating manner, then *every* access will
+cost *O(d)* where *d* is the distance between these versions.
+
+In summary, the bottom line is: even though Rocq's arrays are persistent, in
+order to achieve good efficiency, they should be used in the same way as if
+they were mutable. That is, **only the latest version of each array should be
+used**.
+
+To avoid using an old version by mistake, we suggest relying on shadowing.
+When updating an array named `a`, one intentionally names the updated array
+`a`. Thereafter, the name `a` refers to the updated array. The previous array
+becomes inaccessible, simply because it cannot be named any more. Our tactics
+also encourage this style: the tactic `wp_op <lemma> shadowing: a` clears the
+previous variable `a` before introducing a new variable named `a`.
+
+This discipline concerns not just arrays, but also all data structures based
+on arrays, including vectors and priority queues. Even though these data
+structures are technically persistent, they should be intuitively considered
+mutable. One should obey the rule: **only the latest version of each
+array-based data structure should be used**.
+
+Although this discipline is usually easy to obey, in some situations, one must
+pay particular attention.
+
+One situation to look out for is a call to a function that expects *several
+arrays* (or array-based data structures) as parameters. An example is
+[`blit`](array.v:Definition plain_blit), which expects two arrays as
+arguments. If one passes the same array twice, as in `blit a _i a _j _n`, then
+`blit` will alternate between reading the array `a` and writing an array `b`
+that is a descendant of the array `a`. As a result, the cost of such a call to
+`blit` will be quadratic in `_n`, instead of linear, as one would expect. To
+avoid this problem, one must *not* pass the same array twice to `blit`.
+Instead, use [`blit'`](array.v:Definition plain_blit'), a variant of `blit`
+which expects only one array as an argument, and uses this array both as the
+source array and the destination array.
+
+Another pattern that must be avoided is updating an array while iterating over
+this array. That is,, in a loop of the form `array.iteri a s @@ body`, the
+function `body` must not update (write) the array `a`. In other words, the
+state `s` should not contain the array `a` itself: in particular, a call of
+the form `array.iteri a a @@ body` must be avoided.
+
+In summary, an array, or an array-based data structure, should be used *in a
+linear way*. It should be known by only one name. This name should always
+refer to the latest version of this data structure. This name should never be
+duplicated, that is, passed twice as an argument to a function.
+
+As an exception to this general rule, it is safe to pass an array twice to a
+function *if* this function accesses its arguments only for reading. For
+example, the call `array.append a a`, which reads the array `a` twice, is
+safe, as it does not update `a`.
+
+Is there a way of mechanically checking that the linear use discipline is
+respected? Inside Rocq, no. However, via [extraction from Rocq to
+OCaml](#extraction-to-ocaml), there is a way. If the extracted code is linked
+with [defensive arrays](../extracted/DefensiveArray.ml), then, at runtime, an
+access to an outdated array will cause a runtime error. Thus, *testing* can
+help verify that the linear use discipline is respected.
 
 <!--------------------------------------------------------------------------->
 
