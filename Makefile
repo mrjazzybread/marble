@@ -28,6 +28,10 @@ bench:
 doc:
 	@ make -C doc
 
+.PHONY: view
+view: doc
+	@ open -a "/Applications/Visual Studio Code.app" doc/documentation.md
+
 # ------------------------------------------------------------------------------
 
 # [make headache] updates the headers.
