@@ -621,7 +621,7 @@ Fixpoint move_up a _i x (ACC : Acc ilt _i) : array A :=
    the logic of [move_up] inside [insert]. We avoid this code duplication;
    instead we verify [move_up] twice with slightly different specifications. *)
 
-Definition insert q x :=
+Definition insert q x : queue A :=
   do q ← vector.reserve q ;
   (* Open up the vector, so as to get direct access to the array. *)
   let '(_n, a) := q in

@@ -563,11 +563,11 @@ End Iteri.
 (* In [steal_array], the array is not copied; it becomes part of the
    representation of the vector. In [of_array], it is copied. *)
 
-Definition steal_array a :=
+Definition steal_array a : vector A :=
   do _n ← PArray.length a ;
   (_n, a).
 
-Definition of_array a :=
+Definition of_array a : vector A :=
   do a ← array.copy a ;
   steal_array a.
 
@@ -638,7 +638,7 @@ Implicit Types xs : list A.
 
 (* Converting a list to a vector: [of_list]. *)
 
-Definition of_list xs :=
+Definition of_list xs : vector A :=
   do a ← array.of_list xs ;
   steal_array a.
 
