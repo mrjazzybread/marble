@@ -424,20 +424,19 @@ Fixpoint xiter_down_aux _i _k s
   (ACC : Acc (rilt _i) _k)
 : S * outcome A :=
   IFC _k =? _i THEN λ _,
-    let continue s := (s, Continue) in
-    let break s x := (s, Break x) in
-    body _k s continue break
+    (s, Continue)
   ELSE λ Hki,
-    let continue s := xiter_down_aux _i (_k - 1) s
+    let _k' := _k - 1 in
+    let continue s := xiter_down_aux _i _k' s
                         (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)) in
     let break s x := (s, Break x) in
-    body _k s continue break.
+    body _k' s continue break.
 
 End Body.
 
 Definition xiter_down _i _k s body :=
   if _k ≤? _i then (s, Continue)
-  else xiter_down_aux body _i (_k - 1) s ltac:(tc).
+  else xiter_down_aux body _i _k s ltac:(tc).
 
 End XIterDown.
 
@@ -449,7 +448,7 @@ Lemma wp_xiter_down_aux {S A}
   ∀IntU _k k ,
   i ≤ k →
   ∀ ACC,
-  XITER_Z i (k + 1) Down
+  XITER_Z i k Down
     (λ j _ s continue break Q, ∀ _j, isInt _j j → wp (body _j s continue break) Q)
     (λ s Q, wp (xiter_down_aux (@body) _i _k s ACC) Q).
 Proof.
@@ -459,7 +458,7 @@ Proof.
   destruct ACC; simpl.
   wp_if; z.
   (* Case [k = i]. *)
-  { wp_apply Hbody; intros; wp_ret. }
+  { wp_ret. }
   (* Case [k ≠ i]. *)
   { wp_apply Hbody; intros.
     (* Normal continuation. *)
@@ -514,21 +513,20 @@ Variable body : ∀ {W}, int → (unit → W) → (A → W) → W.
 
 Fixpoint uxiter_down_aux _i _k (ACC : Acc (rilt _i) _k) : outcome A :=
   IFC _k =? _i THEN λ _,
-    let continue '() := Continue in
-    let break x := Break x in
-    body _k continue break
+    Continue
   ELSE λ Hki,
-    let continue '() := uxiter_down_aux _i (_k - 1)
+    let _k' := _k - 1 in
+    let continue '() := uxiter_down_aux _i _k'
                          (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)) in
     let break x := Break x in
-    body _k continue break.
+    body _k' continue break.
 
 End Body.
 
 Definition uxiter_down _i _k
   (body : ∀ {W}, int → (unit → W) → (A → W) → W) :=
   if _k ≤? _i then Continue
-  else uxiter_down_aux (@body) _i (_k - 1) ltac:(tc).
+  else uxiter_down_aux (@body) _i _k ltac:(tc).
 
 End UXIterDown.
 
@@ -540,7 +538,7 @@ Lemma wp_uxiter_down_aux {A}
   ∀IntU _k k ,
   i ≤ k →
   ∀ ACC,
-  UXITER_Z i (k + 1) Down
+  UXITER_Z i k Down
     (λ j _ continue break Q, ∀ _j, isInt _j j → wp (body _j continue break) Q)
     (λ Q, wp (uxiter_down_aux (@body) _i _k ACC) Q).
 Proof.
@@ -550,7 +548,7 @@ Proof.
   destruct ACC; simpl.
   wp_if.
   (* Case [k = i]. *)
-  { wp_apply Hbody; intros; wp_ret. }
+  { wp_ret. }
   (* Case [k ≠ i]. *)
   { wp_apply Hbody; intros.
     (* Normal continuation. *)
