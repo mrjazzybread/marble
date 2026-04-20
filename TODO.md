@@ -36,6 +36,13 @@
 
 * Why is `of_to_Z` an axiom in Rocq's stdlib?
 
+* Add more axioms to Rocq, e.g., `blit` and `blit'`?
+
+* Build an experimental version of Rocq that uses unsafe defensive
+  arrays, and measure its performance.
+
+* Protest against the small magnitude of `max_array_length`.
+
 # OCaml Extraction
 
 * Why does extraction sometimes change `if` to `match`?
@@ -49,27 +56,18 @@
 * Offer a choice between unsafe, defensive, and persistent arrays
   at extraction time.
 
-* Optionally cheat by using unverified versions of `blit`.
+* Use OCaml's uniform arrays (once they exist).
 
-* Do Rocq's default persistent arrays have good behavior
-  in the presence of a large number of updates?
-  One should copy the whole array from time to time
-  so that the cost of switching between versions remains bounded.
-  Test, and implement a new PArray module, if needed.
+* Optionally cheat by using unverified versions of `blit`.
 
 ## Partial Evaluation / Specialization
 
 * Can the extracted code be improved?
-  + Specialize of higher-order functions (e.g., loops)
+  + Specialize higher-order functions (e.g., loops)
   + Inline all small functions
   + Inline (not necessarily small) functions where useful
   + Eliminate useless parameters (e.g., loop-carried state of type `unit`)
   + Unroll loops
-  Attempting to derive an improved version by using `Derive`
-  and metavariables seems extremely difficult. Exercise:
-  first define an improved version of `find_index`,
-  then prove that it is equivalent to `find_index`.
-  If successful then try to derive this code systematically.
 
 ## Documentation
 
