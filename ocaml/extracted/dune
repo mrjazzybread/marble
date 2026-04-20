@@ -1,0 +1,20 @@
+(rocq.extraction
+  (prelude extract)
+  (extracted_modules
+    PrimArray ; type array
+    Base      ; type coq_Inhabited
+    iteration ; type outcome
+    compare   ; type coq_Leb
+    loop
+    array
+    sort
+    vector
+    pqueue
+  )
+  (theories Stdlib Equations stdpp listz marble)
+)
+
+(library
+  (name marble)
+  (libraries ia63)
+)

@@ -44,22 +44,11 @@ let reversed : construction =
 (* -------------------------------------------------------------------------- *)
 
 (* A benchmark of the code that I have extracted from Rocq, which is placed
-   in the module [Extracted.Make]. The parameter [A] is an implementation of
-   the module [Array]. We have several possible implementations; see below. *)
+   in the library [Marble]. *)
 
-module Make (A : sig
-  type 'a t
-  val make : uint63 -> 'a -> 'a t
-  val length : 'a t -> uint63
-  val get : 'a t -> uint63 -> 'a
-  val set : 'a t -> uint63 -> 'a -> 'a t
-  val of_array : 'a array -> 'a -> 'a t
-  val map : ('a -> 'b) -> 'a t -> 'b t
-(*
-  val blit : 'a t -> uint63 -> 'a t -> uint63 -> uint63 -> 'a t
-  val blit' : 'a t -> uint63 -> uint63 -> uint63 -> 'a t
- *)
-end) = struct
+module M = struct
+
+  module A = Array63
 
   let convert (a : int array) : uint63 A.t =
     A.of_array a inhabitant
@@ -75,17 +64,13 @@ end) = struct
     in
     ok Uint63.zero
 
-  (* The extracted code under test. *)
-
-  include Extracted.Make(A)
-
   (* A benchmark: sorting an integer array of size [n]. *)
 
-  let sort_benchmark n construction (array : string) : B.benchmark =
+  let sort_benchmark n construction sort sort_name : B.benchmark =
     let basis = n
     and name =
-      sprintf "sorting %s (size %d) (sort/%s)"
-        (snd construction) n array
+      sprintf "sorting %s (size %d) (%s/%s)"
+        (snd construction) n sort_name A.variant
     and run () =
       (* Construct a fresh mutable array of integers. *)
       let a : int array = (fst construction) n in
@@ -100,10 +85,10 @@ end) = struct
 
   (* A benchmark: blitting between integer arrays. *)
 
-  let blit_benchmark n blit (algorithm : string) (array : string) : B.benchmark =
+  let blit_benchmark n blit blit_name : B.benchmark =
     let basis = n
     and name =
-      sprintf "blitting (size %d) (%s/%s)" n algorithm array
+      sprintf "blitting (size %d) (%s/%s)" n blit_name A.variant
     and run () =
       (* Construct two arrays. *)
       let src : int array = sorted_array n
@@ -117,7 +102,7 @@ end) = struct
     in
     B.benchmark ~name ~quota ~basis ~run
 
-end (* Make *)
+end (* M *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -159,10 +144,7 @@ let blit_baseline n : B.benchmark =
 
 let blit_benchmarks n : B.benchmark list = [
   blit_baseline n;
-  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.blit "blit" "UnsafeArray");
-  (let module M = Make(UnsafeArray) in M.blit_benchmark n M.simple_blit_aux "simple_blit" "UnsafeArray");
-  (let module M = Make(DefensiveArray) in M.blit_benchmark n M.blit "blit" "DefensiveArray");
-  (let module M = Make(Parray) in M.blit_benchmark n M.blit "blit" "Parray");
+  M.blit_benchmark n Marble.Array.blit "Marble.Array.blit";
 ]
 
 (* -------------------------------------------------------------------------- *)
@@ -171,9 +153,7 @@ let blit_benchmarks n : B.benchmark list = [
 
 let sort_benchmarks n construction : B.benchmark list = [
   sort_baseline n construction;
-  (let module M = Make(UnsafeArray) in M.sort_benchmark n construction "UnsafeArray");
-  (let module M = Make(DefensiveArray) in M.sort_benchmark n construction "DefensiveArray");
-  (let module M = Make(Parray) in M.sort_benchmark n construction "Parray");
+  M.sort_benchmark n construction Marble.Sort.sort "Marble.Sort.sort";
 ]
 
 let sort_benchmarks n : B.benchmark list =

@@ -2,6 +2,9 @@ module U = Uint63
 
 type uint63 = U.t
 
+let variant =
+  "defensive"
+
 type 'a t =
   { mutable valid : bool; data : 'a array }
 

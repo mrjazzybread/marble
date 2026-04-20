@@ -2,6 +2,9 @@ module U = Uint63
 
 type uint63 = U.t
 
+let variant =
+  "unsafe"
+
 type 'a t =
   'a array
 

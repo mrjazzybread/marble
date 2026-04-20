@@ -8,6 +8,9 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
+let variant =
+  "persistent"
+
 (** Uniform Arrays: non-flat arrays (even floats are boxed, i.e., doesn't use
     {!Obj.double_array_tag}) *)
 module UArray :

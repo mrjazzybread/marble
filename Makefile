@@ -18,7 +18,7 @@ reinstall:
 
 .PHONY: bench
 bench:
-	@ dune exec extracted/main.exe -- --sort 16000
+	@ dune exec benchmark/main.exe -- --sort 16000
 
 # ------------------------------------------------------------------------------
 

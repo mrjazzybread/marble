@@ -1,0 +1,5 @@
+(library
+  (name persistent)
+  (libraries ia63)
+  (implements ia63)
+)

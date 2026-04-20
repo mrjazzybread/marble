@@ -1,0 +1,5 @@
+(library
+  (name ia63)
+  (wrapped false) ; so the module names Uint63 and Array63 are visible at the top level
+  (virtual_modules Array63)
+)
