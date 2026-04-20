@@ -7,6 +7,8 @@
 
 ## Arrays
 
+* `for_all` : inline loop body and inline away `negb`.
+
 * Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
   Is the cost at the leaves too high?
 
