@@ -1131,6 +1131,36 @@ indices) is needed. Hash tables are an example.
 
 ## Extraction to OCaml
 
-TODO
+TODO explain how the code is packaged as an OCaml library
+
+Thanks to Rocq's extraction mechanism,
+the code in this library can be translated to OCaml,
+and forms an OCaml library.
+
+At extraction time, an OCaml implementation of Rocq's primitive arrays
+must be chosen. Three possible implementations come to mind:
+
++ Persistent arrays,
+  as found for example in Rocq's kernel
+  or in Jean-Christophe Filliâtre's `parray` library.
+  These arrays allow accesses to old versions.
+
++ Defensive arrays.
+  These arrays do not allow accesses to old versions,
+  but detect them at runtime.
+  Thus, an attempt to access an outdated array
+  causes a failure.
+
++ Mutable arrays.
+  These arrays do not allow accesses to old versions
+  and do not detect them.
+  Thus, an attempt to access an outdated array
+  silently produces an incorrect result
+  or causes data corruption.
+
+Our code is designed to never access an old version of an array.
+Therefore, we want to use defensive arrays while *testing* it,
+so as to detect mistakes, and we want to use mutable arrays
+while *executing* out code with maximum performance in mind.
 
 <!--------------------------------------------------------------------------->
