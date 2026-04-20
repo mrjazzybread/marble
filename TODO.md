@@ -45,6 +45,12 @@
 
 # OCaml Extraction
 
+* Automate extraction in a clean way.
+  Use classic extraction or verified extraction?
+  Package the code as a ready-to-use OCaml library.
+  Offer a choice between the multiple implementations of arrays? (or just use unsafe arrays by default)
+  Set up random testing of the library using defensive arrays.
+
 * Why does extraction sometimes change `if` to `match`?
 
 * Are `let` constructs preserved through extraction?
