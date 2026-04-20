@@ -1,5 +1,5 @@
 (library
-  (name persistent)
+  (name ia63_unsafe)
   (libraries ia63)
   (implements ia63)
 )

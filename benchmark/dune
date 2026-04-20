@@ -1,4 +1,4 @@
 (executable
   (name main)
-  (libraries common marble unsafe)
+  (libraries common marble ia63_unsafe)
 )

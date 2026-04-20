@@ -1,5 +1,5 @@
 (library
-  (name defensive)
+  (name ia63_defensive)
   (libraries ia63)
   (implements ia63)
 )
