@@ -47,26 +47,19 @@
 
 # OCaml Extraction
 
-* Automate extraction in a clean way.
-  Use classic extraction or verified extraction?
-  Package the code as a ready-to-use OCaml library.
-  Offer a choice between the multiple implementations of arrays? (or just use unsafe arrays by default)
-  Set up random testing of the library using defensive arrays.
+* Set up random testing of the library using defensive arrays.
 
 * Why does extraction sometimes change `if` to `match`?
 
 * Are `let` constructs preserved through extraction?
   Check that no serious computation is duplicated.
 
-* Set up extraction in a clean way (via `dune`?)
-  so that the OCaml extracted code is neatly packaged.
-
-* Offer a choice between unsafe, defensive, and persistent arrays
-  at extraction time.
-
-* Use OCaml's uniform arrays (once they exist).
+* Our implementations of unsafe arrays and defensive arrays
+  should use OCaml's uniform arrays (once they exist).
 
 * Optionally cheat by using unverified versions of `blit`.
+
+* Use verified extraction?
 
 ## Partial Evaluation / Specialization
 
@@ -76,10 +69,6 @@
   + Inline (not necessarily small) functions where useful
   + Eliminate useless parameters (e.g., loop-carried state of type `unit`)
   + Unroll loops
-
-## Documentation
-
-* Complete the documentation (see TODOs there).
 
 ## Future Applications
 
