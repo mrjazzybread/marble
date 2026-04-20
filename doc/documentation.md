@@ -1131,36 +1131,44 @@ indices) is needed. Hash tables are an example.
 
 ## Extraction to OCaml
 
-TODO explain how the code is packaged as an OCaml library
-
 Thanks to Rocq's extraction mechanism,
 the code in this library can be translated to OCaml,
-and forms an OCaml library.
+forming an OCaml library
+named `marble`.
 
-At extraction time, an OCaml implementation of Rocq's primitive arrays
-must be chosen. Three possible implementations come to mind:
+To use this library, an OCaml implementation of Rocq's primitive arrays must
+be chosen. For this reason, together with `marble`, one of the following three
+libraries should be used:
 
-+ Persistent arrays,
-  as found for example in Rocq's kernel
-  or in Jean-Christophe Filliâtre's `parray` library.
-  These arrays allow accesses to old versions.
++ Persistent arrays ([`ia63_persistent`](../ocaml/ia63/ia63_persistent/array63.ml))
+  allow accesses to old versions.
 
-+ Defensive arrays.
-  These arrays do not allow accesses to old versions,
++ Defensive arrays ([`ia63_defensive`](../ocaml/ia63/ia63_defensive/array63.ml))
+  do not allow accesses to old versions,
   but detect them at runtime.
   Thus, an attempt to access an outdated array
   causes a failure.
 
-+ Mutable arrays.
-  These arrays do not allow accesses to old versions
++ Mutable arrays ([`ia63_unsafe`](../ocaml/ia63/ia63_unsafe/array63.ml))
+  do not allow accesses to old versions
   and do not detect them.
   Thus, an attempt to access an outdated array
   silently produces an incorrect result
   or causes data corruption.
 
-Our code is designed to never access an old version of an array.
-Therefore, we want to use defensive arrays while *testing* it,
-so as to detect mistakes, and we want to use mutable arrays
-while *executing* out code with maximum performance in mind.
+All three libraries are implementations of the virtual library `ia63`.
+Each of these libraries defines the modules
+`Uint63`
+([interface](../ocaml/ia63/ia63/uint63.mli))
+and
+`Array63`
+([interface](../ocaml/ia63/ia63/array63.mli)).
+These modules exist at the top level:
+their names need not (must not) be prefixed with `Ia63`.
+
+The code in `marble` is designed to never access an old version of an array.
+Therefore, ideally, one should use defensive arrays while *testing* this code,
+so as to detect mistakes, and one can use unsafe arrays while *executing* this
+code with maximum performance in mind.
 
 <!--------------------------------------------------------------------------->
