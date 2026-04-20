@@ -99,6 +99,9 @@ From marble Require loop.
 
 Extraction Inline
   loop.Ni
+  loop.iter_up
+  loop.xiter_up
+  loop.uxiter_up
 .
 
 From marble Require array.
