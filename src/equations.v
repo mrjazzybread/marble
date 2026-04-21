@@ -17,6 +17,8 @@ From Equations.Prop Require Export Logic. (* [inspect] *)
 Notation inspected x := (exist _ x _).
 From marble Require Import wf. (* TODO should be merged into stdpp *)
 
+(* -------------------------------------------------------------------------- *)
+
 (* The following notations offers syntactic sugar for a "rich"
    conditional construct. In the first branch, the hypothesis
    [e0 = true] appears; in the second branch, [e0 = false]
@@ -68,6 +70,41 @@ Lemma IFC_if {A} (e0 : bool)
 Proof.
   intros. destruct e0; congruence.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* In the definition of an infinite exitable loop, we need this sum type,
+   as well as a rich conditional on this sum type. *)
+
+(* We do not introduce sugared syntax here, though perhaps we could. *)
+
+Inductive message S A :=
+| MContinue:  S → message S A
+| MBreak: S → A → message S A.
+
+Arguments MContinue {S A} s.
+Arguments MBreak {S A} s x.
+
+Lemma MATCH_match_message {S A W} (m : message S A)
+  (continue' : ∀ s', m = MContinue s' → W)
+  (continue : S → W)
+  (break : S → A → W)
+:
+  (∀ s' Heq, continue' s' Heq = continue s') →
+  match m as m' return m = m' → _ with
+  | MContinue s' => λ Heq, continue' s' Heq
+  | MBreak s' x => λ _, break s' x
+  end eq_refl
+  =
+  match m with
+  | MContinue s' => continue s'
+  | MBreak s' x => break s' x
+  end.
+Proof.
+  intros. destruct m; eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 (* The tactic [cleanup] removes an equality hypothesis that is produced
    by [funelim] and that is usually unneeded. *)
