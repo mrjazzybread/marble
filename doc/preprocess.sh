@@ -7,8 +7,8 @@ set -euo pipefail
 # for links and replaces it with correct Markdown links. The result is printed
 # on stdout. There can be at most one custom link per line.
 
-REPO=https://gitlab.inria.fr/fpottier/marble/-/blob/main/src/
-SRC=../src
+REPO=https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/
+SRC=../theories
 
 echo "<!--- THIS FILE HAS BEEN GENERATED based on documentation.md.pre -->"
 

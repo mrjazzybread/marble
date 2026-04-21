@@ -3,7 +3,7 @@
 # The file documentation.md is generated from documentation.md.pre.
 
 # The preprocessor recognizes the syntax (array.v:Lemma foobar),
-# uses grep to search for "Lemma foobar" in the file src/array.v
+# uses grep to search for "Lemma foobar" in the file theories/array.v
 # and produces a link to this particular line in the repository.
 
 all: documentation.md
@@ -18,7 +18,7 @@ clean:
 debug:
 	./preprocess.sh documentation.md.pre
 
-%.md: %.md.pre $(wildcard ../src/*.v) preprocess.sh
+%.md: %.md.pre $(wildcard ../theories/*.v) preprocess.sh
 	@ rm -f $@
 	./preprocess.sh $< > $@
 	@ chmod u-w $@

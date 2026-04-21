@@ -136,7 +136,7 @@ At this time,
 this form cannot be combined with `introducing:` or `shadowing:`.
 
 A small number of generally useful tactics are provided in the file
-(`tactics.v`)[../src/tactics.v]. In particular, the tactic
+(`tactics.v`)[../theories/tactics.v]. In particular, the tactic
 [`tc`](tactics.v:Ltac tc )
 and its depth-indexed variants [`tc0` to `tc7`](tactics.v:Ltac tc0)
 perform type class search and can solve arithmetic side conditions
@@ -387,7 +387,7 @@ We provide several tactics that help work with these specifications:
 
 ## Iteration on Machine Integers
 
-The file [`loop.v`](../src/loop.v)
+The file [`loop.v`](../theories/loop.v)
 offers several higher-order functions
 that implement loops over an interval of the machine integers.
 
@@ -743,7 +743,7 @@ to invoke this tactic once at the beginning of a proof.
 
 ## Sorting Arrays
 
-The file [`sort.v`](../src/sort.v) contains algorithms that sort arrays and
+The file [`sort.v`](../theories/sort.v) contains algorithms that sort arrays and
 merge sorted arrays.
 
 The desired ordering, and comparison function, are provided in an implicit
@@ -813,7 +813,7 @@ to provide suitable instances of these type classes.
   the new array to be known in the proof.
 
 A number of definitions, lemmas, and tactics related to sorting exist in the
-file [`sorting.v`](../src/sorting.v). They are not intended to be used by end
+file [`sorting.v`](../theories/sorting.v). They are not intended to be used by end
 users of the library.
 
 <!--------------------------------------------------------------------------->
@@ -931,7 +931,7 @@ reasoning rules, which allow the user to access the array `a` directly, while
 still reasoning at the level of abstraction of the vector.
 
 We do not describe this API here. For an example of its use,
-see the file [`pqueue.v`](../src/pqueue.v),
+see the file [`pqueue.v`](../theories/pqueue.v),
 where the function [`move_up`](pqueue.v:Fixpoint move_up)
 uses direct array accesses,
 and the [proof](pqueue.v:Lemma wp_move_up) of this function

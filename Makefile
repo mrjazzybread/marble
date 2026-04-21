@@ -42,7 +42,7 @@ FIND     := $(shell if command -v gfind >/dev/null ; then echo gfind ; else echo
 
 .PHONY: headache
 headache:
-	@ for f in $(shell $(FIND) src -type f -regex ".*\.v") ; do \
+	@ for f in $(shell $(FIND) theories -type f -regex ".*\.v") ; do \
 	  $(HEADACHE) -c headache.config -h $(HEADER) $$f ; \
 	done
 
