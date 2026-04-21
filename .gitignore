@@ -3,3 +3,4 @@
 .nia.cache
 _build
 _opam
+*.install
