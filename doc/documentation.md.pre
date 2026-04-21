@@ -327,7 +327,7 @@ that implement infinite exitable loops.
   The well-founded ordering `≺` is chosen by the user.
 
 + [`loop body Hbody s Hinv`](loop.v:Fixpoint loop_aux)
-  ([specification](loop.v:Lemma wp_loop))
+  ([specification](loop.v:Lemma wp_loop s))
   also requires an initial state `s`
   and a loop body `body`.
   The calling convention of the loop body is `body s`:

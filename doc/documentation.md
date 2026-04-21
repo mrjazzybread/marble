@@ -328,7 +328,7 @@ that implement infinite exitable loops.
   The well-founded ordering `≺` is chosen by the user.
 
 + [`loop body Hbody s Hinv`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L259)
-  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L392))
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L462))
   also requires an initial state `s`
   and a loop body `body`.
   The calling convention of the loop body is `body s`:
