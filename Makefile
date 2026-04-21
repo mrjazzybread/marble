@@ -66,7 +66,7 @@ THIS     := marble
 # ------------------------------------------------------------------------------
 
 # The repository's URL (https).
-REPO     := https://gitlab.inria.fr/fpottier/($THIS)
+REPO     := https://gitlab.inria.fr/fpottier/$(THIS)
 
 # The archive URL (https).
 ARCHIVE  := $(REPO)/-/archive/$(DATE)/archive.tar.gz
