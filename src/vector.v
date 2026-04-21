@@ -284,7 +284,7 @@ Proof.
   destructIsVectorLayers.
   wp_get x. wp_ret. split; [ eauto |].
   introIsVectorLayersWithWitness ({[x]} ++ unoccupied); tc.
-  subst x. isArray.
+  isArray.
 Qed.
 
 (* An alternate specification of [pop]. *)
