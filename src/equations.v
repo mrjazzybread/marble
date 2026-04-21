@@ -37,7 +37,7 @@ Global Notation "'IFC' e0 'THEN' e1 'ELSE' e2" :=
       if e0 as b
       return e0 = b → _
       then e1 else e2
-    ) eq_refl
+    ) eq_refl (* convoy pattern *)
   )
   (at level 70).
 
