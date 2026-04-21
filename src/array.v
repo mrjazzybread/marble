@@ -956,7 +956,7 @@ Lemma wp_blit :
   valid_seg j (j + n) ys →
   wp (blit a _i b _j _n) (blit_post xs i ys j n).
 Proof.
-  intros. arrays. lengths.
+  intros. arrays.
   rewrite blit_eq. unfold plain_blit.
   wp_bind_eq.
   wp_op wp_iter_up with invariant: (λ k, blit_post xs i ys j (k - i));
