@@ -294,6 +294,56 @@ and can prove goals that involve them.
 
 <!--------------------------------------------------------------------------->
 
+## Infinite Exitable Loops
+
+An infinite exitable loop is a loop where the loop body decides whether
+it wishes to continue (iterate once more) or break (stop). It is very
+much like a loop of the form `while (true) do { body }` in C, where
+the loop body `body` can contain `break` and `continue` instructions.
+
+Of course, in Rocq, such a loop is in fact *never* infinite.
+On the contrary, it must be finite:
+the state that is transformed at each loop iteration
+must decrease along a well-founded relation `≺`.
+
+In contrast with the loops described [in the next section](#iteration), where
+there is a producer (the iteration function) and a consumer (the loop body),
+and where the producer is responsible for ensuring termination, in an infinite
+exitable loop, there is no producer: thus the loop body alone is responsible
+for ensuring termination.
+
+The file [`loop.v`](../theories/loop.v)
+offers two higher-order functions
+that implement infinite exitable loops.
+
++ [`simple_loop s @@ body`](loop.v:Fixpoint simple_loop_aux)
+  ([specification](loop.v:Lemma wp_simple_loop))
+  expects just an initial state `s` and a loop body `body`.
+  The calling convention of the loop body is `body s continue break`:
+  that is, in addition to the current state `s`,
+  the body receives two continuations `continue` and `break`.
+  It must call either `continue s' pf`, where `pf` is a proof of `s' ≺ s`,
+  or `break s' x`.
+  The well-founded ordering `≺` is chosen by the user.
+
++ [`loop body Hbody s Hinv`](loop.v:Fixpoint loop_aux)
+  ([specification](loop.v:Lemma wp_loop))
+  also requires an initial state `s`
+  and a loop body `body`.
+  The calling convention of the loop body is `body s`:
+  the loop body returns either `MsgContinue s'`, a request to continue,
+  or `Break s' x`, a request to stop.
+  The user must choose a loop invariant `inv`
+  and supply
+  a proof `Hbody` that the loop body preserves the invariant
+    and causes a decrease in the current state,
+  as well as a proof `Hinv` that the invariant holds initially.
+
+Because `loop` allows exploiting the loop invariant to establish termination,
+it is more powerful than `simple_loop`.
+
+<!--------------------------------------------------------------------------->
+
 ## Iteration
 
 In functional programming languages, it is common to write iteration functions

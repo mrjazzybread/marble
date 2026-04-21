@@ -42,7 +42,7 @@ is needed in a proof of termination,
 that is,
 when a proof of termination
 needs a hypothesis of type `e0 = true` or `e0 = true`.
-The definition of [`iter_down`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L495)
+The definition of [`iter_down`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L546)
 offers an example of this.
 
 <!--------------------------------------------------------------------------->
@@ -64,23 +64,23 @@ The basic reasoning rules are
 [sequencing](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L135),
 [conditional](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L110),
 and
-[consequence](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L232).
+[consequence](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L217).
 
 To apply these reasoning rules, we offer a number of tactics.
 
-The tactic [`wp_ret`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L262) should be used when the goal is
+The tactic [`wp_ret`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L247) should be used when the goal is
 `wp e Q` where `e` is a variable or a simple expression,
 such as an arithmetic expression. It transforms the goal into `Q e`
 and attempts to solve it using the tactic
-[`wp_ret_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L257), which can be customized.
+[`wp_ret_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L242), which can be customized.
 
-The tactic [`wp_if`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L275) should be used when the goal is
+The tactic [`wp_if`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L260) should be used when the goal is
 `wp e Q` where `e` is a conditional construct (that is, `if/then/else`
 or `IF/THEN/ELSE` or `IFC/THEN/ELSE`). It generates one subgoal for the
 Boolean condition (which ideally should be automatically solved) and
 one subgoal for each branch.
 
-The tactic [`wp_op`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L430) is the main workhorse of
+The tactic [`wp_op`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L412) is the main workhorse of
 this small tactic library. It should be used when the goal is a function call
 or begins with a function call: that is, when the goal is `wp (f y z ...) Q`
 or `wp (do x ← f y z ... ; e) Q`. This tactic expects one argument, namely a
@@ -89,9 +89,9 @@ applies the sequencing rule or the consequence rule (whichever is applicable);
 then, it applies the lemma whose name is provided. If this lemma has
 hypotheses (which are usually known as preconditions) then it attempts
 to solve these subgoals by applying the tactics
-[`wp_precondition_primary_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L357)
+[`wp_precondition_primary_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L339)
 and
-[`wp_precondition_secondary_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L361),
+[`wp_precondition_secondary_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L343),
 which can be customized.
 It produces two kinds of subgoals:
 first, the preconditions that it was not able to solve;
@@ -99,19 +99,19 @@ second, the subgoal that represents
 the continuation of the operation `f y z ...`.
 
 In the last subgoal of `wp_op <lemma>`,
-one typically uses either [`wp_intro x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L310)
+one typically uses either [`wp_intro x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L292)
 or
-[`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L329).
+[`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L311).
 
-[`wp_intro x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L310)
+[`wp_intro x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L292)
 introduces the result of the operation `f y z ...`
 under the name `x`. (`x` can be a variable or a composite pattern.)
 It also introduces a hypothesis about `x`,
 which represents the postcondition of the operation `f y z ...`,
-and uses the tactic [`wp_intro_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L301),
+and uses the tactic [`wp_intro_hook`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L283),
 which can be customized, to destruct or simplify this postcondition.
 
-[`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L329)
+[`wp_shadow x`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/wp.v?ref_type=heads#L311)
 also introduces the result of the operation `f y z ...`
 under the name `x`. (In this case, `x` must be a variable.)
 It assumes that there is already a variable named `x`, and
@@ -295,6 +295,56 @@ and can prove goals that involve them.
 
 <!--------------------------------------------------------------------------->
 
+## Infinite Exitable Loops
+
+An infinite exitable loop is a loop where the loop body decides whether
+it wishes to continue (iterate once more) or break (stop). It is very
+much like a loop of the form `while (true) do { body }` in C, where
+the loop body `body` can contain `break` and `continue` instructions.
+
+Of course, in Rocq, such a loop is in fact *never* infinite.
+On the contrary, it must be finite:
+the state that is transformed at each loop iteration
+must decrease along a well-founded relation `≺`.
+
+In contrast with the loops described [in the next section](#iteration), where
+there is a producer (the iteration function) and a consumer (the loop body),
+and where the producer is responsible for ensuring termination, in an infinite
+exitable loop, there is no producer: thus the loop body alone is responsible
+for ensuring termination.
+
+The file [`loop.v`](../theories/loop.v)
+offers two higher-order functions
+that implement infinite exitable loops.
+
++ [`simple_loop s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L86)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L126))
+  expects just an initial state `s` and a loop body `body`.
+  The calling convention of the loop body is `body s continue break`:
+  that is, in addition to the current state `s`,
+  the body receives two continuations `continue` and `break`.
+  It must call either `continue s' pf`, where `pf` is a proof of `s' ≺ s`,
+  or `break s' x`.
+  The well-founded ordering `≺` is chosen by the user.
+
++ [`loop body Hbody s Hinv`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L259)
+  ([specification](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L392))
+  also requires an initial state `s`
+  and a loop body `body`.
+  The calling convention of the loop body is `body s`:
+  the loop body returns either `MsgContinue s'`, a request to continue,
+  or `Break s' x`, a request to stop.
+  The user must choose a loop invariant `inv`
+  and supply
+  a proof `Hbody` that the loop body preserves the invariant
+    and causes a decrease in the current state,
+  as well as a proof `Hinv` that the invariant holds initially.
+
+Because `loop` allows exploiting the loop invariant to establish termination,
+it is more powerful than `simple_loop`.
+
+<!--------------------------------------------------------------------------->
+
 ## Iteration
 
 In functional programming languages, it is common to write iteration functions
@@ -355,7 +405,7 @@ It is worth noting that the type of the producer state is not necessarily
 the type of the elements that the consumer receives. Therefore,
 `ITER_Z` *can* be used to describe a loop where the
 consumer receives, say, machine integers
-(as in [`loop.iter_down`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L547)),
+(as in [`loop.iter_down`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L598)),
 or array elements
 (as in [`array.iteri`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/array.v?ref_type=heads#L1632)).
 
@@ -402,7 +452,7 @@ This is visible in the definition of
 and in the auxiliary definition
 [`z_step`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/iteration.v?ref_type=heads#L507)
 
-+ [`iter_down _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L537)
++ [`iter_down _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L588)
   applies the loop body `body` to every machine
   integer from `_k`, excluded, down to `_i`, included. A state of type `S`,
   whose initial value is `s`, is transformed at each iteration
@@ -411,11 +461,11 @@ and in the auxiliary definition
   To reason about a call to `iter_down`, use the tactic
   `wp_op wp_iter_down with invariant: ...`.
   At the beginning of the loop body, use the tactic
-  [`wp_iter_down_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L805).
+  [`wp_iter_down_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L856).
   This tactic introduces the current index `_j` and its integer model `j`
   as well as the current state `s`.
 
-+ [`xiter_down _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L838)
++ [`xiter_down _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L889)
   applies the loop body `body` to every machine
   integer from `_k`, excluded, down to `_i`, included. This is an exitable
   loop. An invocation of the loop body takes the form `body _j s continue break`.
@@ -427,9 +477,9 @@ and in the auxiliary definition
   To reason about a call to `xiter_down`, use the tactic
   `wp_op wp_xiter_down with invariant: ...`.
   At the beginning of the loop body, use the tactic
-  [`wp_xiter_down_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L898).
+  [`wp_xiter_down_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L949).
 
-+ [`uxiter_down _i _k @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L927)
++ [`uxiter_down _i _k @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L978)
   is a variant of `xiter_down` without a state `s`.
   It is useful when one wishes to scan an interval
   and one does not need to accumulate information during the scan.
@@ -437,20 +487,20 @@ and in the auxiliary definition
   To reason about a call to `uxiter_down`, use the tactic
   `wp_op wp_uxiter_down with invariant: ...`.
   At the beginning of the loop body, use the tactic
-  [`wp_xiter_down_body _j j`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L986).
+  [`wp_xiter_down_body _j j`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1037).
 
-+ [`iter_up _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1028)
++ [`iter_up _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1079)
   applies the loop body `body` to every machine integer
   from `_i`, included, up to `_k`, excluded.
 
   To reason about a call to `iter_up`, use the tactic
   `wp_op wp_iter_up with invariant: ...`.
   At the beginning of the loop body, use the tactic
-  [`wp_iter_up_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1247).
+  [`wp_iter_up_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1298).
   This tactic introduces the current index `_j` and its integer model `j`
   as well as the current state `s`.
 
-+ [`xiter_up _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1277)
++ [`xiter_up _i _k s @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1328)
   applies the loop body `body` to every machine integer
   from `_i`, included, up to `_k`, excluded.
   This is an exitable loop.
@@ -458,15 +508,15 @@ and in the auxiliary definition
   To reason about a call to `xiter_up`, use the tactic
   `wp_op wp_xiter_up with invariant: ...`.
   At the beginning of the loop body, use the tactic
-  [`wp_xiter_up_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1329).
+  [`wp_xiter_up_body _j j s`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1380).
 
-+ [`uxiter_up _i _k @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1357)
++ [`uxiter_up _i _k @@ body`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1408)
   is a variant of `xiter_up` without a state `s`.
 
   To reason about a call to `uxiter_up`, use the tactic
   `wp_op wp_uxiter_up with invariant: ...`.
   At the beginning of the loop body, use the tactic
-  [`wp_xiter_up_body _j j`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1405).
+  [`wp_xiter_up_body _j j`](https://gitlab.inria.fr/fpottier/marble/-/blob/main/theories/loop.v?ref_type=heads#L1456).
 
 <!--------------------------------------------------------------------------->
 
