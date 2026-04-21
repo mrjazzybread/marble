@@ -86,7 +86,6 @@ release:
 # Make sure that the documentation can be built.
 	@ make doc
 # Make sure the current version can be compiled and installed.
-	@ make clean
 	@ dune build -p $(ROCQLIB) @install
 # Check if this is the main branch.
 	@ if [ "$$(git symbolic-ref --short HEAD)" != "main" ] ; then \
