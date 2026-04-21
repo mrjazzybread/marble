@@ -133,6 +133,8 @@ From marble Require pqueue.
 
 Separate Extraction
 
+  loop.simple_loop
+  loop.loop
   loop.iter_up
   loop.iter_down
   loop.xiter_up

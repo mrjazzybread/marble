@@ -151,6 +151,57 @@ End SimpleLoop.
 
 (* -------------------------------------------------------------------------- *)
 
+(* In the definition of our second infinite exitable loop, we need
+   this sum type, as well as a rich conditional on this sum type. *)
+
+(* We do not introduce sugared syntax here, though perhaps we could. *)
+
+Inductive message S A :=
+| MContinue:  S → message S A
+| MBreak: S → A → message S A.
+
+Arguments MContinue {S A} s.
+Arguments MBreak {S A} s x.
+
+Lemma MATCH_match_message {S A W} (m : message S A)
+  (continue' : ∀ s', m = MContinue s' → W)
+  (continue : S → W)
+  (break : S → A → W)
+:
+  (∀ s' Heq, continue' s' Heq = continue s') →
+  match m as m' return m = m' → _ with
+  | MContinue s' => λ Heq, continue' s' Heq
+  | MBreak s' x => λ _, break s' x
+  end eq_refl
+  =
+  match m with
+  | MContinue s' => continue s'
+  | MBreak s' x => break s' x
+  end.
+Proof.
+  intros. destruct m; eauto.
+Qed.
+
+Lemma wp_MATCH_message {S A W} (m : message S A)
+  (continue : ∀ s', m = MContinue s' → W)
+  (break : S → A → W) (Q : W → Prop) :
+  (∀ s',   ∀ Heq : m = MContinue s', wp (continue s' Heq) Q) →
+  (∀ s' x, ∀ Heq : m = MBreak s' x , wp (break s' x) Q) →
+  wp (
+    match m as m' return m = m' → _ with
+    | MContinue s' => λ Heq, continue s' Heq
+    | MBreak s' x => λ _, break s' x
+    end eq_refl
+  ) Q.
+Proof.
+  intros. destruct m; eauto.
+Qed.
+
+Ltac wp_match_message :=
+  simple eapply wp_MATCH_message; intros.
+
+(* -------------------------------------------------------------------------- *)
+
 (* We continue with a more complex loop, where the termination argument can
    exploit a loop invariant. Furthermore, we allow the proofs of preservation
    and termination to be performed together, a posteriori, and in [wp] style.

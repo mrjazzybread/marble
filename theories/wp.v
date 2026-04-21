@@ -212,21 +212,6 @@ Proof.
   unfold isBool. intros. destruct b; eauto.
 Qed.
 
-Lemma wp_MATCH_message {S A W} (m : message S A)
-  (continue : ∀ s', m = MContinue s' → W)
-  (break : S → A → W) (Q : W → Prop) :
-  (∀ s',   ∀ Heq : m = MContinue s', wp (continue s' Heq) Q) →
-  (∀ s' x, ∀ Heq : m = MBreak s' x , wp (break s' x) Q) →
-  wp (
-    match m as m' return m = m' → _ with
-    | MContinue s' => λ Heq, continue s' Heq
-    | MBreak s' x => λ _, break s' x
-    end eq_refl
-  ) Q.
-Proof.
-  intros. destruct m; eauto.
-Qed.
-
 (* The consequence rule. *)
 
 Lemma wp_conseq {A} (a : A) (Q Q' : A → Prop) :
@@ -278,9 +263,6 @@ Ltac wp_if :=
   | simple eapply wp_IFC
   | simple eapply wp_if
   ]; [ tc | intros | intros ].
-
-Ltac wp_match_message :=
-  simple eapply wp_MATCH_message; intros.
 
 (* Reasoning about a [bind] construct whose left-hand side is pure. *)
 

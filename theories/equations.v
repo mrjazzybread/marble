@@ -73,39 +73,6 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* In the definition of an infinite exitable loop, we need this sum type,
-   as well as a rich conditional on this sum type. *)
-
-(* We do not introduce sugared syntax here, though perhaps we could. *)
-
-Inductive message S A :=
-| MContinue:  S → message S A
-| MBreak: S → A → message S A.
-
-Arguments MContinue {S A} s.
-Arguments MBreak {S A} s x.
-
-Lemma MATCH_match_message {S A W} (m : message S A)
-  (continue' : ∀ s', m = MContinue s' → W)
-  (continue : S → W)
-  (break : S → A → W)
-:
-  (∀ s' Heq, continue' s' Heq = continue s') →
-  match m as m' return m = m' → _ with
-  | MContinue s' => λ Heq, continue' s' Heq
-  | MBreak s' x => λ _, break s' x
-  end eq_refl
-  =
-  match m with
-  | MContinue s' => continue s'
-  | MBreak s' x => break s' x
-  end.
-Proof.
-  intros. destruct m; eauto.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
 (* The tactic [cleanup] removes an equality hypothesis that is produced
    by [funelim] and that is usually unneeded. *)
 
