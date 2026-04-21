@@ -1,9 +1,9 @@
 # To Do
 
-## Loops
+## Bugs
 
-* Can we prove an equality between `iter_up` and `iter_up_unrolled`?
-  This would allow deciding a posteriori whether unrolling is desired.
+* `wp.v` should not use `autorewrite with z clength app_assoc`;
+  this introduces a surprising dependency on `listz`.
 
 ## Arrays
 
@@ -28,6 +28,10 @@
   `n` and `a` are separately maintained by the user. Thus the user
   can call `get` and `set` without allocating new pairs. Use this
   API in `pqueue`.
+
+## Priority Queues
+
+* Verify a loop that extracts and inserts elements into the queue.
 
 ## Rocq Technique
 
@@ -78,7 +82,7 @@
 * Chunked sequences.
 * Doubly-linked list (permutation) inside an array or vector.
 * Union-find inside an array or vector.
-* Depth-first search, SCCs and other graph algorithms.
+* Depth-first search, SCCs, Dijkstra, and other graph algorithms.
   Number vertices from `0` to `n-1` and use arrays everywhere.
 * Algorithms from `fix`.
 * Congruence closure.
