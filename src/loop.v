@@ -26,8 +26,409 @@ Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
 
-(* This file defines several higher-order functions that implement
-   loops and interruptible loops over semi-open intervals of the
+(* This file defines several higher-order functions that implement loops and
+   exitable loops. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* We first define two higher-order functions, [simple_loop] and [loop],
+   which implement an exitable infinite loop. *)
+
+(* In an infinite loop, there is no producer state; one could say that
+   the producer state has type [unit] and the predicate [complete] is
+   [λ _, false]. The producer never terminates: the loop must be ended
+   by the consumer. Therefore the obligation of proving that the loop
+   terminates falls entirely onto the consumer. The consumer must
+   prove that the consumer state evolves along a well-founded relation
+   [R]. We write [s' ≺ s] for [R s' s]. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* We begin with a simple loop, where the termination argument cannot exploit
+   a loop invariant. This loop combinator expects the loop body to be written
+   in double-continuation-passing style: that is, the loop body receives two
+   continuations [continue] and [break]. *)
+
+(* When calling [continue s'], the loop body must supply a proof of [s' ≺ s]. *)
+
+Section SimpleLoop.
+
+(* [S] is the type of the consumer's state. *)
+
+(* [A] is the type of the final result that the consumer returns,
+   in addition to the state, once the loop ends. In other words,
+   it is the type of [x] in [break s x]. *)
+
+Context {S A : Type}.
+Implicit Types s : S.
+
+(* [R] is a well-founded relation on the consumer state. *)
+
+Variable R : relation S.
+Context `{WellFounded S R}.
+Infix "≺" := R (at level 70, no associativity).
+
+Section Body.
+
+(* The calling convention of the loop body is [body s continue break].
+   The body can choose to either call [continue s' pf], where [pf] is
+   a proof of [s' ≺ s], or call [break s' x]. *)
+
+Variable body :
+  ∀ {W},
+  ∀ s : S,
+  (∀ s' : S, s' ≺ s → W) →
+  (S → A → W) →
+  W.
+
+(* The code. *)
+
+Fixpoint simple_loop_aux s (ACC : Acc R s) : S * outcome A :=
+  let continue s' (pf : s' ≺ s) := simple_loop_aux s' (Acc_inv ACC pf) in
+  let break s x := (s, Break x) in
+  body s continue break.
+
+End Body.
+
+Definition simple_loop s body :=
+  simple_loop_aux body s ltac:(tc).
+
+(* A specification of this infinite exitable loop. *)
+
+(* This can be viewed as a variant of [XITER] in iteration.v, where the
+   producer state has type [unit], the predicate [complete] is [false], and
+   the continuation [continue] expects a proof that the state decreases. *)
+
+Definition SIMPLE_LOOP
+  (body : ∀ {W} s, (∀ s' : S, s' ≺ s → W) → (S → A → W) → W)
+  (loop : S * outcome A)
+  (s : S)
+:=
+  ∀ inv ,
+  (* Initially, [out] is [Continue]. *)
+  inv s Continue →
+  (* When the loop body is invoked,
+     it can assume that [out] is [Continue]. *)
+  ( ∀ s,
+    inv s Continue →
+    ∀ {W} (Q : W → Prop) (continue : ∀ s', s' ≺ s → W) (break : S → A → W),
+    (* Invoking [continue s pf] is like returning [(s, Continue)]. *)
+    (∀ s' (pf : s' ≺ s), inv s' Continue  → wp (continue s' pf) Q) →
+    (* Invoking [break s x] is like returning [(s, Break x)]. *)
+    (∀ s' x, inv s' (Break x) → wp (break s' x) Q) →
+    wp (body s continue break) Q
+  ) →
+  (* Once the loop ends, we must have [broken out]. *)
+  wp loop (λ '(s, out), inv s out ∧ broken out).
+
+(* [simple_loop_aux] is correct. *)
+
+Lemma wp_simple_loop_aux
+  (body : ∀ {W} s, (∀ s' : S, s' ≺ s → W) → (S → A → W) → W)
+  s ACC :
+  SIMPLE_LOOP (@body) (simple_loop_aux (@body) s ACC) s.
+Proof.
+  unfold SIMPLE_LOOP.
+  by dependent induction on s ACC. intros s Achild IH.
+  intros inv Hinit Hbody.
+  simpl simple_loop_aux.
+  wp_apply Hbody.
+  (* Exit continuation. *)
+  { intros. wp_ret. eauto. }
+Qed.
+
+(* [simple_loop] is correct. *)
+
+Lemma wp_simple_loop
+  (body : ∀ {W} s, (∀ s' : S, s' ≺ s → W) → (S → A → W) → W)
+  s :
+  SIMPLE_LOOP (@body) (simple_loop s (@body)) s.
+Proof.
+  eapply wp_simple_loop_aux.
+Qed.
+
+End SimpleLoop.
+
+(* -------------------------------------------------------------------------- *)
+
+(* We continue with a more complex loop, where the termination argument can
+   exploit a loop invariant. Furthermore, we allow the proofs of preservation
+   and termination to be performed together, a posteriori, and in [wp] style.
+   The only proof that still must be provided a priori is the proof that the
+   invariant holds initially. *)
+
+(* We DO NOT expect the loop body to be written in continuation-passing style,
+   because this seems to make things more difficult. Instead, we require the
+   loop body to return a value of type [message], a sum type. Therefore it is
+   clear that the loop body can terminate only once. If the loop body were
+   written in CPS style then it could potentially invoke several continuations
+   (and throw away their results, except one) and it would be unclear how to
+   extract the witnesses that we need out of a [wp] judgement about the body. *)
+
+(* The loop invariant that is supplied at function definition time, [inv],
+   need not be very rich. It should be just strong enough to argue that the
+   loop terminates. If needed, later on, it is possible to propose a richer
+   loop invariant, [inv']. See the reasoning rules [wp_loop] and [wp_loop']. *)
+
+Section Loop.
+
+Context {S A : Type}.
+Implicit Types s : S.
+
+Variable R : relation S.
+Context `{WellFounded S R}.
+Infix "≺" := R (at level 70, no associativity).
+
+Section Body.
+
+(* The calling convention of the loop body is [body s]. The body can
+   return either [MContinue s'] or [MBreak s' x]. While defining the
+   loop body, there is no need to argue about invariant preservation
+   or about termination. *)
+
+Variable body : S → message S A.
+
+(* The loop invariant takes the form [inv s out]. *)
+
+Variable inv : S → outcome A → Prop.
+
+(* The invariant preservation argument must be provided as follows: *)
+
+Variable preservation :
+  ∀ {s s'}, inv s Continue → body s = MContinue s' → inv s' Continue.
+
+(* The termination argument must be provided in the following form.
+   The termination argument may exploit the loop invariant. *)
+
+Variable decrease :
+  ∀ {s s'}, inv s Continue → body s = MContinue s' → s' ≺ s.
+
+(* The code of the auxiliary function [loop_aux]. *)
+
+Fixpoint loop_aux s (ACC : Acc R s) (Hinv : inv s Continue)
+: S * outcome A :=
+  match body s as m return (body s = m → _) with
+  | MBreak s' x => λ _,
+      (s', Break x)
+  | MContinue s' => λ Heq,
+      loop_aux s'
+        (Acc_inv ACC (decrease Hinv Heq))
+        (preservation Hinv Heq)
+  end eq_refl.
+
+End Body.
+
+Implicit Types body : S → message S A.
+Implicit Types inv : S → outcome A → Prop.
+
+(* A specification of the loop body. *)
+
+(* When the loop body is invoked, it can assume that [out] is [Continue]. *)
+
+(* The loop body must prove that it preserves the invariant. Furthermore,
+   if it wishes to continue with state [s'] then it must prove [s' ≺ s].  *)
+
+(* [BODY'] is a variant of [BODY] where there is no need to prove [s' ≺ s]. *)
+
+Definition BODY body inv :=
+  ∀ s,
+  inv s Continue →
+  wp (body s) (λ m,
+    match m with
+    | MContinue s' => s' ≺ s ∧ inv s' Continue
+    | MBreak s' x  =>          inv s' (Break x)
+    end).
+
+Definition BODY' body inv :=
+  ∀ s,
+  inv s Continue →
+  wp (body s) (λ m,
+    match m with
+    | MContinue s' =>          inv s' Continue
+    | MBreak s' x  =>          inv s' (Break x)
+    end).
+
+(* A specification of this infinite exitable loop. *)
+
+(* [LOOP'] is a variant of [LOOP] where the loop body does not have to prove
+   [s' ≺ s]. *)
+
+Definition LOOP body inv (loop : S * outcome A) (s : S) :=
+  (* Under the assumption that the body is correct, *)
+  BODY body inv →
+  (* once the loop ends, we must have [broken out]. *)
+  wp loop (λ '(s, out), inv s out ∧ broken out).
+
+Definition LOOP' body inv (loop : S * outcome A) (s : S) :=
+  (* Under the assumption that the body is correct, *)
+  BODY' body inv →
+  (* once the loop ends, we must have [broken out]. *)
+  wp loop (λ '(s, out), inv s out ∧ broken out).
+
+(* We now prove a few technical lemmas that help us define [loop] below. *)
+
+(* If the body satisfies its specification [BODY body inv] then, when the
+   body returns [MContinue s'], both [s' ≺ s] and [inv s' Continue] hold.
+   This lets us produce the proofs [preservation] and [decrease] that
+   [loop_aux] expects. *)
+
+Local Lemma decrease_and_preservation body inv :
+  BODY body inv →
+  ∀ s s',
+  inv s Continue →
+  body s = MContinue s' →
+  s' ≺ s ∧ inv s' Continue.
+Proof.
+  intros Hbody ? ? Hinv Heq.
+  unfold BODY, wp in Hbody.
+  specialize (Hbody s Hinv).
+  rewrite Heq in Hbody. (* ha! *)
+  assumption.
+Qed.
+
+Local Lemma decrease body inv :
+  BODY body inv →
+  ∀ s s', inv s Continue → body s = MContinue s' → s' ≺ s.
+Proof.
+  intros. eapply decrease_and_preservation; eauto.
+Qed.
+
+Local Lemma preservation body inv :
+  BODY body inv →
+  ∀ s s', inv s Continue → body s = MContinue s' → inv s' Continue.
+Proof.
+  intros. eapply decrease_and_preservation; eauto.
+Qed.
+
+Local Lemma preservation' body inv :
+  BODY' body inv →
+  ∀ s s', inv s Continue → body s = MContinue s' → inv s' Continue.
+Proof.
+  intros Hbody ? ? Hinv Heq.
+  unfold BODY, wp in Hbody.
+  specialize (Hbody s Hinv).
+  rewrite Heq in Hbody. (* ha! *)
+  assumption.
+Qed.
+
+(* If the body satisfies its specification, a [wp] judgement, then, when the
+   body returns [MBreak s' x], [inv s' (Break x)] holds. *)
+
+Local Lemma exit body inv :
+  BODY body inv →
+  ∀ s s' x, inv s Continue → body s = MBreak s' x → inv s' (Break x).
+Proof.
+  intros Hbody ? ? ? Hinv Heq.
+  unfold BODY, wp in Hbody.
+  specialize (Hbody s Hinv).
+  rewrite Heq in Hbody. (* ha! *)
+  assumption.
+Qed.
+
+Local Lemma exit' body inv :
+  BODY' body inv →
+  ∀ s s' x, inv s Continue → body s = MBreak s' x → inv s' (Break x).
+Proof.
+  intros Hbody ? ? ? Hinv Heq.
+  unfold BODY, wp in Hbody.
+  specialize (Hbody s Hinv).
+  rewrite Heq in Hbody. (* ha! *)
+  assumption.
+Qed.
+
+(* [loop_aux] is correct. *)
+
+Local Lemma wp_loop_aux body inv
+  (preservation : ∀ s s', inv s Continue → body s = MContinue s' → inv s' Continue)
+  (decrease : ∀ s s', inv s Continue → body s = MContinue s' → s' ≺ s)
+  s ACC :
+  ∀ Hinv,
+  LOOP body inv (loop_aux body inv preservation decrease s ACC Hinv) s.
+Proof.
+  unfold LOOP, BODY.
+  by dependent induction on s ACC. intros s Achild IH.
+  intros Hinv Hbody.
+  simpl loop_aux.
+  wp_match_message.
+  (* Normal continuation.
+     Wow! [eauto] applies [IH], [preservation], and [decrease]. *)
+  { eauto. }
+  (* Exit continuation. *)
+  { wp_ret. split; [| eauto ].
+    eapply exit; eauto. }
+Qed.
+
+Local Lemma wp_loop_aux' body inv
+  (preservation : ∀ s s', inv s Continue → body s = MContinue s' → inv s' Continue)
+  (decrease : ∀ s s', inv s Continue → body s = MContinue s' → s' ≺ s)
+  s ACC :
+  ∀ Hinv,
+  ∀ inv',
+  inv' s Continue →
+  LOOP' body inv' (loop_aux body inv preservation decrease s ACC Hinv) s.
+Proof.
+  unfold LOOP', BODY'.
+  by dependent induction on s ACC. intros s Achild IH.
+  intros Hinv inv' Hinv' Hbody.
+  simpl loop_aux.
+  wp_match_message.
+  (* Normal continuation. *)
+  { eapply IH; eauto.
+    eapply preservation'; eauto. }
+  (* Exit continuation. *)
+  { wp_ret. split; [| eauto ].
+    eapply exit'; eauto. }
+Qed.
+
+Section ProofRules.
+
+Context {inv : S → outcome A → Prop}.
+Variable body : S → message S A.
+Variable Hbody : BODY body inv.
+
+(* The high-level combinator [loop]. *)
+
+(* Outside of this section, the type of [loop] is
+   [∀ inv body, BODY body inv → ∀ s, inv s Continue → S * outcome A]. *)
+
+(* [loop body Hbody s Hinv] requires [Hbody], a proof of correctness of the
+   loop body. So, an end user should first define [body] and prove that it
+   is correct before constructing [loop body Hbody s Hinv]. *)
+
+Definition loop s (Hinv : inv s Continue) :=
+  loop_aux body inv
+    (preservation body inv Hbody)
+    (decrease body inv Hbody)
+    s ltac:(tc) Hinv.
+
+(* [loop] is correct. We offer two specifications. [wp_loop] uses a single
+   invariant, [inv], to prove termination and functional correctness.
+   [wp_loop'] distinguishes two invariants, [inv] and [inv']. The former
+   must be just strong enough to prove termination, and is used a priori in
+   the definition of the loop; the latter can be stronger or weaker and is
+   used a posteriori in the proof of functional correctness of the loop. *)
+
+Lemma wp_loop s (Hinv : inv s Continue) :
+  LOOP body inv (loop s Hinv) s.
+Proof.
+  eapply wp_loop_aux.
+Qed.
+
+Lemma wp_loop' s (Hinv : inv s Continue) :
+  ∀ inv',
+  inv' s Continue →
+  LOOP' body inv' (loop s Hinv) s.
+Proof.
+  unfold loop. eauto using wp_loop_aux'.
+Qed.
+
+End ProofRules.
+End Loop.
+
+(* -------------------------------------------------------------------------- *)
+
+(* In the remainder of this file, we define several higher-order functions
+   that implement loops and exitable loops over semi-open intervals of the
    unsigned primitive integers. *)
 
 Open Scope Z_scope.

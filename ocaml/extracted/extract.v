@@ -98,6 +98,8 @@ Extraction Inline
 From marble Require loop.
 
 Extraction Inline
+  loop.simple_loop
+  loop.loop
   loop.Ni
   loop.iter_up
   loop.xiter_up
