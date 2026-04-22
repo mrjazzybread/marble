@@ -482,7 +482,7 @@ End Loop.
    that implement loops and exitable loops over semi-open intervals of the
    unsigned primitive integers. *)
 
-Open Scope Z_scope.
+Local Open Scope Z_scope.
 Implicit Types _i _j _k : int.
 Implicit Types  i : Z.
 Implicit Types  z : Z.

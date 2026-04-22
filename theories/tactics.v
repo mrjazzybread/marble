@@ -142,7 +142,7 @@ Hint Resolve eq_refl : marble.
 
 (* Tests. *)
 
-Open Scope Z_scope.
+Local Open Scope Z_scope.
 
 Goal ∀ x y : Z, x + y - x = y.
 Proof. eauto with marble nocore. Qed.

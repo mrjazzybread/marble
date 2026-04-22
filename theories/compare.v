@@ -133,7 +133,7 @@ End Specs.
 
 (* Instances. *)
 
-Open Scope Z_scope.
+Local Open Scope Z_scope.
 
 (* A two-way comparison on binary integers (Z). *)
 

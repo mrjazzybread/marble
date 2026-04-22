@@ -11,7 +11,7 @@
 (******************************************************************************)
 
 From stdpp Require Import numbers.
-Open Scope Z_scope.
+Local Open Scope Z_scope.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
