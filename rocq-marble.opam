@@ -17,7 +17,7 @@ tags: [
 ]
 depends: [
   "rocq-core" { (>= "9.1") }
-  "rocq-stdlib"
+  "rocq-stdlib" { (>= "9.1") }
   "rocq-equations"
   "rocq-stdpp" { (>= "1.13.0")}
   "dune" { >= "3.21" }
