@@ -35,6 +35,8 @@ Set Universe Polymorphism.
  *)
 
 Local Open Scope Z_scope.
+Local Open Scope uint63.
+
 Implicit Types _i _j _k : int.
 Implicit Types  i : Z.
 Implicit Types  z : Z.
@@ -44,7 +46,7 @@ Implicit Types  z : Z.
 (* The type [int] is inhabited. *)
 
 Instance Inhabited_int : Inhabited int.
-Proof. constructor. exact 0%uint63. Defined.
+Proof. constructor. exact 0. Defined.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -67,8 +69,8 @@ Proof. reflexivity. Qed.
 (* [φ : int → Z] is an injection. *)
 (* [π : Z → int] is a projection. *)
 
-Local Notation "'φ'" := (to_Z).
-Local Notation "'π'" := (of_Z).
+Local Notation "'φ'" := (to_Z) : Z_scope.
+Local Notation "'π'" := (of_Z) : uint63_scope.
 
 Global Hint Rewrite
   to_Z_0
@@ -150,19 +152,19 @@ Proof. lia. Qed.
 (* Addition in Z commutes with projection. *)
 
 Lemma add_spec' z1 z2 :
-  (π z1 + π z2)%uint63 = π (z1 + z2).
+  π z1 + π z2 = π (z1 + z2).
 Proof. lia. Qed.
 
 (* Subtraction in Z commutes with projection. *)
 
 Lemma sub_spec' z1 z2 :
-  (π z1 - π z2)%uint63 = π (z1 - z2).
+  π z1 - π z2 = π (z1 - z2).
 Proof. lia. Qed.
 
 (* Multiplication in Z commutes with projection. *)
 
 Lemma mul_spec' z1 z2 :
-  (π z1 * π z2)%uint63 = π (z1 * z2).
+  π z1 * π z2 = π (z1 * z2).
 Proof. lia. Qed.
 
 (* Division in Z commutes with projection. *)
@@ -170,7 +172,7 @@ Proof. lia. Qed.
 Lemma div_spec' z1 z2 :
   unsigned z1 →
   unsigned z2 →
-  (π z1 / π z2)%uint63 = π (z1 `div` z2).
+  π z1 / π z2 = π (z1 `div` z2).
 Proof.
   intros.
   replace z1 with (φ (π z1)) at 2 by (int; lia).
@@ -183,15 +185,15 @@ Qed.
 (* Some properties of machine integer arithmetic. *)
 
 Lemma add_sub_conv _i _a _b :
-  (_i - _a - _b = _i - (_a + _b))%uint63.
+  _i - _a - _b = _i - (_a + _b).
 Proof. lia. Qed.
 
 Lemma add_sub_comm _i _a _b :
-  (_i - _a - _b = _i - _b - _a)%uint63.
+  _i - _a - _b = _i - _b - _a.
 Proof. lia. Qed.
 
 Lemma add_sub_exch _i _j _k :
-  (_k + (_j - _i) = _j + (_k - _i))%uint63.
+  _k + (_j - _i) = _j + (_k - _i).
 Proof. lia. Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -364,7 +366,7 @@ Notation "'∀IntU' _i i , P" :=
 Lemma isBool_eqb_proj :
   ∀Int _i i ,
   ∀Int _j j ,
-  isBool1 (_i =? _j)%uint63 (proj i = proj j).
+  isBool1 (_i =? _j) (proj i = proj j).
 Proof.
   intros. eapply isBool1_intro. rewrite eqb_spec.
   destructIsInt. lia.
@@ -376,7 +378,7 @@ Qed.
 Global Instance isBool_eqb :
   ∀IntU _i i ,
   ∀IntU _j j ,
-  isBool1 (_i =? _j)%uint63 (i = j).
+  isBool1 (_i =? _j) (i = j).
 Proof.
   intros. eapply isBool1_intro. rewrite eqb_spec.
   destructIsInt. lia.
@@ -392,7 +394,7 @@ Qed.
 Lemma isBool_ltb_proj :
   ∀Int _i i ,
   ∀Int _j j ,
-  isBool1 (_i <? _j)%uint63 (proj i < proj j).
+  isBool1 (_i <? _j) (proj i < proj j).
 Proof.
   intros. eapply isBool1_intro. rewrite ltb_spec.
   destructIsInt. lia.
@@ -404,7 +406,7 @@ Qed.
 Global Instance isBool_ltb :
   ∀IntU _i i ,
   ∀IntU _j j ,
-  isBool1 (_i <? _j)%uint63 (i < j).
+  isBool1 (_i <? _j) (i < j).
 Proof.
   intros. eapply isBool1_intro. rewrite ltb_spec.
   destructIsInt. lia.
@@ -416,7 +418,7 @@ Qed.
 Lemma isBool_leb_proj :
   ∀Int _i i ,
   ∀Int _j j ,
-  isBool1 (_i ≤? _j)%uint63 (proj i ≤ proj j).
+  isBool1 (_i ≤? _j) (proj i ≤ proj j).
 Proof.
   intros. eapply isBool1_intro. rewrite leb_spec.
   destructIsInt. lia.
@@ -428,7 +430,7 @@ Qed.
 Global Instance isBool_leb :
   ∀IntU _i i ,
   ∀IntU _j j ,
-  isBool1 (_i ≤? _j)%uint63 (i ≤ j).
+  isBool1 (_i ≤? _j) (i ≤ j).
 Proof.
   intros. eapply isBool1_intro. rewrite leb_spec.
   destructIsInt. lia.
@@ -439,10 +441,10 @@ Qed.
 (* The operations [_min] and [_max] on machine integers. *)
 
 Definition _min _m _n : int :=
-  if (_m ≤? _n)%uint63 then _m else _n.
+  if (_m ≤? _n) then _m else _n.
 
 Definition _max _m _n : int :=
-  if (_m ≤? _n)%uint63 then _n else _m.
+  if (_m ≤? _n) then _n else _m.
 
 Global Instance isInt_min :
   ∀IntU _m m ,
@@ -450,7 +452,7 @@ Global Instance isInt_min :
   isInt (_min _m _n) (m `min` n).
 Proof.
   intros. unfold _min.
-  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic; z; eauto.
+  destruct (_m ≤? _n) eqn:Heq; isBool_magic; z; eauto.
 Qed.
 
 Global Instance isInt_max :
@@ -459,7 +461,7 @@ Global Instance isInt_max :
   isInt (_max _m _n) (m `max` n).
 Proof.
   intros. unfold _max.
-  destruct (_m ≤? _n)%uint63 eqn:Heq; isBool_magic; z; eauto.
+  destruct (_m ≤? _n) eqn:Heq; isBool_magic; z; eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -498,7 +500,7 @@ Qed.
 Global Instance isInt_div :
   ∀IntU _i i ,
   ∀IntU _j j ,
-  j ≠ 0 →
+  j ≠ 0%Z →
   isInt (_i/_j) (i/j).
 Proof.
   intros. destructIsInt. introIsInt. eauto using div_spec'.
@@ -532,7 +534,7 @@ Ltac proveIsInt :=
           integer literal then we do not want to apply [introIsInt]. *)
       (* [unify] is a way of testing whether [_i] is (convertible with)
          a primitive integer literal. Thanks to Guillaume Melquiond! *)
-      unify (add _i 0)%uint63 _i ;
+      unify (add _i 0) _i ;
       eapply introIsInt; compute; eauto 2 with lia
   end.
 
@@ -554,10 +556,10 @@ Proof. tc. Qed.
 Goal ∀ _i i, isInt _i i → unsigned i → isInt (_min 0 _i) (0 `min` i).
 Proof. tc. Qed.
 
-Goal isInt (1)%uint63 (1)%Z.
+Goal isInt 1 1.
 Proof. tc. Qed.
 
-Goal isInt (1)%uint63 (2^63+1)%Z.
+Goal isInt 1 (2^63+1).
 Proof.
   (* This one is tricky; [tc] cannot prove it. *)
   rewrite isInt_def. lia.
@@ -566,10 +568,10 @@ Qed.
 Goal isInt 12 12.
 Proof. tc. Qed.
 
-Goal ∃ i, isInt 512 i ∧ i = 512.
+Goal ∃ i, isInt 512 i ∧ i = 512%Z.
 Proof. tc. Qed.
 
-Goal ∃ i, isInt 512 i ∧ i = 512.
+Goal ∃ i, isInt 512 i ∧ i = 512%Z.
 Proof.
   (* Same example, interactively. *)
   eexists. split. tc. tc.
@@ -597,7 +599,7 @@ Proof. lia. Qed.
 
 Goal ∀ i,
   unsigned i →
-  i ≠ 0 →
+  i ≠ 0%Z →
   unsigned (i - 1).
 Proof. tc3. Qed.
 
@@ -637,7 +639,7 @@ Global Hint Extern 1 (ilt _ _) =>
 
 Lemma ilt_wf : well_founded ilt.
 Proof.
-  eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := φ) ].
+  eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0%Z) (f := φ) ].
   intros _i _j. eauto with marble.
 Qed.
 
@@ -654,11 +656,11 @@ Hint Resolve Acc_ilt : marble.
    functions by structural induction on a proof of accessibility. *)
 
 Lemma ilt_n_minus_1 _n :
-  (_n =? 0)%uint63 = false →
-  ilt (_n - 1)%uint63 _n.
+  (_n =? 0) = false →
+  ilt (_n - 1) _n.
 Proof. eauto with marble. Qed.
 
-Goal ∀IntU _n n, n ≠ 0 → ilt (_n - 1) _n.
+Goal ∀IntU _n n, n ≠ 0%Z → ilt (_n - 1) _n.
 Proof. eauto with marble. Qed.
 
 (* [rilt] *)
@@ -671,7 +673,7 @@ Global Hint Extern 1 (rilt _ _ _) =>
 
 Lemma rilt_wf _a : well_founded (rilt _a).
 Proof.
-  eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0) (f := λ _i, φ (_i - _a)) ].
+  eapply wf_incl; [| eapply Z.lt_wf_projected with (z := 0%Z) (f := λ _i, φ (_i - _a)) ].
   intros _i _j. eauto with marble.
 Qed.
 
@@ -686,8 +688,8 @@ Hint Resolve Acc_rilt : marble.
    functions by structural induction on a proof of accessibility. *)
 
 Lemma rilt_n_minus_1 _k _i :
-  (_k =? _i)%uint63 = false →
-  (rilt _i) (_k - 1)%uint63 _k.
+  (_k =? _i) = false →
+  (rilt _i) (_k - 1) _k.
 Proof. eauto with marble. Qed.
 
 Goal ∀IntU _k k, ∀IntU _i i, k ≠ i → rilt _i (_k - 1) _k.
@@ -710,7 +712,7 @@ Global Hint Extern 1 (igt _ _) =>
 Lemma igt_wf : well_founded igt.
 Proof.
   eapply wf_incl;
-    [| eapply Z.lt_wf_projected with (z := 0) (f := λ _i, wB - φ _i) ].
+    [| eapply Z.lt_wf_projected with (z := 0%Z) (f := λ _i, (wB - φ _i)%Z) ].
   intros _i _j. rewrite igt_alt_def. lia.
 Qed.
 
@@ -725,8 +727,8 @@ Hint Resolve Acc_igt : marble.
    functions by structural induction on a proof of accessibility. *)
 
 Lemma igt_n_plus_1 _n _k :
-  (_n <? _k)%uint63 = true →
-  igt (_n + 1)%uint63 _n.
+  (_n <? _k) = true →
+  igt (_n + 1) _n.
 Proof. eauto with marble. Qed.
 
 Goal ∀IntU _n n, ∀IntU _k k, n < k → igt (_n + 1) _n.
@@ -743,7 +745,7 @@ Global Hint Extern 1 (rigt _ _ _) =>
 Lemma rigt_wf _a : well_founded (rigt _a).
 Proof.
   eapply wf_incl; [| eapply Z.lt_wf_projected
-                     with (z := 0) (f := λ _i, wB - φ (_i - _a)) ].
+                     with (z := 0%Z) (f := λ _i, (wB - φ (_i - _a))%Z) ].
   intros _i _j. unfold rigt, igt. lia.
 Qed.
 
@@ -770,7 +772,7 @@ Hint Resolve Acc_rigt : marble.
 (* Safely incrementing a machine integer, without integer overflow. *)
 
 Local Lemma safe_increment _i _j :
-  (_i <? _j)%uint63 = true → igt (_i + 1) _i.
+  (_i <? _j) = true → igt (_i + 1) _i.
 Proof.
   (* φ _i < φ _j → φ _i < φ (_i + 1) *)
   eauto with marble.
@@ -784,7 +786,7 @@ Qed.
    this lemma for the record, but it is unused. *)
 
 Local Lemma safe_decrement _i _a :
-  (_i =? _a)%uint63 = false →
+  (_i =? _a) = false →
   φ _a ≤ φ _i →
   ilt (_i - 1) _i.
 Proof.
@@ -797,7 +799,7 @@ Qed.
    It is also unused. *)
 
 Local Lemma safe_decrement_absolute _i :
-  (_i =? 0)%uint63 = false →
+  (_i =? 0) = false →
   ilt (_i - 1) _i.
 Proof.
   (* _i ≠ 0%uint63 → φ (_i - 1) < φ _i *)
@@ -809,7 +811,7 @@ Qed.
    instead of the absolute ordering [ilt]. *)
 
 Local Lemma safe_decrement_relative _i _a :
-  (_i =? _a)%uint63 = false →
+  (_i =? _a) = false →
   rilt _a (_i - 1) _i.
 Proof.
   (* _i ≠ _a → φ (_i - 1 - _a) < φ (_i - _a) *)
@@ -824,7 +826,7 @@ Qed.
 Instance isInt_of_nat n : isInt (of_nat n) (Z.of_nat n).
 Proof. rewrite isInt_def. lia. Qed.
 
-Lemma Z_of_nat_S n :  Z.of_nat (S n) = Z.of_nat n + 1.
+Lemma Z_of_nat_S n :  Z.of_nat (S n) = (Z.of_nat n + 1)%Z.
 Proof. lia. Qed.
   (* Nat2Z.inj_succ : Z.of_nat (S n) = Z.succ (Z.of_nat n) *)
 
