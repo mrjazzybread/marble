@@ -131,6 +131,14 @@ From marble Require vector.
 
 From marble Require pqueue.
 
+From marble Require traverse.
+
+Extraction Inline
+  traverse.return_
+  traverse.covariance
+  traverse.visit_many
+.
+
 Separate Extraction
 
   loop.simple_loop
@@ -183,4 +191,5 @@ Separate Extraction
   pqueue.extract_nonempty
   pqueue.extract
 
+  traverse.visit
 .
