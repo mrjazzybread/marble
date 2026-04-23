@@ -33,6 +33,14 @@
 
 * Verify a loop that extracts and inserts elements into the queue.
 
+## DFS
+
+* Replace ⊤ with a smaller universe where needed, so we can reason
+  about finite graphs.
+
+* Prove an executable DFS algorithm. Deduce that every finite graph can be
+  covered by a DFS forest.
+
 ## Rocq Technique
 
 * Once released (Rocq 9.2?), use `autorewrite*`
