@@ -1,10 +1,10 @@
-From stdpp Require Import sets propset.
-Local Notation set := propset.
-
 (* This file offers a few lemmas and tactics about sets. *)
 
 (* We do not need much, because [stdpp] offers most of what we need, and its
    [set_solver] tactic is excellent. *)
+
+From stdpp Require Import sets propset.
+Local Notation set := propset.
 
 (* -------------------------------------------------------------------------- *)
 

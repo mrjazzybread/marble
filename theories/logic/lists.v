@@ -1,3 +1,7 @@
+(* This file offers a few lemmas about lists. *)
+
+(* These lemmas could move into stdpp or into listz. (TODO) *)
+
 From Stdlib Require Import Utf8.
 From stdpp Require Import list.
 From listz Require Import listz.
