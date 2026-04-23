@@ -7,7 +7,7 @@ From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
 From stdpp Require Import sets propset.
 Local Notation set := propset.
 From marble Require Import tactics.
-From marble.logic Require Import lists sets relations DFS.
+From marble.logic Require Import lists sets relations dfs.
 
 Set Implicit Arguments.
 
