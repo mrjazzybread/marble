@@ -1,0 +1,76 @@
+From stdpp Require Import sets propset.
+Local Notation set := propset.
+
+(* This file offers a few lemmas and tactics about sets. *)
+
+(* We do not need much, because [stdpp] offers most of what we need, and its
+   [set_solver] tactic is excellent. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Basic lemmas. *)
+
+Section Sets.
+
+Variable V : Type.
+
+Implicit Types vs ws zs : set V.
+
+Lemma prove_subset vs ws : (∀ v, v ∈ vs → v ∈ ws) → vs ⊆ ws.
+Proof. set_solver. Qed.
+
+Lemma prove_equiv vs ws : (∀ v, v ∈ vs ↔ v ∈ ws) → vs ≡ ws.
+Proof. set_solver. Qed.
+
+Lemma prove_disjoint vs ws : (∀ v, v ∈ vs → v ∈ ws → False) → vs ## ws.
+Proof. set_solver. Qed.
+
+Lemma subset_transitive vs ws zs :
+  vs ⊆ ws → ws ⊆ zs → vs ⊆ zs.
+Proof. set_solver. Qed.
+
+Lemma subset_antisymmetric vs ws :
+  vs ⊆ ws → ws ⊆ vs → vs ≡ ws.
+Proof. set_solver. Qed.
+
+Lemma prove_subset_empty_left vs : ∅ ⊆ vs.
+Proof. set_solver. Qed.
+
+Lemma prove_subset_union_left vs1 vs2 ws :
+  vs1 ⊆ ws -> vs2 ⊆ ws -> vs1 ∪ vs2 ⊆ ws.
+Proof. set_solver. Qed.
+
+(* Currently unused, but kept for the record. *)
+Lemma prove_subset_union_diff `{!RelDecision (∈@{set V})} vs ws :
+  vs ⊆ (vs ∖ ws) ∪ ws.
+Proof. rewrite difference_union. set_solver. Qed.
+
+Lemma prove_subset_intersection_right vs vs1 vs2 :
+  vs ⊆ vs1 -> vs ⊆ vs2 -> vs ⊆ vs1 ∩ vs2.
+Proof. set_solver. Qed.
+
+End Sets.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The tactic [elem] and its variant simplify [x ∈ e], where [e] is a set
+   expression. *)
+
+Hint Rewrite
+  @elem_of_PropSet
+  @not_elem_of_PropSet
+  @elem_of_singleton
+  @elem_of_difference
+  @elem_of_union
+  @elem_of_intersection
+  using eauto with typeclass_instances
+: elem_of.
+
+Ltac elem :=
+  autorewrite with elem_of.
+
+Tactic Notation "elem" "in" hyp(h) :=
+  autorewrite with elem_of in h.
+
+Tactic Notation "elem" "in" "*" :=
+  autorewrite with elem_of in *.

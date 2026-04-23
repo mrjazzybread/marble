@@ -1,14 +1,20 @@
-(* This library defines some vocabulary about relations. We begin with the
-   idea of the image of a set under a relation: [image], [into], [closed].
-   We continue with the idea of paths and reflexive-transitive closure:
-   [path], [closure], [reaches]. Then, we introduce the reverse of a
-   relation: [flip], and the intersection of a relation and its reverse:
-   [scc]. *)
+(* This library defines some vocabulary about relations, which can also be
+   understood as vocabulary about graphs, since a graph *is* a relation on
+   vertices.
+
+   We begin with the idea of the image of a set under a relation: [image],
+   [into], [closed]. We continue with the idea of paths and reflexive
+   transitive closure: [path], [closure], [reaches]. Then, we prove some
+   properties about the reverse of a relation: [flip], the intersection of a
+   relation and its reverse: [scc], and the strongly connected component of
+   a vertex: [component]. *)
+
+(* We write [V : Type] for a type of vertices and [E : V → V → Prop] for a
+   relation on vertices. *)
 
 From stdpp Require Import sets propset.
 Local Notation set := propset.
-
-From marble Require Import tactics.
+From marble Require Import tactics sets.
 
 Set Implicit Arguments.
 
@@ -34,84 +40,14 @@ Notation transitive E := (∀ v w x, E v w -> E w x -> E v x).
 
 (* -------------------------------------------------------------------------- *)
 
-(* Some lemmas about sets. *)
+(* [image], [into], [outof], [closed]. *)
 
-(* TODO move? *)
-
-Section Sets.
-
-(* A type of elements. *)
+Section Image.
 
 Variable V : Type.
-
-Implicit Types vs ws : set V.
-
-Lemma prove_subset vs ws : (∀ v, v ∈ vs → v ∈ ws) → vs ⊆ ws.
-Proof. set_solver. Qed.
-
-Lemma prove_equiv vs ws : (∀ v, v ∈ vs ↔ v ∈ ws) → vs ≡ ws.
-Proof. set_solver. Qed.
-
-Lemma prove_disjoint vs ws : (∀ v, v ∈ vs → v ∈ ws → False) → vs ## ws.
-Proof. set_solver. Qed.
-
-Lemma subset_transitive vs ws zs :
-  vs ⊆ ws → ws ⊆ zs → vs ⊆ zs.
-Proof. set_solver. Qed.
-
-Lemma subset_antisymmetric vs ws :
-  vs ⊆ ws → ws ⊆ vs → vs ≡ ws.
-Proof. set_solver. Qed.
-
-Lemma prove_subset_empty_left vs : ∅ ⊆ vs.
-Proof. set_solver. Qed.
-
-Lemma prove_subset_union_left vs1 vs2 ws :
-  vs1 ⊆ ws -> vs2 ⊆ ws -> vs1 ∪ vs2 ⊆ ws.
-Proof. set_solver. Qed.
-
-(* Currently unused, but kept for the record. *)
-Lemma prove_subset_union_diff `{!RelDecision (∈@{set V})} vs ws :
-  vs ⊆ (vs ∖ ws) ∪ ws.
-Proof. rewrite difference_union. set_solver. Qed.
-
-Lemma prove_subset_intersection_right vs vs1 vs2 :
-  vs ⊆ vs1 -> vs ⊆ vs2 -> vs ⊆ vs1 ∩ vs2.
-Proof. set_solver. Qed.
-
-End Sets.
-
-Hint Rewrite
-  @elem_of_PropSet
-  @not_elem_of_PropSet
-  @elem_of_singleton
-  @elem_of_difference
-  @elem_of_union
-  @elem_of_intersection
-  using eauto with typeclass_instances
-: elem_of.
-
-Ltac elem :=
-  autorewrite with elem_of.
-
-Tactic Notation "elem" "in" "*" :=
-  autorewrite with elem_of in *.
-
-(* -------------------------------------------------------------------------- *)
-
-(* In this section, we fix a relation [E]. *)
-
-Section Relations.
-
-(* A type of elements. *)
-
-Variable V : Type.
-
-Implicit Types vs ws : set V.
-
-(* A relation. *)
-
 Variable E : V → V → Prop.
+
+Implicit Types vs ws : set V.
 
 (* The image of a set under a relation. *)
 
@@ -217,16 +153,12 @@ Lemma prove_closed_union vs ws :
   closed vs → closed ws → closed (vs ∪ ws).
 Proof. set_solver. Qed.
 
-End Relations.
+End Image.
 
 Local Hint Rewrite
   @elem_of_image_singleton
   @elem_of_image
 : elem_of.
-
-(* -------------------------------------------------------------------------- *)
-
-(* Repeat the notations defined in the above section. *)
 
 Notation into E vs ws :=
   (image E vs ⊆ ws).
@@ -245,18 +177,12 @@ Notation closed E vs :=
 
 Section VarianceWithRespectToE.
 
-(* A type of elements. *)
-
 Variable V : Type.
-
-(* Two relations. *)
-
 Variable E1 E2 : V → V → Prop.
 
 (* We assume that [E2] contains [E1]. *)
 
-Variable subrel :
-  ∀ v w, E1 v w → E2 v w.
+Variable subrel : ∀ v w, E1 v w → E2 v w.
 
 Lemma image_covariant_E vs : image E1 vs ⊆ image E2 vs.
 Proof. set_solver. Qed.
@@ -284,17 +210,11 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* In this section, we again fix a relation [E], and define paths,
-   closedness, and closure. *)
+(* [path], [closure], [reaches], [scc], [component]. *)
 
 Section PathsAndClosure.
 
-(* A type of elements, or vertices. *)
-
 Variable V : Type.
-
-(* A successor (or edge) relation. *)
-
 Variable E : V → V → Prop.
 
 (* -------------------------------------------------------------------------- *)
@@ -514,10 +434,6 @@ Hint Rewrite
   @elem_of_component
 : elem_of.
 
-(* -------------------------------------------------------------------------- *)
-
-(* Repeat the notations defined above. *)
-
 Notation closure E vs :=
   (image (path E) vs).
 
@@ -558,18 +474,12 @@ Hint Resolve
 
 Section MoreVarianceWithRespectToE.
 
-(* A type of elements. *)
-
 Variable V : Type.
-
-(* Two relations. *)
-
 Variable E1 E2 : V → V → Prop.
 
 (* We assume that [E2] contains [E1]. *)
 
-Variable subrel :
-  ∀ v w, E1 v w → E2 v w.
+Variable subrel : ∀ v w, E1 v w → E2 v w.
 
 Lemma path_covariant_E v w :
   path E1 v w → path E2 v w.
@@ -591,14 +501,9 @@ End MoreVarianceWithRespectToE.
 
 (* We now prove properties that involve both [E] and [flip E]. *)
 
-Section Reverse.
-
-(* A type of elements, or vertices. *)
+Section Flip.
 
 Variable V : Type.
-
-(* A successor (or edge) relation. *)
-
 Variable E : V → V → Prop.
 
 (* [path] and [flip] commute. *)
@@ -686,7 +591,7 @@ Lemma prove_closed_complement vs :
   closed (flip E) (⊤ ∖ vs).
 Proof. set_solver. (* wow *) Qed.
 
-End Reverse.
+End Flip.
 
 Lemma prove_closed_path_complement {V} (E : V → V → Prop) vs :
   closed (path E) vs →
