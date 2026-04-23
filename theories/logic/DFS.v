@@ -661,8 +661,11 @@ Proof.
      the union of [imarked] and [support vs], so we reason separately about
      these sets. We then find that the goal follows immediately from the
      hypothesis and from [dfs_complete_discovery]. *)
-  eauto 6 using into_contravariant, prove_into_union_left,
-    dfs_omarked_choice, dfs_complete_discovery with closed.
+  intros hdfs ?.
+  generalize (dfs_omarked_choice hdfs); intro.
+  generalize (dfs_complete_discovery hdfs); intro.
+  rewrite closed_path.
+  set_solver.
 Qed.
 
 (* This implies, in particular, that if [imarked] is closed, then [omarked]
@@ -691,10 +694,8 @@ Lemma dfs_into_closed_tree w imarked mmarked ws :
 Proof.
   intros. dfs_monotonic.
   eapply dfs_into_closed; [ eauto | ].
-  eapply prove_into_union_left; [ eauto | ].
-  eapply subset_transitive.
-  + rewrite closed_path in *. eassumption.
-  + set_solver.
+  rewrite closed_path in *.
+  set_solver.
 Qed.
 
 (* The support of a forest is reachable from its roots. In other words,
@@ -712,11 +713,12 @@ Proof.
     (* Sub-goal 1. [w] reaches [w]. *)
     + eapply prove_reaches_self. set_solver.
     (* Sub-goal 2. [w] reaches [roots ws] reaches [support ws]. *)
-    + eauto using reaches_transitive, prove_reaches_union_left_1,
-      subset_transitive with reaches.
+    + eapply prove_reaches_union_left_1.
+      eapply reaches_transitive; [| eassumption ].
+      eauto 2 using subset_transitive with reaches.
     (* Sub-goal 3. [roots vs] reaches [support vs].
        Use the induction hypothesis. *)
-    + eauto using reaches_contravariant with set_solver. }
+    + set_solver. }
 Qed.
 
 (* As a corollary, if [w/ws] is a tree of a DFS forest, then [w] reaches
@@ -807,7 +809,7 @@ Proof.
      [imarked] and of the support of [w/ws]. *)
   assert (closed_ mmarked) by eauto using dfs_into_closed_tree.
   eapply subset_transitive.
-  + eapply prove_subset_closure; [| eassumption ].
+  + eapply prove_closure_subset; [| eassumption ].
     dfs_monotonic. set_solver.
   + generalize (dfs_omarked_choice hdfs1); intro. set_solver.
 Qed.
@@ -825,7 +827,7 @@ Proof.
      [vs] represents *all* of the trees towards the right; there are no
      more. *)
   intros.
-  eapply prove_subset_closure; [ simpl; set_solver |].
+  eapply prove_closure_subset; [ simpl; set_solver |].
   erewrite dfs_determines_support; [| eauto ].
   eauto using prove_closed_path_complement.
 Qed.
@@ -846,8 +848,8 @@ Proof.
   (* By definition, [component_ w] is the intersection of the vertices
      that [w] can reach and the vertices that can reach [w]. *)
   eapply subset_transitive; [ eapply prove_subset_intersection_right | ].
-  + eapply prove_subset_scc_closure.
-  + eapply prove_subset_scc_reverse_closure.
+  + eapply prove_component_subset_closure.
+  + eapply prove_component_subset_closure_flip.
   (* The previous two lemmas provide upper bounds for the members
      of this intersection. *)
   + generalize (bound_closure_direct hdfs hclosed); intro.
@@ -867,10 +869,10 @@ Lemma last_scc {imarked vs w ws} :
 Proof.
   intros hdfs hclosed.
   (* Only one inclusion is non-trivial. *)
-  eapply subset_antisymmetric; [ apply prove_subset_scc_reverse_closure |].
+  eapply subset_antisymmetric; [ apply prove_component_subset_closure_flip |].
   (* The strongly connected component of [w] is the intersection
      of the direct closure and reverse closure of [w]. *)
-  eapply subset_transitive; [ | eapply prove_subset_intersection_scc ].
+  eapply subset_transitive; [ | eapply prove_intersection_subset_component ].
   (* Thus, it suffices to prove that the reverse closure of [w]
      is a subset of its direct closure. *)
   eapply prove_subset_intersection_right; [ | set_solver ].
@@ -906,7 +908,7 @@ Proof.
     assert (w ∉ imarked). (* TODO make this a lemma *)
     { dependent destruction hdfs. assumption. }
     assert (closure E {[w]} ⊆ ⊤ ∖ imarked).
-    { eapply prove_subset_closure. set_solver. assumption. }
+    { eapply prove_closure_subset. set_solver. assumption. }
     assert (closure E {[w]} ## imarked). (* TODO make this a lemma *)
     { set_solver. }
     set_solver. }

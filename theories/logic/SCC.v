@@ -737,5 +737,5 @@ Lemma scc_soundness {V} `{!RelDecision (∈@{set V})} (E : V → V → Prop) f2 
   is_scc_forest E f2.
 Proof.
   unfold scc_description. intros. unpack.
-  eapply scc_soundness_main_lemma; eauto with myrelations. (* TODO *)
+  eapply scc_soundness_main_lemma; eauto using prove_image_empty.
 Qed.
