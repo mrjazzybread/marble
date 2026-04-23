@@ -403,7 +403,8 @@ Variable E : V → V → Prop.
 
 Notation into_ vs ws := (into E vs ws).
 Notation outof_ vs ws := (outof E vs ws).
-Notation closed_ vs := (closed (path E) vs). (* TODO closed E? *)
+Notation closed_ vs := (closed E vs).
+  (* note: [closed (path E)] and [closed E] are equivalent *)
 Notation reaches_ vs ws := (reaches E vs ws).
 Notation component_ := (component E).
 
@@ -656,7 +657,6 @@ Proof.
   intros hdfs ?.
   generalize (dfs_omarked_choice hdfs); intro.
   generalize (dfs_complete_discovery hdfs); intro.
-  rewrite closed_path.
   set_solver.
 Qed.
 
@@ -686,7 +686,6 @@ Lemma dfs_into_closed_tree w imarked mmarked ws :
 Proof.
   intros. dfs_monotonic.
   eapply dfs_into_closed; [ eauto | ].
-  rewrite closed_path in *.
   set_solver.
 Qed.
 
@@ -809,10 +808,12 @@ Proof.
      [mmarked] and that [mmarked] is closed. Thus, the closure of [w] is
      a subset of [mmarked]. Furthermore, [mmarked] is exactly the union of
      [imarked] and of the support of [w/ws]. *)
+  assert (w ∈ mmarked) by (dfs_monotonic; set_solver).
   assert (closed_ mmarked) by eauto using dfs_into_closed_tree.
   eapply subset_transitive.
-  + eapply prove_closure_subset; [| eassumption ].
-    dfs_monotonic. set_solver.
+  + eapply prove_closure_subset with (ws := mmarked).
+    - set_solver.
+    - rewrite closed_path. assumption.
   + generalize (dfs_omarked_choice hdfs1); intro. set_solver.
 Qed.
 
@@ -831,7 +832,7 @@ Proof.
   intros.
   eapply prove_closure_subset; [ simpl; set_solver |].
   erewrite dfs_determines_support; [| eauto ].
-  eauto using prove_closed_path_complement.
+  rewrite closed_path. set_solver.
 Qed.
 
 (* By combining the previous two lemmas, we find that the strongly
@@ -906,7 +907,8 @@ Proof.
      additional proviso that there is no overlap with [imarked]. We know
      that [w] is not in [imarked], and the hypothesis that [⊤ ∖ imarked]
      is closed ensures that the closure of [w] lies outside [imarked]. *)
-  { generalize (bound_closure_direct hdfs hci); intro.
+  { rewrite <- closed_path in hcci. (* no escape *)
+    generalize (bound_closure_direct hdfs hci); intro.
     assert (w ∉ imarked) by eauto using root_is_unmarked.
     set_solver. }
   (* Now, the reverse inclusion is easy. *)

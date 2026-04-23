@@ -608,8 +608,8 @@ Lemma scc_soundness_main_lemma {V} `{!RelDecision (∈@{set V})} :
      probably have no outgoing or incoming edges. For now, we only
      assume that [masked] is closed, both ways. This implies that
      it is impossible to enter or leave this set by following an edge. *)
-  closed (path E) masked →
-  closed (path (flip E)) masked →
+  closed E masked →
+  closed (flip E) masked →
   ∀ f1,
   dfs E masked ⊤ f1 →
   dfs (flip E) masked ⊤ f2 →
@@ -652,7 +652,7 @@ Proof.
   forwards fact2: exact_closure.
   { econstructor; eauto. }
   { eauto. }
-  { eapply prove_closed_path_complement; eauto. }
+  { set_solver. }
   (* Furthermore, this component forms a prefix of the last tree of [f1],
      that is, of the tree [root2/sons1]. In fact, it forms a prefix of
      the forest [f1] as a whole. *)
@@ -687,14 +687,12 @@ Proof.
      to exclude the vertices in [scc root2]. *)
   eapply IHtail2 with (masked := union imarked masked).
   (* Premise 1. The new set of masked vertices is still closed. *)
-  { eapply closed_E_closed_path.
-    eapply prove_closed_union.
+  { eapply prove_closed_union.
     - eapply still_closed. eauto with closed.
     - generalize (@image_masked_direct _ masked E); intro.
       set_solver. }
   (* Premise 2. The new set of masked vertices is still reverse closed. *)
-  { eapply closed_E_closed_path.
-    eapply prove_closed_union.
+  { eapply prove_closed_union.
     - rewrite reverse_masked_equiv.
       eapply still_closed. eauto with closed.
     - generalize (@image_masked_reverse _ masked E); intro.
