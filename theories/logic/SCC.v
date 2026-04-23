@@ -598,8 +598,6 @@ Qed.
 
 (* Here is the main lemma in the proof of soundness of the algorithm. *)
 
-(* TODO move, and use this instead of [dfs1] or [dfs2] when possible *)
-
 Lemma scc_soundness_main_lemma {V} `{!RelDecision (∈@{set V})} :
   ∀ f2,
   ∀ E : V → V → Prop,

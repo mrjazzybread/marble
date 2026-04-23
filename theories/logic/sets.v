@@ -5,6 +5,7 @@
 
 From stdpp Require Import sets propset.
 Local Notation set := propset.
+From marble.logic Require Import lists.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -84,3 +85,27 @@ Tactic Notation "elem" "in" hyp(h) :=
 
 Tactic Notation "elem" "in" "*" :=
   autorewrite with elem_of in *.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Conversion of a list to a set. *)
+
+Lemma list_to_set_singleton {A} (x : A) :
+  list_to_set {[x]} ≡ ({[x]} : set A).
+Proof. simpl. set_solver. Qed.
+
+Lemma list_to_set_rev `{SemiSet A C} (xs : list A) :
+  list_to_set (rev xs) ≡ (list_to_set xs : C).
+Proof.
+  induction xs; simpl; intros.
+  + eauto.
+  + rewrite list_to_set_app, IHxs. simpl. set_solver.
+Qed.
+
+Hint Rewrite
+  @list_to_set_nil
+  @list_to_set_singleton
+  @list_to_set_app
+  @list_to_set_rev
+  using eauto with typeclass_instances
+: list_to_set.

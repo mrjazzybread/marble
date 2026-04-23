@@ -6,6 +6,27 @@ From Stdlib Require Import Utf8.
 From stdpp Require Import list.
 From listz Require Import listz.
 
+(* -------------------------------------------------------------------------- *)
+
+(* Lemmas about [singleton]. *)
+
+Lemma rev_singleton {A} (x : A) :
+  rev {[x]} = {[x]}.
+Proof. reflexivity. Qed.
+
+Lemma singleton_inj {A} (x y : A) :
+  {[x]} = ({[y]} : list A) →
+  x = y.
+Proof. unfold singleton, stdpp_buffer.singleton_list. congruence. Qed.
+
+Instance Inj_singleton {A} : Inj eq eq (singleton : A → list A).
+Proof. intros x y. eauto using singleton_inj. Qed.
+
+Lemma singleton_ne_nil {A} (x : A) : {[x]} ≠ [].
+Proof. unfold singleton, stdpp_buffer.singleton_list. congruence. Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* A variant of the lemma [app_eq_inv], where the two disjuncts are
    mutually exclusive. *)
 
@@ -43,6 +64,8 @@ Lemma app_eq_inv'_le {A} (l1 l2 k1 k2 : list A) :
 Proof.
   eauto using app_eq_inv'_ge.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 (* If [rev xs] is empty then [xs] is empty. *)
 

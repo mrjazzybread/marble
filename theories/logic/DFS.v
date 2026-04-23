@@ -5,53 +5,12 @@
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
 From stdpp Require Import sets propset.
 Local Notation set := propset.
+From listz Require Import listz. (* singleton list notation *)
+Local Opaque listz.stdpp_buffer.singleton_list. (* TODO *)
 From marble Require Import tactics.
 From marble.logic Require Import lists sets relations.
 
 Set Implicit Arguments.
-
-(* ---------------------------------------------------------------------------- *)
-
-(* Some facts about lists. *)
-
-From listz Require Import listz. (* singleton list notation *)
-
-Lemma rev_singleton {A} (x : A) :
-  rev {[x]} = {[x]}.
-Proof. reflexivity. Qed.
-
-Lemma singleton_inj {A} (x y : A) :
-  {[x]} = ({[y]} : list A) →
-  x = y.
-Proof. unfold singleton, stdpp_buffer.singleton_list. congruence. Qed.
-
-Instance Inj_singleton {A} : Inj eq eq (singleton : A → list A).
-Proof. intros x y. eauto using singleton_inj. Qed.
-
-Lemma list_to_set_singleton {A} (x : A) :
-  list_to_set {[x]} ≡ ({[x]} : set A).
-Proof. simpl. set_solver. Qed.
-
-Lemma list_to_set_rev `{SemiSet A C} (xs : list A) :
-  list_to_set (rev xs) ≡ (list_to_set xs : C).
-Proof.
-  induction xs; simpl; intros.
-  + eauto.
-  + rewrite list_to_set_app, IHxs. simpl. set_solver.
-Qed.
-
-Local Lemma singleton_ne_nil {A} (x : A) : {[x]} ≠ [].
-Proof. unfold singleton, stdpp_buffer.singleton_list. congruence. Qed.
-
-Local Opaque listz.stdpp_buffer.singleton_list.
-
-Hint Rewrite
-  @list_to_set_nil
-  @list_to_set_singleton
-  @list_to_set_app
-  @list_to_set_rev
-  using eauto with typeclass_instances
-: list_to_set.
 
 (* ---------------------------------------------------------------------------- *)
 
