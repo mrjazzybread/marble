@@ -41,6 +41,8 @@
 * Prove an executable DFS algorithm. Deduce that every finite graph can be
   covered by a DFS forest.
 
+* Extend the documentation with a section on DFS.
+
 ## Rocq Technique
 
 * Once released (Rocq 9.2?), use `autorewrite*`
