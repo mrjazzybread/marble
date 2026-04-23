@@ -1,0 +1,3 @@
+# In case these files are created in the source tree by mistake:
+*.ml
+*.mli
