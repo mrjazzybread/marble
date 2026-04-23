@@ -2,11 +2,59 @@
    its properties. That is, it defines what it means for a forest to be a
    DFS forest. *)
 
-Set Implicit Arguments.
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
-From marble.logic Require Import MySets.
-From marble.logic Require Import MyRelations.
+
+From stdpp Require Import sets propset.
+Local Notation set := propset.
+
+From marble Require Import tactics.
 From marble.logic Require Import MyLists.
+From marble.logic Require Import MyRelations.
+
+Set Implicit Arguments.
+
+(* ---------------------------------------------------------------------------- *)
+
+(* Some facts about lists. *)
+
+From listz Require Import listz. (* singleton list notation *)
+
+Lemma rev_singleton {A} (x : A) :
+  rev {[x]} = {[x]}.
+Proof. reflexivity. Qed.
+
+Lemma singleton_inj {A} (x y : A) :
+  {[x]} = ({[y]} : list A) →
+  x = y.
+Proof. unfold singleton, stdpp_buffer.singleton_list. congruence. Qed.
+
+Instance Inj_singleton {A} : Inj eq eq (singleton : A → list A).
+Proof. intros x y. eauto using singleton_inj. Qed.
+
+Lemma list_to_set_singleton {A} (x : A) :
+  list_to_set {[x]} ≡ ({[x]} : set A).
+Proof. simpl. set_solver. Qed.
+
+Lemma list_to_set_rev `{SemiSet A C} (xs : list A) :
+  list_to_set (rev xs) ≡ (list_to_set xs : C).
+Proof.
+  induction xs; simpl; intros.
+  + eauto.
+  + rewrite list_to_set_app, IHxs. simpl. set_solver.
+Qed.
+
+Local Lemma singleton_ne_nil {A} (x : A) : {[x]} ≠ [].
+Proof. unfold singleton, stdpp_buffer.singleton_list. congruence. Qed.
+
+Local Opaque listz.stdpp_buffer.singleton_list.
+
+Hint Rewrite
+  @list_to_set_nil
+  @list_to_set_singleton
+  @list_to_set_app
+  @list_to_set_rev
+  using eauto with typeclass_instances
+: list_to_set.
 
 (* ---------------------------------------------------------------------------- *)
 
@@ -23,9 +71,9 @@ Variable V : Type.
 Inductive forest :=
 |    Empty: forest
 | NonEmpty:
-     V ->      (* the leftmost root of the forest *)
-     forest -> (* its children *)
-     forest -> (* the remaining roots of the forest *)
+     V →      (* the leftmost root of the forest *)
+     forest → (* its children *)
+     forest → (* the remaining roots of the forest *)
      forest.
 
 (* It is customary to define a forest as a list of trees, where a tree is
@@ -41,9 +89,9 @@ Inductive forest :=
 Fixpoint roots (f : forest) : set V :=
   match f with
   | Empty =>
-      empty_
+      ∅
   | NonEmpty w ws vs =>
-      insert w (roots vs)
+      {[w]} ∪ roots vs
   end.
 
 (* The roots of a forest can be viewed as a list of vertices. *)
@@ -51,9 +99,9 @@ Fixpoint roots (f : forest) : set V :=
 Fixpoint rootsl (f : forest) : list V :=
   match f with
   | Empty =>
-      nil
+      []
   | NonEmpty w _ vs =>
-      w :: rootsl vs
+      {[w]} ++ rootsl vs
   end.
 
 (* All vertices of a forest can be viewed as a set of vertices. *)
@@ -61,18 +109,17 @@ Fixpoint rootsl (f : forest) : list V :=
 Fixpoint support (f : forest) : set V :=
   match f with
   | Empty =>
-      empty_
+      ∅
   | NonEmpty w ws vs =>
-      insert w (union (support ws) (support vs))
+      {[w]} ∪ support ws ∪ support vs
   end.
 
 (* The roots of a forest form a subset of its support. *)
 
-Lemma subset_roots_support:
-  forall vs,
-  subset (roots vs) (support vs).
+Lemma subset_roots_support vs :
+  roots vs ⊆ support vs.
 Proof.
-  induction vs; simpl; eauto with mysets.
+  induction vs; simpl; set_solver.
 Qed.
 
 (* All vertices of a forest can also be viewed as a list of vertices.
@@ -81,58 +128,59 @@ Qed.
 Fixpoint preorder (f : forest) :=
   match f with
   | Empty =>
-      nil
+      []
   | NonEmpty w ws vs =>
-      w :: preorder ws ++ preorder vs
+      {[w]} ++ preorder ws ++ preorder vs
   end.
 
 Fixpoint postorder (f : forest) :=
   match f with
   | Empty =>
-      nil
+      []
   | NonEmpty w ws vs =>
-      postorder ws ++ w :: postorder vs
+      postorder ws ++ {[w]} ++ postorder vs
   end.
 
 (* A vertex appears in the support if and only if it appears in the
    postorder linearization. *)
 
-Lemma lsupport_postorder:
-  forall f,
-  lsupport (postorder f) = support f.
+Lemma list_to_set_postorder f :
+  list_to_set (postorder f) ≡ support f.
 Proof.
-  induction f; simpl.
-  { eauto. }
-  { rewrite lsupport_concat.
-    rewrite IHf1. simpl.
-    rewrite IHf2.
-    eauto 20 with mysets. }
+  induction f; simpl; autorewrite with list_to_set;
+  rewrite ?IHf1, ?IHf2; set_solver.
 Qed.
 
 (* A non-empty forest has a non-empty linearization. *)
 
-Lemma postorder_not_nil:
-  forall ws,
-  ws <> Empty ->
-  postorder ws <> nil.
+Lemma postorder_nil_inv ws :
+  postorder ws = [] → ws = Empty.
 Proof.
-  intros. destruct ws; [ congruence | ]. simpl.
-  intros (? & ?)%app_eq_nil.
-  congruence.
+  intros. destruct ws as [| ws ].
+  + eauto.
+  + exfalso.
+    simpl in *. rewrite !app_nil in *. unpack.
+    eapply singleton_ne_nil. eauto.
+Qed.
+
+Lemma postorder_not_nil ws :
+  ws ≠ Empty → postorder ws ≠ nil.
+Proof.
+  intros. generalize (postorder_nil_inv ws). tauto.
 Qed.
 
 (* The first vertex in the reverse postorder of [f] is (obviously)
    a member of the support of [f]. *)
 
 Lemma member_last_root_support r rs f :
-  r :: rs = rev (postorder f) ->
-  member r (support f).
+  {[r]} ++ rs = rev (postorder f) →
+  r ∈ support f.
 Proof.
   intros h.
-  rewrite <- lsupport_postorder.
-  rewrite <- lsupport_rev.
+  rewrite <- list_to_set_postorder.
+  rewrite <- list_to_set_rev.
   rewrite <- h.
-  simpl. eauto with mysets.
+  set_solver.
 Qed.
 
 (* Two forests, viewed as lists of trees, can be concatenated. *)
@@ -147,8 +195,7 @@ Fixpoint concat (ws vs : forest) : forest :=
 
 (* The empty forest is a neutral element for concatenation. *)
 
-Lemma concat_empty:
-  forall f,
+Lemma concat_empty f :
   concat f Empty = f.
 Proof.
   induction f; simpl; intros; congruence.
@@ -156,8 +203,7 @@ Qed.
 
 (* Forest concatenation is associative. *)
 
-Lemma concat_associative:
-  forall xs ys zs,
+Lemma concat_associative xs ys zs :
   concat xs (concat ys zs) = concat (concat xs ys) zs.
 Proof.
   induction xs; simpl; intros; congruence.
@@ -165,45 +211,39 @@ Qed.
 
 (* The support of the concatenation is the union of the supports. *)
 
-Lemma support_concat:
-  forall f1 f2,
-  support (concat f1 f2) = union (support f1) (support f2).
+Lemma support_concat f1 f2 :
+  support (concat f1 f2) ≡ support f1 ∪ support f2.
 Proof.
-  induction f1 as [| ? ? _ ? ih ]; simpl; intros.
-  eauto with mysets.
-  rewrite ih. eauto 25 with mysets.
+  induction f1 as [| ? ? _ ? ih ]; simpl; intros;
+  rewrite ?ih; set_solver.
 Qed.
 
 (* The roots of the concatenation is the union of the roots of the parts. *)
 
-Lemma roots_concat:
-  forall f1 f2,
-  roots (concat f1 f2) = union (roots f1) (roots f2).
+Lemma roots_concat f1 f2 :
+  roots (concat f1 f2) ≡ roots f1 ∪ roots f2.
 Proof.
-  induction f1 as [| ? ? _ ? ih ]; simpl; intros.
-  { eauto with mysets. }
-  { rewrite ih. eauto 20 with mysets. }
+  induction f1 as [| ? ? _ ? ih ]; simpl; intros;
+  rewrite ?ih; set_solver.
 Qed.
 
 (* The linearization of the concatenation is the concatenation of the
    linearizations. *)
 
-Lemma preorder_concat:
-  forall f1 f2,
+Lemma preorder_concat f1 f2 :
   preorder (concat f1 f2) = preorder f1 ++ preorder f2.
 Proof.
   induction f1 as [| ? ? _ ? ih ]; simpl; intros.
   { reflexivity. }
-  { rewrite <- app_assoc. rewrite ih. reflexivity. }
+  { rewrite ih, <- !app_assoc. reflexivity. }
 Qed.
 
-Lemma postorder_concat:
-  forall f1 f2,
+Lemma postorder_concat f1 f2 :
   postorder (concat f1 f2) = postorder f1 ++ postorder f2.
 Proof.
   induction f1 as [| ? ? _ ? ih ]; simpl; intros.
   { reflexivity. }
-  { rewrite <- app_assoc. rewrite ih. reflexivity. }
+  { rewrite ih, <- !app_assoc. reflexivity. }
 Qed.
 
 (* The function [revf] reverses a forest, viewed as a list of trees.
@@ -222,8 +262,7 @@ Fixpoint revf (f : forest) : forest :=
 
 (* Reversal and concatenation commute. *)
 
-Lemma revf_concat:
-  forall f1 f2,
+Lemma revf_concat f1 f2 :
   revf (concat f1 f2) = concat (revf f2) (revf f1).
 Proof.
   induction f1; simpl; intros.
@@ -233,8 +272,7 @@ Qed.
 
 (* Reversal is involutive. *)
 
-Lemma revf_revf:
-  forall f,
+Lemma revf_revf f :
   revf (revf f) = f.
 Proof.
   induction f; simpl; intros.
@@ -244,42 +282,37 @@ Qed.
 
 (* Reversal commutes with [support] and [roots]. *)
 
-Lemma support_revf:
-  forall f,
-  support (revf f) = support f.
+Lemma support_revf f :
+  support (revf f) ≡ support f.
 Proof.
   induction f; simpl; intros.
   { eauto. }
   { rewrite support_concat. simpl.
     rewrite IHf1, IHf2.
-    eauto 20 with mysets. }
+    set_solver. }
 Qed.
 
-Lemma roots_revf:
-  forall f,
-  roots (revf f) = roots f.
+Lemma roots_revf f :
+  roots (revf f) ≡ roots f.
 Proof.
   induction f; simpl; intros.
   { eauto. }
   { rewrite roots_concat. simpl.
     rewrite IHf2.
-    eauto 10 with mysets. }
+    set_solver. }
 Qed.
 
 (* The reverse postorder of the forest [f] is the preorder of the recursive
    reversal of [f]. *)
 
-Lemma preorder_revf:
-  forall f,
+Lemma preorder_revf f :
   preorder (revf f) = rev (postorder f).
 Proof.
   induction f; simpl; intros.
   { eauto. }
   { rewrite preorder_concat. simpl.
-    rewrite IHf1, IHf2.
-    rewrite rev_app_distr. simpl. rewrite app_nil_r.
-    rewrite <- app_assoc. simpl.
-    reflexivity. (* ouf! *) }
+    rewrite IHf1, IHf2, !rev_app_distr.
+    lego. }
 Qed.
 
 (* If a forest has a non-empty reverse postorder, which begins with
@@ -287,30 +320,36 @@ Qed.
    of its last tree is [root2]. *)
 
 Lemma isolate_last_tree:
-  forall root2 f1 rs,
-  root2 :: rs = rev (postorder f1) ->
+  ∀ root2 f1 rs,
+  {[root2]} ++ rs = rev (postorder f1) →
   exists sons1 head1,
   concat head1 (NonEmpty root2 sons1 Empty) = f1.
 Proof.
   (* Although this result sounds obvious, its proof is a bit hairy. *)
   induction f1 as [| root1 sons1 _ tail1 ]; simpl; intros rs h.
   (* Clearly, [f1] is non-empty. *)
-  { congruence. }
-  rewrite rev_app_distr in h. simpl in h.
+  { exfalso. rewrite app_nil in h. destruct h.
+    eapply singleton_ne_nil. eauto. }
+  rewrite !rev_app_distr, rev_singleton in h.
+
   (* Now, check whether [tail1] is empty. We do not destruct [tail1]
      because (when it is non-empty) we do not wish to introduce names
      for its components. *)
-  assert (fact: tail1 = Empty \/ tail1 <> Empty).
+  assert (fact: tail1 = Empty \/ tail1 ≠ Empty).
   { destruct tail1; [ left | right ]; congruence. }
   destruct fact; [ subst | ].
   (* If [tail1] is empty, then we have got the last tree in [f1].
      The vertices [root1] and [root2] are equal, and the goal holds. *)
-  { injection h. clear h. intros. subst.
-    exists sons1, Empty. reflexivity. }
+  { simpl in h.
+    apply app_inj_1 in h; [| length; reflexivity ].
+    destruct h as (h1 & h2).
+    apply singleton_inj in h1.
+    subst. exists sons1, Empty. reflexivity. }
   (* Otherwise, we have to skip this tree and go look further. *)
   { rewrite <- app_assoc in h.
-    apply head_of_append in h;
-      eauto using rev_not_nil, postorder_not_nil.
+    assert (rev (postorder tail1) ≠ []).
+    { eauto using rev_not_nil, postorder_not_nil. }
+    apply app_eq_inv'_le in h; [| lengths; length in *; lia ].
     destruct h as (? & ? & ?).
     edestruct IHtail1 as (sons2 & head1 & ?); [ eauto |]. subst.
     exists sons2, (NonEmpty root1 sons1 head1). reflexivity. }
@@ -324,36 +363,36 @@ Qed.
    appear in the list [rs], though, and they must appear in the
    correct order. *)
 
-Inductive ordered : list V -> forest -> Prop :=
+Inductive ordered : list V → forest → Prop :=
 | OrderedNil:
     ordered nil Empty
 | OrderedSkip:
     (* If the tentative first root [r] does not appear anywhere
        in [f], then it is considered irrelevant. *)
-    forall r rs f,
-    ~ member r (support f) ->
-    ordered rs f ->
-    ordered (r :: rs) f
+    ∀ r rs f,
+    r ∉ (support f) →
+    ordered rs f →
+    ordered ({[r]} ++ rs) f
 | OrderedRoot:
     (* Otherwise, the tentative first root [r] must indeed be
        the root of the first tree in the forest. *)
-    forall r rs ws f,
-    ordered rs f ->
-    ordered (r :: rs) (NonEmpty r ws f).
+    ∀ r rs ws f,
+    ordered rs f →
+    ordered ({[r]} ++ rs) (NonEmpty r ws f).
 
 (* This (unused) lemma states that if [rs] orders a non-empty forest,
    then it orders its tail, too (provided the root [w] does not occur
    twice in the forest). *)
 
 Lemma ordered_tail rs w ws vs :
-  ordered rs (NonEmpty w ws vs) ->
-  ~ member w (support vs) ->
+  ordered rs (NonEmpty w ws vs) →
+  w ∉ support vs →
   ordered rs vs.
 Proof.
   intros h; dependent induction h; intros.
   (* OrderedSkip. *)
   { eapply OrderedSkip; [ | eauto ].
-    simpl in *. mysets. }
+    simpl in *. set_solver. }
   (* OrderedRoot. *)
   { eapply OrderedSkip; eauto. }
 Qed.
@@ -363,75 +402,76 @@ Qed.
 (* We fix a set [E] of edges. *)
 
 (* An edge (successor) relation. *)
-Variable E : V -> V -> Prop.
+Variable E : V → V → Prop.
 
 Notation into_ vs ws := (into E vs ws).
 Notation outof_ vs ws := (outof E vs ws).
-Notation closed_ vs := (closed (path E) vs).
+Notation closed_ vs := (closed (path E) vs). (* TODO closed E? *)
 Notation reaches_ vs ws := (reaches E vs ws).
-Notation scc_ := (scc E).
+Notation component_ := (component E).
 
 (* The predicate [dfs imarked omarked f] holds if a depth-first search,
-   beginning with the set of marked vertices [imarked], can lead to a final
-   set of marked vertices [omarked] and construct the forest [f]. *)
+   beginning with the set of marked vertices [imarked], can lead to a
+   final set of marked vertices [omarked] and construct the forest [f]. *)
 
 (* This can be viewed as a logic-programming version of the DFS algorithm.
    Note that this predicate is non-deterministic: the order in which the
    roots are visited, as well as the order in which the successors of a
    vertex are visited, are not specified. Furthermore, there is no
-   requirement that all vertices of the graph be visited: the forest can be
-   partial. (There *is* a requirement that, if a vertex is visited, then all
-   of its successors are eventually marked.) *)
+   requirement that all vertices of the graph be visited: the forest can
+   be partial. (There *is* a requirement that, if a vertex is visited,
+   then all of its successors are eventually marked.) *)
 
 (* The set [omarked] is always the union of [imarked] and [support f]. We
-   prove this fact a posteriori. We could have chosen instead to remove the
-   parameter [omarked]. The current approach works rather well. *)
+   prove this fact a posteriori. We could have chosen instead to remove
+   the parameter [omarked]. The current approach works rather well. *)
 
-(* There are two constraints that one might wish to impose on a forest. One
-   is an upper bound on its roots (e.g., the roots of the forest must be
-   successors of some node [w]), the other is a lower bound on the final set
-   of marked nodes (e.g., the search is not allowed to stop until all
-   successors of [w] are marked). It is possible to impose these constraints
-   either a priori (by parameterizing the predicate [dfs] with appropriate
-   information) or a posteriori.  We follow the latter approach, which seems
-   more flexible and clearer. *)
+(* There are two constraints that one might wish to impose on a forest.
+   One is an upper bound on its roots (e.g., the roots of the forest must
+   be successors of some node [w]), the other is a lower bound on the
+   final set of marked nodes (e.g., the search is not allowed to stop
+   until all successors of [w] are marked). It is possible to impose these
+   constraints either a priori (by parameterizing the predicate [dfs] with
+   appropriate information) or a posteriori. We follow the latter
+   approach, which seems more flexible and clearer. *)
 
-Inductive dfs : set V -> set V -> forest -> Prop :=
+Inductive dfs : set V → set V → forest → Prop :=
 
 | DFSEmpty:
     (* There is no a priori constraint on the final set of marked nodes.
        Thus, a search is allowed to stop at any time. *)
-    forall imarked,
-    dfs imarked imarked Empty
+    ∀ imarked omarked,
+    imarked ≡ omarked →
+    dfs imarked omarked Empty
 
 | DFSNonEmpty:
     (* There is no a priori constraint on the roots. Thus, an arbitrary
        unmarked node [w] can be picked as the root of the first tree. *)
-    forall imarked mmarked omarked w ws vs,
-    ~ member w imarked ->
+    ∀ imarked mmarked omarked w ws vs,
+    w ∉ imarked →
     (* Once we have picked [w], we mark [w] and traverse its successors,
        yielding a sub-forest [ws]. We impose two constraints a posteriori:
        every root of [ws] must be a successor of [w], and every successor
        of [w] must be marked once we are done constructing [ws]. *)
-    dfs (insert w imarked) mmarked ws ->
-    outof E (singleton w) (roots ws) ->
-    into  E (singleton w) mmarked ->
+    dfs ({[w]} ∪ imarked) mmarked ws →
+    outof E {[w]} (roots ws) →
+    into  E {[w]} mmarked →
     (* Once we are done with the successors of [w], we continue, yielding
        a sub-forest [vs]. *)
-    dfs mmarked omarked vs ->
+    dfs mmarked omarked vs →
     (* The final result is a forest [NonEmpty w ws vs] where [ws] lies
        under [w] and [vs] lies at the same level as [w]. *)
     dfs imarked omarked (NonEmpty w ws vs).
 
 (* ---------------------------------------------------------------------------- *)
 
-(* The tactic [dfs1] states that the goal is an assumption, up to an
-   equality in the first parameter of [dfs]. It creates one subgoal,
-   which is this equality goal. *)
-
-Local Ltac dfs1 :=
-  match goal with h: dfs ?imarked1 _ ?vs |- dfs ?imarked2 _ ?vs =>
-    assert (imarked1 = imarked2) as <- ; [| assumption ]
+Ltac dfs1 :=
+  match goal with |- dfs ?imarked2 _ ?vs =>
+    let imarked1 := fresh "imarked" in
+    evar (imarked1 : set V);
+    cut (imarked1 ≡ imarked2);
+    subst imarked1;
+    [ intros <- |]
   end.
 
 (* ---------------------------------------------------------------------------- *)
@@ -440,51 +480,64 @@ Local Ltac dfs1 :=
 
 Hint Constructors dfs : dfs.
 
+(* [dfs] is compatible with set equality. *)
+
+Instance : Proper (equiv ==> equiv ==> eq ==> impl) dfs.
+Proof.
+  intros imarked1 imarked2 ? omarked1 omarked2 ? f1 f2 ?. subst.
+  unfold impl. intro Hdfs.
+  generalize dependent omarked2.
+  generalize dependent imarked2.
+  generalize dependent omarked1. revert imarked1. revert f2.
+  induction 1; intros.
+  + econstructor. set_solver.
+  + econstructor; eauto.
+    - set_solver.
+    - eapply IHHdfs1; set_solver.
+Qed.
+
 (* The set of marked vertices grows as the DFS progresses. *)
 
-Lemma dfs_monotonic:
-  forall imarked omarked f,
-  dfs imarked omarked f ->
-  subset imarked omarked.
+Lemma dfs_monotonic imarked omarked f :
+  dfs imarked omarked f →
+  imarked ⊆ omarked.
 Proof.
-  induction 1; eauto with st mysets.
+  induction 1; set_solver.
 Qed.
 
 Ltac dfs_monotonic :=
-  eapply subset_transitive; [ | eapply dfs_monotonic; eauto ].
+  repeat match goal with
+  h: dfs _ _ _ |- _ =>
+    generalize (dfs_monotonic h); revert h
+  end;
+  intros.
+
+(* TODO *)
+(* Ltac dfs_monotonic := *)
+(*   eapply subset_transitive; [ | eapply dfs_monotonic; eauto ]. *)
 
 (* Every element of a DFS forest is initially unmarked. *)
 
-Lemma dfs_imarked:
-  forall imarked omarked f,
-  dfs imarked omarked f ->
-  subset (support f) (complement imarked).
+Lemma dfs_imarked imarked omarked f :
+  dfs imarked omarked f →
+  support f ## imarked.
 Proof.
-  induction 1; simpl.
-  (* Empty. *)
-  { eauto with mysets. }
-  (* NonEmpty *)
-  { eapply prove_subset_union_left; [ | eapply prove_subset_union_left ].
-    + eauto with mysets.
-    + eauto with st mysets.
-    + eauto 6 using dfs_monotonic with st mysets. }
+  induction 1; simpl; dfs_monotonic; set_solver.
 Qed.
+
+Ltac dfs_imarked :=
+  repeat match goal with h: dfs _ _ _ |- _ =>
+    generalize (dfs_imarked h); revert h
+  end;
+  intros.
 
 (* Every element of a DFS forest is finally marked. *)
 
-Lemma dfs_omarked:
-  forall imarked omarked f,
-  dfs imarked omarked f ->
-  subset (support f) omarked.
+Lemma dfs_omarked imarked omarked f :
+  dfs imarked omarked f →
+  support f ⊆ omarked.
 Proof.
-  induction 1; simpl.
-  (* Empty. *)
-  { eauto with mysets. }
-  (* NonEmpty *)
-  { eapply prove_subset_union_left; [ | eapply prove_subset_union_left ].
-    + do 2 dfs_monotonic. eauto with mysets.
-    + dfs_monotonic. assumption.
-    + assumption. }
+  induction 1; simpl; dfs_monotonic; set_solver.
 Qed.
 
 Ltac dfs_omarked :=
@@ -497,79 +550,65 @@ Ltac dfs_omarked :=
    or is an element of the forest. This is the reciprocal of the
    combination of [dfs_monotonic] and [dfs_omarked]. *)
 
-Lemma dfs_omarked_choice:
-  forall imarked omarked f,
-  dfs imarked omarked f ->
-  subset omarked (union imarked (support f)).
+Lemma dfs_omarked_choice imarked omarked f :
+  dfs imarked omarked f →
+  omarked ⊆ imarked ∪ support f.
 Proof.
-  induction 1; simpl.
-  (* Empty. *)
-  { eauto with mysets. }
-  (* NonEmpty. *)
-  { eapply subset_transitive; [ eauto | ].
-    eapply prove_subset_union_left; [ | mysets ].
-    eapply subset_transitive; [ eauto | ].
-    mysets. }
+  induction 1; simpl; set_solver.
 Qed.
 
 (* This is the combination of the previous results. *)
 
-Lemma dfs_determines_omarked:
-  forall imarked omarked f,
-  dfs imarked omarked f ->
-  omarked = union imarked (support f).
+Lemma dfs_determines_omarked imarked omarked f :
+  dfs imarked omarked f →
+  omarked ≡ imarked ∪ support f.
 Proof.
   intros. eapply subset_antisymmetric.
   { eauto using dfs_omarked_choice. }
-  { eauto using dfs_monotonic, dfs_omarked with mysets. }
+  { dfs_monotonic. dfs_omarked. set_solver. }
 Qed.
 
 (* The support of the forest [f] is exactly the difference between
    [imarked] and [omarked]. This is also a reformulation of the
    above results. *)
 
-Lemma dfs_determines_support:
-  forall imarked omarked f,
-  dfs imarked omarked f ->
-  support f = diff omarked imarked.
+Lemma dfs_determines_support imarked omarked f :
+  dfs imarked omarked f →
+  support f ≡ omarked ∖ imarked.
 Proof.
-  intros. eapply subset_antisymmetric.
-  { eauto using dfs_imarked, dfs_omarked with mysets. }
-  { eapply prove_subset_intersection_left.
-    + eapply subset_reflexive.
-    + eauto using dfs_omarked_choice.
-    + eauto with mysets. }
+  intros hdfs. dfs_imarked.
+  rewrite (dfs_determines_omarked hdfs).
+  set_solver.
 Qed.
 
-Lemma dfs_determines_support_universe:
-  forall imarked f,
-  dfs imarked universe_ f ->
-  support f = complement imarked.
+(* TODO not useful? *)
+Lemma dfs_determines_support_universe imarked f :
+  dfs imarked ⊤ f →
+  support f ≡ ⊤ ∖ imarked.
 Proof.
-  intros. rewrite <- diff_universe. eauto using dfs_determines_support.
+  eapply dfs_determines_support.
 Qed.
 
 (* The second [dfs] premise of [DFSNonEmpty] could also be formulated
    as follows. The set [mmarked] is replaced with the union of [imarked]
    and the support of the tree [w/ws]. *)
 
-Lemma dfs_second_premise_reformulation
-  imarked mmarked omarked w ws vs :
-  dfs (insert w imarked) mmarked ws ->
-  dfs mmarked omarked vs ->
-  dfs (union imarked (insert w (support ws))) omarked vs.
+Lemma dfs_second_premise_reformulation imarked mmarked omarked w ws vs :
+  dfs ({[w]} ∪ imarked) mmarked ws →
+  dfs mmarked omarked vs →
+  dfs (imarked ∪ {[w]} ∪ support ws) omarked vs.
 Proof.
   intros h1 h2.
   rewrite (dfs_determines_omarked h1) in h2.
-  dfs1. eauto 20 with mysets.
+  dfs1. eassumption. set_solver.
 Qed.
 
 (* This special case of [dfs_imarked] states that the tree [w/ws]
    is disjoint with the rest of the forest [vs]. *)
 
 Lemma dfs_disjoint imarked omarked w ws vs :
-  dfs imarked omarked (NonEmpty w ws vs) ->
-  subset (support vs) (complement (insert w (support ws))).
+  dfs imarked omarked (NonEmpty w ws vs) →
+  support vs ## {[w]} ∪ support ws.
 Proof.
   intros h. dependent destruction h.
   (* The elements of the tree [w/ws] are in [mmarked]. *)
@@ -577,47 +616,45 @@ Proof.
   (* The elements of [vs] are not in [mmarked]. *)
   apply dfs_imarked in p.
   (* This is it! *)
-  mysets.
+  set_solver.
 Qed.
 
 (* The set of initially marked vertices can be enlarged, as long as it
    remains disoint with the support of the forest that is constructed.
    The set of finally marked vertices is then similarly enlarged. *)
 
-Lemma dfs_marked_covariant:
-  forall masked imarked omarked ws,
-  dfs imarked omarked ws ->
-  subset (support ws) (complement masked) ->
-  dfs (union imarked masked) (union omarked masked) ws.
+Lemma dfs_marked_covariant masked imarked omarked ws :
+  dfs imarked omarked ws →
+  support ws ## masked →
+  dfs (imarked ∪ masked) (omarked ∪ masked) ws.
 Proof.
-  induction 1; simpl; intros; econstructor; simplify_sets.
-  + eauto with mysets.
-  + rewrite union_associative. eauto with st mysets.
+  induction 1; simpl; intros; econstructor.
+  + set_solver.
+  + set_solver.
+  + dfs1.
+    - eapply IHdfs1. set_solver.
+    - set_solver.
   + eauto.
-  + eauto with mysets.
-  + eauto with st mysets.
+  + set_solver.
+  + eapply IHdfs2. set_solver.
 Qed.
 
 (* Every successor of a vertex in the forest is finally marked. *)
 
-Lemma dfs_complete_discovery:
-  forall imarked omarked ws,
-  dfs imarked omarked ws ->
+Lemma dfs_complete_discovery imarked omarked ws :
+  dfs imarked omarked ws →
   into_ (support ws) omarked.
 Proof.
   (* This is a direct consequence of the definition of [dfs]. *)
-  induction 1; simpl; intros.
-  { eauto with myrelations. }
-  { eauto 7 using prove_into_union_left, dfs_monotonic with st. }
+  induction 1; simpl; intros; dfs_monotonic; set_solver.
 Qed.
 
 (* If every successor of an initially marked vertex is finally marked,
    then the set of finally marked vertices is closed. *)
 
-Lemma dfs_into_closed:
-  forall imarked omarked vs,
-  dfs imarked omarked vs ->
-  into_ imarked omarked ->
+Lemma dfs_into_closed imarked omarked vs :
+  dfs imarked omarked vs →
+  into_ imarked omarked →
   closed_ omarked.
 Proof.
   (* Quite remarkably perhaps, the proof is not by induction. [omarked] is
@@ -625,7 +662,7 @@ Proof.
      these sets. We then find that the goal follows immediately from the
      hypothesis and from [dfs_complete_discovery]. *)
   eauto 6 using into_contravariant, prove_into_union_left,
-    dfs_omarked_choice, dfs_complete_discovery with mysets closed.
+    dfs_omarked_choice, dfs_complete_discovery with closed.
 Qed.
 
 (* This implies, in particular, that if [imarked] is closed, then [omarked]
@@ -633,78 +670,80 @@ Qed.
    itself marked. In particular, any vertex that is reachable from a root
    of the forest is marked / has been discovered. *)
 
-Lemma dfs_closed:
-  forall imarked omarked vs,
-  dfs imarked omarked vs ->
-  closed_ imarked ->
+Lemma dfs_closed imarked omarked vs :
+  dfs imarked omarked vs →
+  closed_ imarked →
   closed_ omarked.
 Proof.
-  eauto using dfs_into_closed, dfs_monotonic with st closed.
+  eauto using dfs_into_closed, dfs_monotonic, subset_transitive
+    with closed.
 Qed.
 
 (* As a different corollary of [dfs_into_closed], if the set of initially
    marked vertices is closed, then, after marking [w] and visiting all of
    its successors, the set of finally marked vertices is closed. *)
 
-Lemma dfs_into_closed_tree:
-  forall w imarked mmarked ws,
-  dfs (insert w imarked) mmarked ws ->
-  closed_ imarked ->
-  into_ (singleton w) mmarked ->
+Lemma dfs_into_closed_tree w imarked mmarked ws :
+  dfs ({[w]} ∪ imarked) mmarked ws →
+  closed_ imarked →
+  into_ {[w]} mmarked →
   closed_ mmarked.
 Proof.
-  intros.
+  intros. dfs_monotonic.
   eapply dfs_into_closed; [ eauto | ].
   eapply prove_into_union_left; [ eauto | ].
-  eapply subset_transitive; [ eauto with closed | ].
-  eauto using dfs_monotonic with st mysets.
+  eapply subset_transitive.
+  + rewrite closed_path in *. eassumption.
+  + set_solver.
 Qed.
 
 (* The support of a forest is reachable from its roots. In other words,
    every vertex that is discovered must be reachable. *)
 
-Lemma reaches_roots_support:
-  forall imarked mmarked ws,
-  dfs imarked mmarked ws ->
+Lemma reaches_roots_support imarked mmarked ws :
+  dfs imarked mmarked ws →
   reaches_ (roots ws) (support ws).
 Proof.
   induction 1; simpl.
   (* Base case. *)
   { eauto with reaches. }
   (* Inductive case. Split into three sub-goals. *)
-  { eapply prove_subset_union_left; [ | eapply prove_subset_union_left ].
-  (* Sub-goal 1. [w] reaches [w]. *)
-  + eauto using prove_reaches_self with mysets.
-  (* Sub-goal 2. [w] reaches [roots ws] reaches [support ws]. *)
-  + eauto using reaches_transitive, prove_reaches_union_left_1
-      with st reaches.
-  (* Sub-goal 3. [roots vs] reaches [support vs]. Use the induction hypothesis. *)
-  + eauto using reaches_contravariant with mysets. }
+  { repeat eapply prove_subset_union_left.
+    (* Sub-goal 1. [w] reaches [w]. *)
+    + eapply prove_reaches_self. set_solver.
+    (* Sub-goal 2. [w] reaches [roots ws] reaches [support ws]. *)
+    + eauto using reaches_transitive, prove_reaches_union_left_1,
+      subset_transitive with reaches.
+    (* Sub-goal 3. [roots vs] reaches [support vs].
+       Use the induction hypothesis. *)
+    + eauto using reaches_contravariant with set_solver. }
 Qed.
 
 (* As a corollary, if [w/ws] is a tree of a DFS forest, then [w] reaches
    all of [ws]. *)
 
 Lemma reaches_root_support imarked mmarked w ws vs :
-  dfs imarked mmarked (NonEmpty w ws vs) ->
-  reaches_ (singleton w) (support ws).
+  dfs imarked mmarked (NonEmpty w ws vs) →
+  reaches_ {[w]} (support ws).
 Proof.
   intros h. dependent destruction h.
   (* This repeats sub-goal 2 above, but never mind. *)
-  eauto using reaches_roots_support, reaches_transitive with st reaches.
+  eauto using reaches_roots_support, reaches_transitive,
+              subset_transitive with reaches.
 Qed.
 
 (* The concatenation of two DFS forests (with matching intermediate
    state) is a DFS forest. *)
 
-Lemma dfs_concat:
-  forall imarked mmarked vs,
-  dfs imarked mmarked vs ->
-  forall omarked ws,
-  dfs mmarked omarked ws ->
+Lemma dfs_concat imarked mmarked vs :
+  dfs imarked mmarked vs →
+  ∀ omarked ws,
+  dfs mmarked omarked ws →
   dfs imarked omarked (concat vs ws).
 Proof.
-  induction 1; intros; simpl; eauto with dfs.
+  induction 1; intros; simpl.
+  + rewrite H. assumption.
+  + eauto with dfs.
 Qed.
 
 (* Conversely, if a DFS forest is the concatenation of two forests,
@@ -713,11 +752,10 @@ Qed.
    introducing a name, [mmarked], for the vertices that are marked
    after constructing [vs] and before constructing [ws]. *)
 
-Lemma dfs_concat_inversion:
-  forall vs imarked omarked ws,
-  dfs imarked omarked (concat vs ws) ->
-  exists mmarked,
-  dfs imarked mmarked vs /\
+Lemma dfs_concat_inversion vs : ∀ imarked omarked ws,
+  dfs imarked omarked (concat vs ws) →
+  ∃ mmarked,
+  dfs imarked mmarked vs ∧
   dfs mmarked omarked ws.
 Proof.
   induction vs; simpl; intros ??? h.
@@ -732,16 +770,16 @@ Qed.
    disjoint supports. *)
 
 Lemma dfs_disjoint_concat imarked omarked ws vs :
-  dfs imarked omarked (concat ws vs) ->
-  subset (support vs) (complement (support ws)).
+  dfs imarked omarked (concat ws vs) →
+  support vs ## support ws.
 Proof.
   intros (mmarked & Hws & Hvs)%dfs_concat_inversion.
   (* The elements of [ws] are in [mmarked]. *)
   dfs_omarked.
   (* The elements of [vs] are not in [mmarked]. *)
-  apply dfs_imarked in Hvs.
+  dfs_imarked.
   (* This is it! *)
-  mysets.
+  set_solver.
 Qed.
 
 (* ---------------------------------------------------------------------------- *)
@@ -756,132 +794,124 @@ Qed.
    are no forward paths: [w] cannot reach the trees towards the right. *)
 
 Lemma bound_closure_direct imarked omarked w ws vs :
-  dfs imarked omarked (NonEmpty w ws vs) ->
-  closed_ imarked ->
-  subset
-    (closure E (singleton w))
-    (union imarked (insert w (support ws))).
+  dfs imarked omarked (NonEmpty w ws vs) →
+  closed_ imarked →
+  closure E {[w]} ⊆ imarked ∪ {[w]} ∪ support ws.
 Proof.
   (* This is not a new key result; just a corollary of earlier results. *)
   intros hdfs. intros. dependent destruction hdfs.
   (* Let [mmarked] stand for the set of vertices that are marked after the
-     tree [w/ws] has been visited. We know that [w] is a member of [mmarked]
-     and that [mmarked] is closed. Thus, the closure of [w] is a subset of
-     [mmarked]. Furthermore, [mmarked] is exactly the union of [imarked] and
-     of the support of [w/ws]. *)
+     tree [w/ws] has been visited. We know that [w] is a member of
+     [mmarked] and that [mmarked] is closed. Thus, the closure of [w] is
+     a subset of [mmarked]. Furthermore, [mmarked] is exactly the union of
+     [imarked] and of the support of [w/ws]. *)
+  assert (closed_ mmarked) by eauto using dfs_into_closed_tree.
   eapply subset_transitive.
-  eapply prove_subset_closure; [ | eapply dfs_into_closed_tree; eauto ].
-  { eauto using dfs_monotonic with st mysets. }
-  { eapply subset_transitive; [ eauto using dfs_omarked_choice | ].
-    mysets. }
+  + eapply prove_subset_closure; [| eassumption ].
+    dfs_monotonic. set_solver.
+  + generalize (dfs_omarked_choice hdfs1); intro. set_solver.
 Qed.
 
-(* Symmetrically, an upper bound for the closure of [w] in the reverse graph
-   is the support of the forest [w/ws :: vs]. Indeed, because [imarked] is
-   closed, the left-hand trees cannot reach [w]. *)
+(* Symmetrically, an upper bound for the closure of [w] in the reverse
+   graph is the support of the forest [w/ws :: vs]. Indeed, because
+   [imarked] is closed, the left-hand trees cannot reach [w]. *)
 
-Lemma bound_closure_reverse:
-  forall imarked w ws vs,
-  dfs imarked universe_ (NonEmpty w ws vs) ->
-  closed_ imarked ->
-  subset
-    (closure (reverse E) (singleton w))
-    (support (NonEmpty w ws vs)).
+Lemma bound_closure_reverse imarked w ws vs :
+  dfs imarked ⊤ (NonEmpty w ws vs) →
+  closed_ imarked →
+  closure (flip E) {[w]} ⊆ support (NonEmpty w ws vs).
 Proof.
-  (* This lemma does require that [omarked] be [universe_], as this means
-     that [vs] represents *all* of the trees towards the right; there are
-     no more. *)
+  (* This lemma does require that [omarked] be [⊤], as this means that
+     [vs] represents *all* of the trees towards the right; there are no
+     more. *)
   intros.
-  eapply prove_subset_closure; [ simpl; eauto with mysets | ].
-  erewrite dfs_determines_support_universe; [ | eauto ].
+  eapply prove_subset_closure; [ simpl; set_solver |].
+  erewrite dfs_determines_support; [| eauto ].
   eauto using prove_closed_path_complement.
 Qed.
 
 (* By combining the previous two lemmas, we find that the strongly
    connected component of [w] must be a subset of the tree [w/ws]. *)
 
-Lemma bound_scc:
-  forall imarked w ws vs,
-  dfs imarked universe_ (NonEmpty w ws vs) ->
-  closed_ imarked ->
-  subset (scc_ w) (insert w (support ws)).
+(* TODO replace ⊤ with a smaller universe *)
+(* TODO proof of existence of a [dfs] forest *)
+(* TODO closure_ *)
+
+Lemma bound_scc imarked w ws vs :
+  dfs imarked ⊤ (NonEmpty w ws vs) →
+  closed_ imarked →
+  component_ w ⊆ {[w]} ∪ support ws.
 Proof.
-  intros.
-  (* By definition, [scc w] is the intersection of the vertices
+  intros hdfs hclosed.
+  (* By definition, [component_ w] is the intersection of the vertices
      that [w] can reach and the vertices that can reach [w]. *)
   eapply subset_transitive; [ eapply prove_subset_intersection_right | ].
   + eapply prove_subset_scc_closure.
   + eapply prove_subset_scc_reverse_closure.
   (* The previous two lemmas provide upper bounds for the members
      of this intersection. *)
-  + eapply subset_transitive; [
-      eapply intersection_covariant; [
-        eapply bound_closure_direct; eauto
-      | eapply bound_closure_reverse; eauto
-      ]
-    | ].
-    (* There remains to compute this intersection. *)
-    simpl.
-    eapply prove_subset_intersection_left.
-    - eapply dfs_imarked; eauto.
-    - eapply subset_reflexive.
-    - mysets.
+  + generalize (bound_closure_direct hdfs hclosed); intro.
+    generalize (bound_closure_reverse hdfs hclosed); intro.
+    dfs_imarked. dfs_monotonic.
+    set_solver.
 Qed.
 
-(* Now, let us further assume that [w] is the root of the last tree in a DFS
-   forest. Then, the strongly connected component of [w] is exactly the
-   closure of [w] in the reverse graph. *)
+(* Now, let us further assume that [w] is the root of the last tree in a
+   DFS forest. Then, the strongly connected component of [w] is exactly
+   the closure of [w] in the reverse graph. *)
 
-Lemma last_scc {imarked vs w ws} :
-  dfs imarked universe_ (concat vs (NonEmpty w ws Empty)) ->
-  closed_ imarked ->
-  scc_ w = closure (reverse E) (singleton w).
+Lemma last_scc imarked vs w ws :
+  dfs imarked ⊤ (concat vs (NonEmpty w ws Empty)) →
+  closed_ imarked →
+  component_ w ≡ closure (flip E) {[w]}.
 Proof.
-  intros hdfs. intros.
+  intros hdfs hclosed.
   (* Only one inclusion is non-trivial. *)
-  eapply subset_antisymmetric; [ eapply prove_subset_scc_reverse_closure | ].
+  eapply subset_antisymmetric; [ apply prove_subset_scc_reverse_closure |].
   (* The strongly connected component of [w] is the intersection
      of the direct closure and reverse closure of [w]. *)
   eapply subset_transitive; [ | eapply prove_subset_intersection_scc ].
   (* Thus, it suffices to prove that the reverse closure of [w]
      is a subset of its direct closure. *)
-  eapply prove_subset_intersection_right; [ | eauto with mysets ].
-  (* Now, let us get rid of [vs] in the hypothesis above, as it plays
-     no role. *)
+  eapply prove_subset_intersection_right; [ | set_solver ].
+  (* Now, let us get rid of [vs] in the hypothesis [hdfs],
+     as it plays no role. *)
   apply dfs_concat_inversion in hdfs.
-  destruct hdfs as (? & ? & ?).
+  destruct hdfs as (mmarked & ? & ?).
   (* By a previous lemma, the reverse closure of [w] is a subset
      of the support of the tree [w/ws]. *)
-  eapply subset_transitive; [ eapply bound_closure_reverse; eauto using dfs_closed | ].
+  eapply subset_transitive; [
+    eapply bound_closure_reverse; eauto using dfs_closed |].
   (* Thus, there remains to show that [w] reaches [w/ws]. *)
-  simpl. eauto using reaches_root_support with reaches mysets.
+  simpl. eauto using reaches_root_support with reaches.
 Qed.
 
 (* The following lemma is a stronger version of [bound_closure_direct]. If
    [w/ws] is an arbitrary tree in the forest, then, under the assumption
-   that [imarked] is closed both ways, the closure of [w] is exactly the set
-   [w/ws]. *)
+   that [imarked] is closed both ways, the closure of [w] is exactly the
+   set [w/ws]. *)
 
 Lemma exact_closure imarked omarked w ws vs :
-  dfs imarked omarked (NonEmpty w ws vs) ->
-  closed_ imarked ->
-  closed_ (complement imarked) ->
-  closure E (singleton w) = insert w (support ws).
+  dfs imarked omarked (NonEmpty w ws vs) →
+  closed_ imarked →
+  closed_ (⊤ ∖ imarked) →
+  closure E {[w]} ≡ {[w]} ∪ support ws.
 Proof.
-  intros h. intros. eapply subset_antisymmetric.
+  intros hdfs hci hcci. intros. eapply subset_antisymmetric.
   (* This inclusion follows from [bound_closure_direct], with the
-     additional proviso that there is no overlap with [imarked].
-     We know that [w] is not in [imarked], and the hypothesis
-     that [complement imarked] is closed ensures that the closure
-     of [w] lies outside [imarked]. *)
-  { eapply subset_transitive; [ | eapply prove_subset_diff_union ].
-    eapply prove_subset_intersection_right.
-    + eapply bound_closure_direct; eauto.
-    + eapply prove_subset_closure.
-      - dependent destruction h. eauto with mysets.
-      - eassumption. }
+     additional proviso that there is no overlap with [imarked]. We know
+     that [w] is not in [imarked], and the hypothesis that [⊤ ∖ imarked]
+     is closed ensures that the closure of [w] lies outside [imarked]. *)
+  { generalize (bound_closure_direct hdfs hci); intro.
+    assert (w ∉ imarked). (* TODO make this a lemma *)
+    { dependent destruction hdfs. assumption. }
+    assert (closure E {[w]} ⊆ ⊤ ∖ imarked).
+    { eapply prove_subset_closure. set_solver. assumption. }
+    assert (closure E {[w]} ## imarked). (* TODO make this a lemma *)
+    { set_solver. }
+    set_solver. }
   (* Now, the reverse inclusion is easy. *)
-  { eauto using reaches_root_support with reaches mysets. }
+  { eauto using reaches_root_support with reaches. }
 Qed.
 
 End D.
@@ -890,19 +920,15 @@ Hint Constructors dfs : dfs.
 
 (* ---------------------------------------------------------------------------- *)
 
-(* If two DFS forests agree on the sets [imarked] and [omarked], then they have
-   the same support. *)
+(* If two DFS forests agree on the sets [imarked] and [omarked], then they
+   have the same support. *)
 
-Lemma dfs_same_support:
-  forall V : Type,
-  forall (E1 E2 : V -> V -> Prop),
-  forall imarked omarked f1 f2,
-  dfs E1 imarked omarked f1 ->
-  dfs E2 imarked omarked f2 ->
-  support f1 = support f2.
+Lemma dfs_same_support {V} (E1 E2 : V → V → Prop) imarked omarked f1 f2 :
+  dfs E1 imarked omarked f1 →
+  dfs E2 imarked omarked f2 →
+  support f1 ≡ support f2.
 Proof.
-  intros. erewrite dfs_determines_support by eauto.
-  symmetry. eapply dfs_determines_support; eauto.
+  intros. erewrite !dfs_determines_support by eauto. eauto.
 Qed.
 
 (* ---------------------------------------------------------------------------- *)
@@ -916,7 +942,7 @@ Ltac dfs1 :=
   match goal with |- @dfs ?V _ ?imarked2 _ ?vs =>
     let imarked1 := fresh "imarked" in
     evar (imarked1 : set V);
-    cut (imarked1 = imarked2);
+    cut (imarked1 ≡ imarked2);
     subst imarked1;
     [ intros <- |]
   end.
@@ -928,7 +954,7 @@ Ltac dfs2 :=
   match goal with |- @dfs ?V _ _ ?omarked2 ?vs =>
     let omarked1 := fresh "omarked" in
     evar (omarked1 : set V);
-    cut (omarked1 = omarked2);
+    cut (omarked1 ≡ omarked2);
     subst omarked1;
     [ intros <- |]
   end.

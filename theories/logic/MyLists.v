@@ -1,26 +1,57 @@
-Set Implicit Arguments.
-From Stdlib Require Export List.
+From Stdlib Require Import Utf8.
+From stdpp Require Import list.
+From listz Require Import listz.
 
-(* A fact about lists. *)
-Lemma head_of_append:
-  forall (A : Type) (y : A) xs ys zs,
-  y :: xs = ys ++ zs ->
-  ys <> nil ->
-  exists ys',
-  y :: ys' = ys /\ xs = ys' ++ zs.
+(* A variant of the lemma [app_eq_inv], where the two disjuncts are
+   mutually exclusive. *)
+
+Lemma app_eq_inv' {A} (l1 l2 k1 k2 : list A) :
+  l1 ++ l2 = k1 ++ k2 →
+  (∃ k : list A, l1 = k1 ++ k ∧ k2 = k ++ l2) ∨
+  (∃ k : list A, k1 = l1 ++ k ∧ l2 = k ++ k2 ∧ k ≠ []).
 Proof.
-  do 5 intro. intros h ?. destruct ys; [ congruence | ].
-  injection h; clear h; intros. subst. eauto.
+  intro Heq.
+  apply app_eq_inv in Heq.
+  destruct Heq as [ | (k & ? & ?) ].
+  { eauto. }
+  { assert (k = [] ∨ k ≠ []) as [|] by (destruct k; eauto).
+    + subst k. rewrite ?app_nil_l, ?app_nil_r in *. subst.
+      left. exists []. rewrite app_nil_l, app_nil_r. eauto.
+    + eauto. }
 Qed.
 
-(* A fact about lists. *)
-Lemma rev_not_nil:
-  forall (A : Type) (xs : list A),
-  xs <> nil ->
-  rev xs <> nil.
+Lemma app_eq_inv'_ge {A} (l1 l2 k1 k2 : list A) :
+  l1 ++ l2 = k1 ++ k2 →
+  length k1 ≤ length l1 →
+  (∃ k : list A, l1 = k1 ++ k ∧ k2 = k ++ l2).
 Proof.
-  intros. destruct xs; [ congruence | ].
-  simpl.
-  intro h. generalize (app_eq_nil _ _ h); intros [ ? ? ].
-  congruence.
+  intros Heq ?.
+  apply app_eq_inv' in Heq.
+  destruct Heq as [ | (k & ? & ? & ?) ].
+  { eauto. }
+  { exfalso. lengths. length in *. lia. }
+Qed.
+
+Lemma app_eq_inv'_le {A} (l1 l2 k1 k2 : list A) :
+  l1 ++ l2 = k1 ++ k2 →
+  length l1 ≤ length k1 →
+  (∃ k : list A, k1 = l1 ++ k ∧ l2 = k ++ k2).
+Proof.
+  eauto using app_eq_inv'_ge.
+Qed.
+
+(* If [rev xs] is empty then [xs] is empty. *)
+
+Lemma rev_nil_inv {A} (xs : list A) :
+  rev xs = [] → xs = [].
+Proof.
+  destruct xs; simpl.
+  + eauto.
+  + intros (?&?)%app_nil. congruence.
+Qed.
+
+Lemma rev_not_nil {A} (xs : list A) :
+  xs ≠ nil → rev xs ≠ nil.
+Proof.
+  generalize (rev_nil_inv xs). tauto.
 Qed.

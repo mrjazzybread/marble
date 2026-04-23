@@ -515,7 +515,7 @@ Section Masked.
     scc E w = scc E' w.
   Proof.
     (* One inclusion is already known. *)
-    intros. eapply subset_antisymmetric; [ | eauto using scc_covariant_E, fewer_edges ].
+    intros. eapply subset_antisymmetric; [ | eauto using component_covariant_E, fewer_edges ].
     (* Consider a point [x] with paths between [x] and [x]. *)
     eapply prove_subset_directly; intros x [ hwx hxw ].
     (* Apply path preservation to these paths. *)
