@@ -52,6 +52,9 @@ Proof. set_solver. Qed.
 Lemma prove_equiv vs ws : (∀ v, v ∈ vs ↔ v ∈ ws) → vs ≡ ws.
 Proof. set_solver. Qed.
 
+Lemma prove_disjoint vs ws : (∀ v, v ∈ vs → v ∈ ws → False) → vs ## ws.
+Proof. set_solver. Qed.
+
 Lemma subset_transitive vs ws zs :
   vs ⊆ ws → ws ⊆ zs → vs ⊆ zs.
 Proof. set_solver. Qed.
@@ -326,6 +329,29 @@ Proof. set_solver. Qed.
 
 End VarianceWithRespectToE.
 
+Global Instance Proper_image' {V} :
+  Proper (subrelation ==> equiv ==> subseteq) (@image V).
+Proof.
+  intros E1 E2 Hsubrel.
+  intros vs ws Hequiv.
+  eapply prove_subset. intro v. rewrite !elem_of_image.
+  intros (w & ? & ?); exists w.
+  rewrite <- Hequiv. eauto.
+Qed.
+
+Global Instance Proper_image'' {V} :
+  Proper (relation_equivalence ==> equiv ==> equiv) (@image V).
+Proof.
+  intros E1 E2 Hrequiv.
+  unfold relation_equivalence, predicate_equivalence,
+    pointwise_lifting in Hrequiv.
+  intros vs ws Hequiv.
+  eapply prove_equiv. intro v. rewrite !elem_of_image.
+  split; intros (w & ? & ?); exists w.
+  + rewrite <- Hequiv, <- Hrequiv. tauto.
+  + rewrite Hequiv, Hrequiv. tauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Create a hint database. *)
@@ -555,6 +581,12 @@ Definition scc v w :=
 
 Definition component v :=
   {[ w | scc v w ]}.
+
+(* Membership in a component. *)
+
+Lemma elem_of_component v w :
+  w ∈ component v ↔ scc v w.
+Proof. set_solver. Qed.
 
 (* [scc] is an equivalence relation. *)
 

@@ -482,7 +482,7 @@ Hint Constructors dfs : dfs.
 
 (* [dfs] is compatible with set equality. *)
 
-Instance : Proper (equiv ==> equiv ==> eq ==> impl) dfs.
+Global Instance : Proper (equiv ==> equiv ==> eq ==> impl) dfs.
 Proof.
   intros imarked1 imarked2 ? omarked1 omarked2 ? f1 f2 ?. subst.
   unfold impl. intro Hdfs.
@@ -860,7 +860,7 @@ Qed.
    DFS forest. Then, the strongly connected component of [w] is exactly
    the closure of [w] in the reverse graph. *)
 
-Lemma last_scc imarked vs w ws :
+Lemma last_scc {imarked vs w ws} :
   dfs imarked ⊤ (concat vs (NonEmpty w ws Empty)) →
   closed_ imarked →
   component_ w ≡ closure (flip E) {[w]}.
@@ -931,6 +931,28 @@ Proof.
   intros. erewrite !dfs_determines_support by eauto. eauto.
 Qed.
 
+(* [dfs] is compatible with relation equivalence. *)
+
+Lemma dfs_eqrel {V} (E1 E2 : V → V → Prop) imarked omarked f :
+  relation_equivalence E1 E2 →
+  dfs E1 imarked omarked f →
+  dfs E2 imarked omarked f.
+Proof.
+  intros Hrequiv.
+  induction 1; econstructor;
+  rewrite <- ?Hrequiv; eauto.
+Qed.
+
+Global Instance Proper_dfs_rel {V} :
+  Proper (relation_equivalence ==> eq ==> eq ==> eq ==> iff) (@dfs V).
+Proof.
+  intros E1 E2 Hrequiv.
+  intros imarked1 imarked2 ? omarked1 omarked2 ? f1 f2 ?. subst.
+  split; eapply dfs_eqrel.
+  + eauto.
+  + symmetry. eauto.
+Qed.
+
 (* ---------------------------------------------------------------------------- *)
 
 (* The tactic [dfs1] states that the goal should be proved up to an
@@ -958,3 +980,22 @@ Ltac dfs2 :=
     subst omarked1;
     [ intros <- |]
   end.
+
+Ltac dfs_monotonic :=
+  repeat match goal with
+  h: dfs _ _ _ _ |- _ =>
+    generalize (dfs_monotonic h); revert h
+  end;
+  intros.
+
+Ltac dfs_imarked :=
+  repeat match goal with h: dfs _ _ _ _ |- _ =>
+    generalize (dfs_imarked h); revert h
+  end;
+  intros.
+
+Ltac dfs_omarked :=
+  repeat match goal with h: dfs _ _ _ _ |- _ =>
+    generalize (dfs_omarked h); revert h
+  end;
+  intros.
