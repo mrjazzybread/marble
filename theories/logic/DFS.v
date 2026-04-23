@@ -1,18 +1,18 @@
-(* This library defines a logical view of depth-first search, and explores
-   its properties. That is, it defines what it means for a forest to be a
-   DFS forest. *)
+(* This library defines a logical view of depth-first search. It defines
+   what it means for a forest to be a DFS forest, via an inductive
+   predicate [dfs], and explores the properties of this predicate. *)
 
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
 From stdpp Require Import sets propset.
 Local Notation set := propset.
 From listz Require Import listz. (* singleton list notation *)
-Local Opaque listz.stdpp_buffer.singleton_list. (* TODO *)
+Local Opaque listz.stdpp_buffer.singleton_list.
 From marble Require Import tactics.
 From marble.logic Require Import lists sets relations.
 
 Set Implicit Arguments.
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
 
 (* We fix a set [V] of vertices. *)
 
@@ -287,7 +287,6 @@ Proof.
   { exfalso. rewrite app_nil in h. destruct h.
     eapply singleton_ne_nil. eauto. }
   rewrite !rev_app_distr, rev_singleton in h.
-
   (* Now, check whether [tail1] is empty. We do not destruct [tail1]
      because (when it is non-empty) we do not wish to introduce names
      for its components. *)
@@ -353,7 +352,7 @@ Proof.
   { eapply OrderedSkip; eauto. }
 Qed.
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
 
 (* We fix a set [E] of edges. *)
 
@@ -421,7 +420,9 @@ Inductive dfs : set V → set V → forest → Prop :=
        under [w] and [vs] lies at the same level as [w]. *)
     dfs imarked omarked (NonEmpty w ws vs).
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
+
+(* This local tactic is redefined (exported) at the end of this file. *)
 
 Ltac dfs1 :=
   match goal with |- dfs ?imarked2 _ ?vs =>
@@ -432,7 +433,7 @@ Ltac dfs1 :=
     [ intros <- |]
   end.
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
 
 (* Properties of [dfs]. *)
 
@@ -578,6 +579,8 @@ Qed.
    remains disoint with the support of the forest that is constructed.
    The set of finally marked vertices is then similarly enlarged. *)
 
+(* This lemma is currently unused. *)
+
 Lemma dfs_marked_covariant masked imarked omarked ws :
   dfs imarked omarked ws →
   support ws ## masked →
@@ -630,8 +633,7 @@ Lemma dfs_closed imarked omarked vs :
   closed_ imarked →
   closed_ omarked.
 Proof.
-  eauto using dfs_into_closed, dfs_monotonic, subset_transitive
-    with closed.
+  eauto using dfs_into_closed, dfs_monotonic, subset_transitive.
 Qed.
 
 (* As a different corollary of [dfs_into_closed], if the set of initially
@@ -685,7 +687,7 @@ Proof.
               subset_transitive with reaches.
 Qed.
 
-Lemma reaches_children w ws vs imarked omarked x :
+Lemma reaches_root_descendants w ws vs imarked omarked x :
   dfs imarked omarked (NonEmpty w ws vs) →
   x ∈ support ws →
   reaches_ {[w]} {[x]}.
@@ -745,7 +747,7 @@ Proof.
   set_solver.
 Qed.
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
 
 (* The following lemmas form an analysis of the relation between a
    DFS forest and the strongly connected components. *)
@@ -875,7 +877,7 @@ End D.
 
 Hint Constructors dfs : dfs.
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
 
 (* If two DFS forests agree on the sets [imarked] and [omarked], then they
    have the same support. *)
@@ -910,7 +912,7 @@ Proof.
   + symmetry. eauto.
 Qed.
 
-(* ---------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
 
 (* The tactic [dfs1] states that the goal should be proved up to an
    equality in the first parameter of [dfs], that is, [imarked]. It

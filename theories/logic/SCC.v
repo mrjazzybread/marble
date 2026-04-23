@@ -534,7 +534,7 @@ Proof.
   eapply prove_disjoint. intros x ? ?.
   (* Then, there is a path from [r] to [w] to [x] to [r]. *)
   assert (reaches E {[r]} {[w]}) by set_solver.
-  assert (reaches E {[w]} {[x]}) by eauto using reaches_children with dfs.
+  assert (reaches E {[w]} {[x]}) by eauto using reaches_root_descendants with dfs.
   assert (reaches E {[x]} {[r]}) by set_solver.
   rewrite reaches_singleton_singleton in *.
   (* Hence, [w] must be part of [component E r]. Contradiction. *)
