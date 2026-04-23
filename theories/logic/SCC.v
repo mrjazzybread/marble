@@ -10,7 +10,7 @@ Local Notation set := propset.
 
 From marble Require Import tactics.
 From marble.logic Require Import MyTactics.
-From marble.logic Require Import MyLists.
+From marble.logic Require Import lists.
 From marble.logic Require Import sets relations.
 From marble.logic Require Import DFS.
 

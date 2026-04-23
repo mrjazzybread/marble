@@ -3,13 +3,10 @@
    DFS forest. *)
 
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
-
 From stdpp Require Import sets propset.
 Local Notation set := propset.
-
 From marble Require Import tactics.
-From marble.logic Require Import MyLists.
-From marble.logic Require Import sets relations.
+From marble.logic Require Import lists sets relations.
 
 Set Implicit Arguments.
 
