@@ -86,7 +86,7 @@
 
 ## Future Applications
 
-* Hash sets, hash maps.
+* Hash sets, hash maps. Compare with [Diqt](https://github.com/valoran-M/diqt).
 * HAMTs.
 * B-Trees.
 * Chunked sequences.
