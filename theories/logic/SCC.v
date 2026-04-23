@@ -33,7 +33,7 @@ Inductive is_scc_forest (V : Type) (E : V → V → Prop) : forest V → Prop :=
 | IsSccForestEmpty:
     is_scc_forest E (Empty _)
 | IsSccForestNonEmpty:
-    forall w ws vs,
+    ∀ w ws vs,
     component E w ≡ {[w]} ∪ support ws →
     is_scc_forest E vs →
     is_scc_forest E (NonEmpty w ws vs).
@@ -170,10 +170,9 @@ Hint Resolve equpto_rev filter_equpto : equpto.
 (* The property [ordered rs f] is insensitive to the presence in the list
    [rs] of vertices that are not in the support of [f]. *)
 
-Lemma ordered_equpto:
-  forall rs1 f,
+Lemma ordered_equpto rs1 f :
   ordered rs1 f →
-  forall rs2,
+  ∀ rs2,
   rs1 ≃ rs2 →
   support f ## masked →
   ordered rs2 f.
@@ -221,6 +220,8 @@ Proof.
 Qed.
 
 (* The forest produced by [filter] does not contain masked vertices. *)
+
+(* This lemma is currently unused. *)
 
 Lemma filter_support vs ws :
   filter vs ws →
@@ -276,14 +277,6 @@ Proof.
   unfold flip, E'. set_solver.
 Qed.
 
-(* The target of an [E'] edge is never masked. *)
-
-Lemma into_complement_masked vs :
-  into E' vs (⊤ ∖ masked).
-Proof.
-  unfold E'. set_solver.
-Qed.
-
 (* A path from [x] to [z] is preserved unless there is a masked
    vertex [y] on this path. *)
 
@@ -316,21 +309,9 @@ Proof.
 Qed.
 
 (* If no vertex in [vs] is masked, then the image of [vs] through [E']
-   is its image through [E], minus any masked vertices. The following
-   two lemmas prove one inclusion each. *)
+   is its image through [E], minus any masked vertices. *)
 
-Lemma image_preservation_1 vs :
-  vs ## masked →
-  image E vs ∖ masked ⊆ image E' vs.
-Proof.
-  unfold E'. set_solver. (* nice! *)
-Qed.
-
-Lemma image_preservation_2 vs :
-  image E' vs ⊆ image E vs ∖ masked.
-Proof.
-  unfold E'. set_solver. (* nice! *)
-Qed.
+(* This lemma is currently unused. *)
 
 Lemma image_preservation vs :
   vs ## masked →
@@ -342,6 +323,8 @@ Qed.
 (* If all [E]-edges out of [vs] lead into [ws], then the same is true
    of all [E']-edges out of [vs], and furthermore these edges lead to
    vertices that are not masked. *)
+
+(* This lemma is currently unused. *)
 
 Lemma into_preservation vs ws :
   into E vs ws →
@@ -360,9 +343,8 @@ Lemma outof_preservation w ws :
   outof E' {[w]} (roots ws).
 Proof.
   intros hw hws ?.
-  generalize (@image_preservation {[w]} ltac:(set_solver)); intro.
   generalize (subset_roots_support ws); intro.
-  set_solver.
+  unfold E'. set_solver. (* [image_preservation] *)
 Qed.
 
 (* If a DFS of the original graph produces the forest [ws], and if
@@ -374,6 +356,8 @@ Qed.
    any more, so we can view them as marked or unmarked, as we please. We
    prove two variants of the lemma, namely [dfs_filter_diff] and
    [dfs_filter_union]. *)
+
+(* This lemma is currently unused. *)
 
 Lemma dfs_filter_diff imarked omarked ws :
   dfs E imarked omarked ws →
@@ -395,7 +379,7 @@ Proof.
     + set_solver.
     + dfs1; [ eauto using filter_reflexive | set_solver ].
     + eapply outof_preservation; set_solver.
-    + eapply into_preservation; eauto.
+    + unfold E'. set_solver. (* [into_preservation] *)
     + eauto. }
 Qed.
 
@@ -438,9 +422,9 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* We now assume that the masked vertices form a strongly connected component.
-   In that case, quite obviously, the remaining components of the original
-   graph are exactly the components of the modified graph. *)
+(* We now assume that the masked vertices form a strongly connected
+   component. In that case, quite obviously, the remaining components of
+   the original graph are exactly the components of the modified graph. *)
 
 (* We assume that there exists some vertex [r]... *)
 
@@ -710,6 +694,10 @@ Proof.
     + rewrite fact1, fact2. assumption. }
   (* Phew... *)
 Qed.
+
+(* This theorem states that if the forest [f2] has been constructed via
+   Kosaraju and Sharir's algorithm then it is an SCC forest. In other
+   words, this algorithm is correct. *)
 
 Lemma scc_soundness {V} `{!RelDecision (∈@{set V})} (E : V → V → Prop) f2 :
   scc_description E f2 →
