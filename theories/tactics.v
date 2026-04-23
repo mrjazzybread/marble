@@ -20,6 +20,8 @@ Set Universe Polymorphism.
 
 (* This file defines a small number of tactics that I find useful. *)
 
+(* -------------------------------------------------------------------------- *)
+
 (* [unpack] destructs conjunctions and existential quantifiers in all
    hypotheses. It could be called [unpack in *]. *)
 
@@ -53,6 +55,8 @@ Ltac unpack_in h :=
 Tactic Notation "unpack" "in" hyp(h) :=
   unpack_in h.
 
+(* -------------------------------------------------------------------------- *)
+
 (* [pack] introduces conjunctions and quantifiers in the goal. *)
 
 Ltac pack :=
@@ -64,6 +68,8 @@ Ltac pack :=
   | |- ∃ x, _ =>
       eexists
   end.
+
+(* -------------------------------------------------------------------------- *)
 
 (* The tactics [tc] perform type class search and can solve arithmetic
    side conditions. They either solve the goal or leave it untouched. *)
@@ -84,6 +90,8 @@ Ltac tc6 := eauto 6 with typeclass_instances marble nocore.
 Ltac tc7 := eauto 7 with typeclass_instances marble nocore.
 
 Ltac tc  := tc5.
+
+(* -------------------------------------------------------------------------- *)
 
 (* The tactics [idtc] are similar to [tc], but they use iterative deepening.
    This helps avoid suboptimal proofs that contain leftover uninstantiated
@@ -113,6 +121,8 @@ Ltac idtc4 := try solve [idtc3; tc4].
 Ltac idtc5 := try solve [idtc4; tc5].
 Ltac idtc6 := try solve [idtc5; tc6].
 Ltac idtc7 := try solve [idtc6; tc7].
+
+(* -------------------------------------------------------------------------- *)
 
 (* Populate the hint database [marble]. *)
 
@@ -171,6 +181,8 @@ Proof. eauto with marble nocore. Qed.
 Goal ∀ x y : Z, x ≤ y + 1 → ∃ z, x ≤ z ∧ y < z.
 Proof. eauto with marble nocore. Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 (* Instruct Equations to kill proof obligations using [tc]. *)
 
 Global Obligation Tactic :=
@@ -179,3 +191,31 @@ Global Obligation Tactic :=
   CoreTactics.equations_simpl;
   try Tactics.program_solve_wf;
   tc.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Simple forward application tactics. *)
+
+(* These tactics are inspired by Arthur Charguéraud's LibTactics. They
+   are much more basic and do not work quite as well as Arthur's. *)
+
+(* [forwards: lemma] applies the lemma [lemma] in forward mode.
+   The premises of the lemma become subgoals. *)
+
+Tactic Notation "forwards:" constr(lemma) :=
+  let P := fresh in
+  evar (P : Prop);
+  assert P; [
+    unfold P; simple eapply lemma
+  | subst P ].
+
+(* [forwards fact: lemma] applies the lemma [lemma] in forward mode.
+   The premises of the lemma become subgoals. In the last subgoal,
+   the newly acquired fact is named [fact]. *)
+
+Tactic Notation "forwards" simple_intropattern(h) ":" constr(lemma) :=
+  let P := fresh in
+  evar (P : Prop);
+  assert (h: P); [
+    unfold P; simple eapply lemma
+  | subst P ].

@@ -49,7 +49,17 @@ Lemma prove_subset_intersection_right vs vs1 vs2 :
   vs ⊆ vs1 -> vs ⊆ vs2 -> vs ⊆ vs1 ∩ vs2.
 Proof. set_solver. Qed.
 
+(* Set union is associative. *)
+
+Lemma union_assoc vs ws zs :
+  vs ∪ (ws ∪ zs) ≡ vs ∪ ws ∪ zs.
+Proof. set_solver. Qed.
+
 End Sets.
+
+Hint Rewrite
+  @union_assoc
+: sets.
 
 (* -------------------------------------------------------------------------- *)
 

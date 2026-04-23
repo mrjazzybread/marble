@@ -477,6 +477,15 @@ Ltac dfs1 :=
 
 Hint Constructors dfs : dfs.
 
+(* The leftmost root of a forest is initially unmarked. *)
+
+Lemma root_is_unmarked w ws vs imarked omarked :
+  dfs imarked omarked (NonEmpty w ws vs) →
+  w ∉ imarked.
+Proof.
+  intros hdfs. dependent destruction hdfs. assumption.
+Qed.
+
 (* [dfs] is compatible with set equality. *)
 
 Global Instance : Proper (equiv ==> equiv ==> eq ==> impl) dfs.
@@ -508,10 +517,6 @@ Ltac dfs_monotonic :=
     generalize (dfs_monotonic h); revert h
   end;
   intros.
-
-(* TODO *)
-(* Ltac dfs_monotonic := *)
-(*   eapply subset_transitive; [ | eapply dfs_monotonic; eauto ]. *)
 
 (* Every element of a DFS forest is initially unmarked. *)
 
@@ -578,14 +583,6 @@ Proof.
   set_solver.
 Qed.
 
-(* TODO not useful? *)
-Lemma dfs_determines_support_universe imarked f :
-  dfs imarked ⊤ f →
-  support f ≡ ⊤ ∖ imarked.
-Proof.
-  eapply dfs_determines_support.
-Qed.
-
 (* The second [dfs] premise of [DFSNonEmpty] could also be formulated
    as follows. The set [mmarked] is replaced with the union of [imarked]
    and the support of the tree [w/ws]. *)
@@ -628,9 +625,7 @@ Proof.
   induction 1; simpl; intros; econstructor.
   + set_solver.
   + set_solver.
-  + dfs1.
-    - eapply IHdfs1. set_solver.
-    - set_solver.
+  + autorewrite with sets. eapply IHdfs1. set_solver.
   + eauto.
   + set_solver.
   + eapply IHdfs2. set_solver.
@@ -718,8 +713,8 @@ Proof.
     + set_solver. }
 Qed.
 
-(* As a corollary, if [w/ws] is a tree of a DFS forest, then [w] reaches
-   all of [ws]. *)
+(* As a corollary, if [w/ws] is a tree of a DFS forest,
+   then [w] reaches all of [ws]. *)
 
 Lemma reaches_root_support imarked mmarked w ws vs :
   dfs imarked mmarked (NonEmpty w ws vs) →
@@ -729,6 +724,16 @@ Proof.
   (* This repeats sub-goal 2 above, but never mind. *)
   eauto using reaches_roots_support, reaches_transitive,
               subset_transitive with reaches.
+Qed.
+
+Lemma reaches_children w ws vs imarked omarked x :
+  dfs imarked omarked (NonEmpty w ws vs) →
+  x ∈ support ws →
+  reaches_ {[w]} {[x]}.
+Proof.
+  intros hdfs ?.
+  generalize (reaches_root_support hdfs); intro.
+  set_solver.
 Qed.
 
 (* The concatenation of two DFS forests (with matching intermediate
@@ -902,12 +907,7 @@ Proof.
      that [w] is not in [imarked], and the hypothesis that [⊤ ∖ imarked]
      is closed ensures that the closure of [w] lies outside [imarked]. *)
   { generalize (bound_closure_direct hdfs hci); intro.
-    assert (w ∉ imarked). (* TODO make this a lemma *)
-    { dependent destruction hdfs. assumption. }
-    assert (closure E {[w]} ⊆ ⊤ ∖ imarked).
-    { eapply prove_closure_subset. set_solver. assumption. }
-    assert (closure E {[w]} ## imarked). (* TODO make this a lemma *)
-    { set_solver. }
+    assert (w ∉ imarked) by eauto using root_is_unmarked.
     set_solver. }
   (* Now, the reverse inclusion is easy. *)
   { eauto using reaches_root_support with reaches. }

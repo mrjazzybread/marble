@@ -1,18 +1,13 @@
-(* This library contains a proof of correctness of an algorithm that
+(* This file contains a proof of correctness of an algorithm that
    produces the strongly connected components of a directed graph.
    The algorithm is attributed by Cormen et al. to Kosaraju and Sharir,
    and this proof is due to Wegener. *)
 
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
-
 From stdpp Require Import sets propset.
 Local Notation set := propset.
-
 From marble Require Import tactics.
-From marble.logic Require Import MyTactics.
-From marble.logic Require Import lists.
-From marble.logic Require Import sets relations.
-From marble.logic Require Import DFS.
+From marble.logic Require Import lists sets relations DFS.
 
 Set Implicit Arguments.
 
@@ -57,391 +52,389 @@ Inductive is_scc_forest (V : Type) (E : V → V → Prop) : forest V → Prop :=
    vertices, [equpto], and a notion of forest compatibility up to masked
    vertices, [filter]. *)
 
-(* TODO de-indent *)
-
 Section Masked.
 
-  (* A type of vertices. *)
+(* A type of vertices. *)
 
-  Variable V : Type.
+Variable V : Type.
 
-  (* A set of masked vertices. *)
+(* A set of masked vertices. *)
 
-  Variable masked : set V.
+Variable masked : set V.
 
-  (* The predicate [equpto rs1 rs2] means that the lists [rs1] and [rs2] are
-     equal provided one is allowed to ignore the masked elements of [rs1]. *)
+(* The predicate [equpto rs1 rs2] means that the lists [rs1] and [rs2] are
+   equal provided one is allowed to ignore the masked elements of [rs1]. *)
 
-  (* Note: [EqUpToSync] does not require [a ∉ masked]. This makes the
-     predicate [equpto] reflexive and non-deterministic. It also causes a
-     slight discrepancy between the definitions of [equpto] and [filter].
-     This does not seem to be a problem. *)
+(* Note: [EqUpToSync] does not require [a ∉ masked]. This makes the
+   predicate [equpto] reflexive and non-deterministic. It also causes a
+   slight discrepancy between the definitions of [equpto] and [filter].
+   This does not seem to be a problem. *)
 
-  Inductive equpto : list V → list V → Prop :=
-    | EqUpToNil:
-        equpto [] []
-    | EqUpToSkip:
-        ∀ a bs cs,
-        a ∈ masked →
-        equpto bs cs →
-        equpto (a :: bs) cs
-    | EqUpToSync:
-        ∀ a bs cs,
-        equpto bs cs →
-        equpto (a :: bs) (a :: cs).
+Inductive equpto : list V → list V → Prop :=
+  | EqUpToNil:
+      equpto [] []
+  | EqUpToSkip:
+      ∀ a bs cs,
+      a ∈ masked →
+      equpto bs cs →
+      equpto (a :: bs) cs
+  | EqUpToSync:
+      ∀ a bs cs,
+      equpto bs cs →
+      equpto (a :: bs) (a :: cs).
 
-  Hint Constructors equpto : equpto.
+Hint Constructors equpto : equpto.
 
-  Local Infix "≃" := equpto (at level 80).
+Local Infix "≃" := equpto (at level 80).
 
-  (* The predicate [filter ws vs] means that the masked vertices form a
-     prefix of the forest [ws] and, if we remove them, what remains is
-     the forest [vs]. *)
+(* The predicate [filter ws vs] means that the masked vertices form a
+   prefix of the forest [ws] and, if we remove them, what remains is
+   the forest [vs]. *)
 
-  Inductive filter : forest V → forest V → Prop :=
-    | FilterEmpty:
-        filter (Empty _) (Empty _)
-    | FilterMasked:
-        (* If [w] is masked, it is dropped, and the forest [ws] of its
-           children is recursively filtered. *)
-        ∀ w ws vs ws' vs',
-        w ∈ masked →
-        filter ws ws' →
-        filter vs vs' →
-        filter (NonEmpty w ws vs) (concat ws' vs')
-    | FilterVisible:
-        (* If [w] is not masked, it is preserved. We require that none of
-           its descendants be masked, so that the forest [ws] is preserved. *)
-        ∀ w ws vs vs',
-        w ∉ masked →
-        support ws ## masked →
-        filter vs vs' →
-        filter (NonEmpty w ws vs) (NonEmpty w ws vs').
+Inductive filter : forest V → forest V → Prop :=
+  | FilterEmpty:
+      filter (Empty _) (Empty _)
+  | FilterMasked:
+      (* If [w] is masked, it is dropped, and the forest [ws] of its
+         children is recursively filtered. *)
+      ∀ w ws vs ws' vs',
+      w ∈ masked →
+      filter ws ws' →
+      filter vs vs' →
+      filter (NonEmpty w ws vs) (concat ws' vs')
+  | FilterVisible:
+      (* If [w] is not masked, it is preserved. We require that none of
+         its descendants be masked, so that the forest [ws] is preserved. *)
+      ∀ w ws vs vs',
+      w ∉ masked →
+      support ws ## masked →
+      filter vs vs' →
+      filter (NonEmpty w ws vs) (NonEmpty w ws vs').
 
-  Hint Constructors filter : filter.
+Hint Constructors filter : filter.
 
-  (* [equpto] is reflexive. *)
+(* [equpto] is reflexive. *)
 
-  Lemma equpto_reflexive: reflexive equpto.
-  Proof.
-    intro xs. induction xs; eauto with equpto.
-  Qed.
+Lemma equpto_reflexive: reflexive equpto.
+Proof.
+  intro xs. induction xs; eauto with equpto.
+Qed.
 
-  (* [equpto] is transitive. *)
+(* [equpto] is transitive. *)
 
-  Lemma equpto_transitive: transitive equpto.
-  Proof.
-    intros xs ys zs. intros Hxy. revert zs. revert xs ys Hxy.
-    induction 1; induction zs; intros Hyz;
-    dependent destruction Hyz; eauto with equpto.
-  Qed.
+Lemma equpto_transitive: transitive equpto.
+Proof.
+  intros xs ys zs. intros Hxy. revert zs. revert xs ys Hxy.
+  induction 1; induction zs; intros Hyz;
+  dependent destruction Hyz; eauto with equpto.
+Qed.
 
-  (* [equpto] is preserved by list concatenation. *)
+(* [equpto] is preserved by list concatenation. *)
 
-  Lemma equpto_append xs1 xs2 ys1 ys2 :
-    xs1 ≃ xs2 →
-    ys1 ≃ ys2 →
-    xs1 ++ ys1 ≃ xs2 ++ ys2.
-  Proof.
-    induction 1; simpl; intros; eauto with equpto.
-  Qed.
+Lemma equpto_append xs1 xs2 ys1 ys2 :
+  xs1 ≃ xs2 →
+  ys1 ≃ ys2 →
+  xs1 ++ ys1 ≃ xs2 ++ ys2.
+Proof.
+  induction 1; simpl; intros; eauto with equpto.
+Qed.
 
-  Hint Resolve equpto_reflexive equpto_append : equpto.
+Hint Resolve equpto_reflexive equpto_append : equpto.
 
-  (* [equpto] is preserved by list reversal. *)
+(* [equpto] is preserved by list reversal. *)
 
-  Lemma equpto_rev rs1 rs2 :
-    rs1 ≃ rs2 → rev rs1 ≃ rev rs2.
-  Proof.
-    induction 1; simpl; intros.
-    { eauto with equpto. }
-    { eapply equpto_transitive; [| eassumption ].
-      replace (rev bs) with (rev bs ++ @nil V) at 2 by eapply app_nil_r.
-      eauto with equpto. }
-    { eauto with equpto. }
-  Qed.
+Lemma equpto_rev rs1 rs2 :
+  rs1 ≃ rs2 → rev rs1 ≃ rev rs2.
+Proof.
+  induction 1; simpl; intros.
+  { eauto with equpto. }
+  { eapply equpto_transitive; [| eassumption ].
+    replace (rev bs) with (rev bs ++ @nil V) at 2 by eapply app_nil_r.
+    eauto with equpto. }
+  { eauto with equpto. }
+Qed.
 
-  (* If two forests are compatible up to masked vertices, then their
-     linearizations are compatible up to masked vertices. *)
+(* If two forests are compatible up to masked vertices, then their
+   linearizations are compatible up to masked vertices. *)
 
-  Lemma filter_equpto vs ws :
-    filter vs ws →
-    postorder vs ≃ postorder ws.
-  Proof.
-    induction 1; simpl; intros; rewrite ?postorder_concat;
-    eauto with equpto.
-  Qed.
+Lemma filter_equpto vs ws :
+  filter vs ws →
+  postorder vs ≃ postorder ws.
+Proof.
+  induction 1; simpl; intros; rewrite ?postorder_concat;
+  eauto with equpto.
+Qed.
 
-  Hint Resolve equpto_rev filter_equpto : equpto.
+Hint Resolve equpto_rev filter_equpto : equpto.
 
-  (* The property [ordered rs f] is insensitive to the presence in the list
-     [rs] of vertices that are not in the support of [f]. *)
+(* The property [ordered rs f] is insensitive to the presence in the list
+   [rs] of vertices that are not in the support of [f]. *)
 
-  Lemma ordered_equpto:
-    forall rs1 f,
-    ordered rs1 f →
-    forall rs2,
-    rs1 ≃ rs2 →
-    support f ## masked →
-    ordered rs2 f.
-  Proof.
-    induction 1; simpl; intros rs2 heq; intros.
-    (* OrderedNil *)
-    { dependent destruction heq. constructor. }
-    (* OrderedSkip *)
-    { dependent destruction heq.
-      + eauto.
-      + econstructor; eauto. }
-    (* OrderedRoot *)
-    { dependent destruction heq; [ set_solver |].
-      eapply OrderedRoot.
-      eapply IHordered; [ eauto | set_solver ]. }
-  Qed.
+Lemma ordered_equpto:
+  forall rs1 f,
+  ordered rs1 f →
+  forall rs2,
+  rs1 ≃ rs2 →
+  support f ## masked →
+  ordered rs2 f.
+Proof.
+  induction 1; simpl; intros rs2 heq; intros.
+  (* OrderedNil *)
+  { dependent destruction heq. constructor. }
+  (* OrderedSkip *)
+  { dependent destruction heq.
+    + eauto.
+    + econstructor; eauto. }
+  (* OrderedRoot *)
+  { dependent destruction heq; [ set_solver |].
+    eapply OrderedRoot.
+    eapply IHordered; [ eauto | set_solver ]. }
+Qed.
 
-  (* If a forest [vs] lies entirely outside [masked], then it is
-     preserved by filtration. In other words, [filter] is reflexive
-     outside [masked]. *)
+(* If a forest [vs] lies entirely outside [masked], then it is
+   preserved by filtration. In other words, [filter] is reflexive
+   outside [masked]. *)
 
-  Lemma filter_reflexive vs :
-    support vs ## masked →
-    filter vs vs.
-  Proof.
-    induction vs; simpl; intros.
-    + econstructor.
-    + econstructor.
-      - set_solver.
-      - set_solver.
-      - eapply IHvs2. set_solver.
-  Qed.
+Lemma filter_reflexive vs :
+  support vs ## masked →
+  filter vs vs.
+Proof.
+  induction vs; simpl; intros.
+  + econstructor.
+  + econstructor.
+    - set_solver.
+    - set_solver.
+    - eapply IHvs2. set_solver.
+Qed.
 
-  (* [filter] is preserved by concatenation. *)
+(* [filter] is preserved by concatenation. *)
 
-  Lemma filter_concat vs1 ws1 :
-    filter vs1 ws1 →
-    ∀ vs2 ws2,
-    filter vs2 ws2 →
-    filter (concat vs1 vs2) (concat ws1 ws2).
-  Proof.
-    induction 1; simpl; intros; eauto;
-    rewrite <- ?concat_associative;
-    eauto with filter.
-  Qed.
+Lemma filter_concat vs1 ws1 :
+  filter vs1 ws1 →
+  ∀ vs2 ws2,
+  filter vs2 ws2 →
+  filter (concat vs1 vs2) (concat ws1 ws2).
+Proof.
+  induction 1; simpl; intros; eauto;
+  rewrite <- ?concat_associative;
+  eauto with filter.
+Qed.
 
-  (* The forest produced by [filter] does not contain masked vertices. *)
+(* The forest produced by [filter] does not contain masked vertices. *)
 
-  Lemma filter_support vs ws :
-    filter vs ws →
-    support ws ## masked.
-  Proof.
-    induction 1; simpl; rewrite ?support_concat; set_solver.
-  Qed.
+Lemma filter_support vs ws :
+  filter vs ws →
+  support ws ## masked.
+Proof.
+  induction 1; simpl; rewrite ?support_concat; set_solver.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
 (* We now mask away not only a set of vertices, but also the incoming and
    outgoing edges carried by these vertices. *)
 
-  Variable E : V → V → Prop.
+Variable E : V → V → Prop.
 
-  (* The relation [E'] represents the remaining edges. *)
+(* The relation [E'] represents the remaining edges. *)
 
-  (* An edge is removed as soon as either of its endpoints is removed.
-     This seems to be required, later on, when we argue that the set
-     of masked vertices is closed both ways, i.e., has no incoming or
-     outgoing edges. *)
+(* An edge is removed as soon as either of its endpoints is removed.
+   This seems to be required, later on, when we argue that the set
+   of masked vertices is closed both ways, i.e., has no incoming or
+   outgoing edges. *)
 
-  Definition E' v w :=
-    E v w ∧ v ∉ masked ∧ w ∉ masked.
+Definition E' v w :=
+  E v w ∧ v ∉ masked ∧ w ∉ masked.
 
-  Hint Unfold E' : E'.
+Hint Unfold E' : E'.
 
-  (* There are fewer edges in [E'] than in [E]. *)
+(* There are fewer edges in [E'] than in [E]. *)
 
-  Lemma fewer_edges v w : E' v w → E v w.
-  Proof. unfold E'. tauto. Qed.
+Lemma fewer_edges v w : E' v w → E v w.
+Proof. unfold E'. tauto. Qed.
 
-  (* Hence, if a set is closed with respect to [E], then it is also closed
-     with respect to [E']. *)
+(* Hence, if a set is closed with respect to [E], then it is also closed
+   with respect to [E']. *)
 
-  Lemma still_closed vs : closed E vs → closed E' vs.
-  Proof.
-    generalize (into_contravariant_E fewer_edges). eauto.
-  Qed.
+Lemma still_closed vs : closed E vs → closed E' vs.
+Proof.
+  generalize (into_contravariant_E fewer_edges). eauto.
+Qed.
 
-  (* The set [masked] is closed with respect to [E'] and [flip E'].
-     This is due to the fact that a masked vertex has no incoming or
-     outgoing edges. *)
+(* The set [masked] is closed with respect to [E'] and [flip E'].
+   This is due to the fact that a masked vertex has no incoming or
+   outgoing edges. *)
 
-  Lemma image_masked_direct: into E' masked ∅.
-  Proof.
-    unfold E'. set_solver.
-  Qed.
+Lemma image_masked_direct: into E' masked ∅.
+Proof.
+  unfold E'. set_solver.
+Qed.
 
-  Lemma image_masked_reverse:
-    into (flip E') masked ∅.
-  Proof.
-    unfold flip, E'. set_solver.
-  Qed.
+Lemma image_masked_reverse:
+  into (flip E') masked ∅.
+Proof.
+  unfold flip, E'. set_solver.
+Qed.
 
-  (* The target of an [E'] edge is never masked. *)
+(* The target of an [E'] edge is never masked. *)
 
-  Lemma into_complement_masked vs :
-    into E' vs (⊤ ∖ masked).
-  Proof.
-    unfold E'. set_solver.
-  Qed.
+Lemma into_complement_masked vs :
+  into E' vs (⊤ ∖ masked).
+Proof.
+  unfold E'. set_solver.
+Qed.
 
-  (* A path from [x] to [z] is preserved unless there is a masked
-     vertex [y] on this path. *)
+(* A path from [x] to [z] is preserved unless there is a masked
+   vertex [y] on this path. *)
 
-  Lemma path_preservation `{!RelDecision (∈@{set V})} x :
-    ∀ z,
-    path E x z →
-    path E' x z ∨
-    ∃ y, y ∈ masked ∧ path E x y ∧ path E y z.
-  Proof.
-    (* First, deal with the case where [x] is masked, which is trivial. *)
-    case (decide (x ∈ masked)); intro.
-    { right. eauto with path. }
-    (* Now, re-introduce [x], and perform an induction. *)
-    generalize dependent x.
-    induction 2.
-    (* Base case. *)
-    { eauto with path. }
-    (* Inductive case. *)
-    (* If [y] is masked, we have a masked vertex on the path from [x]
-       to [z], and we are done. *)
-    case (decide (y ∈ masked)); intro.
-    { right. eauto with path. }
-    (* Assume now that [y] is not masked. The edge from [x] to [y] is
-       preserved. Furthermore, the induction hypothesis is applicable. *)
-    destruct IHpath; [ assumption | | unpack ].
-    (* Sub-case 1. *)
-    { left. eauto with E' path. }
-    (* Sub-case 2. *)
-    { right. eauto with path. }
-  Qed.
+Lemma path_preservation `{!RelDecision (∈@{set V})} x :
+  ∀ z,
+  path E x z →
+  path E' x z ∨
+  ∃ y, y ∈ masked ∧ path E x y ∧ path E y z.
+Proof.
+  (* First, deal with the case where [x] is masked, which is trivial. *)
+  case (decide (x ∈ masked)); intro.
+  { right. eauto with path. }
+  (* Now, re-introduce [x], and perform an induction. *)
+  generalize dependent x.
+  induction 2.
+  (* Base case. *)
+  { eauto with path. }
+  (* Inductive case. *)
+  (* If [y] is masked, we have a masked vertex on the path from [x]
+     to [z], and we are done. *)
+  case (decide (y ∈ masked)); intro.
+  { right. eauto with path. }
+  (* Assume now that [y] is not masked. The edge from [x] to [y] is
+     preserved. Furthermore, the induction hypothesis is applicable. *)
+  destruct IHpath; [ assumption | | unpack ].
+  (* Sub-case 1. *)
+  { left. eauto with E' path. }
+  (* Sub-case 2. *)
+  { right. eauto with path. }
+Qed.
 
-  (* If no vertex in [vs] is masked, then the image of [vs] through [E']
-     is its image through [E], minus any masked vertices. The following
-     two lemmas prove one inclusion each. *)
+(* If no vertex in [vs] is masked, then the image of [vs] through [E']
+   is its image through [E], minus any masked vertices. The following
+   two lemmas prove one inclusion each. *)
 
-  Lemma image_preservation_1 vs :
-    vs ## masked →
-    image E vs ∖ masked ⊆ image E' vs.
-  Proof.
-    unfold E'. set_solver. (* nice! *)
-  Qed.
+Lemma image_preservation_1 vs :
+  vs ## masked →
+  image E vs ∖ masked ⊆ image E' vs.
+Proof.
+  unfold E'. set_solver. (* nice! *)
+Qed.
 
-  Lemma image_preservation_2 vs :
-    image E' vs ⊆ image E vs ∖ masked.
-  Proof.
-    unfold E'. set_solver. (* nice! *)
-  Qed.
+Lemma image_preservation_2 vs :
+  image E' vs ⊆ image E vs ∖ masked.
+Proof.
+  unfold E'. set_solver. (* nice! *)
+Qed.
 
-  Lemma image_preservation vs :
-    vs ## masked →
-    image E vs ∖ masked ≡ image E' vs.
-  Proof.
-    unfold E'. set_solver.
-  Qed.
+Lemma image_preservation vs :
+  vs ## masked →
+  image E vs ∖ masked ≡ image E' vs.
+Proof.
+  unfold E'. set_solver.
+Qed.
 
-  (* If all [E]-edges out of [vs] lead into [ws], then the same is true
-     of all [E']-edges out of [vs], and furthermore these edges lead to
-     vertices that are not masked. *)
+(* If all [E]-edges out of [vs] lead into [ws], then the same is true
+   of all [E']-edges out of [vs], and furthermore these edges lead to
+   vertices that are not masked. *)
 
-  Lemma into_preservation vs ws :
-    into E vs ws →
-    into E' vs (ws ∖ masked).
-  Proof.
-    unfold E'. set_solver.
-  Qed.
+Lemma into_preservation vs ws :
+  into E vs ws →
+  into E' vs (ws ∖ masked).
+Proof.
+  unfold E'. set_solver.
+Qed.
 
-  (* If no vertex in [w/ws] is masked, and if there in an edge in [E]
-     from [w] to every root of [ws], then this remains true in [E']. *)
+(* If no vertex in [w/ws] is masked, and if there in an edge in [E]
+   from [w] to every root of [ws], then this remains true in [E']. *)
 
-  Lemma outof_preservation w ws :
-    w ∉ masked →
-    support ws ## masked →
-    outof E {[w]} (roots ws) →
-    outof E' {[w]} (roots ws).
-  Proof.
-    intros hw hws ?.
-    generalize (@image_preservation {[w]} ltac:(set_solver)); intro.
-    generalize (subset_roots_support ws); intro.
-    set_solver.
-  Qed.
+Lemma outof_preservation w ws :
+  w ∉ masked →
+  support ws ## masked →
+  outof E {[w]} (roots ws) →
+  outof E' {[w]} (roots ws).
+Proof.
+  intros hw hws ?.
+  generalize (@image_preservation {[w]} ltac:(set_solver)); intro.
+  generalize (subset_roots_support ws); intro.
+  set_solver.
+Qed.
 
-  (* If a DFS of the original graph produces the forest [ws], and if
-     filtering out the masked vertices of [ws] yields the forest [ws'],
-     then a DFS of the modified graph yields [ws'], as one would expect. *)
+(* If a DFS of the original graph produces the forest [ws], and if
+   filtering out the masked vertices of [ws] yields the forest [ws'],
+   then a DFS of the modified graph yields [ws'], as one would expect. *)
 
-  (* One might wonder which sets of marked vertices should appear in the
-     conclusion of this lemma. In fact, the masked vertices do not matter
-     any more, so we can view them as marked or unmarked, as we please. We
-     prove two variants of the lemma, namely [dfs_filter_diff] and
-     [dfs_filter_union]. *)
+(* One might wonder which sets of marked vertices should appear in the
+   conclusion of this lemma. In fact, the masked vertices do not matter
+   any more, so we can view them as marked or unmarked, as we please. We
+   prove two variants of the lemma, namely [dfs_filter_diff] and
+   [dfs_filter_union]. *)
 
-  Lemma dfs_filter_diff imarked omarked ws :
-    dfs E imarked omarked ws →
-    ∀ ws',
-    filter ws ws' →
-    dfs E' (imarked ∖ masked) (omarked ∖ masked) ws'.
-  Proof.
-    induction 1; intros ? hf; dependent destruction hf.
-    (* Empty. *)
-    { econstructor. set_solver. }
-    (* NonEmpty/Masked *)
-    { eapply dfs_concat; [ | eauto ].
-      (* The first premise requires tweaking; we must argue that [w]
-         is masked, hence it does not make any difference whether it
-         is marked or unmarked. *)
-      dfs1; [ eauto | set_solver ]. }
-    (* NonEmpty/Visible *)
-    { econstructor.
-      + set_solver.
-      + dfs1; [ eauto using filter_reflexive | set_solver ].
-      + eapply outof_preservation; set_solver.
-      + eapply into_preservation; eauto.
-      + eauto. }
-  Qed.
-
-  Lemma dfs_filter_union imarked omarked ws :
-    dfs E imarked omarked ws →
-    ∀ ws',
-    filter ws ws' →
-    dfs E' (imarked ∪ masked) (omarked ∪ masked) ws'.
-  Proof.
-    (* This lemma used to be proved via [dfs_filter_diff] and
-       [dfs_marked_covariant] and [prove_subset_union_diff], which
-       requires decidable membership. A direct proof is preferable. *)
-    induction 1; intros ? hfilter; dependent destruction hfilter.
-    { econstructor. set_solver. }
-    { eapply dfs_concat.
-      + dfs1. eauto. set_solver.
-      + dfs1. eauto. set_solver. }
-    { econstructor.
-      + set_solver.
-      + dfs1. eauto using filter_reflexive. set_solver.
-      + eapply outof_preservation; eauto with set_solver.
-      + unfold E'. set_solver. (* [into_preservation] *)
-      + eauto. }
-  Qed.
-
-  (* This special case of the previous lemma covers the case where every
-     masked vertex is initially marked. *)
-
-  Lemma dfs_filter_remainder imarked omarked ws :
-    dfs E imarked omarked ws →
-    masked ⊆ imarked →
-    dfs E' imarked omarked ws.
-  Proof.
-    intros. dfs1. dfs2.
-    + eapply dfs_filter_union; [ eauto | eapply filter_reflexive ].
-      dfs_imarked. set_solver.
-    + dfs_monotonic. set_solver.
+Lemma dfs_filter_diff imarked omarked ws :
+  dfs E imarked omarked ws →
+  ∀ ws',
+  filter ws ws' →
+  dfs E' (imarked ∖ masked) (omarked ∖ masked) ws'.
+Proof.
+  induction 1; intros ? hf; dependent destruction hf.
+  (* Empty. *)
+  { econstructor. set_solver. }
+  (* NonEmpty/Masked *)
+  { eapply dfs_concat; [ | eauto ].
+    (* The first premise requires tweaking; we must argue that [w]
+       is masked, hence it does not make any difference whether it
+       is marked or unmarked. *)
+    dfs1; [ eauto | set_solver ]. }
+  (* NonEmpty/Visible *)
+  { econstructor.
     + set_solver.
-  Qed.
+    + dfs1; [ eauto using filter_reflexive | set_solver ].
+    + eapply outof_preservation; set_solver.
+    + eapply into_preservation; eauto.
+    + eauto. }
+Qed.
+
+Lemma dfs_filter_union imarked omarked ws :
+  dfs E imarked omarked ws →
+  ∀ ws',
+  filter ws ws' →
+  dfs E' (imarked ∪ masked) (omarked ∪ masked) ws'.
+Proof.
+  (* This lemma used to be proved via [dfs_filter_diff] and
+     [dfs_marked_covariant] and [prove_subset_union_diff], which
+     requires decidable membership. A direct proof is preferable. *)
+  induction 1; intros ? hfilter; dependent destruction hfilter.
+  { econstructor. set_solver. }
+  { eapply dfs_concat.
+    + dfs1. eauto. set_solver.
+    + dfs1. eauto. set_solver. }
+  { econstructor.
+    + set_solver.
+    + dfs1. eauto using filter_reflexive. set_solver.
+    + eapply outof_preservation; eauto with set_solver.
+    + unfold E'. set_solver. (* [into_preservation] *)
+    + eauto. }
+Qed.
+
+(* This special case of the previous lemma covers the case where every
+   masked vertex is initially marked. *)
+
+Lemma dfs_filter_remainder imarked omarked ws :
+  dfs E imarked omarked ws →
+  masked ⊆ imarked →
+  dfs E' imarked omarked ws.
+Proof.
+  intros. dfs1. dfs2.
+  + eapply dfs_filter_union; [ eauto | eapply filter_reflexive ].
+    dfs_imarked. set_solver.
+  + dfs_monotonic. set_solver.
+  + set_solver.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -449,140 +442,136 @@ Section Masked.
    In that case, quite obviously, the remaining components of the original
    graph are exactly the components of the modified graph. *)
 
-  (* We assume that there exists some vertex [r]... *)
+(* We assume that there exists some vertex [r]... *)
 
-  Variable r : V.
+Variable r : V.
 
-  (* ...such that the masked vertices are exactly the component of [r]. *)
+(* ...such that the masked vertices are exactly the component of [r]. *)
 
-  Variable hm : masked ≡ component E r.
+Variable hm : masked ≡ component E r.
 
-  (* Let us spell out the obvious consequences of this hypothesis. *)
+(* Let us spell out the obvious consequences of this hypothesis. *)
 
-  Lemma scc_masked w : w ∈ masked → scc E r w.
-  Proof. set_solver. Qed.
+Lemma scc_masked w : w ∈ masked → scc E r w.
+Proof. set_solver. Qed.
 
-  Lemma masked_scc w : scc E r w → w ∈ masked.
-  Proof. set_solver. Qed.
+Lemma masked_scc w : scc E r w → w ∈ masked.
+Proof. set_solver. Qed.
 
-  (* If [w] is unmasked, then its component in [E'] is the same as its
-     component in [E]. *)
+(* If [w] is unmasked, then its component in [E'] is the same as its
+   component in [E]. *)
 
-  Lemma scc_preservation `{!RelDecision (∈@{set V})} w :
-    w ∉ masked →
-    component E w ≡ component E' w.
-  Proof.
-    (* One inclusion is already known. *)
-    intros. eapply subset_antisymmetric;
-      [| eauto using component_covariant_E, fewer_edges ].
-    (* Consider a point [x] with paths between [w] and [x]. *)
-    eapply prove_subset; intros x [ hwx hxw ].
-    (* Apply path preservation to these paths. *)
-    generalize (path_preservation hwx); intro fwx.
-    generalize (path_preservation hxw); intro fxw.
-    (* Three cases arise. *)
-    destruct fwx; [ destruct fxw | ].
-    (* Case 1. The two paths are preserved. Done. *)
-    { constructor; eauto. }
-    (* Case 2. The path of [x] to [w] hits a masked vertex [y]. This vertex
-       is a member of [r]'s component, hence [w] must also be a member of
-       [r]'s component, hence [w] must be masked. Contradiction. *)
-    { exfalso. unpack.
-      cut (w ∈ masked); [ tauto |].
-      eauto 7 using scc_masked, masked_scc with scc path. }
-    (* Case 3. Symmetric. *)
-     { exfalso. unpack.
-      cut (w ∈ masked); [ tauto |].
-      eauto 7 using scc_masked, masked_scc with scc path. }
-  Qed.
-
-  (* Thus, an SCC forest for [E'] is an SCC forest for [E]. *)
-
-  Lemma is_scc_forest_inclusion `{!RelDecision (∈@{set V})} f :
-    is_scc_forest E' f →
-    support f ## masked →
-    is_scc_forest E f.
-  Proof.
-    induction 1 as [| ? ? ? heq h IH ]; simpl; constructor.
-    + rewrite <- heq. eapply scc_preservation. set_solver.
-    + eapply IH. set_solver.
-  Qed.
-
-  (* If the vertex [r] reaches the (roots of the) forest [vs], then the
-     strongly connected component of [r] forms a prefix of the forest
-     [vs]. Thus, there exists a forest [ws] obtained by filtering away
-     this component. *)
-
-  Lemma filter_scc `{!RelDecision (∈@{set V})} imarked omarked vs :
-    dfs E imarked omarked vs →
-    reaches E {[r]} (support vs) →
-    ∃ ws,
-    filter vs ws.
-  Proof.
-    (* The beginning of the proof is administrative. *)
-    induction 1; simpl; intros.
-    (* Empty. *)
-    { eauto with filter. }
-    (* NonEmpty. *)
-    edestruct IHdfs2 as (vs' & ?). eauto with set_solver. clear IHdfs2.
-    case (decide (w ∈ masked)); intro.
-    (* Case: [w] is masked. *)
-    { edestruct IHdfs1 as (ws' & ?). eauto with set_solver. clear IHdfs1.
-      eauto with filter. }
-    (* Case: [w] is not masked. *)
-    clear IHdfs1.
-    eexists.
-    eapply FilterVisible; [ eauto | | eauto ].
-    (* Here comes the key argument. If [w] is not part of [scc E r],
-       then none of its descendants in the forest is part of it. *)
-    (* Assume, by way of contradiction, that [x] is part of [support ws]
-       and is part of [component E r]. *)
-    rewrite hm.
-    eapply prove_disjoint. intros x ? ?.
-    (* Then, there is a path from [r] to [w] to [x] to [r]. *)
-    assert (reaches E {[r]} {[w]}) by eauto with set_solver.
-    assert (reaches E {[w]} {[x]}). (* TODO lemma *)
-    { eapply subset_transitive;
-        [| eapply reaches_root_support with (ws := ws) ].
-      + set_solver.
-      + eauto with dfs. }
-    assert (reaches E {[x]} {[r]}) by set_solver.
-    (* Hence, [w] must be part of [component E r]. Contradiction. *)
+Lemma scc_preservation `{!RelDecision (∈@{set V})} w :
+  w ∉ masked →
+  component E w ≡ component E' w.
+Proof.
+  (* One inclusion is already known. *)
+  intros. eapply subset_antisymmetric;
+    [| eauto using component_covariant_E, fewer_edges ].
+  (* Consider a point [x] with paths between [w] and [x]. *)
+  eapply prove_subset; intros x [ hwx hxw ].
+  (* Apply path preservation to these paths. *)
+  generalize (path_preservation hwx); intro fwx.
+  generalize (path_preservation hxw); intro fxw.
+  (* Three cases arise. *)
+  destruct fwx; [ destruct fxw | ].
+  (* Case 1. The two paths are preserved. Done. *)
+  { constructor; eauto. }
+  (* Case 2. The path of [x] to [w] hits a masked vertex [y]. This vertex
+     is a member of [r]'s component, hence [w] must also be a member of
+     [r]'s component, hence [w] must be masked. Contradiction. *)
+  { exfalso. unpack.
     cut (w ∈ masked); [ tauto |].
-    rewrite hm.
-    rewrite elem_of_component in *. unfold scc in *.
-    rewrite reaches_singleton_singleton in *.
-    intuition eauto with path.
-  Qed.
+    eauto 7 using scc_masked, masked_scc with scc path. }
+  (* Case 3. Symmetric. *)
+   { exfalso. unpack.
+    cut (w ∈ masked); [ tauto |].
+    eauto 7 using scc_masked, masked_scc with scc path. }
+Qed.
 
-  (* In the particular case where the distinguished vertex [r] is the last
-     root of the forest, the same can be said. *)
+(* Thus, an SCC forest for [E'] is an SCC forest for [E]. *)
 
-  Lemma filter_last_scc `{!RelDecision (∈@{set V})} imarked ws vs :
-    dfs E imarked ⊤ (concat vs (NonEmpty r ws (Empty _))) →
-    closed E imarked →
-    ∃ ws',
-    filter (concat vs (NonEmpty r ws (Empty _))) (concat vs ws').
-  Proof.
-    (* The proof consists in applying [filter_reflexive] to the forest [vs]
-       and applying [filter_scc] to the tree [w/ws]. *)
-    intros Hdfs ?.
-    generalize Hdfs;
-    intros (mmarked & Hdfs1 & Hdfs2)%dfs_concat_inversion.
-    edestruct filter_scc.
-    { eauto. }
-    { simpl. eauto using reaches_root_support with reaches. }
-    eexists.
-    eapply filter_concat; [ | eauto ].
-    eapply filter_reflexive.
-    (* We must check that [vs] is disjoint with the component of [r].
-       This follows from [bound_scc] and [dfs_disjoint_concat]. *)
-    rewrite hm.
-    forwards: (bound_scc Hdfs2).
-    { eauto using dfs_closed with closed. }
-    eapply dfs_disjoint_concat in Hdfs. simpl in Hdfs.
-    set_solver.
-  Qed.
+Lemma is_scc_forest_inclusion `{!RelDecision (∈@{set V})} f :
+  is_scc_forest E' f →
+  support f ## masked →
+  is_scc_forest E f.
+Proof.
+  induction 1 as [| ? ? ? heq h IH ]; simpl; constructor.
+  + rewrite <- heq. eapply scc_preservation. set_solver.
+  + eapply IH. set_solver.
+Qed.
+
+(* If the vertex [r] reaches the (roots of the) forest [vs], then the
+   strongly connected component of [r] forms a prefix of the forest
+   [vs]. Thus, there exists a forest [ws] obtained by filtering away
+   this component. *)
+
+Lemma filter_scc `{!RelDecision (∈@{set V})} imarked omarked vs :
+  dfs E imarked omarked vs →
+  reaches E {[r]} (support vs) →
+  ∃ ws,
+  filter vs ws.
+Proof.
+  (* The beginning of the proof is administrative. *)
+  induction 1; simpl; intros.
+  (* Empty. *)
+  { eauto with filter. }
+  (* NonEmpty. *)
+  edestruct IHdfs2 as (vs' & ?). eauto with set_solver. clear IHdfs2.
+  case (decide (w ∈ masked)); intro.
+  (* Case: [w] is masked. *)
+  { edestruct IHdfs1 as (ws' & ?). eauto with set_solver. clear IHdfs1.
+    eauto with filter. }
+  (* Case: [w] is not masked. *)
+  clear IHdfs1.
+  eexists.
+  eapply FilterVisible; [ eauto | | eauto ].
+  (* Here comes the key argument. If [w] is not part of [scc E r],
+     then none of its descendants in the forest is part of it. *)
+  (* Assume, by way of contradiction, that [x] is part of [support ws]
+     and is part of [component E r]. *)
+  rewrite hm.
+  eapply prove_disjoint. intros x ? ?.
+  (* Then, there is a path from [r] to [w] to [x] to [r]. *)
+  assert (reaches E {[r]} {[w]}) by set_solver.
+  assert (reaches E {[w]} {[x]}) by eauto using reaches_children with dfs.
+  assert (reaches E {[x]} {[r]}) by set_solver.
+  rewrite reaches_singleton_singleton in *.
+  (* Hence, [w] must be part of [component E r]. Contradiction. *)
+  cut (w ∈ masked); [ tauto |].
+  rewrite hm.
+  elem in *. unfold scc in *.
+  intuition eauto with path.
+Qed.
+
+(* In the particular case where the distinguished vertex [r] is the last
+   root of the forest, the same can be said. *)
+
+Lemma filter_last_scc `{!RelDecision (∈@{set V})} imarked ws vs :
+  dfs E imarked ⊤ (concat vs (NonEmpty r ws (Empty _))) →
+  closed E imarked →
+  ∃ ws',
+  filter (concat vs (NonEmpty r ws (Empty _))) (concat vs ws').
+Proof.
+  (* The proof consists in applying [filter_reflexive] to the forest [vs]
+     and applying [filter_scc] to the tree [w/ws]. *)
+  intros Hdfs ?.
+  generalize Hdfs;
+  intros (mmarked & Hdfs1 & Hdfs2)%dfs_concat_inversion.
+  edestruct filter_scc.
+  { eauto. }
+  { simpl. eauto using reaches_root_support with reaches. }
+  eexists.
+  eapply filter_concat; [ | eauto ].
+  eapply filter_reflexive.
+  (* We must check that [vs] is disjoint with the component of [r].
+     This follows from [bound_scc] and [dfs_disjoint_concat]. *)
+  rewrite hm.
+  forwards: (bound_scc Hdfs2).
+  { eauto using dfs_closed with closed. }
+  eapply dfs_disjoint_concat in Hdfs. simpl in Hdfs.
+  set_solver.
+Qed.
 
 End Masked.
 
@@ -610,12 +599,6 @@ Qed.
 (* Here is the main lemma in the proof of soundness of the algorithm. *)
 
 (* TODO move, and use this instead of [dfs1] or [dfs2] when possible *)
-Lemma union_assoc {V} (vs ws zs : set V) :
-  vs ∪ (ws ∪ zs) ≡ vs ∪ ws ∪ zs.
-Proof. set_solver. Qed.
-Local Hint Rewrite
-  @union_assoc
-: sets.
 
 Lemma scc_soundness_main_lemma {V} `{!RelDecision (∈@{set V})} :
   ∀ f2,
