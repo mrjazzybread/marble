@@ -405,6 +405,7 @@ Notation into_ vs ws := (into E vs ws).
 Notation outof_ vs ws := (outof E vs ws).
 Notation closed_ vs := (closed E vs).
   (* note: [closed (path E)] and [closed E] are equivalent *)
+Notation closure_ vs := (closure E vs).
 Notation reaches_ vs ws := (reaches E vs ws).
 Notation component_ := (component E).
 
@@ -799,7 +800,7 @@ Qed.
 Lemma bound_closure_direct imarked omarked w ws vs :
   dfs imarked omarked (NonEmpty w ws vs) →
   closed_ imarked →
-  closure E {[w]} ⊆ imarked ∪ {[w]} ∪ support ws.
+  closure_ {[w]} ⊆ imarked ∪ {[w]} ∪ support ws.
 Proof.
   (* This is not a new key result; just a corollary of earlier results. *)
   intros hdfs. intros. dependent destruction hdfs.
@@ -837,10 +838,6 @@ Qed.
 
 (* By combining the previous two lemmas, we find that the strongly
    connected component of [w] must be a subset of the tree [w/ws]. *)
-
-(* TODO replace ⊤ with a smaller universe *)
-(* TODO proof of existence of a [dfs] forest *)
-(* TODO closure_ *)
 
 Lemma bound_scc imarked w ws vs :
   dfs imarked ⊤ (NonEmpty w ws vs) →
@@ -900,7 +897,7 @@ Lemma exact_closure imarked omarked w ws vs :
   dfs imarked omarked (NonEmpty w ws vs) →
   closed_ imarked →
   closed_ (⊤ ∖ imarked) →
-  closure E {[w]} ≡ {[w]} ∪ support ws.
+  closure_ {[w]} ≡ {[w]} ∪ support ws.
 Proof.
   intros hdfs hci hcci. intros. eapply subset_antisymmetric.
   (* This inclusion follows from [bound_closure_direct], with the
