@@ -107,6 +107,12 @@ Proof.
   simpl; eauto with lia.
 Qed.
 
+Lemma lt_le_trans n0 n1 n2 : lt n0 n1 → le n1 n2 → lt n0 n2.
+Proof.
+  destruct n0 as [n0|]; destruct n1 as [n1|]; destruct n2 as [n2|];
+  simpl; eauto with lia.
+Qed.
+
 Lemma lt_le n0 n1 : lt n0 n1 → le n0 n1.
 Proof.
   destruct n0 as [n0|]; destruct n1 as [n1|]; simpl; eauto with lia.
@@ -196,34 +202,36 @@ Open Scope state_scope.
 
 (* [beyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
 
-Definition beyond s : Type :=
+Definition beyond s :=
   { s' | s' ≤ s }.
+
+(* [below s] is the type of a state [s'] such that [s' < s] holds. *)
+
+Definition below s :=
+  { s' | s' < s }.
 
 (* [return_ s] wraps the state [s] so that it has type [beyond s]. *)
 
 Definition return_ s : beyond s :=
   Specif.exist _ s (Nat'.le_refl (weight s)).
 
-(* [transitivity] composes two weight ordering witnesses, one of which
-   is strict, to produce a strict witness again. *)
+(* [step], an identity function on states, proves that if a state [s0]
+   is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
 
-Local Lemma transitivity {s0 s1 s2} : s0 ≤ s1 → s1 < s2 → s0 < s2.
-Proof. unfold lt, le. eauto using Nat'.le_lt_trans. Qed.
-
-(* [covariance], an identity function on states, proves that if a state
-   [s0] is beyond [s1], and if [s1 ≤ s2] holds, then [s0] is beyond [s2]
-   as well. *)
-
-Local Lemma covariance {s1 s2} : s1 ≤ s2 → beyond s1 → beyond s2.
+Local Definition step {s1 s2} : s1 < s2 → beyond s1 → below s2.
 Proof.
   intros ow12 (s0 & ow01). exists s0.
-  unfold le. eauto using Nat'.le_trans.
-Qed.
+  unfold le, lt in *. eauto using Nat'.le_lt_trans.
+Defined.
 
-(* [decay] turns a strict ordering witness into a non-strict one. *)
+(* [decay], an identity function on states, proves that if a state [s']
+   is below [s] then it is also beyond [s]. (Information is lost.) *)
 
-Local Lemma decay {s1 s2} : s1 < s2 → s1 ≤ s2.
-Proof. unfold lt, le. eauto using Nat'.lt_le. Qed.
+Local Definition decay {s} : below s → beyond s.
+Proof.
+  intros (s' & ow). exists s'.
+  unfold lt, le in *. eauto using Nat'.lt_le.
+Defined.
 
 (* [decrease] constructs a strict ordering witness, expressing the idea
    that if the vertex [v] is unmarked in the state [s], which is the pair
@@ -260,44 +268,6 @@ Admitted. (* TODO *)
 
 (* -------------------------------------------------------------------------- *)
 
-(* We now define the auxiliary function [visit_many], which visits the
-   successors of a vertex. It is parameterized with [visit], which visits
-   a vertex. *)
-
-(* A key difficulty is that [visit] cannot be applied to an arbitrary
-   state. For a certain fixed state [s2], [visit] can be applied only to
-   states [s1] such that [s1 < s2] holds. Furthermore, because the state
-   returned by [visit] is used as the argument of the next call to
-   [visit], we must keep track of the fact that this new state [s0] is
-   beyond [s1]. That is, [s0 ≤ s1] holds. Therefore we have [s0 < s2],
-   which implies that [visit] can be applied to [s0]. *)
-
-Section VisitMany.
-
-(* If [s1 < s2] holds then [visit s1 w] can be called, and the result
-   is a new state [s0] such that [s0 ≤ s1] holds. This is expressed
-   in the type of [visit]. *)
-
-Context {s2 : S}.
-
-Variable visit : ∀ s1, vertex → s1 < s2 → beyond s1.
-
-(* [visit_many] is defined by structural induction on the list [ws]. *)
-
-Fixpoint visit_many s1 ws (ow12 : s1 < s2) : beyond s1 :=
-  match ws with
-  | [] =>
-       return_ s1
-  | w :: ws =>
-      let (s0, ow01) := visit s1 w ow12 in
-      let ow : s0 < s2 := transitivity ow01 ow12 in
-      covariance ow01 (visit_many s0 ws ow)
-  end.
-
-End VisitMany.
-
-(* -------------------------------------------------------------------------- *)
-
 (* The main recursive function of the depth-first search algorithm: [visit].  *)
 
 Section Visit.
@@ -312,6 +282,8 @@ Variable body : vertex → U → U.
 (* Fortunately, no properties of this function are needed in the proof
    of termination of [visit]. *)
 
+(* TODO can now use [foreach_successors] *)
+
 Variable successors : vertex → list vertex.
 
 (* [visit] expects a state [s], a vertex [v], and a proof that this state
@@ -321,6 +293,17 @@ Variable successors : vertex → list vertex.
 (* Thanks to the beautiful hack, there is no need to separately keep track
    of an invariant about the state [s]. A state that does not satisfy the
    invariant is deemed inaccessible (unsafe). *)
+
+(* [visit s v ACC] produces a result of type [beyond s], that is, a new
+   state [s'] such that [s' ≤ s] holds. This information is required,
+   while iterating on the successors of a state, to prove that every call
+   to [visit] in this sequence is permitted. *)
+
+(* To iterate on the successors, we use a normal (simply-typed) iteration
+   function. This requires us to package [visit] as a function that does
+   whose argument state and result state have the same type, and which
+   does not require an accessibility witness as an argument. Fortunately,
+   this is possible! *)
 
 Fixpoint visit s v (ACC : safe s) : beyond s :=
   (* Destruct [s] as a pair [(m, u)] while keeping track of the equation. *)
@@ -339,25 +322,22 @@ Fixpoint visit s v (ACC : safe s) : beyond s :=
     let s' := (m', u') in
     (* Construct a witness of the assertion [s' < s]. *)
     let ow : s' < s := decrease s m v u u' Hsmu ACC Hunmarked in
-    (* Wrap [visit] as a function that can be passed to [visit_many].
-       The trick is, because we have [ACC] at hand, any call to [visit]
-       with a state that is smaller than [s] is permitted. *)
-    let visit s' v (ow : s' < s) := visit s' v (Acc_inv ACC ow) in
+    (* Package [visit] as a function of type [below s → vertex → below s],
+       which can be passed to [foldl]. Because we have [ACC] at hand, any
+       call to [visit] on a state that is smaller than [s] is permitted.
+       Therefore we are able to package [visit] as a function that does
+       not require an accessibility witness. *)
+    (* This construction has just [visit] and [ACC] as free variables. *)
+    let visit (sow' : below s) (w : vertex) : below s :=
+      let (s', ow) := sow' in
+      step ow (visit s' w (Acc_inv ACC ow))
+    in
     (* Get ahold of the successors of [v]. *)
     do ws ← successors v ;
-    (* Visit them. *)
-    covariance (decay ow) (visit_many visit s' ws ow)
+    (* Visit them, then use [decay] to forget that we went below [s]. *)
+    decay (fold_left visit ws (Specif.exist _ s' ow))
   end eq_refl.
 
 End Visit.
 
 End S.
-
-(* TODO checking the quality of the extracted code:
-From Corelib Require Extraction.
-From Corelib Require ExtrOcamlBasic.
-Extraction Inline bind return_.
-Extraction Inline covariance.
-Extraction Inline visit_many.
-Recursive Extraction visit.
- *)

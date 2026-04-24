@@ -20,8 +20,15 @@ Set Extraction Output Directory ".".
 (* Basics. *)
 
 From Corelib Require ExtrOcamlBasic.
+
 Extraction Inline
   negb
+.
+
+From Stdlib Require List.
+
+Extraction Inline
+  List.fold_left
 .
 
 (* -------------------------------------------------------------------------- *)
@@ -135,8 +142,7 @@ From marble Require traverse.
 
 Extraction Inline
   traverse.return_
-  traverse.covariance
-  traverse.visit_many
+  traverse.decay
 .
 
 Separate Extraction
