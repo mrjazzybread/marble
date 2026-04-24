@@ -141,7 +141,9 @@ From marble Require pqueue.
 From marble Require traverse.
 
 Extraction Inline
-  traverse.return_
+  traverse.pack_beyond
+  traverse.pack_below
+  traverse.step
   traverse.decay
 .
 

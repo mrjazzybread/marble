@@ -135,10 +135,16 @@ Definition beyond s :=
 Definition below s :=
   { s' | s' < s }.
 
-(* [return_ s] wraps the state [s] so that it has type [beyond s]. *)
+(* [pack_beyond s] wraps the state [s] so that it has type [beyond s]. *)
 
-Definition return_ s : beyond s :=
+Definition pack_beyond s : beyond s :=
   Specif.exist _ s (ole_refl (weight s)).
+
+(* [pack_below s ow] packages the state [s'] and the witness [ow : s' < s]
+   so that they have type [beyond s]. *)
+
+Definition pack_below {s} s' (ow : s' < s) : below s :=
+  Specif.exist _ s' ow.
 
 (* [step], an identity function on states, proves that if a state [s0]
    is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
@@ -226,10 +232,10 @@ Variable successors : vertex → list vertex.
    to [visit] in this sequence is permitted. *)
 
 (* To iterate on the successors, we use a normal (simply-typed) iteration
-   function. This requires us to package [visit] as a function that does
-   whose argument state and result state have the same type, and which
-   does not require an accessibility witness as an argument. Fortunately,
-   this is possible! *)
+   function. This requires us to package [visit] as a function whose
+   argument state and result state have the same type, and which does not
+   require an accessibility witness as an argument. Fortunately, this is
+   possible! *)
 
 Fixpoint visit s v (ACC : safe s) : beyond s :=
   (* Destruct [s] as a pair [(m, u)] while keeping track of the equation. *)
@@ -238,7 +244,7 @@ Fixpoint visit s v (ACC : safe s) : beyond s :=
   let marked := get m v in
   IFC marked THEN λ _,
     (* It is marked: do nothing. *)
-    return_ s
+    pack_beyond s
   ELSE λ Hunmarked,
     (* Mark this vertex. *)
     let m' := set m v true in
@@ -248,6 +254,8 @@ Fixpoint visit s v (ACC : safe s) : beyond s :=
     let s' := (m', u') in
     (* Construct a witness of the assertion [s' < s]. *)
     let ow : s' < s := decrease s m v u u' Hsmu ACC Hunmarked in
+    (* Package them together. *)
+    let s' := pack_below s' ow in
     (* Package [visit] as a function of type [below s → vertex → below s],
        which can be passed to [foldl]. Because we have [ACC] at hand, any
        call to [visit] on a state that is smaller than [s] is permitted.
@@ -261,7 +269,7 @@ Fixpoint visit s v (ACC : safe s) : beyond s :=
     (* Get ahold of the successors of [v]. *)
     do ws ← successors v ;
     (* Visit them, then use [decay] to forget that we went below [s]. *)
-    decay (fold_left visit ws (Specif.exist _ s' ow))
+    decay (fold_left visit ws s')
   end eq_refl.
 
 End Visit.
