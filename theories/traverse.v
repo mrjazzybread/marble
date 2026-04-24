@@ -10,13 +10,13 @@
 (*                                                                            *)
 (******************************************************************************)
 
-From Stdlib Require Import Program.Equality. (* [dependent induction] *)
 From stdpp Require Import numbers list.
 From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics bool int iteration loop wp array.
+From marble.logic Require Import olt.
 Implicit Type _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -27,8 +27,11 @@ Set Universe Polymorphism.
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO list of successors, cascade of successors, or foreach function? *)
-(* TODO recursive DFS or CPS-style DFS or loop with explicit stack? *)
+(* TODO we can now request a function [foreach_successors] *)
+
+(* TODO also propose a variant of DFS where the consumer is in control;
+     use CPS style or defunctionalized CPS style;
+     this variant is naturally exitable/resumable *)
 
 (* TODO need generic [reduce] function on arrays, with monoid *)
 
@@ -57,111 +60,33 @@ Local Definition unmarked (b : bool) : nat :=
 Local Definition sum {A} (f : A → nat) (a : array A) : nat :=
   array.iteri a 0%nat (λ _i x s, f x + s)%nat.
 
-(* The natural numbers augmented with infinity, equipped with the strict
-   ordering [<], and extended with a self-loop at [infinity], form a
-   structure where every element except [infinity] is accessible. *)
+(* We wish to record the invariant [default m = true]. That is, outside of
+   the bounds of the marks array, every vertex is considered marked.
+   Therefore, if an out-of-bounds vertex is encountered, then the
+   algorithm ignores it. This lets us prove termination without imposing
+   any conditions on the vertices that the algorithm receives as
+   parameters. Of course, later on (a posteriori), we can use [wp]-style
+   specifications to ensure that every vertex lies within the desired
+   bounds. *)
 
-(* We use this structure to keep track of an invariant. If the array
-   [m] does NOT satisfy the invariant then its weight is [infinity]. In
-   other words, if [m] is accessible then [m] satisfies the invariant.
-   This hack removes the need to separately carry an invariant. *)
+(* To record this invariant, we use a partial measure. That is, instead
+   of [mweight : marks → nat], we define [mweight : marks → option nat],
+   with the convention that if [m] does not satisfy the invariant then
+   [mweight m] is [None]. *)
 
-Module Nat'.
+(* Because [None] is not an accessible element of the ordering that we
+   impose on the type [option nat], a witness of accessibility of
+   [mweight m] implies that [mweight m] is not [None], therefore implies
+   that [m] satisfies the invariant. *)
 
-Inductive nat' :=
-| N : nat → nat'
-| infinity : nat'.
+Definition mweight m : option nat :=
+  if default m then Some (sum unmarked m) else None.
 
-Definition lt (n1 n2 : nat') :=
-  match n1, n2 with
-  | _, infinity =>
-      True (* loop! *)
-  | infinity, N _ =>
-      False
-  | N n1, N n2 =>
-      (n1 < n2)%nat
-  end.
+Local Notation olt :=
+  (@olt nat Nat.lt).
 
-Definition le (n1 n2 : nat') :=
-  match n1, n2 with
-  | _, infinity =>
-      True
-  | infinity, _ =>
-      False
-  | N n1, N n2 =>
-      (n1 ≤ n2)%nat
-  end.
-
-Lemma le_refl n : le n n.
-Proof. destruct n; simpl; eauto. Qed.
-
-Lemma le_trans n0 n1 n2 : le n0 n1 → le n1 n2 → le n0 n2.
-Proof.
-  destruct n0 as [n0|]; destruct n1 as [n1|]; destruct n2 as [n2|];
-  simpl; eauto with lia.
-Qed.
-
-Lemma le_lt_trans n0 n1 n2 : le n0 n1 → lt n1 n2 → lt n0 n2.
-Proof.
-  destruct n0 as [n0|]; destruct n1 as [n1|]; destruct n2 as [n2|];
-  simpl; eauto with lia.
-Qed.
-
-Lemma lt_le_trans n0 n1 n2 : lt n0 n1 → le n1 n2 → lt n0 n2.
-Proof.
-  destruct n0 as [n0|]; destruct n1 as [n1|]; destruct n2 as [n2|];
-  simpl; eauto with lia.
-Qed.
-
-Lemma lt_le n0 n1 : lt n0 n1 → le n0 n1.
-Proof.
-  destruct n0 as [n0|]; destruct n1 as [n1|]; simpl; eauto with lia.
-Qed.
-
-(* Every finite number is accessible. *)
-
-Local Lemma Acc_N_aux n : ∀ n', (n' < n)%nat → Acc lt (N n').
-Proof.
-  induction n as [|n]; intros.
-  { lia. }
-  { constructor. intros n'' Hlt.
-    destruct n''; simpl in Hlt.
-    + eauto with lia.
-    + tauto. }
-Qed.
-
-Lemma Acc_N n : Acc lt (N n).
-Proof. apply Acc_N_aux with (n := S n). lia. Qed.
-
-(* Infinity is not accessible. *)
-
-Lemma Acc_infinity : ¬ Acc lt infinity.
-Proof.
-  unfold not. intros H. dependent induction H.
-  clear H. rename H0 into IH.
-  eapply IH; [| reflexivity ].
-  (* [lt infinity infinity] is true. *)
-  reflexivity.
-Qed.
-
-End Nat'.
-
-(* The invariant that we record is [default m = true]. That is, outside
-   of the bounds of the marks array, every vertex is considered marked.
-   Therefore, if an out-of-bounds vertex is encountered (which could
-   happen, as we do not impose any condition on the vertices that we
-   receive as parameters!) then the algorithm ignores it. *)
-
-(* This trick can be considered a dirty hack, but it is convenient and
-   helps us in the termination proof. Of course, a posteriori, we can
-   use [wp]-style specifications to ensure that every vertex is within
-   the desired bounds. *)
-
-Definition mweight m : Nat'.nat' :=
-  if default m then
-    Nat'.N (sum unmarked m)
-  else
-    Nat'.infinity.
+Local Notation ole :=
+  (@ole nat Nat.lt).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -188,16 +113,16 @@ Definition weight s :=
 (* We write [safe s] for the type of an accessibility witness. *)
 
 Definition safe s :=
-  Acc Nat'.lt (weight s).
+  Acc olt (weight s).
 
 (* The notations [s' ≤ s] and [s' < s] help reason about the weight
    of a state without visual overhead. *)
 
-Definition le s' s := Nat'.le (weight s') (weight s).
-Definition lt s' s := Nat'.lt (weight s') (weight s).
+Definition slt s' s := olt (weight s') (weight s).
+Definition sle s' s := ole (weight s') (weight s).
 Declare Scope state_scope.
-Infix "≤" := le (at level 70) : state_scope.
-Infix "<" := lt (at level 70) : state_scope.
+Infix "≤" := sle (at level 70) : state_scope.
+Infix "<" := slt (at level 70) : state_scope.
 Open Scope state_scope.
 
 (* [beyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
@@ -213,7 +138,7 @@ Definition below s :=
 (* [return_ s] wraps the state [s] so that it has type [beyond s]. *)
 
 Definition return_ s : beyond s :=
-  Specif.exist _ s (Nat'.le_refl (weight s)).
+  Specif.exist _ s (ole_refl (weight s)).
 
 (* [step], an identity function on states, proves that if a state [s0]
    is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
@@ -221,7 +146,8 @@ Definition return_ s : beyond s :=
 Local Definition step {s1 s2} : s1 < s2 → beyond s1 → below s2.
 Proof.
   intros ow12 (s0 & ow01). exists s0.
-  unfold le, lt in *. eauto using Nat'.le_lt_trans.
+  unfold sle, slt in *.
+  eauto using ole_olt_trans with typeclass_instances.
 Defined.
 
 (* [decay], an identity function on states, proves that if a state [s']
@@ -230,7 +156,8 @@ Defined.
 Local Definition decay {s} : below s → beyond s.
 Proof.
   intros (s' & ow). exists s'.
-  unfold lt, le in *. eauto using Nat'.lt_le.
+  unfold slt, sle in *.
+  eauto using olt_ole with typeclass_instances.
 Defined.
 
 (* [decrease] constructs a strict ordering witness, expressing the idea
@@ -250,11 +177,12 @@ Proof.
   { unfold safe, weight, mweight in *.
     (* By way of contradiction, assume [default m] is [false]. *)
     destruct (default m) eqn:Hm; [ reflexivity | exfalso ].
-    (* Then we get that [infinity] is accessible. Contradiction. *)
-    generalize Nat'.Acc_infinity. tauto. }
+    (* Then we get that [None] is accessible. Contradiction. *)
+    eapply (@Acc_None nat Nat.lt). tauto. }
   (* Because [default m] is [true], and because this remains true
-     after [m] is updated, the goal can be simplified. *)
-  unfold lt, weight, mweight.
+     after [m] is updated, the goal can be simplified and becomes
+     a comparison of two natural numbers. *)
+  unfold slt, weight, mweight.
   rewrite default_set.
   rewrite Hm.
   simpl.
@@ -281,8 +209,6 @@ Variable body : vertex → U → U.
 
 (* Fortunately, no properties of this function are needed in the proof
    of termination of [visit]. *)
-
-(* TODO can now use [foreach_successors] *)
 
 Variable successors : vertex → list vertex.
 
