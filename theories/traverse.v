@@ -15,8 +15,10 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
+From Stdlib Require Export ZifyNat ZifyUint63.
 From marble Require Import tactics bool int iteration loop wp array.
 From marble.logic Require Import olt.
+From marble Require Import listz_buffer. (* TODO *)
 Implicit Type _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.
@@ -47,9 +49,6 @@ Implicit Type m : marks.
 Local Definition unmarked (b : bool) : nat :=
   if b then 0 else 1.
 
-Local Definition sum {A} (f : A → nat) (a : array A) : nat :=
-  array.iteri a 0%nat (λ _i x s, f x + s)%nat.
-
 (* We wish to record the invariant [default m = true]. That is, outside of
    the bounds of the marks array, every vertex is considered marked.
    Therefore, if an out-of-bounds vertex is encountered, then the
@@ -70,7 +69,7 @@ Local Definition sum {A} (f : A → nat) (a : array A) : nat :=
    that [m] satisfies the invariant. *)
 
 Definition mweight m : option nat :=
-  if default m then Some (sum unmarked m) else None.
+  if default m then Some (sum_with unmarked m) else None.
 
 Local Notation olt :=
   (@olt nat Nat.lt).
@@ -166,7 +165,7 @@ Lemma decrease s m v u u' :
   get m v = false →
   (set m v true, u') < s.
 Proof.
-  intros. subst.
+  intros ? Hsafe Hget. subst.
   (* The beautiful hack: from [safe (m, u)],
      we deduce [default m = true]. *)
   assert (Hm: default m = true).
@@ -188,7 +187,20 @@ Proof.
   { destruct ((v <? length m)%uint63) eqn:Hv; [ reflexivity | exfalso ].
     apply get_out_of_bounds in Hv.
     congruence. }
-Admitted. (* TODO *)
+  (* There remains to work. This is a bit ugly. *)
+  set (i := (φ v)%uint63).
+  assert (unsigned i). { unfold i. lia. }
+  assert (isInt v i).  { eapply introIsInt. reflexivity. }
+  assert (Hvalid: valid i (to_list m))
+    by eauto using ltb_length_spec with typeclass_instances.
+  rewrite !sum_with_spec.
+  erewrite set_spec by eauto.
+  generalize (sum_list_with_insert unmarked i (to_list m) true Hvalid).
+  erewrite <- get_spec by eauto.
+  rewrite Hget.
+  simpl unmarked.
+  lia. (* ouf *)
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
