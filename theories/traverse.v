@@ -202,6 +202,29 @@ Proof.
   lia. (* ouf *)
 Qed.
 
+(* A marks array [m] of arbitrary size [_n], allocated via [init] and
+   initialized with [false] everywhere, is a safe initial state. *)
+
+(* Fortunately, [n ≤ max_array_length] is not required. *)
+
+Local Lemma safe_init _n u :
+  safe (init _n (λ _, false), u).
+Proof.
+  (* We rely on the fact that [inhabitant] at type [bool] happens to
+     be [true]. We need the array [m] to be everywhere [false] and to
+     have default value [true]. *)
+  assert (fact: default (init _n (λ _, false)) = true).
+  { change true with (inhabitant : bool). eapply default_init. }
+  revert fact.
+  generalize (init _n (λ _, false)); intro m.
+  intro Hm.
+  unfold safe, weight, mweight.
+  rewrite Hm; clear Hm.
+  eapply Acc_Some.
+  eapply (Acc_intro_generator 32).
+  eapply Wf_nat.lt_wf.
+Defined.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The main recursive function of the depth-first search algorithm: [visit].  *)
