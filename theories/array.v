@@ -1821,3 +1821,75 @@ Proof.
 Qed.
 
 End SumWith.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [default]. *)
+
+(* A Rocq array [a] has a default element, [default a]. This element is
+   returned by an attempt to read out of the bounds of the array. *)
+
+(* Most of the time, we do not care what the default element is, as we
+   forbid out-of-bounds accesses. However, in some unusual situations,
+   it can be useful to keep track of the value of the default element.
+   The following lemmas can help with this. *)
+
+(* [make _n x] produces an array whose default element is [x]. *)
+
+Lemma wp_make_default {A} _n (x : A) :
+  wp (make _n x) (λ a, default a = x).
+Proof.
+  wp_ret. simple eapply default_make.
+Qed.
+
+(* [set] preserves the default element. *)
+
+Lemma wp_set_default {A} a _i (x : A) d :
+  default a = d →
+  wp (set a _i x) (λ a, default a = d).
+Proof.
+  intros. wp_ret. subst d. simple eapply default_set.
+Qed.
+
+(* If the loop body preserves the default element, then [iter_up]
+   preserves the default element. This is an auxiliary result for
+   the next lemma. *)
+
+Lemma wp_iter_up_default {A} (body : int → array A → array A) :
+  ( ∀ _i a d,
+    default a = d →
+    wp (body _i a) (λ a, default a = d)
+  ) →
+  ∀ _i _k a d,
+  default a = d →
+  wp (iter_up _i _k a body) (λ a, default a = d).
+Proof.
+  intros Hbody _i. unfold iter_up.
+  generalize (Acc_igt _i); intro ACC; revert ACC.
+  by well-founded induction on _i along igt.
+  intros. destruct ACC. simpl.
+  wp_if.
+  { eapply isBool_trivial. }
+  { wp_op Hbody shadowing: a. } (* The hook shortens this proof *)
+  { wp_ret. }
+Qed.
+
+(* [init _n f] constructs an array whose default element is [inhabitant]. *)
+
+Lemma wp_init_default `{Inhabited A} _n (f : int → A) :
+  wp (init _n f) (λ a, default a = inhabitant).
+Proof.
+  rewrite init_eq. unfold plain_init.
+  wp_op wp_make_default introducing: a.
+  wp_op wp_iter_up_default shadowing: a.
+  { intros. wp_bind_eq. wp_apply wp_set_default. }
+Qed.
+
+(* A reformulation of the previous statement. *)
+
+Lemma default_init `{Inhabited A} _n (f : int → A) :
+  default (init _n f) = inhabitant.
+Proof.
+  generalize (wp_init_default _n f); intro Hinit.
+  rewrite wp_iff in Hinit. assumption.
+Qed.

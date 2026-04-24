@@ -47,6 +47,16 @@ Global Hint Mode isBool ! - - : typeclass_instances.
 Global Notation isBool1 b P :=
   (isBool b P (¬P)).
 
+(* This trivial way of proving [isBool] should seldom be useful, as
+   the whole point of using [isBool] is to find non-trivial properties
+   [P] and [Q]. *)
+
+Lemma isBool_trivial b :
+  isBool b (b = true) (b = false).
+Proof.
+  unfold isBool. destruct b; eauto.
+Qed.
+
 (* Bridges between [BoolSpec] and [isBool]. *)
 
 Lemma BoolSpec_iff_isBool P Q b :
