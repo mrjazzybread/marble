@@ -16,6 +16,7 @@ Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics bool int iteration loop wp logic.
+From marble Require Import listz_buffer. (* TODO *)
 Implicit Types _i _j _k _n : int.
 From Corelib Require Derive.
 
@@ -1771,3 +1772,52 @@ Proof.
 Qed.
 
 End Init.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [sum_with]. *)
+
+(* [sum_with f a] computes the sum of all [f x] where [x] ranges over the
+   array [A]. The function [f] maps array elements to natural numbers.
+   This function is normally not useful at runtime, but can be used to
+   reason about the sum of the weights of the elements of an array, for
+   some notion of weight. *)
+
+(* This function could be generalized to work with a type of weights
+   other than [nat]. We keep this way, for now, because it is a good
+   match for the function [sum_list_with] in stdpp. *)
+
+Section SumWith.
+Context `{Inhabited A}.
+Implicit Type a : array A.
+Implicit Type f : A → nat.
+
+Definition sum_with f a : nat :=
+  iteri a 0%nat (λ _i x s, f x + s)%nat.
+
+Lemma wp_sum_with f a xs :
+  isArray a xs →
+  wp (sum_with f a) (λ s, s = sum_list_with f xs).
+Proof.
+  intros. arrays. unfold sum_with.
+  wp_op wp_iteri
+    with invariant: (λ j s, s = sum_list_with f (initial_seg j xs));
+  last wp_intro s.
+  (* Preservation. *)
+  { wp_iteri_body _j j x s.
+    wp_ret.
+    split_seg j xs. recognize. list. lia. }
+  (* Conclusion. *)
+  { list in *. assumption. }
+Qed.
+
+Lemma sum_with_spec f a :
+  sum_with f a = sum_list_with f (to_list a).
+Proof.
+  intros.
+  assert (fact: isArray a (to_list a)) by eapply isArray_to_list.
+  apply wp_sum_with with (f := f) in fact.
+  rewrite wp_iff in fact. assumption.
+Qed.
+
+End SumWith.
