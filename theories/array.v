@@ -552,6 +552,71 @@ End ToList.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Because [to_list] is the "model function" of arrays (that is, it maps
+   the physical data structure, the array, to its logical view, the list),
+   it can be tempting to describe the behavior of each operation on arrays
+   by describing how this operation interacts with [to_list]. We do not
+   recommend this style (we prefer using [wp] judgements), but it is
+   sometimes useful or necessary to use this style. The following lemmas
+   can be of help. *)
+
+(* See also the lemma [isInt_length]. *)
+
+(* Every array [a] is related via [isArray] to the list [to_list a]. *)
+
+Lemma isArray_to_list `{Inhabited A} (a : array A) :
+  isArray a (to_list a).
+Proof.
+  rewrite isArray_iff. reflexivity.
+Qed.
+
+(* If the machine integer [_i] is less than the machine integer [length a]
+   then the ideal integer [i] is less than the length of [to_list a]. *)
+
+Lemma ltb_length_spec `{Inhabited A} (a : array A) :
+  ∀IntU _i i,
+  (_i <? length a)%uint63 = true →
+  valid i (to_list a).
+Proof.
+  intros.
+  generalize (isArray_to_list a).
+  set (xs := to_list a). intro. clearbody xs.
+  assert (isInt (length a) (len xs)) by tc.
+  rewrite isInt_def in *. arrays. lia.
+Qed.
+
+(* Looking up an array is related with looking up a list. *)
+
+Lemma get_spec `{Inhabited A} (a : array A) :
+  ∀IntU _i i,
+  (_i <? length a)%uint63 = true →
+  get a _i = to_list a !!! i.
+Proof.
+  intros.
+  generalize (isArray_to_list a); intro Ha.
+  assert (Hv: valid i (to_list a)) by eauto using ltb_length_spec.
+  revert Ha Hv. set (xs := to_list a). intros. clearbody xs.
+  assert (Hwp: wp (get a _i) (λ x, x = xs !!! i)) by wp_get x.
+  rewrite wp_iff in Hwp. assumption.
+Qed.
+
+(* Updating an array is related with updating a list. *)
+
+Lemma set_spec `{Inhabited A} (a : array A) x :
+  ∀IntU _i i,
+  (_i <? length a)%uint63 = true →
+  to_list (set a _i x) = <[i := x]>(to_list a).
+Proof.
+  intros.
+  generalize (isArray_to_list a); intro Ha.
+  assert (Hv: valid i (to_list a)) by eauto using ltb_length_spec.
+  revert Ha Hv. set (xs := to_list a). intros. clearbody xs.
+  assert (Hwp: wp (set a _i x) (λ a, isArray a (<[i := x]>xs))) by wp_set.
+  rewrite wp_iff, isArray_iff in Hwp. assumption.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [list_iteri] iterates on a list, from left to right,
    with a running index of type [int]
    and a running state of type [S]. *)
