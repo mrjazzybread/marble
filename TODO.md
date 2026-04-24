@@ -7,6 +7,8 @@
 
 ## Arrays
 
+* Rocq has `copy` (since when?). Use it.
+
 * `for_all` : inline loop body and inline away `negb`.
 
 * Find out why `sort` is still 2x slower (in OCaml code) than `Array.sort`.
@@ -42,6 +44,12 @@
   covered by a DFS forest.
 
 * Extend the documentation with a section on DFS.
+
+## Traverse
+
+* Propose a variant of DFS where the consumer is in control;
+  use CPS style or defunctionalized CPS style;
+  this variant is naturally exitable/resumable.
 
 ## Rocq Technique
 
