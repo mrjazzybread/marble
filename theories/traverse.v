@@ -27,16 +27,6 @@ Set Universe Polymorphism.
 
 (* -------------------------------------------------------------------------- *)
 
-(* TODO we can now request a function [foreach_successors] *)
-
-(* TODO also propose a variant of DFS where the consumer is in control;
-     use CPS style or defunctionalized CPS style;
-     this variant is naturally exitable/resumable *)
-
-(* TODO need generic [reduce] function on arrays, with monoid *)
-
-(* -------------------------------------------------------------------------- *)
-
 (* We assume that the vertices of the graph are numbered from 0 to [n-1].
    This assumption allows us to mark vertices by maintaining an array of
    Boolean marks. This is simple and efficient. *)
@@ -206,17 +196,17 @@ Admitted. (* TODO *)
 
 Section Visit.
 
+(* [foreach_successor v] must iterate on the successors of the vertex [v]. *)
+
+(* Fortunately, no properties of this function are needed in the proof of
+   termination of [visit]. *)
+
+Variable foreach_successor : ∀ {A}, A → vertex → (A → vertex → A) → A.
+
 (* The user function [body v u] is invoked when a vertex [v] is discovered.
    It updates the user state [u]. *)
 
 Variable body : vertex → U → U.
-
-(* [successors v] must be a list of the successors of the vertex [v]. *)
-
-(* Fortunately, no properties of this function are needed in the proof
-   of termination of [visit]. *)
-
-Variable successors : vertex → list vertex.
 
 (* [visit] expects a state [s], a vertex [v], and a proof that this state
    is safe. The fact that [s] is safe (accessible) is used to justify
@@ -266,10 +256,9 @@ Fixpoint visit s v (ACC : safe s) : beyond s :=
       let (s', ow) := sow' in
       step ow (visit s' w (Acc_inv ACC ow))
     in
-    (* Get ahold of the successors of [v]. *)
-    do ws ← successors v ;
+    (* Visit the successors of [v], *)
     (* Visit them, then use [decay] to forget that we went below [s]. *)
-    decay (fold_left visit ws s')
+    decay (foreach_successor s' v visit)
   end eq_refl.
 
 End Visit.
