@@ -124,7 +124,7 @@ Definition isArray `{Inhabited A} (a : array A) (xs : list A) :=
 Local Ltac introIsArray :=
   split; [| split ].
 
-Local Ltac destructIsArray :=
+Ltac destructIsArray :=
   match goal with h: isArray _ _ |- _ => destruct h as (?&?&?) end.
 
 (* This lemma can be viewed as a specification of [length],
