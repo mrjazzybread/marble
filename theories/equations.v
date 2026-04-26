@@ -71,6 +71,17 @@ Proof.
   intros. destruct e0; congruence.
 Qed.
 
+Lemma IFC_if_dep {A} {Q : A → Prop} (e0 : bool)
+  (e1 : (e0 = true) → sig Q) (a1 : A)
+  (e2 : (e0 = false) → sig Q) (a2 : A) :
+  (∀ pf1, proj1_sig (e1 pf1) = a1) →
+  (∀ pf2, proj1_sig (e2 pf2) = a2) →
+  proj1_sig (IFC e0 THEN e1 ELSE e2) =
+  if e0 then a1 else a2.
+Proof.
+  intros. destruct e0; congruence.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The tactic [cleanup] removes an equality hypothesis that is produced
