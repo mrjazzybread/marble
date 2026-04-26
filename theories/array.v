@@ -241,7 +241,7 @@ Instance isBool1_lt_length `{Inhabited A} (a : array A) xs :
   ∀IntU _i i,
   isBool1 (_i <? length a)%uint63 (valid i xs).
 Proof.
-  intros. arrays. eapply isBool1_variance; tc4. (* so sweet! *)
+  intros. arrays. eapply isBool1_conseq; tc4. (* so sweet! *)
 Qed.
 
 (* [isArray _ xs] is injective, up to the side condition

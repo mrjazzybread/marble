@@ -75,17 +75,11 @@ Qed.
 
 (* Rewriting inside [isBool] and [BoolSpec]. *)
 
+(* See also the consequence rules further on. *)
+
 Instance isBool_variance : Proper (eq ==> iff ==> iff ==> iff) isBool.
 Proof.
   intros b b' Hb P P' HP Q Q' HQ. subst b'.
-  destruct b; simpl; tauto.
-Qed.
-
-Lemma isBool1_variance b P P' :
-  isBool1 b P →
-  (P ↔ P') →
-  isBool1 b P'.
-Proof.
   destruct b; simpl; tauto.
 Qed.
 
