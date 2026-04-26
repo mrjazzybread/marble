@@ -10,7 +10,7 @@
 (*                                                                            *)
 (******************************************************************************)
 
-From stdpp Require Import list.
+From stdpp Require Import list sets.
 From listz Require Import listz.
 From marble Require Import tactics wp.
 
@@ -353,6 +353,37 @@ Definition ITER_MULTISET {S A}
 
 (* -------------------------------------------------------------------------- *)
 
+(* Iteration on a set, in an unspecified order, and with permitted
+   repetitions (an element can be produced several times). *)
+
+(* The producer state is the set of elements produced so far. *)
+
+(* The constraint [SemiSet A C] means that [C] is a type of sets of
+   elements of type [A], which supports empty set, union, inclusion,
+   and equivalence. *)
+
+Definition ITER_SET {S A} `{SemiSet A C}
+  (init xs : C)
+  (body : A → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    init
+    ( λ history, history ≡ xs )
+    ( λ history0 history1 s Q,
+      ∀ x,
+      init ⊆ history0 →
+      history0 ∪ {[x]} ≡ history1 →
+      history1 ⊆ xs →
+      body x s Q
+    )
+    loop.
+
+Tactic Notation "set_step" simple_intropattern(x) :=
+  intros x ? ? ?.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Iteration on a semi-open interval [i, k) of the integers in [nat]. *)
 
 (* To avoid duplication, we parameterize these definitions with
@@ -578,6 +609,7 @@ Ltac expand_ITER :=
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET, ITERI_MULTISET,
+    ITER_SET,
     ITER, XITER, UXITER;
     simpl implication.
 
@@ -587,6 +619,7 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET, ITERI_MULTISET,
+    ITER_SET,
     ITER, XITER, UXITER
   in h;
   simpl implication in h.
