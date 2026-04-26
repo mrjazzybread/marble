@@ -200,4 +200,5 @@ Separate Extraction
   pqueue.extract
 
   traverse.visit
+  traverse.visit_top
 .
