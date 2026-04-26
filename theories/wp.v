@@ -248,6 +248,99 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* When the type of a program is a subset type { a : A | Q a }, writing a
+   postcondition becomes difficult, as it is necessary to deconstruct [a],
+   or to wrap it in the projection [proj1_sig]. *)
+
+(* To remove this difficulty, we offer a new judgement, [wpd a Q]. *)
+
+Definition wpd {A} {Q'} (a : sig Q') (Q : A → Prop) :=
+  Q (proj1_sig a).
+
+(* Through rewriting (from left to right), this lemma transforms a [wpd]
+   judgement into a [wp] judgement. *)
+
+Lemma wpd_wp {A} {Q'} (a : sig Q') (Q : A → Prop) :
+  wpd a Q ↔ wp a (λ a, Q (proj1_sig a)).
+Proof.
+  tauto.
+Qed.
+
+(* Conversely, if the goal is a [wp] judgement, then, by applying the
+   following lemma, it can be turned back into a [wp] judgement . *)
+
+Lemma wp_wpd {A} {Q' : A → Prop} (a : sig Q') (Q1 : A → Prop) (Q2 : sig Q' → Prop) :
+  wpd a Q1 →
+  (∀ a, Q1 (proj1_sig a) → Q2 a) →
+  wp a Q2.
+Proof.
+  unfold wp, wpd. eauto.
+Qed.
+
+(* The return rule. *)
+
+Lemma wpd_ret {A} {Q'} (a : sig Q') (Q : A → Prop) :
+  Q (proj1_sig a) →
+  wpd a Q.
+Proof.
+  eauto.
+Qed.
+
+(* A stronger version of the return rule, where [Q'] can be exploited. *)
+
+Lemma wpd_ret' {A} {Q'} (a : sig Q') (Q : A → Prop) :
+  (Q' (proj1_sig a) → Q (proj1_sig a)) →
+  wpd a Q.
+Proof.
+  intros h. unfold wpd. eapply h.
+  destruct a. simpl. tauto.
+Qed.
+
+(* The bind rule (with a [wp] judgement on the left-hand side). *)
+
+Lemma wpd_bind {A B} {Q'} a (b : A → sig Q') P (Q : B → Prop) :
+  wp a P →
+  (∀ x, P x → wpd (b x) Q) →
+  wpd (bind a b) Q.
+Proof.
+  eauto.
+Qed.
+
+(* Reasoning rules for conditionals. *)
+
+Lemma wpd_if {A} {Q'} b (e1 e2 : sig Q') (Q : A → Prop) {P1 P2 : Prop} :
+  isBool b P1 P2 →
+  (P1 → wpd e1 Q) →
+  (P2 → wpd e2 Q) →
+  wpd (if b then e1 else e2) Q.
+Proof.
+  unfold isBool. intros. destruct b; eauto.
+Qed.
+
+Lemma wpd_IFC {A} {Q'} b
+  (e1 : b = true → sig Q')
+  (e2 : b = false → sig Q')
+  (Q : A → Prop) {P1 P2 : Prop} :
+  isBool b P1 P2 →
+  (∀ pf1 : b =  true, P1 → wpd (e1 pf1) Q) →
+  (∀ pf2 : b = false, P2 → wpd (e2 pf2) Q) →
+  wpd (IFC b THEN e1 ELSE e2) Q.
+Proof.
+  unfold isBool. intros. destruct b; eauto.
+Qed.
+
+(* The consequence rule. *)
+
+Lemma wpd_conseq {A} {Q'} (a : sig Q') (Q1 Q2 : A → Prop) :
+  wpd a Q1 →
+  (∀ x, Q1 x → Q2 x) →
+  wpd a Q2.
+Proof.
+  unfold wpd. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* We make [wp] opaque, so as to discourage unfolding it. *)
 
 Opaque wp.
