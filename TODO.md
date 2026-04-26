@@ -43,6 +43,8 @@
 * Prove an executable DFS algorithm. Deduce that every finite graph can be
   covered by a DFS forest.
 
+* Extend the documentation with a section on `wpd`.
+
 * Extend the documentation with a section on DFS.
 
 ## Traverse
@@ -76,10 +78,14 @@
 * Are `let` constructs preserved through extraction?
   Check that no serious computation is duplicated.
 
+* We could offer a super-unsafe variant
+  where our arrays use `Array.unsafe_get` and `Array.unsafe_set`.
+
 * Our implementations of unsafe arrays and defensive arrays
   should use OCaml's uniform arrays (once they exist).
 
-* Optionally cheat by using unverified versions of `blit`.
+* Optionally cheat by using unverified versions of `blit`, `fill`,
+  or other functions.
 
 * Use verified extraction?
 
