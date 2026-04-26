@@ -93,6 +93,30 @@ Proof.
   intros. unfold bind. congruence.
 Qed.
 
+(* This lemma can be used to prove that a [bind] construct whose result
+   type is a subset type { a : A | Q a } is equal (up to a projection)
+   to a [bind] construct whose result type is just A. *)
+
+Lemma bind_eq_dep {A B} {Q : B → Prop}
+  (a1 : A) (b1 : A → sig Q)
+  (a2 : A) (b2 : A → B) :
+  a1 = a2 →
+  (∀ a, proj1_sig (b1 a) = b2 a) →
+  proj1_sig (bind a1 b1) = bind a2 b2.
+Proof.
+  intros. subst. eauto.
+Qed.
+
+Lemma bind_eq_dep_dep {A B} {Q' : A → Prop} {Q : B → Prop}
+  (a1 : sig Q') (b1 : sig Q' → sig Q)
+  (a2 : A) (b2 : A → B) :
+  (proj1_sig a1 = a2) →
+  (∀ a pf, proj1_sig (b1 (Specif.exist _ a pf)) = b2 a) →
+  proj1_sig (bind a1 b1) = bind a2 b2.
+Proof.
+  intros. destruct a1. subst. eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [wp] has type [A → WP A]. *)
