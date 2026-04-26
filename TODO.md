@@ -1,5 +1,10 @@
 # To Do
 
+## CHANGES
+
+* Mention the new file `olt.v`.
+* Mention the new file `traverse.v`.
+
 ## Bugs
 
 * `wp.v` should not use `autorewrite with z clength app_assoc`;

@@ -2,8 +2,16 @@
 
 ## 2026/XX/XX
 
+* In `equations`:
+  + New lemma `IFC_if_dep`.
+
 * In `bool`:
   + New lemma `isBool_trivial`.
+  + Remove the lemma `isBool1_variance`, which was a duplicate of `isBool1_conseq`.
+
+* In `wp`:
+  + New lemmas `bind_eq_dep` and `bind_eq_dep_dep`.
+  + New judgement `wpd` together with a set of reasoning rules.
 
 * In `arrays`:
   + New lemma `isArray_to_list`.
