@@ -114,10 +114,10 @@ Definition pack_beyond s : beyond s :=
 Definition pack_below {s} s' (ow : s' < s) : below s :=
   Specif.exist _ s' ow.
 
-(* [step], an identity function on states, proves that if a state [s0]
+(* [bury], an identity function on states, proves that if a state [s0]
    is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
 
-Local Definition step {s1 s2} : s1 < s2 → beyond s1 → below s2.
+Local Definition bury {s1 s2} : s1 < s2 → beyond s1 → below s2.
 Proof.
   intros ow12 (s0 & ow01). exists s0.
   unfold sle, slt in *. eauto using Nat.le_lt_trans.
@@ -132,14 +132,14 @@ Proof.
   unfold slt, sle in *. eauto using Nat.lt_le_incl.
 Defined.
 
-(* [step] and [decay] are identity functions, so, while reasoning via
+(* [bury] and [decay] are identity functions, so, while reasoning via
    [wpd] judgements, they have no effect. *)
 
-Local Lemma wpd_step {s1 s2} (a : beyond s1) (pf : s1 < s2) Q :
+Local Lemma wpd_bury {s1 s2} (a : beyond s1) (pf : s1 < s2) Q :
   wpd a Q →
-  wpd (step pf a) Q.
+  wpd (bury pf a) Q.
 Proof.
-  unfold step. destruct a. tauto.
+  unfold bury. destruct a. tauto.
 Qed.
 
 Local Lemma wpd_decay {s} (a : below s) Q :
@@ -245,7 +245,7 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
     (* This construction has just [visit] and [ACC] as free variables. *)
     let visit (sow' : below s) (_w : _vertex) : below s :=
       let (s', ow) := sow' in
-      step ow (visit s' _w (Acc_inv ACC ow))
+      bury ow (visit s' _w (Acc_inv ACC ow))
     in
     (* Visit the successors of [v], *)
     (* Visit them, then use [decay] to forget that we went below [s]. *)
@@ -459,8 +459,8 @@ Proof.
     (* Change the goal back into [wpd] format. *)
     eapply wp_wpd with (Q1 := λ s'', visit_post marked' examined1 s'');
       [| solve [ eauto] ].
-    eapply wpd_step.
-    (* Use the induction hypothesis to justify calling [visit s'' _w ]. *)
+    eapply wpd_bury.
+    (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
     eapply wpd_conseq.
     { eapply IH; try reflexivity; tc. }
     (* Justify that this call establishes the loop invariant. *)
