@@ -76,6 +76,30 @@ Qed.
 Definition filter_key (k : K) (l : bucket) : bucket :=
   base.filter (fun (x : K * V) => let (k', _) := x in k' = k) l.
 
+Lemma filter_key_cons_True :
+  forall k v b, filter_key k ((k, v) :: b) = (k, v) :: filter_key k b.
+Proof.
+  intros.
+  unfold filter_key. by apply filter_cons_True.
+Qed.
+
+Lemma filter_key_cons_False :
+  forall k k' v b,
+    k' ≠ k ->
+    filter_key k ((k', v) :: b) = filter_key k b.
+Proof.
+  intros.
+  unfold filter_key. by apply filter_cons_False.
+Qed.
+
+Lemma filter_key_nil :
+  forall k, filter_key k [] = [].
+Proof.
+  intros. unfold filter_key.
+  Search filter.
+  by rewrite filter_nil with (P:=(λ x : K * V, let (k', _) := x in k' = k)).
+Qed.
+
 (* Relates a list of buckets to a total function from keys to lists of
    values, where [n] is the length of the [tbl].  For every key [k],
    [m] returns the list of values mapped to [k] in [tbl].  If [k] is
