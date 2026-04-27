@@ -61,9 +61,8 @@ Proof.
 Qed.
 
 Lemma index_valid :
-  forall A k _n (l : list A),
+  forall A k _n (l : list A) `{isInt _n (len l)},
     len l > 0 ->
-    isInt _n (len l) ->
     valid (indexZ k φ (_n)) l.
 Proof.
   intros k h _n l H4 H5.
@@ -189,10 +188,24 @@ Definition add (h : hashtbl) k v :=
   do h' ← set h i ((k, v) :: b);
   h'.
 
-Ltac wp_hget k h l i :=
-  let h1 := fresh "H1" in
-  let h2 := fresh "H2" in
-  wp_get i.
+(* This tactic solves goals of the form [valid (indexZ i (len l) l)]
+   using the [index_valid] lemma. *)
+
+Ltac validi := apply index_valid; [auto | try lia].
+
+(* Whenever we use the tactics [wp_get] or [wp_set], we have to prove
+   that the array accesses are valid.  When array indexes are always
+   computed using the [index] function, it is always valid to access
+   the array.  These wrapper tactics dispatch these conditions
+   automatically when the index in generated using [index]. *)
+
+Local Ltac wp_hget i :=
+  wp_get i;
+  [validi|].
+
+Local Ltac wp_hset :=
+  wp_set;
+  [validi|].
 
 (* TODO : Maybe François would like to add these lemmas to his listz
 library? *)
@@ -221,9 +234,11 @@ Proof.
   by apply lookup_lt_is_Some_2.
 Qed.
 
-Hint Rewrite @lookup_total_insert_eq using listz_arith : clist.
+Hint Rewrite @lookup_total_insert_eq using try listz_arith : clist.
 
-(* If the list representation of a hash table does not have any garbage, then adding a key in its correct index will keep it without garbage. *)
+(* If the list representation of a hash table does not contain keys in
+   incorrect indexes and a new key in the correct index, the table
+   remains valid. *)
 
 Lemma no_garbage_insert :
   forall n k v i tbl b,
@@ -250,7 +265,38 @@ Proof.
     - unfold indexZ in H3. lia. }
 Qed.
 
-(* Awful. *)
+Lemma valid_insert_bucket_eq :
+  forall k v l m b b',
+    valid_buckets (len l) l m ->
+    b = l !!! indexZ k (len l) ->
+    b' = filter_key k ((k, v) :: b) ->
+    v :: m k = map snd b'.
+Proof.
+  intros k v l m b b' H1 H2 H3.
+  rewrite filter_key_cons_True in H3.
+  unfold valid_buckets in H1.
+  subst b'.
+  rewrite map_cons. f_equal.
+  apply H1 with (indexZ k (len l)).
+  { f_equal. }
+  { subst b. auto. }
+Qed.
+
+Lemma valid_insert_bucket_ne :
+  forall k k' i v l m b b',
+    valid_buckets (len l) l m ->
+    indexZ k (len l) = i ->
+    indexZ k' (len l) = i ->
+    b = l !!! indexZ k (len l) ->
+    b' = filter_key k' ((k, v) :: b) ->
+    k ≠ k' ->
+    m k' = map snd b'.
+Proof.
+  intros k k' i v l m b b' H1 H2 H3 H4 H5 H6.
+  rewrite filter_key_cons_False in H5. 2: auto.
+  unfold valid_buckets in H1.
+  apply H1 with (indexZ k (len l)); subst; auto.
+Qed.
 
 Lemma wp_add :
   forall h m k v,
@@ -263,57 +309,46 @@ Proof.
   destructIsHashtbl.
   wp_length _n.
   wp_bind_eq.
-  wp_hget k h l b.
-  { apply index_valid; auto with lia. }
+  wp_hget b.
   wp_bind_eq.
-  wp_set.
-  { apply index_valid; auto with lia. }
+  wp_hset.
   wp_ret.
-  introIsHashtbl.
-  - rewrite length_insert. lia.
-  - rewrite length_insert.
-    apply no_garbage_insert; subst. 1, 2, 4: auto.
-    destructIsInt. f_equal. int. lia. destructIsArray.
-    unfold max_array_length in *. list in *. lia.
-  - intros i b' k' H5 H6.
-    unfold _set. list in H5.
+  introIsHashtbl. 2,3: destructIsArray.
+  - (* The length is still greater than 0. *)
+    rewrite length_insert. lia.
+  -  (* The key was inserted in the correct bucket. *)
+    list. apply no_garbage_insert; subst. 1, 2, 4: auto.
+    list in *. unfold max_array_length in *.
+    destructIsInt. f_equal. int. lia.
+  - intros i b' k' ? ?.
+    unfold _set.
     destructIsInt.
-    destructIsArray.
-    unfold max_array_length in H4.
-    list in H4.
+    unfold max_array_length in *.
+    list in *.
     int in *.
+    (* The updated map as described in the postcondition
+       accurately models the updated hash table. *)
     destruct decide.
-    + subst k'. list in H5.
-      list in H4. int in *. unfold max_array_length in H4.
-      int in *. subst i.
-      rewrite lookup_total_insert_eq in H6.
+    + (* When we apply the updated map with the key we pass as
+         argument. *)
+      subst k'. subst i.
+      list in *.
       2: { apply index_valid_len. lia. }
-      unfold filter_key in H6.
-      rewrite filter_cons_True with (x:=(k, v)) in H6.
-      2: auto. unfold valid_buckets in H3.
-      subst b'.
-      rewrite map_cons. f_equal.
-      apply H3 with (indexZ k (len l)).
-      { f_equal. auto. }
-      { subst b. auto. }
-    + list in H5.
-      destruct (decide (i = indexZ k (len l))) as [E | E].
-      { rewrite E in H6.
-        destructIsInt.
-        int in *.
-        rewrite lookup_total_insert_eq in H6.
-        2: { apply index_valid_len. lia. }
-        subst b'.
-        unfold filter_key.
-        rewrite filter_cons_False with (x:=(k, v)). 2: auto.
-        unfold valid_buckets in H3.
-        apply H3 with i.
-        { subst. reflexivity. }
-        { subst. rewrite E. auto. }
-      }
-      { rewrite lookup_total_insert_ne in H6. 2: auto.
+      unfold filter_key in *.
+      simpl in *.
+      subst n.
+      apply valid_insert_bucket_eq with l b; auto.
+    + (* When we apply the updated map with a different key [k']. *)
+      destruct (decide (indexZ k (len l) = i)) as [E | E].
+      { (* [k'] belongs to the same bucket (i.e. has the same index)
+           as [k]. *)
+        rewrite E in H9.
+        list in *. 2: { subst i. apply index_valid_len. lia. }
+        subst n.
+        apply valid_insert_bucket_ne with k i v l b; auto. }
+      { (* [k] belongs to another bucket. *)
+        list in *.
         unfold valid_buckets in H3.
         apply H3 with (indexZ k' n).
-        auto. subst. auto.
-      }
+        auto. subst. auto. }
 Qed.
