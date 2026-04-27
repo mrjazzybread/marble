@@ -143,8 +143,9 @@ From marble Require traverse.
 Extraction Inline
   traverse.pack_beyond
   traverse.pack_below
-  traverse.step
+  traverse.bury
   traverse.decay
+  traverse.transform
 .
 
 Separate Extraction

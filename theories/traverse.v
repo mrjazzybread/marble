@@ -215,10 +215,14 @@ Section Visit.
 
 Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
 
-(* The user function [body _v u] is invoked when a vertex [_v] is
-   discovered. It updates the user state [u]. *)
+(* The user function [hook _event u] is invoked when an event is observed,
+   that is, when a vertex is entered or exited. It updates the user state
+   [u]. *)
 
-Variable body : _vertex → U → U.
+(* If the user needs to observe only one kind of event, they can provide
+   a hook that ignores the other kind. *)
+
+Variable hook : event _vertex → U → U.
 
 (* [visit] expects a state [s], a vertex [_v], and a proof that [s] is
    safe (accessible). This proof is used to justify termination; the
@@ -247,8 +251,8 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
   ELSE λ Hunmarked,
     (* Mark this vertex. *)
     let m' := set m _v true in
-    (* Invoke the user function [body]. *)
-    do u' ← body _v u ;
+    (* Invoke [hook] to signal that we are entering [_v]. *)
+    do u' ← hook (Enter _v) u ;
     (* Construct an updated state. *)
     let s' := (m', u') in
     (* Construct a witness of the assertion [s' < s]. *)
@@ -256,18 +260,22 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
     (* Package them together. *)
     let s' := pack_below s' ow in
     (* Package [visit] as a function of type [below s → vertex → below s],
-       which can be passed to [foldl]. Because we have [ACC] at hand, any
-       call to [visit] on a state that is smaller than [s] is permitted.
-       Therefore we are able to package [visit] as a function that does
-       not require an accessibility witness. *)
+       which can be passed to [foreach_successor]. Because we have [ACC]
+       at hand, any call to [visit] on a state that is smaller than [s] is
+       permitted. Therefore we are able to package [visit] as a function
+       that does not require an accessibility witness. *)
     (* This construction has just [visit] and [ACC] as free variables. *)
     let visit (sow' : below s) (_w : _vertex) : below s :=
       let (s', ow) := sow' in
       bury ow (visit s' _w (Acc_inv ACC ow))
     in
-    (* Visit the successors of [v], *)
-    (* Visit them, then use [decay] to forget that we went below [s]. *)
-    decay (foreach_successor s' _v visit)
+    (* Visit the successors of [v]. *)
+    do sow ← foreach_successor s' _v visit ;
+    (* Forget that we went below [s]. *)
+    do sow ← decay sow ;
+    (* Invoke [hook] to signal that we are exiting [_v]. *)
+    do sow ← transform (hook (Exit _v)) sow ;
+    sow
   ELSE λ _,
      (* This vertex is out-of-bounds. Ignore it. This lets us prove
         termination without imposing any conditions on the vertices
@@ -304,6 +312,39 @@ Variable n : Z.
 Hypothesis bound :
   ∀ v w, 0 ≤ v < n → E v w → 0 ≤ w < n.
 
+(* -------------------------------------------------------------------------- *)
+
+(* [marked], [imarked], [omarked] denote sets of vertices. *)
+
+Local Notation vertices := (propset vertex).
+Implicit Types marked imarked omarked : vertices.
+
+(* The assertion [wf marked σ], defined in dfs.v, means that the set of
+   vertices [marked] and the stack [σ] are a well-formed state of an
+   ongoing DFS traversal of the graph [E]. *)
+
+(* We take the set of initially marked vertices to be empty.  *)
+
+(* The set [start], which is the set of vertices where the user would like
+   the traversal to begin, is a parameter. *)
+
+Variable start : vertices.
+
+Implicit Type σ : stack vertex.
+
+Local Hint Constructors wf : wf.
+
+Local Notation wf := (wf E start ∅).
+Local Notation step := (step E).
+
+(* The assertion [edge (top σ) v] means that there is an edge of the
+   stack's current vertex to [v]. (If the stack has no current vertex,
+   it means that [v] is a member of the set [start].) *)
+
+Local Notation edge := (edge E start).
+
+(* -------------------------------------------------------------------------- *)
+
 (* The function [foreach_successor], applied to [_v], must enumerate the
    successors of the vertex [v]. They can be enumerated in an arbitrary
    order, and it is permitted for a vertex [w] to be presented several
@@ -320,23 +361,96 @@ Variable wp_foreach_successor:
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_successor a _v body) Q).
 
-(* The function [body], applied to a vertex [_v] and to a user state [u],
-   returns a new user state. *)
-
-(* TODO add a user invariant on [u] *)
-
-Variable wp_body :
-  ∀Int _v v,
-  0 ≤ v < n →
-  ∀ u,
-  wp (body _v u) (λ u, True).
-
 (* -------------------------------------------------------------------------- *)
 
-(* [marked], [imarked], [omarked] denote sets of vertices. *)
+(* The function [hook], applied to an event and to a user state,
+   returns a new user state. *)
 
-Local Notation vertices := (propset vertex).
-Implicit Types marked imarked omarked : vertices.
+(* We want to specify what sequences of events the user can expect.
+   In short, we are a producer of events. We must expose the labeled
+   transition system that we obey: that is, we must define the type
+   of producer states as well as the relation that specifies one we
+   move from one producer state to the next, while emitting an event. *)
+
+(* A producer state is a pair [(marked, σ)]. *)
+
+(* We name this type [ghost] to emphasize that it is NOT the type of
+   runtime states, [S]. Producer states do not exist at runtime. *)
+
+Definition ghost :=
+  (vertices * stack vertex)%type.
+
+Implicit Type γ : ghost.
+
+(* A transition from state [γ] to state [γ'], emitting an event [e],
+   is permitted if the relation [step] allows it. *)
+
+(* Roughly, [move] and [step] are the same thing, up to packaging. *)
+
+Definition move γ e γ' :=
+  let (marked, σ) := γ in
+  let (marked', σ') := γ' in
+  step start marked σ e marked' σ'.
+
+(* The user's loop invariant is a parameter. As usual (iteration.v),
+   it relates a producer state [γ] and a user state [u]. *)
+
+Variable inv : ghost → U → Prop.
+
+(* [isEvent _e e] relates a runtime event [_e] and an event [e].
+   They are the same thing, up to the relation between a machine
+   integer [_v] and an ideal integer [v]. *)
+
+Inductive isEvent : event _vertex → event vertex → Prop :=
+| IsEventEnter:
+    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Enter _v) (Enter v)
+| IsEventExit:
+    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Exit _v) (Exit v).
+
+Local Hint Constructors isEvent : marble.
+
+(* The specification of the user function [hook] states that [hook]
+   can expect the invariant [inv γ u] to hold, can expect to observe
+   an event [e] such that [move γ e γ'] holds, and must update the
+   user state to a new state [u'] such that [inv γ' u'] holds. *)
+
+Variable wp_hook :
+  ∀ γ γ' u,
+  inv γ u →
+  ∀ _e e,
+  isEvent _e e →
+  move γ e γ' →
+  wp (hook _e u) (λ u', inv γ' u').
+
+(* A reformulation in terms of [step]. *)
+
+Local Lemma wp_hook' :
+  ∀ marked σ marked' σ' u,
+  inv (marked, σ) u →
+  ∀ _e e,
+  isEvent _e e →
+  step start marked σ e marked' σ' →
+  wp (hook _e u) (λ u', inv (marked', σ') u').
+Proof.
+  eauto using wp_hook.
+Qed.
+
+(* A reformulation in terms of [move] of the lemma [wf_step]. *)
+
+Lemma wf_move marked σ e marked' σ' :
+  wf marked σ →
+  move (marked, σ) e (marked', σ') →
+  wf marked' σ'.
+Proof.
+  unfold move. eauto using wf_step.
+Qed.
+
+Local Hint Resolve wf_move : wf.
+
+(* TODO the re-packaging using pairs [marked, σ]
+        could go into dfs.v *)
+
+(* -------------------------------------------------------------------------- *)
 
 (* [isMarks m marked] means that the Boolean array [m] represents the set
    of vertices [marked]. *)
@@ -383,42 +497,38 @@ Proof. set_solver. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* The assertion [dfs imarked omarked f], defined in dfs.v, means that [f]
-   is a DFS forest for the graph [E], consistent with the set of initially
-   marked vertices [imarked] and with the set of finally marked vertices
-   [omarked]. *)
-
-Implicit Type f : forest vertex.
-
-Local Notation dfs := (@dfs vertex E).
-
 (* The postcondition of [visit]. *)
 
-(* [visit_post imarked examined s'] means that, if one starts from the set
-   of initially marked vertices [imarked] and if the roots of the search
-   form the set [examined], then [s'] is a correct final state. *)
+(* [visit_post marked σ examined s'] means that, if one starts from the
+   producer state [(marked, σ)] then [s'] is a correct final runtime state
+   where every vertex in the set [examined] is marked. *)
 
-Definition visit_post imarked examined s' :=
+Definition visit_post marked σ examined s' :=
   let (m', u') := s' in
-  ∃ omarked f,
-  isMarks m' omarked ∧
-  examined ⊆ omarked ∧
-  dfs imarked omarked f ∧
-  roots f ⊆ examined.
+  ∃ marked' σ',
+  isMarks m' marked' ∧
+  marked ⊆ marked' ∧
+  inv (marked', σ') u' ∧
+  similar σ σ' ∧
+  wf marked' σ' ∧
+  examined ⊆ marked'.
 
 Local Ltac intro_visit_post :=
   unfold visit_post; do 2 eexists; pack;
-    [ eauto | set_solver | |].
+    [ eauto | set_solver | eauto  |
+      eauto using similar_push with similar wf |
+      eauto with wf | set_solver ].
 
-Local Ltac intro_visit_post_empty :=
-  intro_visit_post; [ eapply DFSEmpty; eauto | set_solver ].
-
-Local Ltac elim_visit_post omarked f :=
-  match goal with h: visit_post _ _ _ |- _ =>
+Local Ltac elim_visit_post marked' σ' :=
+  match goal with h: visit_post _ _ _ _ |- _ =>
     unfold visit_post in h;
-    destruct h as (omarked & f & ? & ? & ? & ?);
-    dfs_monotonic
+    destruct h as (marked' & σ' & h);
+    unpack in h
   end.
+
+Local Hint Resolve similar_same_edges : marble.
+Local Hint Extern 1 (_ ≡ _) => reflexivity : marble.
+Local Opaque bury decay transform.
 
 (* The specification of [visit]. *)
 
@@ -426,12 +536,15 @@ Local Ltac elim_visit_post omarked f :=
    instead of [wp], we use the judgement [wpd]. *)
 
 Lemma wpd_visit (k : nat) :
-  ∀ m u _v v ACC imarked,
+  ∀ m u _v v ACC marked σ,
   mweight m = k →
-  isMarks m imarked →
+  isMarks m marked →
+  inv (marked, σ) u →
+  wf marked σ →
   isInt _v v →
   0 ≤ v < n →
-  wpd (visit (m, u) _v ACC) (λ s', visit_post imarked {[v]} s').
+  edge (top σ) v →
+  wpd (visit (m, u) _v ACC) (λ s', visit_post marked σ {[v]} s').
 Proof.
   by well-founded induction on k along lt.
   intros. subst k. destruct ACC. simpl visit.
@@ -442,40 +555,45 @@ Proof.
   (* The second conditional construct tests whether [v] is marked. *)
   eapply wpd_IFC; [ tc | intros | intros ].
   (* Case: [v] is marked already. *)
-  { eapply wpd_ret. intro_visit_post_empty. }
+  { eapply wpd_ret. intro_visit_post. }
   (* Case: [v] is unmarked. We mark this vertex. *)
-  assert (fact: wp (set m _v true) (λ m, isMarks m ({[v]} ∪ imarked))).
+  assert (Hm': wp (set m _v true) (λ m, isMarks m ({[v]} ∪ marked))).
   { wp_set. introMarks. intros v' ?. case_lookup_insert.
     + subst v'. tc.
     + rewrite mark_unaffected by assumption. tc. }
-  rewrite wp_iff in fact.
-  revert fact. set (m' := set m _v true).
-  set (marked' := {[v]} ∪ imarked). intro.
-  (* We invoke the user function [body]. *)
-  eapply wpd_bind; last wp_intro u'.
-  { eauto using wp_body. }
-  (* The state at this point is described by [marked'] and [u']. *)
-  eapply wpd_decay.
+  rewrite wp_iff in Hm'. revert Hm'.
+  set (m' := set m _v true).
+  set (marked' := {[v]} ∪ marked).
+  set (σ' := Frame (Some v) Empty :: σ).
+  intro.
+  (* We invoke the user function [hook]. *)
+  assert (move (marked, σ) (Enter v) (marked', σ')).
+  { econstructor; tc. }
+  eapply wpd_bind.
+  { eapply wp_hook'; tc. }
+  cbv beta; intros u' ?.
+  (* The state at this point is described by [marked'], [σ'], [u']. *)
+  eapply wpd_wpd_bind_unary.
   (* We reach the loop on the successors of [v]. The goal must be changed
      from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
   rewrite wpd_wp.
   wp_op wp_foreach_successor with invariant: (
     λ examined (s'' : { s'' | slt s'' (m, u) }),
-      visit_post marked' examined (proj1_sig s'')
+      visit_post marked' σ' examined (proj1_sig s'')
   ).
   (* Initialization. *)
-  { intro_visit_post_empty. }
+  { simpl. intro_visit_post. }
   (* Preservation. *)
   { wp_body examined0 examined1 ((m'' & u'') & ow)
       introducing: (fun _ => set_step w; intros _w ?).
-    elim_visit_post marked'' f.
+    elim_visit_post marked'' σ''.
     assert (E v w) by set_solver.
-    (* The state at this point is described by [marked''] and [u''].
-       The successors of [v] that have been examined already form
-       the set [examined0], a subset of [marked'']. The vertex [w],
-       also a successor of [v], is about to be examined. *)
+    (* The state at this point is described by [marked''], [σ''], [u''].
+       The successors of [v] that have been examined already form the
+       set [examined0], a subset of [marked'']. The vertex [w], also
+       a successor of [v], is about to be examined. *)
     (* Change the goal back into [wpd] format. *)
-    eapply wp_wpd with (Q1 := λ s'', visit_post marked' examined1 s'');
+    eapply wp_wpd with (Q1 := λ s'', visit_post marked' σ' examined1 s'');
       [| solve [ eauto] ].
     eapply wpd_bury.
     (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
@@ -483,17 +601,34 @@ Proof.
     { eapply IH; try reflexivity; tc. }
     (* Justify that this call establishes the loop invariant. *)
     cbv beta. intros (m''' & u''') ?.
-    elim_visit_post omarked f'''.
-    intro_visit_post.
-    + eauto using dfs_concat.
-    + rewrite roots_concat. set_solver. }
-  (* Completion. All successors of [v] have now been examined. *)
-  { intros ((m'' & u'') & ?). simpl proj1_sig.
-    intros (examined & ? & ?).
-    elim_visit_post omarked f.
-    intro_visit_post.
-    + eapply DFSNonEmpty with (w := v); eauto with dfs set_solver.
-    + set_solver. }
+    elim_visit_post marked''' σ'''.
+    intro_visit_post. }
+  (* All successors of [v] have now been examined. *)
+  intros ((m'' & u'') & ?). simpl proj1_sig.
+  intros (examined & Hpost & Hexamined) ?.
+  elim_visit_post marked'' σ''.
+  (* Decay. *)
+  eapply wpd_wpd_bind_unary.
+  eapply wpd_decay. eapply wpd_ret. simpl. intro.
+  (* The structure of the stack has been preserved. *)
+  unfold σ' in Hpost2.
+  assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
+  { inversion Hpost2. eauto. }
+  set (marked''' := marked'').
+  set (σ''' := store v vs σ).
+  (* We invoke the user function [hook] again. *)
+  assert (move (marked'', σ'') (Exit v) (marked''', σ''')).
+  { unfold move. unfold marked''', σ'''.
+    econstructor; eauto with set_solver. }
+  eapply wpd_wpd_bind_unary.
+  eapply wpd_transform.
+  eapply wpd_ret. simpl.
+  change (m'', hook (Exit _v) u'')
+    with (do u''' ← hook (Exit _v) u'' ; (m'', u''')).
+  wp_op wp_hook' introducing: u'''.
+  (* Return. *)
+  wp_ret. intro. eapply wpd_ret.
+  intro_visit_post.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -510,16 +645,10 @@ Definition visit' s _v : S :=
    showing this proof for pedagogical purposes; it is super difficult
    if one does not approach it in exactly the right way. *)
 
-(* Under [proj1_sig], the coercions [step] and [decay] vanish. *)
+(* Under [proj1_sig], the coercion [bury] vanishes. *)
 
-Lemma proj1_sig_step {s1 s2} (pf : slt s1 s2) (s' : beyond s1) :
-  proj1_sig (step pf s') = proj1_sig s'.
-Proof.
-  destruct s'. eauto.
-Qed.
-
-Lemma proj1_sig_decay {s} (s' : below s) :
-  proj1_sig (decay s') = proj1_sig s'.
+Local Lemma proj1_sig_bury {s1 s2} (pf : slt s1 s2) (s' : beyond s1) :
+  proj1_sig (bury pf s') = proj1_sig s'.
 Proof.
   destruct s'. eauto.
 Qed.
@@ -552,9 +681,12 @@ Lemma visit_eq (k : nat) :
         s
       else
         do m' ← set m _v true ;
-        do u' ← body _v u ;
+        do u' ← hook (Enter _v) u ;
         let s' := (m', u') in
-        foreach_successor s' _v visit'
+        do s' ← foreach_successor s' _v visit' ;
+        let (m', u') := s' in
+        do u' ← hook (Exit _v) u' ;
+        (m', u')
     else
       s.
 Proof.
@@ -563,20 +695,24 @@ Proof.
   destruct s as (m & u).
   eapply IFC_if_dep; intro; [| eauto ].
   eapply IFC_if_dep; intro; [ eauto |].
-  unfold bind at 2.
+  (* Eliminate [do m' ← ...], which appears only on one side. *)
+  unfold bind at 5.
   eapply bind_eq_dep; [ eauto | intro u' ].
-  rewrite proj1_sig_decay.
-  eapply foreach_successor_parametric
-    with (A := λ (s1 : below (m, u)) (s2 : S), proj1_sig s1 = s2);
-    [| eauto ].
-  intros (s' & ?) ?. simpl. intros <- _w.
-  rewrite proj1_sig_step.
-  unfold visit'.
-  (* The goal boils down to proving that the parameter [ACC] is
-     computationally irrelevant; that is, it does not influence
-     the first projection of the result of [visit]. *)
-  erewrite !IH by eauto. (* rewrite both sides *)
-  reflexivity.
+  eapply bind_eq_dep_dep; [| clear u' ].
+  (* The loop. *)
+  { eapply foreach_successor_parametric
+      with (A := λ (s1 : below (m, u)) (s2 : S), proj1_sig s1 = s2);
+      [| eauto ].
+    intros (s' & ?) ?. simpl. intros <- _w.
+    rewrite proj1_sig_bury.
+    unfold visit'.
+    (* The goal boils down to proving that the parameter [ACC] is
+       computationally irrelevant; that is, it does not influence
+       the first projection of the result of [visit]. *)
+    erewrite !IH by eauto. (* rewrite both sides *)
+    reflexivity. }
+  (* The code that follows the loop. *)
+  intros (m' & u') ?. reflexivity.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -585,6 +721,10 @@ Qed.
    It allocates the marks array [m]. *)
 
 (* TODO use [foreach_root] *)
+
+(* Variable u0 : U. *)
+(* Variable Hinit : *)
+(*   inv (∅, (Frame None Empty) :: []) u0. *)
 
 Definition visit_top _n u _v : S :=
   let m := init _n (λ _i, false) in
