@@ -960,3 +960,307 @@ Ltac dfs_omarked :=
   intros.
 
 Arguments Empty {V}.
+
+(* -------------------------------------------------------------------------- *)
+
+(* (New in 2026!) The above results describe the structure of a complete DFS
+   forest. However, in order to describe an interactive traversal, where a
+   producer performs the traversal and emits events, and where a consumer
+   observes these events, it is desirable to have a small-step description,
+   that is, a labeled transition system whose state represents an ongoing
+   (incomplete) DFS traversal. *)
+
+Section Interactive.
+Variable V : Type.
+Variable E : V → V → Prop.
+Local Notation dfs := (@dfs V E).
+
+(* We work with two kinds of observable events. [Enter v] means that the
+   vertex [v] has just been discovered and entered; we are about to
+   explore its successors. [Exit v] means that all of the descendants of
+   [v] have been explored; we about to come back up out of [v]. The
+   sequence of all [Enter] events is a "pre-order" enumeration of the
+   vertices; the sequence of all [Exit] events is a "post-order"
+   enumeration of the vertices. *)
+
+Inductive event :=
+| Enter : V → event
+| Exit  : V → event.
+
+(* A stack is a (nonempty) list of stack frames. *)
+
+(* A stack frame contains an optional vertex [ov] and a forest [vs]. *)
+
+(* When [ov] is [None], one can think of it as a special vertex that
+   represents the entry point of the entire traversal. The successors of
+   this entry vertex are the start vertices of the traversal. This entry
+   vertex has no incoming edges. *)
+
+(* The forest [vs] represents the descendants of [ov] that have been
+   explored already. *)
+
+Inductive frame :=
+| Frame : option V → forest V → frame.
+
+Definition stack :=
+  list frame.
+
+Implicit Type ov : option V.
+Implicit Type σ : stack.
+
+(* The start vertices of the traversal. *)
+
+Variable start : set V.
+
+(* [edge ov w] means that there is an edge from [ov] to [w] in the graph
+   [E], extended with an edge of the entry vertex [None] to every start
+   vertex. *)
+
+Definition edge ov w :=
+  match ov with
+  | Some v => E v w
+  | None   => w ∈ start
+  end.
+
+(* [top σ] is the vertex found in the top frame of the stack [σ]. *)
+
+Definition top σ : option V :=
+  match σ with
+  | Frame ov vs :: _ => ov
+  | []               => None (* dummy; cannot happen *)
+  end.
+
+(* [store w ws σ] appends the tree [w/ws] to the forest
+   that is stored in the top frame of the stack [σ]. *)
+
+Definition store w ws σ : stack :=
+  match σ with
+  | [] =>
+      [] (* cannot happen *)
+  | Frame ov vs :: σ =>
+      Frame ov (concat vs (NonEmpty w ws Empty)) :: σ
+  end.
+
+(* The labeled transition system [step] describes the evolution of the
+   state, and the corresponding observable events, as the depth-first
+   search traversal progresses. *)
+
+(* A state is a pair of a set of vertices [marked] and a stack [σ]. *)
+
+(* [step marked σ event marked' σ'] means that the system can evolve from
+   [marked] and [σ] to [marked'] and [σ'] while emitting the observable
+   event [event]. *)
+
+Inductive step : set V → stack → event → set V → stack → Prop :=
+
+| StepEnter:
+    ∀ marked σ marked' σ' w,
+    (* If [w] is an unmarked child of the top stack vertex, *)
+    edge (top σ) w →
+    w ∉ marked →
+    (* then [w] can be marked *)
+    marked' ≡ {[w]} ∪ marked →
+    (* and a new frame, carrying [w] together with an empty forest,
+       can be pushed onto the stack. *)
+    σ' = Frame (Some w) Empty :: σ →
+    (* This transition corresponds to the event [Enter w]. *)
+    step
+      marked σ
+      (Enter w)
+      marked' σ'
+
+| StepExit:
+    ∀ marked σ w ws σ0 marked' σ',
+    (* Suppose the top stack frame contains [w] and its children [ws]. *)
+    σ = Frame (Some w) ws :: σ0 →
+    (* If all children of [w] are marked *)
+    {[x | E w x]} ⊆ marked →
+    (* then the top stack frame can be popped, and the tree [w/ws] can be
+       stored in the previous frame. *)
+    σ' = store w ws σ0 →
+    (* The set of marked vertices is unchanged. *)
+    marked' ≡ marked →
+    (* This transition corresponds to the event [Exit w]. *)
+    step
+      marked σ
+      (Exit w)
+      marked' σ'.
+
+(* Not every stack is well-formed. A stack is well-formed only if it
+   corresponds to the beginning of a well-formed DFS forest. *)
+
+(* [wf imarked omarked σ] means that the stack [σ] is well-formed:
+   starting with the set of marked vertices [imarked], it is possible to
+   reach a state where the set of marked vertices is [omarked] and the
+   stack is [σ]. *)
+
+Inductive wf : set V → set V → stack → Prop :=
+
+| WfBottom:
+    ∀ imarked omarked vs ,
+    (* If [vs] is a well-formed DFS forest *)
+    dfs imarked omarked vs →
+    (* and if every root of [vs] is a start vertex *)
+    roots vs ⊆ start →
+    (* then a stack that consists of just one frame, containing the entry
+       vertex [None] and the forest [vs], is well-formed. *)
+    wf imarked omarked (Frame None vs :: [])
+
+| WfDeep:
+    ∀ imarked mmarked σ omarked w ws ,
+    (* If the stack [σ] is well-formed, *)
+    wf imarked mmarked σ →
+    (* If [w] is an unmarked child of the top stack vertex, *)
+    edge (top σ) w →
+    w ∉ mmarked →
+    (* If, after marking [w], a forest [ws] of children of [w] has
+       been traversed, *)
+    dfs ({[w]} ∪ mmarked) omarked ws →
+    outof E {[w]} (roots ws) →
+    (* Then the stack [σ], extended with one frame that contains [w]
+       and [ws], is well-formed. *)
+    wf imarked omarked (Frame (Some w) ws :: σ).
+
+Hint Constructors wf : wf.
+
+(* Hints for the proofs that follow. *)
+
+Local Hint Resolve dfs_concat : dfs.
+
+Local Hint Extern 1 (roots (concat _ _) ⊆ _) =>
+  rewrite roots_concat
+: set_solver.
+
+(* A well-formed stack is nonempty. *)
+
+Lemma wf_nonempty imarked omarked σ :
+  wf imarked omarked σ →
+  0 < length σ.
+Proof.
+  induction 1; length; lia.
+Qed.
+
+(* A stack that contains just one empty frame is well-formed. *)
+
+Lemma wf_init :
+  ∀ imarked,
+  wf imarked imarked (Frame None Empty :: []).
+Proof.
+  intros. eapply WfBottom; eauto with dfs set_solver.
+Qed.
+
+(* The transition system preserves well-formedness. *)
+
+Lemma wf_step :
+  ∀ marked σ event marked' σ',
+  step marked σ event marked' σ' →
+  ∀ imarked,
+  wf imarked marked σ →
+  wf imarked marked' σ'.
+Proof.
+  induction 1; intros imarked Hwf; dependent destruction Hwf; subst σ'.
+  (* Case: [StepEnter/WfBottom]. *)
+  { eauto with wf dfs set_solver. }
+  (* Case: [StepEnter/WfDeep]. *)
+  { eauto with wf dfs set_solver. }
+  (* Case: [StepExit/WfBottom]. *)
+  { exfalso. congruence. }
+  (* Case: [StepExit/WfDeep]. *)
+  { match goal with h: _ :: _ = _ :: _ |- _ => injection h; clear h end.
+    intros -> -> ->.
+    dependent destruction Hwf.
+    (* Subcase: [WfBottom]. [ov] is [None]. *)
+    { eapply WfBottom; eauto with dfs set_solver. }
+    (* Subcase: [WfBottom]. [ov] is [None]. *)
+    { eapply WfDeep; eauto with dfs set_solver. }}
+Qed.
+
+(* At any time, if the stack has height 1 (its minimum height) then
+   the unique stack frame contains a DFS forest [vs] whose roots
+   form a subset of [start]. *)
+
+Lemma wf_completion imarked omarked σ :
+  wf imarked omarked σ →
+  length σ = 1 →
+  ∃ vs,
+  σ = Frame None vs :: [] ∧
+  dfs imarked omarked vs ∧
+  roots vs ⊆ start.
+Proof.
+  intros Hwf ?. dependent destruction Hwf.
+  { eauto. }
+  { generalize (wf_nonempty Hwf); intro. length in *. lia. }
+Qed.
+
+(* Between the moment where a vertex is entered and the moment where this
+   vertex is exited, the stack does not change at all, except possibly in
+   the top frame, where new trees can be stored. *)
+
+(* The proposition [similar σ σ'] describes this evolution. *)
+
+Inductive similar : stack → stack → Prop :=
+| Sim :
+    ∀ ov vs1 vs2 vs σ,
+    concat vs1 vs2 = vs →
+    similar (Frame ov vs1 :: σ) (Frame ov vs :: σ).
+
+(* [similar] is reflexive, except in the special case of an empty stack,
+   which is not well-formed. *)
+
+Lemma similar_reflexive imarked omarked σ :
+  wf imarked omarked σ →
+  similar σ σ.
+Proof.
+  inversion 1; subst;
+  eapply Sim with (vs2 := Empty);
+  eapply concat_empty.
+Qed.
+
+(* [similar] is transitive. *)
+
+Lemma similar_transitive σ1 σ2 σ3 :
+  similar σ1 σ2 →
+  similar σ2 σ3 →
+  similar σ1 σ3.
+Proof.
+  inversion 1; inversion 1; subst. econstructor.
+  rewrite concat_associative. eauto.
+Qed.
+
+(* Two similar stacks have the same top vertex. *)
+
+Lemma similar_same_top σ σ' :
+  similar σ σ' →
+  top σ = top σ'.
+Proof.
+  inversion 1. simpl. eauto.
+Qed.
+
+(* Two similar stacks have the same edges exiting the top vertex. *)
+
+Lemma similar_same_edges σ σ' w :
+  similar σ σ' → edge (top σ) w → edge (top σ') w.
+Proof.
+  intros.
+  assert (top σ = top σ') by eauto using similar_same_top.
+   congruence.
+Qed.
+
+(* Storing a tree [w/ws] into a stack [σ] is permitted by [similar]. *)
+
+Lemma similar_push imarked omarked w ws σ :
+  wf imarked omarked σ →
+  similar σ (store w ws σ).
+Proof.
+  inversion 1; subst; simpl; econstructor; eauto.
+Qed.
+
+End Interactive.
+
+Hint Constructors similar : similar.
+
+Hint Resolve
+  similar_reflexive
+  similar_transitive
+  similar_push
+: similar.
