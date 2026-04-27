@@ -156,6 +156,8 @@ Definition _empty := fun (_ : K) => [] : list V.
 Notation "'∅'" := _empty.
 Definition _set m (k : K) (v : V) :=
   (fun k' => if decide (k = k') then v :: m k' else m k').
+Definition rm m (k : K) : K -> list V :=
+  (fun k' => if (decide (k = k')) then tl (m k') else m k').
 
 (* Specification for create function *)
 
@@ -351,4 +353,109 @@ Proof.
         unfold valid_buckets in H3.
         apply H3 with (indexZ k' n).
         auto. subst. auto. }
+Qed.
+
+Fixpoint remove_assoc (k : K) (b : bucket) :=
+  match b with
+  |[] => []
+  |(x, v) :: t =>
+     if decide (x = k) then
+       t else (x, v) :: remove_assoc k t
+  end.
+
+Lemma remove_assoc_in :
+  forall b k k' v,
+    (k', v) ∈ remove_assoc k b ->
+    (k', v) ∈ b.
+Proof.
+  intros b k k' v H1.
+  induction b as [|[k'' v'] t Ih]; simpl in H1.
+  + apply not_elem_of_nil in H1. contradiction.
+  + destruct decide in H1; apply elem_of_cons. auto.
+   apply elem_of_cons in H1 as [H1 | H1].
+   auto. right. by apply Ih.
+Qed.
+
+Lemma remove_assoc_bucket_eq :
+  forall k b b',
+    b' = remove_assoc k b ->
+    filter_key k b' = tl (filter_key k b).
+Proof.
+Admitted.
+
+Lemma remove_assoc_bucket_ne :
+  forall k k' b b',
+    b' = remove_assoc k b ->
+    k ≠ k' ->
+    filter_key k' b' = filter_key k' b.
+Proof.
+Admitted.
+
+Definition remove (h : hashtbl) (k : K) :=
+  do l ← length h;
+  do i ← index k l;
+  do b ← get h i;
+  do b' ← remove_assoc k b;
+  set h i b'.
+
+(* Destructs a isHashtbl hypothesis. *)
+Local Ltac destructIsHashtbl' :=
+  match goal with h: isHashtbl _ _ |- _ =>
+    unfold isHashtbl in h;
+    let c := fresh "l" in
+    let n := fresh "n" in
+    destruct h as (c&?);
+    destruct h as (n&?);
+    unpack
+  end.
+
+Lemma wp_remove :
+  forall h m k,
+    isHashtbl h m ->
+    wp (remove h k)
+       (λ h', isHashtbl h' (rm m k)).
+Proof.
+  intros h m k H.
+  destructIsHashtbl'.
+  unfold remove.
+  wp_length _n.
+  subst n.
+  wp_bind_eq.
+  wp_hget b.
+  wp_bind_eq.
+  wp_hset.
+  introIsHashtbl.
+  + list. lia.
+  + list. unfold no_garbage in *.
+    intros ? k' ???.
+    list in *.
+    apply H2 with v. auto.
+    destruct (decide (i = indexZ k φ (_n))); subst; list in *. 2: auto.
+    apply remove_assoc_in with k. auto.
+  + intros ? b' k' ??.
+    unfold rm.
+    list in *.
+    destructIsInt.
+    destructIsArray. unfold max_array_length in *.
+    unfold valid_buckets in *.
+    destruct decide.
+    { subst.
+      list in *. int in *.
+      list. 2: { apply index_valid_len. lia. }
+      rewrite remove_assoc_bucket_eq with (b:=(l !!! indexZ k' (len l))).
+      2: auto.
+      rewrite <- tl_map.
+      f_equal. by apply H3 with (indexZ k' (len l)). }
+    { list in *. int in *.
+      destruct (decide (indexZ k (len l) = i)) as [E | E]; subst.
+      + rewrite E. list.
+        2: { apply index_valid_len. lia. }
+        rewrite remove_assoc_bucket_ne with (k:=k) (b:=(l !!! indexZ k' (len l))). 2, 3: auto.
+        apply H3 with (indexZ k' (len l)). 2:auto.
+        reflexivity.
+      + rewrite list_lookup_total_insert_ne.
+        2, 3 : apply index_valid_len; lia.
+        2: symmetry; apply E.
+        by apply H3 with (indexZ k' (len l)).
+    }
 Qed.
