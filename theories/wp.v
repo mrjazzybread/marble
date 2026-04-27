@@ -306,6 +306,25 @@ Proof.
   eauto.
 Qed.
 
+(* The bind rule (with a [wpd] judgement on the left-hand side). *)
+
+Lemma wpd_wpd_bind {A B} {Q1 Q2} (a : sig Q1) (b : sig Q1 → sig Q2)
+  (P : A → Prop) (Q : B → Prop) :
+  wpd a P →
+  (∀ x pf, P x → wpd (b ((exist _ x pf))) Q) →
+  wpd (bind a b) Q.
+Proof.
+  destruct a. eauto.
+Qed.
+
+Lemma wpd_wpd_bind_unary {A B} {Q1 : A → Prop} {Q2}
+  (a : sig Q1) (b : sig Q1 → sig Q2) (Q : B → Prop) :
+  wpd a (λ x, ∀ pf, wpd (b ((exist _ x pf))) Q) →
+  wpd (bind a b) Q.
+Proof.
+  destruct a. eauto.
+Qed.
+
 (* Reasoning rules for conditionals. *)
 
 Lemma wpd_if {A} {Q'} b (e1 e2 : sig Q') (Q : A → Prop) {P1 P2 : Prop} :
