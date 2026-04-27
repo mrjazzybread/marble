@@ -958,3 +958,5 @@ Ltac dfs_omarked :=
     generalize (dfs_omarked h); revert h
   end;
   intros.
+
+Arguments Empty {V}.

@@ -31,7 +31,7 @@ Definition scc_description {V} (E : V → V → Prop) (f2 : forest V) :=
 
 Inductive is_scc_forest (V : Type) (E : V → V → Prop) : forest V → Prop :=
 | IsSccForestEmpty:
-    is_scc_forest E (Empty _)
+    is_scc_forest E Empty
 | IsSccForestNonEmpty:
     ∀ w ws vs,
     component E w ≡ {[w]} ∪ support ws →
@@ -93,7 +93,7 @@ Local Infix "≃" := equpto (at level 80).
 
 Inductive filter : forest V → forest V → Prop :=
   | FilterEmpty:
-      filter (Empty _) (Empty _)
+      filter Empty Empty
   | FilterMasked:
       (* If [w] is masked, it is dropped, and the forest [ws] of its
          children is recursively filtered. *)
@@ -532,10 +532,10 @@ Qed.
    root of the forest, the same can be said. *)
 
 Lemma filter_last_scc `{!RelDecision (∈@{set V})} imarked ws vs :
-  dfs E imarked ⊤ (concat vs (NonEmpty r ws (Empty _))) →
+  dfs E imarked ⊤ (concat vs (NonEmpty r ws Empty)) →
   closed E imarked →
   ∃ ws',
-  filter (concat vs (NonEmpty r ws (Empty _))) (concat vs ws').
+  filter (concat vs (NonEmpty r ws Empty)) (concat vs ws').
 Proof.
   (* The proof consists in applying [filter_reflexive] to the forest [vs]
      and applying [filter_scc] to the tree [w/ws]. *)
