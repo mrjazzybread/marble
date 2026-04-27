@@ -149,6 +149,24 @@ Proof.
   unfold decay. destruct a. tauto.
 Qed.
 
+(* [transform] applies a transformation [f] to the component [u] in
+   a composite state of the form [((m', u'), ow)]. *)
+
+Local Definition transform {s} (f : U → U) : beyond s → beyond s.
+Proof.
+  intros ((m' & u') & ow).
+  exists (m', f u'). assumption.
+Defined.
+
+(* A reasoning rule for [transform]. *)
+
+Local Lemma wpd_transform {s} f (s' : beyond s) Q :
+  wpd s' (λ '(m', u'), wp (m', f u') Q) →
+  wpd (transform f s') Q.
+Proof.
+  unfold transform. destruct s' as ((m' & u') & ?). eauto.
+Qed.
+
 (* [decrease] constructs a strict ordering witness, expressing the idea
    that if the vertex [_v] is unmarked in the state [s], which is the pair
    [(m, u)], then marking [_v] produces a new state of smaller weight. *)
