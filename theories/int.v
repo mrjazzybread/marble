@@ -180,6 +180,19 @@ Proof.
   rewrite <- div_spec. int. eauto.
 Qed.
 
+(* Modulo in Z commutes with projection. *)
+
+Lemma mod_spec' z1 z2 :
+  unsigned z1 →
+  unsigned z2 →
+  π z1 mod π z2 = π (z1 `mod` z2).
+Proof.
+  intros.
+  replace z1 with (φ (π z1)) at 2 by (int; lia).
+  replace z2 with (φ (π z2)) at 2 by (int; lia).
+  rewrite <- mod_spec. int. eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Some properties of machine integer arithmetic. *)
@@ -504,6 +517,15 @@ Global Instance isInt_div :
   isInt (_i/_j) (i/j).
 Proof.
   intros. destructIsInt. introIsInt. eauto using div_spec'.
+Qed.
+
+Global Instance isInt_mod :
+  ∀IntU _i i ,
+  ∀IntU _j j ,
+  j ≠ 0%Z →
+  isInt (_i mod _j) (i mod j).
+Proof.
+  intros. destructIsInt. introIsInt. eauto using mod_spec'.
 Qed.
 
 (* Beyond this point, [isInt] is opaque. *)
