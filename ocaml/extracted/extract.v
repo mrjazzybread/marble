@@ -146,6 +146,7 @@ Extraction Inline
   traverse.bury
   traverse.decay
   traverse.transform
+  traverse.visit'
 .
 
 Separate Extraction
@@ -200,6 +201,5 @@ Separate Extraction
   pqueue.extract_nonempty
   pqueue.extract
 
-  traverse.visit
-  traverse.visit_top
+  traverse.traverse
 .

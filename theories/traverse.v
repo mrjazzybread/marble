@@ -200,13 +200,20 @@ Qed.
 Local Lemma all_safe s : safe s.
 Proof.
   eapply (Acc_intro_generator 32). eapply Wf_nat.lt_wf.
-Defined.
+Qed.
+  (* Perhaps, in order to allow execution inside Rocq, [Defined] should
+     be used instead of [Qed]. However, making [all_safe] transparent
+     causes some of the proofs below to run forever at [Qed] time. *)
 
 (* -------------------------------------------------------------------------- *)
 
 (* The main recursive function of the depth-first search algorithm: [visit].  *)
 
 Section Visit.
+
+(* [foreach_start] iterates on the start vertices. *)
+
+Variable foreach_start : ∀ {A}, A → (A → _vertex → A) → A.
 
 (* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
 
@@ -295,6 +302,31 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* Once the termination of [visit] has been established, one can define a
+   simplified version of it, which does not need an accessibility witness,
+   and whose result type is just [S]. *)
+
+Definition visit' s _v : S :=
+  proj1_sig (visit s _v (all_safe s)).
+
+(* -------------------------------------------------------------------------- *)
+
+(* [traverse _n u] is the main function of the depth-first search
+   algorithm. It traverses a directed graph whose vertices are
+   numbered in the range [0, n), with initial user state [u]. *)
+
+(* The start vertices are given by [foreach_start].
+   The successors of a vertex are given by [foreach_successor].
+   The algorithm emits events by invoking [hook]. *)
+
+Definition traverse _n u : S :=
+  (* Allocate an array of Boolean marks. *)
+  do m ←  init _n (λ _i, false) ;
+  (* Visit the start vertices. *)
+  foreach_start (m, u) visit'.
+
+(* -------------------------------------------------------------------------- *)
+
 (* We now formulate more hypotheses about the functions [foreach_successor]
    and [body], which the user provides. Under these hypotheses, we prove
    that [visit] is correct. *)
@@ -309,7 +341,7 @@ Variable n : Z.
 
 (* No edge can leave the interval [0, n). *)
 
-Hypothesis bound :
+Hypothesis edges_respect_bound :
   ∀ v w, 0 ≤ v < n → E v w → 0 ≤ w < n.
 
 (* -------------------------------------------------------------------------- *)
@@ -320,6 +352,11 @@ Hypothesis bound :
 Local Notation vertices := (propset vertex).
 
 Variable start : vertices.
+
+(* The start vertices must lie in the interval [0, n). *)
+
+Hypothesis start_respects_bound :
+  ∀ v, v ∈ start → 0 ≤ v < n.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -366,6 +403,12 @@ Local Hint Resolve wf_step : wf.
    it means that [v] is a member of the set [start].) *)
 
 Local Notation edge := (dfs.edge E start).
+
+(* The assertion [dfs marked vs] that [vs] is a DFS forest for the
+   graph [E], with initial set of marked vertices ∅, and final set of
+   marked vertices [marked]. *)
+
+Local Notation dfs := (dfs.dfs E ∅).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -603,14 +646,23 @@ Proof.
   intro_visit_post.
 Qed.
 
+(* A specification of [visit']. *)
+
+Lemma wp_visit' :
+  ∀ m u _v v marked σ,
+  isMarks m marked →
+  inv (marked, σ) u →
+  wf (marked, σ) →
+  isInt _v v →
+  0 ≤ v < n →
+  edge (top σ) v →
+  wp (visit' (m, u) _v) (λ s', visit_post (marked, σ) {[v]} s').
+Proof.
+  intros. unfold visit'. eapply wpd_visit; tc.
+Qed.
+  (* This [Qed] diverges if [all_safe] is transparent. *)
+
 (* -------------------------------------------------------------------------- *)
-
-(* Once the termination of [visit] has been established, one can define a
-   simplified version of it, which does not need an accessibility witness,
-   and whose result type is just [S]. *)
-
-Definition visit' s _v : S :=
-  proj1_sig (visit s _v (all_safe s)).
 
 (* As an exercise, we prove that [visit'] satisfies the desired fixed
    point equation. Most likely, we will NOT need this property. I am
@@ -640,7 +692,7 @@ Hypothesis foreach_successor_parametric:
   ∀ _v,
   A (foreach_successor a1 _v body1) (foreach_successor a2 _v body2).
 
-(* [visit] satisfies the desired fixed point equation: *)
+(* [visit'] satisfies the desired fixed point equation: *)
 
 Lemma visit_eq (k : nat) :
   ∀ s _v ACC,
@@ -689,22 +741,77 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* The top-level function does not need an accessibility witness.
-   It allocates the marks array [m]. *)
+(* A hypothesis about [foreach_start]. *)
 
-(* TODO use [foreach_root] *)
+(* [foreach_start] must enumerate the vertices in the set [start],
+   in an arbitrary order, possibly with repetitions. *)
 
-(* Variable u0 : U. *)
-(* Variable Hinit : *)
-(*   inv (∅, (Frame None Empty) :: []) u0. *)
+Variable wp_foreach_start:
+  ∀ {A} (body : A → _vertex → A),
+  ITER_SET ∅ start
+    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ a Q, wp (foreach_start a body) Q).
 
-(* TODO in the end, the spec of the toplevel DFS function should be an
-   instance of [ITER]. *)
+(* A specification of [traverse]. *)
 
-Definition visit_top _n u _v : S :=
-  let m := init _n (λ _i, false) in
-  let s := (m, u) in
-  visit' s _v.
+Lemma wp_traverse :
+  (* Provided [n] is not too large, *)
+  ∀ _n, isInt _n n →
+  0 ≤ n ≤ max_array_length →
+  (* Provided the initial user state [u] and the empty ghost stack
+     satisfy the user invariant [inv], *)
+  ∀ u,
+  inv (∅, Frame None Empty :: []) u →
+  (* [traverse _n u] can be called. *)
+  wp (traverse _n u) (λ '(m', u'),
+    (* When it returns, a set of vertices [marked'] has been marked,
+       the ghost stack is [σ'], and a DFS forest has been virtually
+       constructed. (This forest does not exist at runtime.) *)
+    ∃ marked' σ' vs,
+    (* The array [m'] tells which vertices have been marked. *)
+    isMarks m' marked' ∧
+    (* The ghost stack [σ'] stores the forest [vs]. *)
+    σ' = Frame None vs :: [] ∧
+    (* The user invariant holds. *)
+    inv (marked', σ') u' ∧
+    (* [vs] is a DFS forest. *)
+    dfs marked' vs ∧
+    (* The roots of the forest [vs] form a subset of the start vertices. *)
+    roots vs ⊆ start ∧
+    (* Every start vertex is marked. *)
+    start ⊆ marked'
+  ).
+Proof.
+  intros. unfold traverse.
+  wp_op (wp_init (λ _, false)) introducing: m.
+  { intros. wp_ret. }
+  set (s := (m, u)).
+  set (marked := (∅ : vertices)).
+  set (σ := (Frame None Empty :: [] : stack vertex)).
+  set (γ := (marked, σ)).
+  wp_op wp_foreach_start with invariant:
+    (λ examined s, visit_post γ examined s).
+  (* Initialization. *)
+  { assert (wf γ).
+    { econstructor; eauto with dfs set_solver. }
+    intro_visit_post.
+    + assert (∀ v, 0 ≤ v < n → v ∉ marked) by set_solver.
+      introMarks. intros. list. tc. }
+  (* Preservation. *)
+  { clear s. clear dependent m. clear dependent u.
+    intros examined0 examined1 (m' & u') ?.
+    intros v ??? _v ?.
+    assert (v ∈ start) by set_solver.
+    elim_visit_post marked' σ'.
+    wp_op wp_visit' introducing: (m'' & u'').
+    elim_visit_post marked'' σ''.
+    intro_visit_post. }
+  (* Conclusion. *)
+  { cbv beta. intros (m' & u') (examined & ? & ?).
+    elim_visit_post marked' σ'.
+    edestruct wf_completion' as (vs & ? & ? & ?); tc.
+    exists marked', σ', vs. pack; eauto with set_solver. }
+Qed.
 
 End Visit.
 
