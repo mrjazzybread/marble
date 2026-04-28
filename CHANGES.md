@@ -9,6 +9,9 @@
   + New lemma `isBool_trivial`.
   + Remove the lemma `isBool1_variance`, which was a duplicate of `isBool1_conseq`.
 
+* In `int`:
+  + New instance `isInt_mod`.
+
 * In `wp`:
   + New lemmas `bind_eq_dep` and `bind_eq_dep_dep`.
   + New judgement `wpd` together with a set of reasoning rules.
@@ -25,9 +28,8 @@
   + New lemma `wp_set_default`.
   + New lemma `wp_init_default`.
   + New lemma `default_init`.
-  + In the lemma `wp_make`, reveal `default a = x`.
-  + In the lemma `wp_init`, reveal `default a = inhabitant`.
-    Make `ψ` the first parameter.
+  + In the lemma `wp_init`, make `ψ` the first parameter.
+    Allow `f` to rely on the hypothesis `0 ≤ i < n`.
 
 * Resurrected the theory of directed graphs and depth-first search that appars
   in the paper [Depth-first search and strong connectivity in
