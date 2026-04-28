@@ -49,10 +49,13 @@
 
 ## Traverse
 
+* Recreate the "beautiful hack" that allows us to not test whether
+  a vertex is out of bounds?
+  If we do not recreate this hack then we can use `make`
+  instead of `init` to allocate the array of marks.
+
 * Define and verify the toplevel function.
-* Should its postcondition mention that a DFS forest has been
-  built, and relate this DFS forest with the events that have
-  been emitted earlier?
+  Its specification should be an instance of `ITER`.
 
 * Define a simplified function where only `Enter` events are
   observed. (Check that the code is simplified.) Prove that it
@@ -67,6 +70,8 @@
   track of grey vertices? or a three-color scheme?) and
   possibly a new kind of event (rediscovering a vertex).
   Use the interruptible DFS, so we can stop at the first cycle.
+
+* Test whether depth-first search can be executed inside Rocq.
 
 * Extend the documentation with a section on `wpd`.
 
