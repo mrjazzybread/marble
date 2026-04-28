@@ -1245,6 +1245,23 @@ Proof.
   inversion 1; subst; simpl; econstructor; eauto.
 Qed.
 
+(* A corollary of [wf_completion]. *)
+
+Lemma wf_completion' imarked omarked σ σ' :
+  wf imarked (omarked, σ') →
+  similar σ σ' →
+  σ = Frame None Empty :: [] →
+  ∃ vs,
+  σ' = Frame None vs :: [] ∧
+  dfs imarked omarked vs ∧
+  roots vs ⊆ start.
+Proof.
+  intros Hwf Hsimilar ?. subst.
+  assert (top σ' = None).
+  { dependent destruction Hsimilar. eauto. }
+  eauto using wf_completion.
+Qed.
+
 End Interactive.
 
 Hint Constructors similar : similar.
