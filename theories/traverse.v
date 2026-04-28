@@ -10,6 +10,7 @@
 (*                                                                            *)
 (******************************************************************************)
 
+From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
 From stdpp Require Import numbers list.
 From stdpp Require Import sets propset.
 From listz Require Import listz.
@@ -18,7 +19,7 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Export ZifyNat ZifyUint63.
 From marble Require Import tactics bool int iteration loop wp array.
-From marble.logic Require Import relations dfs.
+From marble.logic Require Import sets relations dfs.
 From marble Require Import listz_buffer. (* TODO *)
 Implicit Type _i _j _k _n : int.
 
@@ -201,7 +202,7 @@ Section U.
 
 (* The user state. *)
 
-Variable U : Type.
+Context {U : Type}.
 Implicit Type u : U.
 
 (* A state [s] is a pair [(m, u)]. *)
@@ -694,6 +695,8 @@ Qed.
 
 (* Under [proj1_sig], the coercion [bury] vanishes. *)
 
+Section FixedPoint.
+
 Local Lemma proj1_sig_bury {s1 s2} (pf : slt s1 s2) (s' : beyond s1) :
   proj1_sig (bury pf s') = proj1_sig s'.
 Proof.
@@ -762,6 +765,8 @@ Proof.
   intros (m' & u') ?. reflexivity.
 Qed.
 
+End FixedPoint.
+
 (* -------------------------------------------------------------------------- *)
 
 (* A specification of [traverse]. *)
@@ -826,5 +831,156 @@ Proof.
 Qed.
 
 End U.
+
+(* -------------------------------------------------------------------------- *)
+
+(* We now define [enumerate], a simplified version of [traverse]. Instead
+   of emitting both vertex-entry and vertex-exit events, this function
+   emits just vertex-entry events. Thus its [hook] function expects just
+   a vertex as a parameter, as opposed to an event. *)
+
+(* Because [enumerate] does not emit vertex-exit events, it is more
+   efficient than [traverse]. It performs more tail calls and requires
+   less stack space. *)
+
+Section Enumerate.
+
+Context {U : Type}.
+Implicit Type u : U.
+
+(* [hook'] passes [Enter] events on to [hook] and ignores [Exit] events. *)
+
+Variable hook : _vertex → U → U.
+
+Local Definition hook' _e u :=
+  match _e with
+  | Enter _v => hook _v u
+  | Exit  _  => u
+  end.
+
+(* [plain_enumerate] is just [traverse] applied to [hook']. *)
+
+Definition plain_enumerate _n u :=
+  @traverse U hook' _n u.
+
+(* By specializing [traverse] and [visit] for [hook'], we obtain code
+   where the vertex-exit events disappear. In the extracted OCaml code,
+   the call from [visit] to [foreach_successor] becomes a tail call. *)
+
+Derive enumerate
+  in (∀ _n u, enumerate _n u = plain_enumerate _n u)
+  as enumerate_eq.
+Proof.
+  intros. unfold plain_enumerate, traverse, visit', visit, hook'.
+  unfold enumerate; reflexivity.
+Defined.
+
+(* The user's loop invariant. *)
+
+(* This time, as the producer state, we use a set of vertices, which
+   is the set of vertices that have been examined. *)
+
+Variable inv : vertices → U → Prop.
+
+(* This administrative requirement is painful: the invariant [inv]
+   must be compatible with set equality. *)
+
+Variable Proper_inv : Proper (equiv ==> eq ==> iff) inv.
+
+Local Ltac proveInv :=
+  match goal with h: inv ?marked ?u |- inv ?marked' ?u =>
+    assert (marked' ≡ marked) as -> by set_solver;
+    exact h
+  end.
+
+Local Notation closure vs :=
+  (closure E vs).
+
+(* In comparison with [wp_traverse], the lemma [wp_enumerate] offers a
+   simplified statement. We do not advertise the fact that vertices are
+   produced in DFS pre-order. We advertise only the fact that we enumerate
+   the reachable vertices, without repetition, in an unspecified order. *)
+
+Variable wp_hook :
+  ∀ examined0 examined1 u,
+  inv examined0 u →
+  ∀ _v v,
+  isInt _v v →
+  0 ≤ v < n →
+  v ∉ examined0 →
+  examined0 ∪ {[v]} ≡ examined1 →
+  examined1 ⊆ closure start →
+  wp (hook _v u) (λ u', inv examined1 u').
+
+Lemma wp_enumerate :
+  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
+  ∀ u, inv ∅ u →
+  wp (enumerate _n u) (λ '(m', u'),
+    ∃ marked',
+    (* The array [m'] tells which vertices have been marked. *)
+    isMarks m' marked' ∧
+    (* The user invariant holds. *)
+    inv marked' u' ∧
+    (* The marked vertices are exactly the reachable vertices. *)
+    marked' ≡ closure start
+  ).
+Proof.
+  intros. rewrite enumerate_eq. unfold plain_enumerate.
+  wp_op wp_traverse with invariant: (λ γ u,
+    let '(marked, σ) := γ in
+    inv marked u
+  ).
+  (* Preservation. *)
+  { clear dependent u.
+    intros (marked0 & σ0) (marked1 & σ1) u ? ?.
+    intros _e e Hevent Hstep.
+    unfold hook'.
+    dependent destruction Hevent;
+    dependent destruction Hstep.
+    (* Case: [Enter]. *)
+    { wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
+    (* Case: [Exit]. *)
+    { wp_ret. proveInv. }}
+  (* Conclusion. *)
+  { clear dependent u.
+    cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
+    pack; eauto using omarked_is_closure_start. }
+Qed.
+
+End Enumerate.
+
+(* [enumerate'] is a simplified version of [enumerate] where we return
+   just the final user state [u], not the marks array [m]. *)
+
+Definition enumerate' {U} hook _n (u : U) : U :=
+  do (m, u) ← enumerate hook _n u ;
+  u.
+
+(* Although dropping [m] may seem silly, this allows us to give a
+   specification of [enumerate'] as a higher-order iteration function.
+   This specification is an instance of [ITER_SET_UNIQUE]. It states
+   that [enumerate'] enumerates the reachable vertices of the graph [E],
+   without repetitions, in an unspecified order. *)
+
+Lemma wp_enumerate' :
+  ∀ {U} (hook : _vertex → U → U),
+  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
+  ITER_SET_UNIQUE
+    ∅ (closure E start)
+    (λ v u Q, ∀ _v, isInt _v v → 0 ≤ v < n → wp (hook _v u) Q)
+    (λ u Q, wp (enumerate' hook _n u) Q).
+Proof.
+  intros. ITER. unfold enumerate'.
+  wp_op wp_enumerate with invariant: inv.
+  admit. (* TODO extend ITER to allow requiring Proper inv *)
+  (* Preservation. *)
+  { intros. wp_op Hbody.
+    + set_solver.
+    + cbv beta. eauto. }
+  (* Conclusion. *)
+  { clear dependent s.
+    cbv beta. intros (m & u) (marked' & ?). unpack.
+    wp_ret. }
+Qed.
 
 End G.

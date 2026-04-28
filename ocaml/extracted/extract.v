@@ -147,6 +147,8 @@ Extraction Inline
   traverse.decay
   traverse.transform
   traverse.visit'
+  traverse.hook'
+  traverse.enumerate'
 .
 
 Separate Extraction
@@ -202,4 +204,6 @@ Separate Extraction
   pqueue.extract
 
   traverse.traverse
+  traverse.enumerate
+  traverse.enumerate'
 .
