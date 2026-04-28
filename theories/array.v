@@ -1751,10 +1751,10 @@ Proof.
 Defined.
 (* Print init. *)
 
-Lemma wp_init _n n f (ψ : Z → A) :
+Lemma wp_init (ψ : Z → A) _n n f :
   isInt _n n →
   0 ≤ n ≤ max_array_length →
-  ( ∀IntU _i i, wp (f _i) (eq (ψ i)) ) →
+  (∀Int _i i, 0 ≤ i < n → wp (f _i) (eq (ψ i))) →
   wp (init _n f) (λ a, isArray a (listz.init n ψ)).
 Proof.
   intros. rewrite init_eq. unfold plain_init. wp_last Hf.
