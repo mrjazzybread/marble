@@ -43,6 +43,139 @@ Implicit Type m : marks.
 
 Local Notation vertex := Z.
 Implicit Type v w : vertex.
+Local Notation vertices := (propset vertex).
+
+(* -------------------------------------------------------------------------- *)
+
+(* Let us first introduce the parameters that describe the graph. *)
+
+(* [foreach_start] and [foreach_successor] are runtime parameters. *)
+
+(* The remaining parameters are logical. *)
+
+Section G.
+
+(* [foreach_start] iterates on the start vertices. *)
+
+Variable foreach_start : ∀ {A}, A → (A → _vertex → A) → A.
+
+(* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
+
+(* Fortunately, no properties of this function are needed in the proof of
+   termination of [visit]. *)
+
+Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
+
+(* The vertices must be numbered from 0 to [n], excluded. *)
+
+Variable n : Z.
+
+(* [start] is the set of vertices where the traversal should begin. *)
+
+Variable start : vertices.
+
+(* The start vertices must lie in the interval [0, n). *)
+
+Hypothesis start_respects_bound :
+  ∀ v, v ∈ start → 0 ≤ v < n.
+
+(* The vertices form a directed graph. *)
+
+Variable E : relation vertex.
+
+(* No edge can leave the interval [0, n). *)
+
+Hypothesis edges_respect_bound :
+  ∀ v w, 0 ≤ v < n → E v w → 0 ≤ w < n.
+
+(* The function [foreach_successor], applied to [_v], must enumerate the
+   successors of the vertex [v]. They can be enumerated in an arbitrary
+   order, and it is permitted for a vertex [w] to be presented several
+   times. *)
+
+Local Notation successors v :=
+  (image E {[v]}).
+
+Variable wp_foreach_successor:
+  ∀ {A} (body : A → _vertex → A),
+  ∀Int _v v,
+  0 ≤ v < n →
+  ITER_SET ∅ (successors v)
+    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ a Q, wp (foreach_successor a _v body) Q).
+
+(* [foreach_start] must enumerate the vertices in the set [start],
+   in an arbitrary order, possibly with repetitions. *)
+
+Variable wp_foreach_start:
+  ∀ {A} (body : A → _vertex → A),
+  ITER_SET ∅ start
+    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ a Q, wp (foreach_start a body) Q).
+
+(* -------------------------------------------------------------------------- *)
+
+(* [marked], [imarked], [omarked] denote sets of vertices. *)
+
+Implicit Types marked imarked omarked : vertices.
+
+Implicit Type σ : stack vertex.
+
+(* We wish to specify what sequences of events the user can expect to
+   observe. In short, we are a producer of events. We must expose the
+   labeled transition system that we obey: that is, we must define the
+   type of producer states as well as the relation that specifies one we
+   move from one producer state to the next, while emitting an event. *)
+
+(* A producer state is a pair [(marked, σ)]. *)
+
+(* We name this type [ghost] to emphasize that it is NOT the type of
+   runtime states, [S]. Producer states do not exist at runtime. *)
+
+Local Notation ghost :=
+  (dfs.state vertex).
+
+Implicit Type γ : ghost.
+
+(* A transition from state [γ] to state [γ'], emitting an event [e], is
+   permitted if the relation [step] allows it. *)
+
+Local Notation step :=
+  (dfs.step E start).
+
+(* The assertion [wf γ] means that the set of vertices [marked] and the
+   stack [σ] are a well-formed state of an ongoing DFS traversal of the
+   graph [E]. *)
+
+Local Notation wf := (dfs.wf E start ∅).
+
+Local Hint Constructors dfs.wf : wf.
+
+Local Hint Resolve wf_step : wf.
+
+(* The assertion [edge (top σ) v] means that there is an edge of the
+   stack's current vertex to [v]. (If the stack has no current vertex,
+   it means that [v] is a member of the set [start].) *)
+
+Local Notation edge := (dfs.edge E start).
+
+(* The assertion [dfs marked vs] that [vs] is a DFS forest for the
+   graph [E], with initial set of marked vertices ∅, and final set of
+   marked vertices [marked]. *)
+
+Local Notation dfs := (dfs.dfs E ∅).
+
+(* [isEvent _e e] relates a runtime event [_e] and an event [e].
+   They are the same thing, up to the relation between a machine
+   integer [_v] and an ideal integer [v]. *)
+
+Inductive isEvent : event _vertex → event vertex → Prop :=
+| IsEventEnter:
+    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Enter _v) (Enter v)
+| IsEventExit:
+    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Exit _v) (Exit v).
+
+Local Hint Constructors isEvent : marble.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -61,7 +194,10 @@ Definition mweight m : nat :=
 (* The state of the depth-first search algorithm is a pair [(m, u)] where
    [m] is the marks array and [u] is a user state of arbitrary type [U]. *)
 
-Section S.
+(* At this point we open a subsection, where we place parameters that
+   depend on the type [U]. *)
+
+Section U.
 
 (* The user state. *)
 
@@ -72,6 +208,11 @@ Implicit Type u : U.
 
 Definition S : Type := marks * U.
 Implicit Type s : S.
+
+(* -------------------------------------------------------------------------- *)
+
+(* We now make a series of definitions that play a role in the proof
+   of termination of the recursive function [visit]. *)
 
 (* The notion of weight is extended to states. *)
 
@@ -207,29 +348,47 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* The main recursive function of the depth-first search algorithm: [visit].  *)
-
-Section Visit.
-
-(* [foreach_start] iterates on the start vertices. *)
-
-Variable foreach_start : ∀ {A}, A → (A → _vertex → A) → A.
-
-(* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
-
-(* Fortunately, no properties of this function are needed in the proof of
-   termination of [visit]. *)
-
-Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
-
-(* The user function [hook _event u] is invoked when an event is observed,
-   that is, when a vertex is entered or exited. It updates the user state
-   [u]. *)
+(* The user function [hook _e u] is invoked when an event is observed,
+   that is, when a vertex is entered or exited. It receives an event [_e]
+   and a user state [u] and returns an updated user state. *)
 
 (* If the user needs to observe only one kind of event, they can provide
    a hook that ignores the other kind. *)
 
 Variable hook : event _vertex → U → U.
+
+(* The user's loop invariant appears a precondition and a postcondition of
+   the function [hook]. As usual (iteration.v), it relates a producer
+   state [γ] and a user state [u]. *)
+
+Variable inv : ghost → U → Prop.
+
+(* The specification of the user function [hook] states that [hook]
+   can expect the invariant [inv γ u] to hold, can expect to observe
+   an event [e] such that [step γ e γ'] holds, and must update the
+   user state to a new state [u'] such that [inv γ' u'] holds. *)
+
+Variable wp_hook :
+  ∀ γ γ' u,
+  inv γ u →
+  ∀ _e e,
+  isEvent _e e →
+  step γ e γ' →
+  wp (hook _e u) (λ u', inv γ' u').
+
+(* From the user's point of view, the loop invariant [inv γ u] is a
+   concrete logical proposition that is preserved at each step. From the
+   producer's point of view (that is, our point of view, here), [inv γ u]
+   is an abstract assertion. It keeps track of the connection between the
+   ghost state [γ] and the user state [u], which exists at runtime.
+   Because we receive [inv γ u] and must establish [inv γ' u'], [inv] can
+   be understood both as a permission and as an obligation to invoke the
+   user function [hook] so as to emit a certain sequence of observable
+   events. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* The main recursive function: [visit].  *)
 
 (* [visit] expects a state [s], a vertex [_v], and a proof that [s] is
    safe (accessible). This proof is used to justify termination; the
@@ -324,144 +483,6 @@ Definition traverse _n u : S :=
   do m ←  init _n (λ _i, false) ;
   (* Visit the start vertices. *)
   foreach_start (m, u) visit'.
-
-(* -------------------------------------------------------------------------- *)
-
-(* We now formulate more hypotheses about the functions [foreach_successor]
-   and [body], which the user provides. Under these hypotheses, we prove
-   that [visit] is correct. *)
-
-(* The vertices must form a directed graph. *)
-
-Variable E : relation vertex.
-
-(* The vertices must be numbered from 0 to [n], excluded. *)
-
-Variable n : Z.
-
-(* No edge can leave the interval [0, n). *)
-
-Hypothesis edges_respect_bound :
-  ∀ v w, 0 ≤ v < n → E v w → 0 ≤ w < n.
-
-(* -------------------------------------------------------------------------- *)
-
-(* The set [start] is the set of vertices where the user would like
-   the traversal to begin. *)
-
-Local Notation vertices := (propset vertex).
-
-Variable start : vertices.
-
-(* The start vertices must lie in the interval [0, n). *)
-
-Hypothesis start_respects_bound :
-  ∀ v, v ∈ start → 0 ≤ v < n.
-
-(* -------------------------------------------------------------------------- *)
-
-(* [marked], [imarked], [omarked] denote sets of vertices. *)
-
-Implicit Types marked imarked omarked : vertices.
-
-Implicit Type σ : stack vertex.
-
-(* We wish to specify what sequences of events the user can expect to
-   observe. In short, we are a producer of events. We must expose the
-   labeled transition system that we obey: that is, we must define the
-   type of producer states as well as the relation that specifies one we
-   move from one producer state to the next, while emitting an event. *)
-
-(* A producer state is a pair [(marked, σ)]. *)
-
-(* We name this type [ghost] to emphasize that it is NOT the type of
-   runtime states, [S]. Producer states do not exist at runtime. *)
-
-Local Notation ghost :=
-  (dfs.state vertex).
-
-Implicit Type γ : ghost.
-
-(* A transition from state [γ] to state [γ'], emitting an event [e], is
-   permitted if the relation [step] allows it. *)
-
-Local Notation step :=
-  (dfs.step E start).
-
-(* The assertion [wf γ] means that the set of vertices [marked] and the
-   stack [σ] are a well-formed state of an ongoing DFS traversal of the
-   graph [E]. *)
-
-Local Notation wf := (dfs.wf E start ∅).
-
-Local Hint Constructors dfs.wf : wf.
-
-Local Hint Resolve wf_step : wf.
-
-(* The assertion [edge (top σ) v] means that there is an edge of the
-   stack's current vertex to [v]. (If the stack has no current vertex,
-   it means that [v] is a member of the set [start].) *)
-
-Local Notation edge := (dfs.edge E start).
-
-(* The assertion [dfs marked vs] that [vs] is a DFS forest for the
-   graph [E], with initial set of marked vertices ∅, and final set of
-   marked vertices [marked]. *)
-
-Local Notation dfs := (dfs.dfs E ∅).
-
-(* -------------------------------------------------------------------------- *)
-
-(* The function [foreach_successor], applied to [_v], must enumerate the
-   successors of the vertex [v]. They can be enumerated in an arbitrary
-   order, and it is permitted for a vertex [w] to be presented several
-   times. *)
-
-Local Notation successors v :=
-  (image E {[v]}).
-
-Variable wp_foreach_successor:
-  ∀ {A} (body : A → _vertex → A),
-  ∀Int _v v,
-  0 ≤ v < n →
-  ITER_SET ∅ (successors v)
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_successor a _v body) Q).
-
-(* -------------------------------------------------------------------------- *)
-
-(* The function [hook], applied to an event and to a user state,
-   returns a new user state. *)
-
-(* The user's loop invariant is a parameter. As usual (iteration.v),
-   it relates a producer state [γ] and a user state [u]. *)
-
-Variable inv : ghost → U → Prop.
-
-(* [isEvent _e e] relates a runtime event [_e] and an event [e].
-   They are the same thing, up to the relation between a machine
-   integer [_v] and an ideal integer [v]. *)
-
-Inductive isEvent : event _vertex → event vertex → Prop :=
-| IsEventEnter:
-    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Enter _v) (Enter v)
-| IsEventExit:
-    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Exit _v) (Exit v).
-
-Local Hint Constructors isEvent : marble.
-
-(* The specification of the user function [hook] states that [hook]
-   can expect the invariant [inv γ u] to hold, can expect to observe
-   an event [e] such that [move γ e γ'] holds, and must update the
-   user state to a new state [u'] such that [inv γ' u'] holds. *)
-
-Variable wp_hook :
-  ∀ γ γ' u,
-  inv γ u →
-  ∀ _e e,
-  isEvent _e e →
-  step γ e γ' →
-  wp (hook _e u) (λ u', inv γ' u').
 
 (* -------------------------------------------------------------------------- *)
 
@@ -741,17 +762,6 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A hypothesis about [foreach_start]. *)
-
-(* [foreach_start] must enumerate the vertices in the set [start],
-   in an arbitrary order, possibly with repetitions. *)
-
-Variable wp_foreach_start:
-  ∀ {A} (body : A → _vertex → A),
-  ITER_SET ∅ start
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_start a body) Q).
-
 (* A specification of [traverse]. *)
 
 Lemma wp_traverse :
@@ -813,6 +823,6 @@ Proof.
     exists marked', σ', vs. pack; eauto with set_solver. }
 Qed.
 
-End Visit.
+End U.
 
-End S.
+End G.
