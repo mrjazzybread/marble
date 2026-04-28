@@ -365,6 +365,13 @@ Lemma reaches_singleton_singleton v w :
   reaches {[v]} {[w]} ↔ path v w.
 Proof. set_solver. Qed.
 
+Lemma prove_reaches_singleton_singleton v w :
+  E v w →
+  reaches {[v]} {[w]}.
+Proof.
+  rewrite reaches_singleton_singleton. eauto with path.
+Qed.
+
 (* Special cases of [reaches_contravariant]. *)
 
 Lemma prove_reaches_union_left_1 vs1 vs2 ws :

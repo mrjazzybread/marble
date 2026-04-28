@@ -697,6 +697,30 @@ Proof.
   set_solver.
 Qed.
 
+(* If there are initially no marked vertices, then, at the end of
+   a DFS traversal, the marked vertices are exactly the vertices
+   that are reachable from the start vertices. *)
+
+Lemma omarked_is_closure_start omarked vs start :
+  dfs ∅ omarked vs →
+  roots vs ⊆ start →
+  start ⊆ omarked →
+  omarked ≡ closure_ start.
+Proof.
+  intros Hdfs ??.
+  assert (closed_ omarked) by eauto using dfs_closed with set_solver.
+  eapply subset_antisymmetric.
+  (* Every marked vertex is reachable. *)
+  { assert (reaches E start (roots vs))
+      by eauto using prove_reaches_self.
+    generalize (reaches_roots_support Hdfs); intro.
+    generalize (dfs_omarked_choice Hdfs); intro.
+    eauto 2 using reaches_transitive, subset_transitive with set_solver. }
+  (* Every reachable vertex is marked. *)
+  { eapply prove_closure_subset; [ eauto |].
+    rewrite closed_path. assumption. }
+Qed.
+
 (* The concatenation of two DFS forests (with matching intermediate
    state) is a DFS forest. *)
 
@@ -1231,8 +1255,8 @@ Proof.
     (* Because [w] is a successor of [top σ], [w] is reachable, too. *)
     assert (reaches E start {[w]}).
     { destruct (top σ) eqn:Heq; unfold edge in *.
-      + assert (reaches E {[v]} {[w]}).
-        { rewrite reaches_singleton_singleton. eauto with path. }
+      + assert (reaches E {[v]} {[w]})
+          by eauto using prove_reaches_singleton_singleton.
         eauto using reaches_transitive, subset_transitive.
       + eauto using prove_reaches_self with set_solver. }
     (* [w] reaches its successors. *)
@@ -1261,7 +1285,8 @@ Proof.
   eapply prove_subset_union_left; [ exact Homarked |].
   assert (option_to_set (top σ) ⊆ omarked) by eauto using wf_top_marked.
   destruct (top σ); unfold edge in *; simpl in *.
-  + assert (reaches E {[v]} {[w]}) by eauto with reaches.
+  + assert (reaches E {[v]} {[w]})
+      by eauto using prove_reaches_singleton_singleton.
     eauto using reaches_transitive, subset_transitive.
   + eauto using prove_reaches_self with set_solver.
 Qed.
