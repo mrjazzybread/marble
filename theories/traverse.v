@@ -366,11 +366,13 @@ Variable inv : ghost → U → Prop.
 (* The specification of the user function [hook] states that [hook]
    can expect the invariant [inv γ u] to hold, can expect to observe
    an event [e] such that [step γ e γ'] holds, and must update the
-   user state to a new state [u'] such that [inv γ' u'] holds. *)
+   user state to a new state [u'] such that [inv γ' u'] holds.
+   The user can also expect [γ] to be well-formed. *)
 
 Variable wp_hook :
   ∀ γ γ' u,
   inv γ u →
+  wf γ →
   ∀ _e e,
   isEvent _e e →
   step γ e γ' →
