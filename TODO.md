@@ -42,11 +42,26 @@
 
 ## DFS
 
-* Replace ⊤ with a smaller universe where needed, so we can reason
-  about finite graphs.
+* `dfs.v`:
+  + Replace ⊤ with a smaller set where needed,
+    so we can reason about finite graphs.
 
-* Prove an executable DFS algorithm. Deduce that every finite graph can be
-  covered by a DFS forest.
+* `traverse.v`:
+  + Define and verify the toplevel function.
+  + Should its postcondition mention that a DFS forest has been
+    built, and relate this DFS forest with the events that have
+    been emitted earlier?
+  + Define a simplified function where only `Enter` events are
+    observed. (Check that the code is simplified.) Prove that it
+    enumerates the reachable vertices (in an unspecified order).
+  + Define an incremental/interruptible variant of DFS,
+    as a sequence (cascade) of events.
+    (No need for a user state there.)
+  + Define a function that detects the existence of a cycle.
+    This requires more physical state (another array to keep
+    track of grey vertices? or a three-color scheme?) and
+    possibly a new kind of event (rediscovering a vertex).
+    Use the interruptible DFS, so we can stop at the first cycle.
 
 * Extend the documentation with a section on `wpd`.
 
