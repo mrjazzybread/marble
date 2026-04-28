@@ -353,14 +353,16 @@ Definition ITER_MULTISET {S A}
 
 (* -------------------------------------------------------------------------- *)
 
-(* Iteration on a set, in an unspecified order, and with permitted
-   repetitions (an element can be produced several times). *)
+(* Iteration on a set, in an unspecified order. *)
 
 (* The producer state is the set of elements produced so far. *)
 
 (* The constraint [SemiSet A C] means that [C] is a type of sets of
    elements of type [A], which supports empty set, union, inclusion,
    and equivalence. *)
+
+(* [ITER_SET] allows repetitions: an element can be produced several
+   times. [ITER_SET_UNIQUE] forbids repetitions. *)
 
 Definition ITER_SET {S A} `{SemiSet A C}
   (init xs : C)
@@ -373,6 +375,24 @@ Definition ITER_SET {S A} `{SemiSet A C}
     ( λ history0 history1 s Q,
       ∀ x,
       init ⊆ history0 →
+      history0 ∪ {[x]} ≡ history1 →
+      history1 ⊆ xs →
+      body x s Q
+    )
+    loop.
+
+Definition ITER_SET_UNIQUE {S A} `{SemiSet A C}
+  (init xs : C)
+  (body : A → S → WP S)
+  (loop : S → WP S)
+:=
+  ITER
+    init
+    ( λ history, history ≡ xs )
+    ( λ history0 history1 s Q,
+      ∀ x,
+      init ⊆ history0 →
+      x ∉ history0 → (* no repetitions *)
       history0 ∪ {[x]} ≡ history1 →
       history1 ⊆ xs →
       body x s Q
