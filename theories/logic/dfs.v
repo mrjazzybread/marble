@@ -1182,6 +1182,90 @@ Proof.
   { exfalso. simpl in *. congruence. }
 Qed.
 
+(* Every vertex in the stack is marked. *)
+
+(* We do not currently have a function that collects all vertices in
+   the stack, so we just express the fact that the vertex [top σ] is
+   marked. *)
+
+Lemma wf_top_marked imarked γ :
+  wf imarked γ →
+  ∀ omarked σ ,
+  γ = (omarked, σ) →
+  option_to_set (top σ) ⊆ omarked.
+Proof.
+  intros Hwf. dependent induction Hwf;
+  match goal with h: dfs _ _ _ |- _ => rename h into Hdfs end;
+  intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  generalize (dfs_determines_omarked Hdfs);
+  intros; simpl; dfs_monotonic; set_solver.
+Qed.
+
+(* If one starts from an empty set of marked vertices, then at any
+   time, the marked vertices are reachable from the start vertices,
+   and so is the vertex [top σ]. (In fact, every vertex) *)
+
+Lemma wf_reaches γ :
+  wf ∅ γ →
+  ∀ omarked σ ,
+  γ = (omarked, σ) →
+  reaches E start omarked. (* [omarked ⊆ closure E start] *)
+Proof.
+  (* This proof feels abnormally difficult. Maybe we are missing some
+     lemmas, or maybe they exist but I did not find them. *)
+  intros Hwf. dependent induction Hwf;
+  match goal with h: dfs _ _ _ |- _ => rename h into Hdfs end;
+  intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  dfs_monotonic;
+  generalize (dfs_determines_omarked Hdfs);
+  generalize (reaches_roots_support Hdfs);
+  intros.
+  (* Case [WfBottom]. *)
+  { set_solver. }
+  (* Case [WfDeep]. *)
+  { specialize (IHHwf eq_refl mmarked σ eq_refl).
+    (* [top σ] is marked, therefore is reachable. *)
+    assert (option_to_set (top σ) ⊆ mmarked) by eauto using wf_top_marked.
+    (* Because [w] is a successor of [top σ], [w] is reachable, too. *)
+    assert (reaches E start {[w]}).
+    { destruct (top σ) eqn:Heq; unfold edge in *.
+      + assert (reaches E {[v]} {[w]}).
+        { rewrite reaches_singleton_singleton. eauto with path. }
+        eauto using reaches_transitive, subset_transitive.
+      + eauto using prove_reaches_self with set_solver. }
+    (* [w] reaches its successors. *)
+    assert (image E {[w]} ⊆ closure E {[w]}).
+    { eauto using prove_image_subset_closure. }
+    (* Therefore [w] reaches [roots ws]. *)
+    assert (reaches E {[w]} (roots ws)).
+    { set_solver. }
+    (* [start] reaches [w] reaches [roots ws] reaches [support ws]. *)
+    assert (reaches E start (support ws))
+      by eauto using reaches_transitive.
+    (* The result follows. *)
+    set_solver. }
+Qed.
+
+(* A corollary. *)
+
+Lemma wf_reaches' omarked σ w :
+  wf ∅ (omarked, σ) →
+  edge (top σ) w →
+  reaches E start (omarked ∪ {[w]}).
+Proof.
+  (* Also abnormally difficult. *)
+  intros Hwf Hedge.
+  generalize (wf_reaches Hwf eq_refl); intros Homarked.
+  eapply prove_subset_union_left; [ exact Homarked |].
+  assert (option_to_set (top σ) ⊆ omarked) by eauto using wf_top_marked.
+  destruct (top σ); unfold edge in *; simpl in *.
+  + assert (reaches E {[v]} {[w]}) by eauto with reaches.
+    eauto using reaches_transitive, subset_transitive.
+  + eauto using prove_reaches_self with set_solver.
+Qed.
+
 (* Between the moment where a vertex is entered and the moment where this
    vertex is exited, the stack does not change at all, except possibly in
    the top frame, where new trees can be stored. *)
