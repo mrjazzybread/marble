@@ -314,34 +314,58 @@ Hypothesis bound :
 
 (* -------------------------------------------------------------------------- *)
 
-(* [marked], [imarked], [omarked] denote sets of vertices. *)
+(* The set [start] is the set of vertices where the user would like
+   the traversal to begin. *)
 
 Local Notation vertices := (propset vertex).
-Implicit Types marked imarked omarked : vertices.
-
-(* The assertion [wf marked σ], defined in dfs.v, means that the set of
-   vertices [marked] and the stack [σ] are a well-formed state of an
-   ongoing DFS traversal of the graph [E]. *)
-
-(* We take the set of initially marked vertices to be empty.  *)
-
-(* The set [start], which is the set of vertices where the user would like
-   the traversal to begin, is a parameter. *)
 
 Variable start : vertices.
 
+(* -------------------------------------------------------------------------- *)
+
+(* [marked], [imarked], [omarked] denote sets of vertices. *)
+
+Implicit Types marked imarked omarked : vertices.
+
 Implicit Type σ : stack vertex.
 
-Local Hint Constructors wf : wf.
+(* We wish to specify what sequences of events the user can expect to
+   observe. In short, we are a producer of events. We must expose the
+   labeled transition system that we obey: that is, we must define the
+   type of producer states as well as the relation that specifies one we
+   move from one producer state to the next, while emitting an event. *)
 
-Local Notation wf := (wf E start ∅).
-Local Notation step := (step E).
+(* A producer state is a pair [(marked, σ)]. *)
+
+(* We name this type [ghost] to emphasize that it is NOT the type of
+   runtime states, [S]. Producer states do not exist at runtime. *)
+
+Local Notation ghost :=
+  (dfs.state vertex).
+
+Implicit Type γ : ghost.
+
+(* A transition from state [γ] to state [γ'], emitting an event [e], is
+   permitted if the relation [step] allows it. *)
+
+Local Notation step :=
+  (dfs.step E start).
+
+(* The assertion [wf γ] means that the set of vertices [marked] and the
+   stack [σ] are a well-formed state of an ongoing DFS traversal of the
+   graph [E]. *)
+
+Local Notation wf := (dfs.wf E start ∅).
+
+Local Hint Constructors dfs.wf : wf.
+
+Local Hint Resolve wf_step : wf.
 
 (* The assertion [edge (top σ) v] means that there is an edge of the
    stack's current vertex to [v]. (If the stack has no current vertex,
    it means that [v] is a member of the set [start].) *)
 
-Local Notation edge := (edge E start).
+Local Notation edge := (dfs.edge E start).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -365,32 +389,6 @@ Variable wp_foreach_successor:
 
 (* The function [hook], applied to an event and to a user state,
    returns a new user state. *)
-
-(* We want to specify what sequences of events the user can expect.
-   In short, we are a producer of events. We must expose the labeled
-   transition system that we obey: that is, we must define the type
-   of producer states as well as the relation that specifies one we
-   move from one producer state to the next, while emitting an event. *)
-
-(* A producer state is a pair [(marked, σ)]. *)
-
-(* We name this type [ghost] to emphasize that it is NOT the type of
-   runtime states, [S]. Producer states do not exist at runtime. *)
-
-Definition ghost :=
-  (vertices * stack vertex)%type.
-
-Implicit Type γ : ghost.
-
-(* A transition from state [γ] to state [γ'], emitting an event [e],
-   is permitted if the relation [step] allows it. *)
-
-(* Roughly, [move] and [step] are the same thing, up to packaging. *)
-
-Definition move γ e γ' :=
-  let (marked, σ) := γ in
-  let (marked', σ') := γ' in
-  step start marked σ e marked' σ'.
 
 (* The user's loop invariant is a parameter. As usual (iteration.v),
    it relates a producer state [γ] and a user state [u]. *)
@@ -419,36 +417,8 @@ Variable wp_hook :
   inv γ u →
   ∀ _e e,
   isEvent _e e →
-  move γ e γ' →
+  step γ e γ' →
   wp (hook _e u) (λ u', inv γ' u').
-
-(* A reformulation in terms of [step]. *)
-
-Local Lemma wp_hook' :
-  ∀ marked σ marked' σ' u,
-  inv (marked, σ) u →
-  ∀ _e e,
-  isEvent _e e →
-  step start marked σ e marked' σ' →
-  wp (hook _e u) (λ u', inv (marked', σ') u').
-Proof.
-  eauto using wp_hook.
-Qed.
-
-(* A reformulation in terms of [move] of the lemma [wf_step]. *)
-
-Lemma wf_move marked σ e marked' σ' :
-  wf marked σ →
-  move (marked, σ) e (marked', σ') →
-  wf marked' σ'.
-Proof.
-  unfold move. eauto using wf_step.
-Qed.
-
-Local Hint Resolve wf_move : wf.
-
-(* TODO the re-packaging using pairs [marked, σ]
-        could go into dfs.v *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -499,28 +469,29 @@ Proof. set_solver. Qed.
 
 (* The postcondition of [visit]. *)
 
-(* [visit_post marked σ examined s'] means that, if one starts from the
-   producer state [(marked, σ)] then [s'] is a correct final runtime state
-   where every vertex in the set [examined] is marked. *)
+(* [visit_post γ examined s'] means that, if one starts from the producer
+   state [γ] then [s'] is a correct final runtime state where every vertex
+   in the set [examined] is marked. *)
 
-Definition visit_post marked σ examined s' :=
+Definition visit_post γ examined s' :=
+  let (marked, σ) := γ in
   let (m', u') := s' in
   ∃ marked' σ',
   isMarks m' marked' ∧
   marked ⊆ marked' ∧
   inv (marked', σ') u' ∧
   similar σ σ' ∧
-  wf marked' σ' ∧
+  wf (marked', σ') ∧
   examined ⊆ marked'.
 
 Local Ltac intro_visit_post :=
   unfold visit_post; do 2 eexists; pack;
     [ eauto | set_solver | eauto  |
-      eauto using similar_push with similar wf |
+      eauto using similar_store with similar wf |
       eauto with wf | set_solver ].
 
 Local Ltac elim_visit_post marked' σ' :=
-  match goal with h: visit_post _ _ _ _ |- _ =>
+  match goal with h: visit_post _ _ _ |- _ =>
     unfold visit_post in h;
     destruct h as (marked' & σ' & h);
     unpack in h
@@ -540,11 +511,11 @@ Lemma wpd_visit (k : nat) :
   mweight m = k →
   isMarks m marked →
   inv (marked, σ) u →
-  wf marked σ →
+  wf (marked, σ) →
   isInt _v v →
   0 ≤ v < n →
   edge (top σ) v →
-  wpd (visit (m, u) _v ACC) (λ s', visit_post marked σ {[v]} s').
+  wpd (visit (m, u) _v ACC) (λ s', visit_post (marked, σ) {[v]} s').
 Proof.
   by well-founded induction on k along lt.
   intros. subst k. destruct ACC. simpl visit.
@@ -567,10 +538,10 @@ Proof.
   set (σ' := Frame (Some v) Empty :: σ).
   intro.
   (* We invoke the user function [hook]. *)
-  assert (move (marked, σ) (Enter v) (marked', σ')).
+  assert (step (marked, σ) (Enter v) (marked', σ')).
   { econstructor; tc. }
   eapply wpd_bind.
-  { eapply wp_hook'; tc. }
+  { eapply wp_hook; tc. }
   cbv beta; intros u' ?.
   (* The state at this point is described by [marked'], [σ'], [u']. *)
   eapply wpd_wpd_bind_unary.
@@ -579,7 +550,7 @@ Proof.
   rewrite wpd_wp.
   wp_op wp_foreach_successor with invariant: (
     λ examined (s'' : { s'' | slt s'' (m, u) }),
-      visit_post marked' σ' examined (proj1_sig s'')
+      visit_post (marked', σ') examined (proj1_sig s'')
   ).
   (* Initialization. *)
   { simpl. intro_visit_post. }
@@ -593,7 +564,8 @@ Proof.
        set [examined0], a subset of [marked'']. The vertex [w], also
        a successor of [v], is about to be examined. *)
     (* Change the goal back into [wpd] format. *)
-    eapply wp_wpd with (Q1 := λ s'', visit_post marked' σ' examined1 s'');
+    eapply wp_wpd
+      with (Q1 := λ s'', visit_post (marked', σ') examined1 s'');
       [| solve [ eauto] ].
     eapply wpd_bury.
     (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
@@ -609,7 +581,8 @@ Proof.
   elim_visit_post marked'' σ''.
   (* Decay. *)
   eapply wpd_wpd_bind_unary.
-  eapply wpd_decay. eapply wpd_ret. simpl. intro.
+  eapply wpd_decay. eapply wpd_ret.
+  simpl proj1_sig. intro.
   (* The structure of the stack has been preserved. *)
   unfold σ' in Hpost2.
   assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
@@ -617,15 +590,14 @@ Proof.
   set (marked''' := marked'').
   set (σ''' := store v vs σ).
   (* We invoke the user function [hook] again. *)
-  assert (move (marked'', σ'') (Exit v) (marked''', σ''')).
-  { unfold move. unfold marked''', σ'''.
-    econstructor; eauto with set_solver. }
+  assert (step (marked'', σ'') (Exit v) (marked''', σ''')).
+  { econstructor; eauto with set_solver. }
   eapply wpd_wpd_bind_unary.
   eapply wpd_transform.
-  eapply wpd_ret. simpl.
+  eapply wpd_ret. simpl proj1_sig. cbv iota.
   change (m'', hook (Exit _v) u'')
     with (do u''' ← hook (Exit _v) u'' ; (m'', u''')).
-  wp_op wp_hook' introducing: u'''.
+  wp_op wp_hook introducing: u'''.
   (* Return. *)
   wp_ret. intro. eapply wpd_ret.
   intro_visit_post.
@@ -725,6 +697,9 @@ Qed.
 (* Variable u0 : U. *)
 (* Variable Hinit : *)
 (*   inv (∅, (Frame None Empty) :: []) u0. *)
+
+(* TODO in the end, the spec of the toplevel DFS function should be an
+   instance of [ITER]. *)
 
 Definition visit_top _n u _v : S :=
   let m := init _n (λ _i, false) in

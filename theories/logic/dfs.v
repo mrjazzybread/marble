@@ -1045,13 +1045,17 @@ Definition store w ws σ : stack :=
    state, and the corresponding observable events, as the depth-first
    search traversal progresses. *)
 
-(* A state is a pair of a set of vertices [marked] and a stack [σ]. *)
+(* A state [γ] is a pair of a set of vertices [marked] and a stack [σ]. *)
 
-(* [step marked σ event marked' σ'] means that the system can evolve from
-   [marked] and [σ] to [marked'] and [σ'] while emitting the observable
-   event [event]. *)
+Definition state : Type :=
+  (set V * stack).
 
-Inductive step : set V → stack → event → set V → stack → Prop :=
+Implicit Type γ : state.
+
+(* [step γ e γ'] means that the system can evolve from [γ] to [γ']] while
+   emitting the observable event [e]. *)
+
+Inductive step : state → event → state → Prop :=
 
 | StepEnter:
     ∀ marked σ marked' σ' w,
@@ -1065,9 +1069,9 @@ Inductive step : set V → stack → event → set V → stack → Prop :=
     σ' = Frame (Some w) Empty :: σ →
     (* This transition corresponds to the event [Enter w]. *)
     step
-      marked σ
+      (marked, σ)
       (Enter w)
-      marked' σ'
+      (marked', σ')
 
 | StepExit:
     ∀ marked σ w ws σ0 marked' σ',
@@ -1082,19 +1086,19 @@ Inductive step : set V → stack → event → set V → stack → Prop :=
     marked' ≡ marked →
     (* This transition corresponds to the event [Exit w]. *)
     step
-      marked σ
+      (marked, σ)
       (Exit w)
-      marked' σ'.
+      (marked', σ').
 
 (* Not every stack is well-formed. A stack is well-formed only if it
    corresponds to the beginning of a well-formed DFS forest. *)
 
-(* [wf imarked omarked σ] means that the stack [σ] is well-formed:
-   starting with the set of marked vertices [imarked], it is possible to
-   reach a state where the set of marked vertices is [omarked] and the
-   stack is [σ]. *)
+(* [wf imarked (omarked, σ)] means that the state [(omarked, σ)] is
+   well-formed: starting with the set of marked vertices [imarked],
+   one may reach a state where the set of marked vertices is [omarked]
+   and the stack is [σ]. *)
 
-Inductive wf : set V → set V → stack → Prop :=
+Inductive wf : set V → state → Prop :=
 
 | WfBottom:
     ∀ imarked omarked vs ,
@@ -1104,12 +1108,12 @@ Inductive wf : set V → set V → stack → Prop :=
     roots vs ⊆ start →
     (* then a stack that consists of just one frame, containing the entry
        vertex [None] and the forest [vs], is well-formed. *)
-    wf imarked omarked (Frame None vs :: [])
+    wf imarked (omarked, Frame None vs :: [])
 
 | WfDeep:
     ∀ imarked mmarked σ omarked w ws ,
     (* If the stack [σ] is well-formed, *)
-    wf imarked mmarked σ →
+    wf imarked (mmarked, σ) →
     (* If [w] is an unmarked child of the top stack vertex, *)
     edge (top σ) w →
     w ∉ mmarked →
@@ -1119,7 +1123,7 @@ Inductive wf : set V → set V → stack → Prop :=
     outof E {[w]} (roots ws) →
     (* Then the stack [σ], extended with one frame that contains [w]
        and [ws], is well-formed. *)
-    wf imarked omarked (Frame (Some w) ws :: σ).
+    wf imarked (omarked, Frame (Some w) ws :: σ).
 
 Hint Constructors wf : wf.
 
@@ -1131,20 +1135,11 @@ Local Hint Extern 1 (roots (concat _ _) ⊆ _) =>
   rewrite roots_concat
 : set_solver.
 
-(* A well-formed stack is nonempty. *)
-
-Lemma wf_nonempty imarked omarked σ :
-  wf imarked omarked σ →
-  0 < length σ.
-Proof.
-  induction 1; length; lia.
-Qed.
-
 (* A stack that contains just one empty frame is well-formed. *)
 
 Lemma wf_init :
   ∀ imarked,
-  wf imarked imarked (Frame None Empty :: []).
+  wf imarked (imarked, Frame None Empty :: []).
 Proof.
   intros. eapply WfBottom; eauto with dfs set_solver.
 Qed.
@@ -1152,36 +1147,31 @@ Qed.
 (* The transition system preserves well-formedness. *)
 
 Lemma wf_step :
-  ∀ marked σ event marked' σ',
-  step marked σ event marked' σ' →
+  ∀ γ e γ',
+  step γ e γ' →
   ∀ imarked,
-  wf imarked marked σ →
-  wf imarked marked' σ'.
+  wf imarked γ →
+  wf imarked γ'.
 Proof.
-  induction 1; intros imarked Hwf; dependent destruction Hwf; subst σ'.
+  induction 1; intros imarked Hwf; dependent destruction Hwf.
   (* Case: [StepEnter/WfBottom]. *)
   { eauto with wf dfs set_solver. }
   (* Case: [StepEnter/WfDeep]. *)
   { eauto with wf dfs set_solver. }
-  (* Case: [StepExit/WfBottom]. *)
-  { exfalso. congruence. }
   (* Case: [StepExit/WfDeep]. *)
-  { match goal with h: _ :: _ = _ :: _ |- _ => injection h; clear h end.
-    intros -> -> ->.
-    dependent destruction Hwf.
+  { dependent destruction Hwf.
     (* Subcase: [WfBottom]. [ov] is [None]. *)
     { eapply WfBottom; eauto with dfs set_solver. }
     (* Subcase: [WfBottom]. [ov] is [None]. *)
     { eapply WfDeep; eauto with dfs set_solver. }}
 Qed.
 
-(* At any time, if the stack has height 1 (its minimum height) then
-   the unique stack frame contains a DFS forest [vs] whose roots
-   form a subset of [start]. *)
+(* If the stack has just one frame then this frame holds a DFS forest [vs]
+   whose roots form a subset of [start]. *)
 
 Lemma wf_completion imarked omarked σ :
-  wf imarked omarked σ →
-  length σ = 1 →
+  wf imarked (omarked, σ) →
+  top σ = None →
   ∃ vs,
   σ = Frame None vs :: [] ∧
   dfs imarked omarked vs ∧
@@ -1189,7 +1179,7 @@ Lemma wf_completion imarked omarked σ :
 Proof.
   intros Hwf ?. dependent destruction Hwf.
   { eauto. }
-  { generalize (wf_nonempty Hwf); intro. length in *. lia. }
+  { exfalso. simpl in *. congruence. }
 Qed.
 
 (* Between the moment where a vertex is entered and the moment where this
@@ -1208,7 +1198,7 @@ Inductive similar : stack → stack → Prop :=
    which is not well-formed. *)
 
 Lemma similar_reflexive imarked omarked σ :
-  wf imarked omarked σ →
+  wf imarked (omarked, σ) →
   similar σ σ.
 Proof.
   inversion 1; subst;
@@ -1248,8 +1238,8 @@ Qed.
 
 (* Storing a tree [w/ws] into a stack [σ] is permitted by [similar]. *)
 
-Lemma similar_push imarked omarked w ws σ :
-  wf imarked omarked σ →
+Lemma similar_store imarked omarked w ws σ :
+  wf imarked (omarked, σ) →
   similar σ (store w ws σ).
 Proof.
   inversion 1; subst; simpl; econstructor; eauto.
@@ -1262,5 +1252,5 @@ Hint Constructors similar : similar.
 Hint Resolve
   similar_reflexive
   similar_transitive
-  similar_push
+  similar_store
 : similar.
