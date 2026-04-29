@@ -31,6 +31,13 @@ Set Universe Polymorphism.
 
 (* -------------------------------------------------------------------------- *)
 
+(* This constructs an inhabitant of a subset type. *)
+
+Local Notation exist x pf :=
+  (Specif.exist _ x pf).
+
+(* -------------------------------------------------------------------------- *)
+
 (* We assume that the vertices of the graph are numbered from 0 to [n-1].
    This assumption allows us to mark vertices by maintaining an array of
    Boolean marks. This is simple and efficient. *)
@@ -192,6 +199,51 @@ Definition mweight m : nat :=
 
 (* -------------------------------------------------------------------------- *)
 
+(* [isMarks m marked] means that the Boolean array [m] represents the set
+   of vertices [marked]. *)
+
+Open Scope Z_scope.
+
+Definition isMarks m marked :=
+  ∃ bs,
+  isArray m bs ∧
+  len bs = n ∧
+  ∀ v, 0 ≤ v < n → isBool1 (bs !!! v) (v ∈ marked).
+
+Local Ltac introMarks :=
+  eexists; split; [| split]; [ isArray | list; tc | ].
+
+Local Ltac destructMarks :=
+  match goal with h: isMarks _ _ |- _ =>
+    generalize h; intro; (* keep a copy *)
+    let bs := fresh "bs" in
+    destruct h as (bs & ? & ? & ?)
+  end.
+
+Local Instance isBool_get_mark m marked :
+  ∀Int _v v,
+  0 ≤ v < n →
+  isMarks m marked →
+  isBool1 (get m _v) (v ∈ marked).
+Proof.
+  intros. destructMarks.
+  assert (fact: wp (get m _v) (eq (bs !!! v))).
+  { wp_get b. eauto. }
+  rewrite wp_iff in fact.
+  rewrite <- fact. tc.
+Qed.
+
+Local Lemma mark_self marked v : v ∈ {[v]} ∪ marked.
+Proof. set_solver. Qed.
+Local Hint Resolve mark_self : marble.
+
+Local Lemma mark_unaffected marked v v' :
+  v ≠ v' →
+  v' ∈ {[v]} ∪ marked ↔ v' ∈ marked.
+Proof. set_solver. Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* The state of the depth-first search algorithm is a pair [(m, u)] where
    [m] is the marks array and [u] is a user state of arbitrary type [U]. *)
 
@@ -207,7 +259,7 @@ Implicit Type u : U.
 
 (* A state [s] is a pair [(m, u)]. *)
 
-Definition S : Type := marks * U.
+Local Notation S := (marks * U)%type.
 Implicit Type s : S.
 
 (* -------------------------------------------------------------------------- *)
@@ -244,17 +296,6 @@ Definition beyond s :=
 
 Definition below s :=
   { s' | s' < s }.
-
-(* [pack_beyond s] wraps the state [s] so that it has type [beyond s]. *)
-
-Definition pack_beyond s : beyond s :=
-  Specif.exist _ s (Nat.le_refl (weight s)).
-
-(* [pack_below s ow] packages the state [s'] and the witness [ow : s' < s]
-   so that they have type [beyond s]. *)
-
-Definition pack_below {s} s' (ow : s' < s) : below s :=
-  Specif.exist _ s' ow.
 
 (* [bury], an identity function on states, proves that if a state [s0]
    is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
@@ -424,7 +465,7 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
   (* Test whether this vertex is marked. *)
   IFC get m _v THEN λ _,
     (* It is marked: do nothing. *)
-    pack_beyond s
+    exist s (Nat.le_refl (weight s))
   ELSE λ Hunmarked,
     (* Mark this vertex. *)
     let m' := set m _v true in
@@ -434,30 +475,27 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
     let s' := (m', u') in
     (* Construct a witness of the assertion [s' < s]. *)
     let ow : s' < s := decrease s m _v u u' Hsmu ACC Hv Hunmarked in
-    (* Package them together. *)
-    let s' := pack_below s' ow in
-    (* Package [visit] as a function of type [below s → vertex → below s],
-       which can be passed to [foreach_successor]. Because we have [ACC]
-       at hand, any call to [visit] on a state that is smaller than [s] is
-       permitted. Therefore we are able to package [visit] as a function
-       that does not require an accessibility witness. *)
-    (* This construction has just [visit] and [ACC] as free variables. *)
-    let visit (sow' : below s) (_w : _vertex) : below s :=
-      let (s', ow) := sow' in
-      bury ow (visit s' _w (Acc_inv ACC ow))
-    in
     (* Visit the successors of [v]. *)
-    do sow ← foreach_successor s' _v visit ;
+    (* The loop body is a function of type [below s → vertex → below s],
+       which can be passed to [foreach_successor]. Because [ACC] is at
+       hand, any call to [visit] on a state that is smaller than [s] is
+       permitted. Thus the loop body does not need an accessibility
+       witness as an argument. Its free variables are [visit] and [ACC]. *)
+    do sow'' ← foreach_successor (exist s' ow) _v (
+      λ (sow' : below s) _w ,
+        let (s', ow) := sow' in
+        bury ow (visit s' _w (Acc_inv ACC ow))
+    ) ;
     (* Forget that we went below [s]. *)
-    do sow ← decay sow ;
+    do sow'' ← decay sow'' ;
     (* Invoke [hook] to signal that we are exiting [_v]. *)
-    do sow ← transform (hook (Exit _v)) sow ;
-    sow
+    do sow'' ← transform (hook (Exit _v)) sow'' ;
+    sow''
   ELSE λ _,
      (* This vertex is out-of-bounds. Ignore it. This lets us prove
         termination without imposing any conditions on the vertices
         that we receive. *)
-    pack_beyond s
+    exist s (Nat.le_refl (weight s))
   end eq_refl.
 
 (* In an earlier version of this code, we did not test whether [v] is
@@ -494,51 +532,6 @@ Definition traverse _n u : S :=
   do m ←  init _n (λ _i, false) ;
   (* Visit the start vertices. *)
   foreach_start (m, u) visit'.
-
-(* -------------------------------------------------------------------------- *)
-
-(* [isMarks m marked] means that the Boolean array [m] represents the set
-   of vertices [marked]. *)
-
-Open Scope Z_scope.
-
-Definition isMarks m marked :=
-  ∃ bs,
-  isArray m bs ∧
-  len bs = n ∧
-  ∀ v, 0 ≤ v < n → isBool1 (bs !!! v) (v ∈ marked).
-
-Local Ltac introMarks :=
-  eexists; split; [| split]; [ isArray | list; tc | ].
-
-Local Ltac destructMarks :=
-  match goal with h: isMarks _ _ |- _ =>
-    generalize h; intro; (* keep a copy *)
-    let bs := fresh "bs" in
-    destruct h as (bs & ? & ? & ?)
-  end.
-
-Local Instance isBool_get_mark m marked :
-  ∀Int _v v,
-  0 ≤ v < n →
-  isMarks m marked →
-  isBool1 (get m _v) (v ∈ marked).
-Proof.
-  intros. destructMarks.
-  assert (fact: wp (get m _v) (eq (bs !!! v))).
-  { wp_get b. eauto. }
-  rewrite wp_iff in fact.
-  rewrite <- fact. tc.
-Qed.
-
-Local Lemma mark_self marked v : v ∈ {[v]} ∪ marked.
-Proof. set_solver. Qed.
-Local Hint Resolve mark_self : marble.
-
-Local Lemma mark_unaffected marked v v' :
-  v ≠ v' →
-  v' ∈ {[v]} ∪ marked ↔ v' ∈ marked.
-Proof. set_solver. Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -581,9 +574,9 @@ Local Opaque bury decay transform.
 (* Because the result type of [visit] is a subset type,
    instead of [wp], we use the judgement [wpd]. *)
 
-Lemma wpd_visit (k : nat) :
+Lemma wpd_visit (i : nat) :
   ∀ m u _v v ACC marked σ,
-  mweight m = k →
+  mweight m = i →
   isMarks m marked →
   inv (marked, σ) u →
   wf (marked, σ) →
@@ -592,8 +585,8 @@ Lemma wpd_visit (k : nat) :
   edge (top σ) v →
   wpd (visit (m, u) _v ACC) (λ s', visit_post (marked, σ) {[v]} s').
 Proof.
-  by well-founded induction on k along lt.
-  intros. subst k. destruct ACC. simpl visit.
+  by well-founded induction on i along lt.
+  intros. subst i. destruct ACC. simpl visit.
   destructMarks. arrays.
   (* Because we require [v < n], the first branch of this conditional
      construct must be taken. The second branch is dead. *)
@@ -623,7 +616,6 @@ Proof.
   (* We reach the loop on the successors of [v]. The goal must be changed
      from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
   rewrite wpd_wp.
-  Ltac wp_loop_precondition_hook ::= idtac.
   wp_op wp_foreach_successor with invariant: (
     λ examined (s'' : { s'' | slt s'' (m, u) }),
       visit_post (marked', σ') examined (proj1_sig s'')
