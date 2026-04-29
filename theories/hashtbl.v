@@ -200,7 +200,7 @@ Local Ltac destructIsHashtbl :=
 Local Ltac introIsHashtbl :=
   unfold isHashtbl;
   eexists; pack;
-  eauto; list.
+  eauto; list; try lia.
 
 (* Some definitions to facilitate working with functions as infinite
    maps. *)
@@ -211,6 +211,8 @@ Definition _set m (k : K) (v : V) :=
   (fun k' => if decide (k = k') then v :: m k' else m k').
 Definition rm m (k : K) : K -> list V :=
   (fun k' => if (decide (k = k')) then tl (m k') else m k').
+Definition rm_set m (k : K) (v : V) : K -> list V :=
+  _set (rm m k) k v.
 
 (* Specification for create function *)
 
@@ -224,7 +226,6 @@ Lemma wp_create :
 Proof.
   intros _n n H1 H2. unfold create. wp_make a.
   wp_ret. introIsHashtbl.
-  { list. lia. } (* Array is non-empty *)
   (* The following conditions are trivial since they
       are statements regarding the validity of the
       empty table's contents. *)
@@ -344,12 +345,8 @@ Proof.
   wp_set.
   wp_ret.
   introIsHashtbl.
-  - (* The length is still greater than 0. *)
-    lia.
-  -  (* The key was inserted in the correct bucket. *)
-    subst. apply no_garbage_insert; auto.
-  -  (* Each bucket remains valid. *)
-    apply valid_buckets_insert; by subst.
+  - subst. apply no_garbage_insert; auto.
+  - apply valid_buckets_insert; by subst.
 Qed.
 
 Definition remove (h : hashtbl) (k : K) :=
@@ -423,4 +420,44 @@ Proof.
   introIsHashtbl.
   - subst n. by apply no_garbage_remove with k b.
   - apply valid_buckets_remove with b; by subst.
+Qed.
+
+Definition replace (h : hashtbl) (k : K) (v : V) :=
+  do n ← length h;
+  do i ← index k n;
+  do b ← get h i;
+  do b' ← remove_assoc k b;
+  do b' ← (k, v) :: b';
+  set h i b'.
+
+Lemma decompose_replace :
+  forall (i : Z) x b (tbl : list bucket),
+    <[i:=x :: b]> tbl =
+      <[i:=x :: b]>(<[i:=b]>tbl).
+Proof.
+  intros. subst. by list.
+Qed.
+
+Lemma wp_replace :
+  forall h m k v,
+    isHashtbl h m ->
+    wp (replace h k v) (λ h, isHashtbl h (rm_set m k v)).
+Proof.
+  intros h m k v H.
+  unfold replace.
+  destructIsHashtbl.
+  arrays.
+  wp_length _n.
+  index_intro k _n n.
+  wp_bind_eq.
+  wp_get b.
+  wp_bind_eq.
+  wp_bind_eq.
+  wp_set.
+  set (b' := remove_assoc k b).
+  introIsHashtbl; subst n; simpl; rewrite decompose_replace.
+  - apply no_garbage_insert. 1, 3, 4: by list.
+    apply no_garbage_remove with k b; subst; by list.
+  - apply valid_buckets_insert. 1, 4: by list. 1, 2: lia.
+    apply valid_buckets_remove with b; auto.
 Qed.
