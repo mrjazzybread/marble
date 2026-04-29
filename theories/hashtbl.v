@@ -89,6 +89,14 @@ Proof.
   + by do 2 rewrite filter_key_cons_False by auto.
 Qed.
 
+Hint Rewrite
+  filter_key_cons_False
+  filter_key_cons_True
+  filter_key_cons
+  filter_key_nil using auto : cfilter.
+
+Ltac filter := autorewrite with cfilter.
+
 Fixpoint remove_assoc (k : K) (b : bucket) :=
   match b with
   |[] => []
@@ -140,13 +148,14 @@ Proof.
 Qed.
 
 Hint Rewrite
-  filter_key_cons_False
-  filter_key_cons_True
-  filter_key_cons
-  filter_key_nil using auto : cfilter.
+  remove_assoc_bucket_ne
+  remove_assoc_bucket_eq
+  remove_assoc_in : cassoc.
 
-Ltac filter := autorewrite with cfilter.
+Ltac assoc := autorewrite with cassoc.
 
+Tactic Notation "assoc" "in" "*" :=
+  autorewrite with cassoc in *.
 
 (* Relates a list of buckets to a total function from keys to lists of
    values, where [n] is the length of the [tbl].  For every key [k],
@@ -191,7 +200,7 @@ Local Ltac destructIsHashtbl :=
 Local Ltac introIsHashtbl :=
   unfold isHashtbl;
   eexists; pack;
-  unfold valid_buckets; eauto.
+  eauto; list.
 
 (* Some definitions to facilitate working with functions as infinite
    maps. *)
@@ -269,10 +278,7 @@ Lemma valid_insert_bucket_eq :
     v :: m k = map snd b'.
 Proof.
   intros k v l m n b b' H1 H2 H3 H4.
-  rewrite filter_key_cons_True in H4.
-  unfold valid_buckets in H2.
-  subst b'.
-  rewrite map_cons. f_equal.
+  subst b'. filter. simpl. f_equal.
   apply H2 with (indexZ k (len l)); by subst.
 Qed.
 
@@ -287,13 +293,37 @@ Lemma valid_insert_bucket_ne :
     k ≠ k' ->
     m k' = map snd b'.
 Proof.
-  intros k k' i v l n m b b' H1 H2 H3 H4 H5 H6 H7.
-  rewrite filter_key_cons_False in H6 by auto.
-  apply H2 with (indexZ k (len l)); by subst.
+  intros k k' i ????? b' H1 H2 ?????.
+  subst b'. rewrite filter_key_cons_False by auto.
+  apply H2 with i; by subst.
 Qed.
 
 Ltac case_bucket k n i :=
   destruct (decide (indexZ k n = i)).
+
+Lemma valid_buckets_insert :
+  forall i n tbl k v b m,
+    n = len tbl ->
+    0 < n ->
+    i = indexZ k n ->
+    b = tbl !!! i ->
+    valid_buckets n tbl m ->
+    valid_buckets n (<[i:=(k, v) :: b]> tbl)
+      (_set m k v).
+Proof.
+  intros i n tbl k v b m ???? H5.
+  intros i' b' k' ? ?.
+  (* The updated map as described in the postcondition
+     accurately models the updated hash table. *)
+  unfold _set. destruct decide.
+  + (* When we apply the updated map with the key we pass as
+         argument. *)
+    apply valid_insert_bucket_eq with tbl n (tbl !!! i);
+      subst; by list.
+  + (* When we apply the updated map with a different key [k']. *)
+    case_bucket k n i'; [apply H5 with i| apply H5 with i'];
+      subst; list; simpl; by filter.
+Qed.
 
 Lemma wp_add :
   forall h m k v,
@@ -315,28 +345,11 @@ Proof.
   wp_ret.
   introIsHashtbl.
   - (* The length is still greater than 0. *)
-    length. lia.
+    lia.
   -  (* The key was inserted in the correct bucket. *)
-    list. subst. apply no_garbage_insert; auto.
-  - intros i' b' k' ? ?.
-    unfold _set.
-    length in *.
-    (* The updated map as described in the postcondition
-       accurately models the updated hash table. *)
-    destruct decide.
-    + (* When we apply the updated map with the key we pass as
-         argument. *)
-      apply valid_insert_bucket_eq with l (len l) (l !!! i);
-        subst; by list.
-    + (* When we apply the updated map with a different key [k']. *)
-      case_bucket k n i'.
-      { (* [k'] belongs to the same bucket (i.e. has the same index)
-           as [k]. *)
-         subst. list. simpl. filter. by apply H3 with i. }
-      { (* [k] belongs to another bucket. *)
-        (* list in *. *)
-        subst. list. filter.
-        by apply H3 with (indexZ k' (len l)). }
+    subst. apply no_garbage_insert; auto.
+  -  (* Each bucket remains valid. *)
+    apply valid_buckets_insert; by subst.
 Qed.
 
 Definition remove (h : hashtbl) (k : K) :=
@@ -347,6 +360,48 @@ Definition remove (h : hashtbl) (k : K) :=
   set h i b'.
 
 Hint Rewrite <- tl_map : clist.
+
+Lemma no_garbage_remove :
+  forall n tbl k i b b',
+    i = indexZ k n ->
+    n = len tbl ->
+    b' = remove_assoc k b ->
+    no_garbage n tbl ->
+    b = tbl !!! i ->
+    no_garbage n (<[i:=b']> tbl).
+Proof.
+  intros n tbl k i b b' ??? NG ? i' k' v??.
+  list in *.
+  apply NG with v. auto.
+  destruct (decide (i = i')); subst; list in *. 2: auto.
+  by apply remove_assoc_in with k.
+Qed.
+
+Lemma valid_buckets_remove :
+  forall n i k b b' tbl m,
+    0 < n ->
+    n = len tbl ->
+    i = indexZ k n ->
+    b = tbl !!! i ->
+    b' = remove_assoc k b ->
+    valid_buckets n tbl m ->
+    valid_buckets n (<[i:=b']> tbl) (rm m k)
+  .
+Proof.
+  intros n i k b b' tbl m H1 H2 H3 H4 H5 H6 i' b'' k' H7 H8.
+  unfold rm.
+  case_decide.
+  { subst b'' b' k i'. list.
+    rewrite remove_assoc_bucket_eq with (b:=b) by auto.
+    list. f_equal. subst b.
+    apply H6 with (i := i); by subst. }
+  { case_bucket k' n i.
+    + subst b'' i'. list.
+      rewrite remove_assoc_bucket_ne with (k:=k) (b:=b) by auto.
+      apply H6 with i; by subst.
+    + subst b''. list.
+      apply H6 with i'; by subst. }
+Qed.
 
 Lemma wp_remove :
   forall h m k,
@@ -359,29 +414,13 @@ Proof.
   arrays.
   unfold remove.
   wp_length _n.
+  index_intro k _n n.
   wp_bind_eq.
   wp_get b.
+  set (b' := remove_assoc k b).
   wp_bind_eq.
   wp_set.
   introIsHashtbl.
-  + list. lia.
-  + (* Removing a key value pair from a bucket keeps it valid. *)
-    list. intros ? k' ???.
-    list in *. subst n. apply H2 with v.
-    auto. case_bucket k (len l) i; subst; list in *. 2: auto.
-    by apply remove_assoc_in with k.
-  + intros i b' k' iEq bEq.
-    list in *.
-    unfold rm.
-    case_decide.
-    { rewrite <- iEq in bEq. subst k b'. list.
-      rewrite remove_assoc_bucket_eq with (b:=b) by auto.
-      list. f_equal. subst b.
-      apply H3 with i; by subst. }
-    { case_bucket k (len l) i.
-      + rewrite e in bEq. list in bEq. subst b'.
-        rewrite remove_assoc_bucket_ne with (k:=k) (b:=b) by auto.
-        apply H3 with i; subst; by do 2 f_equal.
-      + subst. list.
-        by apply H3 with (indexZ k' (len l)). }
+  - subst n. by apply no_garbage_remove with k b.
+  - apply valid_buckets_remove with b; by subst.
 Qed.
