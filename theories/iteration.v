@@ -264,6 +264,7 @@ Definition ITERI_LIST {S A}
   (init xs : list A)
   (body : A → Z → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITER
     init
@@ -297,6 +298,7 @@ Definition ITER_LIST {S A}
   (init xs : list A)
   (body : A → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITERI_LIST
     init xs
@@ -327,6 +329,7 @@ Definition ITERI_MULTISET {S A}
   (init xs : list A)
   (body : A → Z → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITER
     init
@@ -345,6 +348,7 @@ Definition ITER_MULTISET {S A}
   (init xs : list A)
   (body : A → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITERI_MULTISET
     init xs
@@ -368,6 +372,7 @@ Definition ITER_SET {S A} `{SemiSet A C}
   (init xs : C)
   (body : A → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITER
     init
@@ -385,6 +390,7 @@ Definition ITER_SET_UNIQUE {S A} `{SemiSet A C}
   (init xs : C)
   (body : A → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITER
     init
@@ -496,6 +502,7 @@ Definition ITER_NAT {S}
   i k dir
   (body : nat → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITER
     (nat_init i k dir)
@@ -507,6 +514,7 @@ Definition XITER_NAT {S A}
   i k dir
   (body : nat → ∀ {W}, S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
+: Prop
 :=
   XITER
     (nat_init i k dir)
@@ -518,6 +526,7 @@ Definition UXITER_NAT {A}
   i k dir
   (body : nat → ∀ {W}, (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
+: Prop
 :=
   UXITER
     (nat_init i k dir)
@@ -584,6 +593,7 @@ Definition ITER_Z {S}
   i k dir
   (body : Z → S → WP S)
   (loop : S → WP S)
+: Prop
 :=
   ITER
     (z_init i k dir)
@@ -595,6 +605,7 @@ Definition XITER_Z {S A}
   i k dir
   (body : Z → ∀ {W}, S → (S → W) → (S → A → W) → WP W)
   (loop : S → WP (S * outcome A))
+: Prop
 :=
   XITER
     (z_init i k dir)
@@ -606,6 +617,7 @@ Definition UXITER_Z {A}
   i k dir
   (body : Z → ∀ {W}, (unit → W) → (A → W) → WP W)
   (loop : WP (outcome A))
+: Prop
 :=
   UXITER
     (z_init i k dir)
