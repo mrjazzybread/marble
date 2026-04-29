@@ -147,6 +147,15 @@ Proof.
     - apply filter_key_cons. by rewrite Ih.
 Qed.
 
+Fixpoint find_assoc (k : K) (b : bucket) : option V :=
+  match b with
+  |[] => None
+  |(k', v) :: t =>
+     if (decide (k = k'))
+     then Some v
+     else find_assoc k t
+  end.
+
 Hint Rewrite
   remove_assoc_bucket_ne
   remove_assoc_bucket_eq
@@ -458,4 +467,38 @@ Proof.
     apply no_garbage_remove with k b; subst; by list.
   - apply valid_buckets_insert. 1, 4: by list. 1, 2: lia.
     apply valid_buckets_remove with b; auto.
+Qed.
+
+Definition get (h : hashtbl) (k : K) :=
+  do n ← length h;
+  do i ← index k n;
+  do b ← get h i;
+  find_assoc k b.
+
+Lemma filter_key_assoc :
+  forall k l,
+    head (map snd (filter_key k l)) = find_assoc k l.
+Proof.
+  intros k l.
+  induction l as [|[k' v] t Ih]. auto.
+  simpl. case_decide; subst; by filter.
+Qed.
+
+Lemma get_wp :
+  forall h m k,
+    isHashtbl h m ->
+    wp (get h k) (λ v, head (m k) = v).
+Proof.
+  intros h m k H.
+  unfold get.
+  destructIsHashtbl.
+  wp_length _n.
+  set (_i := index k _n).
+  set (i := indexZ k n).
+  assert (isInt _i i) by tc.
+  wp_bind_eq.
+  wp_get b.
+  wp_ret.
+  rewrite H3 with (i:=i) (b:=filter_key k b); subst; auto.
+  apply filter_key_assoc.
 Qed.
