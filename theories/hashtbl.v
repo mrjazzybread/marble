@@ -207,10 +207,24 @@ Local Ltac destructIsHashtbl :=
     arrays
   end.
 
+(* Introduces the goals needed to prove [isHashtbl _]. [lia] is
+   executed so that the goal stating that a table is greater than [0]
+   is automatically dispatched.  *)
 Local Ltac introIsHashtbl :=
   unfold isHashtbl;
   eexists; pack;
   eauto; list; try lia.
+
+(* [index_intro k _n n] Introduces an index and its logical
+   representation computed from [k].  This tactic is not strictly
+   necessary although it makes following the proofs a little
+   easier. *)
+Local Ltac index_intro k _n n :=
+  let _i := fresh "i'" in
+  let i := fresh "i" in
+  set (_i:= index k _n);
+  set (i := indexZ k n);
+  assert (isInt _i i) by tc.
 
 (* Some definitions to facilitate working with functions as infinite
    maps. *)
@@ -224,8 +238,6 @@ Definition rm m (k : K) : K -> list V :=
 Definition rm_set m (k : K) (v : V) : K -> list V :=
   _set (rm m k) k v.
 
-(* Specification for create function *)
-
 Definition create (n : int) : hashtbl :=
   do a ← make n [] ; a.
 
@@ -236,9 +248,6 @@ Lemma wp_create :
 Proof.
   intros _n n H1 H2. unfold create. wp_make a.
   wp_ret. introIsHashtbl.
-  (* The following conditions are trivial since they
-      are statements regarding the validity of the
-      empty table's contents. *)
   { unfold no_garbage. intros.
     do 2 list in *. apply not_elem_of_nil in H3.
     contradiction. }
@@ -346,10 +355,9 @@ Proof.
   unfold add.
   destructIsHashtbl.
   wp_length _n.
+  index_intro k _n n.
   wp_bind_eq.
-  set (_i:= index k _n).
-  set (i := indexZ k n).
-  assert (isInt _i i) by tc.
+  index_intro k _n n.
   wp_get b.
   wp_set.
   wp_ret.
