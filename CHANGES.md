@@ -12,9 +12,19 @@
 * In `int`:
   + New instance `isInt_mod`.
 
+* In `iteration`:
+  + New definitions `ITER_SET` and `ITER_SET_UNIQUE`.
+  + Modified definition of `ITER`.
+    The definition now includes the requirement for the user invariant `inv`
+    to be compatible with a notion of equality on producer states.
+
 * In `wp`:
   + New lemmas `bind_eq_dep` and `bind_eq_dep_dep`.
   + New judgement `wpd` together with a set of reasoning rules.
+  + New tactic `prove_Proper`.
+  + The tactic `wp_loop_precondition_hook` now calls `prove_Proper`
+    so as to automatically prove that the loop invariant is compatible
+    with equality of producer states (if this is easy to prove).
 
 * In `arrays`:
   + New lemma `isArray_to_list`.
