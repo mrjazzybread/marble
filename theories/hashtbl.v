@@ -194,7 +194,8 @@ Local Ltac destructIsHashtbl :=
     let n := fresh "n" in
     destruct h as (c&?);
     destruct h as (n&?);
-    unpack
+    unpack;
+    arrays
   end.
 
 Local Ltac introIsHashtbl :=
@@ -335,7 +336,6 @@ Proof.
   intros h m k v H.
   unfold add.
   destructIsHashtbl.
-  arrays.
   wp_length _n.
   wp_bind_eq.
   set (_i:= index k _n).
@@ -408,7 +408,6 @@ Lemma wp_remove :
 Proof.
   intros h m k H.
   destructIsHashtbl.
-  arrays.
   unfold remove.
   wp_length _n.
   index_intro k _n n.
@@ -446,7 +445,6 @@ Proof.
   intros h m k v H.
   unfold replace.
   destructIsHashtbl.
-  arrays.
   wp_length _n.
   index_intro k _n n.
   wp_bind_eq.
