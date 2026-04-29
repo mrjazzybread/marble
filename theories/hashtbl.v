@@ -14,7 +14,16 @@ Parameter K : Type.
 Parameter V : Type.
 
 (* Hash function. *)
-Parameter hash : K -> int.
+Parameter _hash : K -> int.
+Parameter hash : K -> Z.
+
+Axiom hash_unsigned :
+  forall k, unsigned (hash k).
+
+Local Hint Resolve hash_unsigned : marble.
+
+Declare Instance IsInt_hash :
+  forall k, isInt (_hash k) (hash k).
 
 (* Decidable equality over keys. *)
 Global Declare Instance EqK : EqDecision K.
@@ -32,48 +41,19 @@ Definition hashtbl := array bucket.
 (* Function that calculates the index of a particular key using
 [hash].  In machine integers and ideal integers. *)
 
-Definition index k len : int :=
-  (hash k) mod len.
+Notation index k len :=
+  ((_hash k) mod len).
 
-Definition indexZ k (len : Z) : Z :=
-   (to_Z (hash k)) mod len.
-
-(* This typeclass instance relates the two indexes and is necessary to
-   automatically dispatch side conditions when accessing the hash
-   table. *)
-
-Instance index_isInt :
-  forall k len, isInt (index k len) (indexZ k (to_Z len)).
-Proof.
-  intros. introIsInt. unfold index. unfold indexZ. lia.
-Qed.
-
-(* For any non-empty array whose model is [l], [indexZ] will always
-   generate an index in bounds. *)
-
-Lemma index_valid_len :
-  forall A k (l : list A),
-    len l > 0 ->
-    valid (indexZ k (len l)) l.
-Proof.
-  intros.
-  unfold indexZ. lia.
-Qed.
-
-Lemma index_valid :
-  forall A k _n (l : list A) `{isInt _n (len l)},
-    len l > 0 ->
-    valid (indexZ k φ (_n)) l.
-Proof.
-  intros k h _n l H4 H5.
-  unfold indexZ.
-  destructIsInt.
-  lia.
-Qed.
+Notation indexZ k len := (hash k mod len)%Z.
 
 (* Filters a bucket leaving only pairings whose key is [k]. *)
+Definition cmp_key (k : K) (x : K * V) :=
+  let (k', _) := x in k' = k.
+
 Definition filter_key (k : K) (l : bucket) : bucket :=
-  base.filter (fun (x : K * V) => let (k', _) := x in k' = k) l.
+  base.filter (cmp_key k)  l.
+
+(* Lemmas for working with [filter_key] *)
 
 Lemma filter_key_cons_True :
   forall k v b, filter_key k ((k, v) :: b) = (k, v) :: filter_key k b.
@@ -95,9 +75,78 @@ Lemma filter_key_nil :
   forall k, filter_key k [] = [].
 Proof.
   intros. unfold filter_key.
-  Search filter.
-  by rewrite filter_nil with (P:=(λ x : K * V, let (k', _) := x in k' = k)).
+  by rewrite filter_nil with (P:=cmp_key k).
 Qed.
+
+Lemma filter_key_cons :
+  forall k k' v b1 b2,
+    filter_key k b1 = filter_key k b2 ->
+    filter_key k ((k', v)::b1) = filter_key k ((k', v) :: b2).
+Proof.
+  intros.
+  destruct (decide (k = k')).
+  + subst. do 2 rewrite filter_key_cons_True. by f_equal.
+  + by do 2 rewrite filter_key_cons_False by auto.
+Qed.
+
+Fixpoint remove_assoc (k : K) (b : bucket) :=
+  match b with
+  |[] => []
+  |(x, v) :: t =>
+     if decide (x = k) then t else
+       (x, v) :: remove_assoc k t
+  end.
+
+Lemma remove_assoc_in :
+  forall b k k' v,
+    (k', v) ∈ remove_assoc k b ->
+    (k', v) ∈ b.
+Proof.
+  intros b k k' v H1.
+  induction b as [|[k'' v'] t Ih]; simpl in H1.
+  + apply not_elem_of_nil in H1. contradiction.
+  + destruct decide in H1; apply elem_of_cons. auto.
+   apply elem_of_cons in H1 as [H1 | H1].
+   auto. right. by apply Ih.
+Qed.
+
+Lemma remove_assoc_bucket_eq :
+  forall k b b',
+    b' = remove_assoc k b ->
+    filter_key k b' = tl (filter_key k b).
+Proof.
+  intros k b.
+  induction b as [|[k' v] t Ih]; simpl; intros; subst b'.
+  - auto.
+  - case_decide.
+    + subst. rewrite filter_key_cons_True. by simpl.
+    + rewrite filter_key_cons_False by eauto.
+      rewrite Ih by eauto.
+      by rewrite filter_key_cons_False.
+Qed.
+
+Lemma remove_assoc_bucket_ne :
+  forall k k' b b',
+    b' = remove_assoc k b ->
+    k' ≠ k ->
+    filter_key k' b' = filter_key k' b.
+Proof.
+  intros k k' b.
+  induction b as [|[k'' v] t Ih]; simpl; intros b' H1 H2; subst b'.
+  + auto.
+  + case_decide.
+    - subst. by rewrite filter_key_cons_False.
+    - apply filter_key_cons. by rewrite Ih.
+Qed.
+
+Hint Rewrite
+  filter_key_cons_False
+  filter_key_cons_True
+  filter_key_cons
+  filter_key_nil using auto : cfilter.
+
+Ltac filter := autorewrite with cfilter.
+
 
 (* Relates a list of buckets to a total function from keys to lists of
    values, where [n] is the length of the [tbl].  For every key [k],
@@ -127,11 +176,6 @@ Definition no_garbage (n : Z) (tbl : list bucket) : Prop :=
 Definition isHashtbl (h : hashtbl) (m : K -> (list V)) :=
   ∃ l n, isArray h l ∧ n = len l ∧ 0 < n ∧
       no_garbage n l ∧ valid_buckets n l m.
-
-Hint Rewrite @lookup_total_replicate_lt using listz_arith : clist.
-
-(* TODO : Another hint database for maps? *)
-Hint Rewrite (lookup_empty (M := gmap K) (A:=V)) : clist.
 
 (* Destructs a isHashtbl hypothesis. *)
 Local Ltac destructIsHashtbl :=
@@ -178,7 +222,7 @@ Proof.
   { unfold no_garbage. intros.
     do 2 list in *. apply not_elem_of_nil in H3.
     contradiction. }
-  { intros i b k H3 H4. unfold indexZ in H3.
+  { intros i b k H3 H4.
     list in H3. list in H4.
     subst. simpl. auto. }
 Qed.
@@ -190,57 +234,9 @@ Definition add (h : hashtbl) k v :=
   do h' ← set h i ((k, v) :: b);
   h'.
 
-(* This tactic solves goals of the form [valid (indexZ i (len l) l)]
-   using the [index_valid] lemma. *)
-
-Ltac validi := apply index_valid; [auto | try lia].
-
-(* Whenever we use the tactics [wp_get] or [wp_set], we have to prove
-   that the array accesses are valid.  When array indexes are always
-   computed using the [index] function, it is always valid to access
-   the array.  These wrapper tactics dispatch these conditions
-   automatically when the index in generated using [index]. *)
-
-Local Ltac wp_hget i :=
-  wp_get i;
-  [validi|].
-
-Local Ltac wp_hset :=
-  wp_set;
-  [validi|].
-
-(* TODO : Maybe François would like to add these lemmas to his listz
-library? *)
-
-Lemma list_lookup_total_insert_eq :
-  forall {A} `{Inhabited A} (l : list A) (i : Z) x,
-    valid i l ->
-    <[i := x]> l !!! i = x.
-Proof.
-  intros.
-  apply list_lookup_total_correct.
-  by rewrite list_lookup_insert_eq.
-Qed.
-
-Lemma list_lookup_total_insert_ne :
-  forall {A} `{Inhabited A} (l : list A) (i i' : Z) x,
-    valid i l ->
-    valid i' l ->
-    i ≠ i' ->
-    <[i' := x]> l !!! i = l !!! i.
-Proof.
-  intros.
-  apply list_lookup_total_correct.
-  rewrite list_lookup_insert_ne. 2: auto.
-  apply list_lookup_lookup_total.
-  by apply lookup_lt_is_Some_2.
-Qed.
-
-Hint Rewrite @lookup_total_insert_eq using try listz_arith : clist.
-
 (* If the list representation of a hash table does not contain keys in
-   incorrect indexes and a new key in the correct index, the table
-   remains valid. *)
+   incorrect indexes and a new key is added in the correct index, the
+   table remains valid. *)
 
 Lemma no_garbage_insert :
   forall n k v i tbl b,
@@ -261,44 +257,43 @@ Proof.
     - rewrite list_elem_of_singleton in H6.
       injection H6. intros. by subst.
     - subst. by apply H2 with v'. }
-  { rewrite list_lookup_total_insert_ne in H6.
-    2, 4: auto.
-    - by apply H2 with v'.
-    - unfold indexZ in H3. lia. }
+  { list in H6. by apply H2 with v'. }
 Qed.
 
 Lemma valid_insert_bucket_eq :
-  forall k v l m b b',
-    valid_buckets (len l) l m ->
-    b = l !!! indexZ k (len l) ->
+  forall k v l m n b b',
+    n = len l ->
+    valid_buckets n l m ->
+    b = l !!! indexZ k n ->
     b' = filter_key k ((k, v) :: b) ->
     v :: m k = map snd b'.
 Proof.
-  intros k v l m b b' H1 H2 H3.
-  rewrite filter_key_cons_True in H3.
-  unfold valid_buckets in H1.
+  intros k v l m n b b' H1 H2 H3 H4.
+  rewrite filter_key_cons_True in H4.
+  unfold valid_buckets in H2.
   subst b'.
   rewrite map_cons. f_equal.
-  apply H1 with (indexZ k (len l)).
-  { f_equal. }
-  { subst b. auto. }
+  apply H2 with (indexZ k (len l)); by subst.
 Qed.
 
 Lemma valid_insert_bucket_ne :
-  forall k k' i v l m b b',
-    valid_buckets (len l) l m ->
-    indexZ k (len l) = i ->
-    indexZ k' (len l) = i ->
-    b = l !!! indexZ k (len l) ->
+  forall k k' i v l n m b b',
+    n = len l ->
+    valid_buckets n l m ->
+    indexZ k n = i ->
+    indexZ k' n = i ->
+    b = l !!! indexZ k n ->
     b' = filter_key k' ((k, v) :: b) ->
     k ≠ k' ->
     m k' = map snd b'.
 Proof.
-  intros k k' i v l m b b' H1 H2 H3 H4 H5 H6.
-  rewrite filter_key_cons_False in H5. 2: auto.
-  unfold valid_buckets in H1.
-  apply H1 with (indexZ k (len l)); subst; auto.
+  intros k k' i v l n m b b' H1 H2 H3 H4 H5 H6 H7.
+  rewrite filter_key_cons_False in H6 by auto.
+  apply H2 with (indexZ k (len l)); by subst.
 Qed.
+
+Ltac case_bucket k n i :=
+  destruct (decide (indexZ k n = i)).
 
 Lemma wp_add :
   forall h m k v,
@@ -309,87 +304,40 @@ Proof.
   intros h m k v H.
   unfold add.
   destructIsHashtbl.
+  arrays.
   wp_length _n.
   wp_bind_eq.
-  wp_hget b.
-  wp_bind_eq.
-  wp_hset.
+  set (_i:= index k _n).
+  set (i := indexZ k n).
+  assert (isInt _i i) by tc.
+  wp_get b.
+  wp_set.
   wp_ret.
-  introIsHashtbl. 2,3: destructIsArray.
+  introIsHashtbl.
   - (* The length is still greater than 0. *)
-    rewrite length_insert. lia.
+    length. lia.
   -  (* The key was inserted in the correct bucket. *)
-    list. apply no_garbage_insert; subst. 1, 2, 4: auto.
-    list in *. unfold max_array_length in *.
-    destructIsInt. f_equal. int. lia.
-  - intros i b' k' ? ?.
+    list. subst. apply no_garbage_insert; auto.
+  - intros i' b' k' ? ?.
     unfold _set.
-    destructIsInt.
-    unfold max_array_length in *.
-    list in *.
-    int in *.
+    length in *.
     (* The updated map as described in the postcondition
        accurately models the updated hash table. *)
     destruct decide.
     + (* When we apply the updated map with the key we pass as
          argument. *)
-      subst k'. subst i.
-      list in *.
-      2: { apply index_valid_len. lia. }
-      unfold filter_key in *.
-      simpl in *.
-      subst n.
-      apply valid_insert_bucket_eq with l b; auto.
+      apply valid_insert_bucket_eq with l (len l) (l !!! i);
+        subst; by list.
     + (* When we apply the updated map with a different key [k']. *)
-      destruct (decide (indexZ k (len l) = i)) as [E | E].
+      case_bucket k n i'.
       { (* [k'] belongs to the same bucket (i.e. has the same index)
            as [k]. *)
-        rewrite E in H9.
-        list in *. 2: { subst i. apply index_valid_len. lia. }
-        subst n.
-        apply valid_insert_bucket_ne with k i v l b; auto. }
+         subst. list. simpl. filter. by apply H3 with i. }
       { (* [k] belongs to another bucket. *)
-        list in *.
-        unfold valid_buckets in H3.
-        apply H3 with (indexZ k' n).
-        auto. subst. auto. }
+        (* list in *. *)
+        subst. list. filter.
+        by apply H3 with (indexZ k' (len l)). }
 Qed.
-
-Fixpoint remove_assoc (k : K) (b : bucket) :=
-  match b with
-  |[] => []
-  |(x, v) :: t =>
-     if decide (x = k) then
-       t else (x, v) :: remove_assoc k t
-  end.
-
-Lemma remove_assoc_in :
-  forall b k k' v,
-    (k', v) ∈ remove_assoc k b ->
-    (k', v) ∈ b.
-Proof.
-  intros b k k' v H1.
-  induction b as [|[k'' v'] t Ih]; simpl in H1.
-  + apply not_elem_of_nil in H1. contradiction.
-  + destruct decide in H1; apply elem_of_cons. auto.
-   apply elem_of_cons in H1 as [H1 | H1].
-   auto. right. by apply Ih.
-Qed.
-
-Lemma remove_assoc_bucket_eq :
-  forall k b b',
-    b' = remove_assoc k b ->
-    filter_key k b' = tl (filter_key k b).
-Proof.
-Admitted.
-
-Lemma remove_assoc_bucket_ne :
-  forall k k' b b',
-    b' = remove_assoc k b ->
-    k ≠ k' ->
-    filter_key k' b' = filter_key k' b.
-Proof.
-Admitted.
 
 Definition remove (h : hashtbl) (k : K) :=
   do l ← length h;
@@ -398,16 +346,7 @@ Definition remove (h : hashtbl) (k : K) :=
   do b' ← remove_assoc k b;
   set h i b'.
 
-(* Destructs a isHashtbl hypothesis. *)
-Local Ltac destructIsHashtbl' :=
-  match goal with h: isHashtbl _ _ |- _ =>
-    unfold isHashtbl in h;
-    let c := fresh "l" in
-    let n := fresh "n" in
-    destruct h as (c&?);
-    destruct h as (n&?);
-    unpack
-  end.
+Hint Rewrite <- tl_map : clist.
 
 Lemma wp_remove :
   forall h m k,
@@ -416,46 +355,33 @@ Lemma wp_remove :
        (λ h', isHashtbl h' (rm m k)).
 Proof.
   intros h m k H.
-  destructIsHashtbl'.
+  destructIsHashtbl.
+  arrays.
   unfold remove.
   wp_length _n.
-  subst n.
   wp_bind_eq.
-  wp_hget b.
+  wp_get b.
   wp_bind_eq.
-  wp_hset.
+  wp_set.
   introIsHashtbl.
   + list. lia.
-  + list. unfold no_garbage in *.
-    intros ? k' ???.
+  + (* Removing a key value pair from a bucket keeps it valid. *)
+    list. intros ? k' ???.
+    list in *. subst n. apply H2 with v.
+    auto. case_bucket k (len l) i; subst; list in *. 2: auto.
+    by apply remove_assoc_in with k.
+  + intros i b' k' iEq bEq.
     list in *.
-    apply H2 with v. auto.
-    destruct (decide (i = indexZ k φ (_n))); subst; list in *. 2: auto.
-    apply remove_assoc_in with k. auto.
-  + intros ? b' k' ??.
     unfold rm.
-    list in *.
-    destructIsInt.
-    destructIsArray. unfold max_array_length in *.
-    unfold valid_buckets in *.
-    destruct decide.
-    { subst.
-      list in *. int in *.
-      list. 2: { apply index_valid_len. lia. }
-      rewrite remove_assoc_bucket_eq with (b:=(l !!! indexZ k' (len l))).
-      2: auto.
-      rewrite <- tl_map.
-      f_equal. by apply H3 with (indexZ k' (len l)). }
-    { list in *. int in *.
-      destruct (decide (indexZ k (len l) = i)) as [E | E]; subst.
-      + rewrite E. list.
-        2: { apply index_valid_len. lia. }
-        rewrite remove_assoc_bucket_ne with (k:=k) (b:=(l !!! indexZ k' (len l))). 2, 3: auto.
-        apply H3 with (indexZ k' (len l)). 2:auto.
-        reflexivity.
-      + rewrite list_lookup_total_insert_ne.
-        2, 3 : apply index_valid_len; lia.
-        2: symmetry; apply E.
-        by apply H3 with (indexZ k' (len l)).
-    }
+    case_decide.
+    { rewrite <- iEq in bEq. subst k b'. list.
+      rewrite remove_assoc_bucket_eq with (b:=b) by auto.
+      list. f_equal. subst b.
+      apply H3 with i; by subst. }
+    { case_bucket k (len l) i.
+      + rewrite e in bEq. list in bEq. subst b'.
+        rewrite remove_assoc_bucket_ne with (k:=k) (b:=b) by auto.
+        apply H3 with i; subst; by do 2 f_equal.
+      + subst. list.
+        by apply H3 with (indexZ k' (len l)). }
 Qed.
