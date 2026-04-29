@@ -635,7 +635,10 @@ Definition UXITER_Z {A}
    before beginning the induction, so that the definitions are expanded
    not only in the goal but also in the induction hypothesis. *)
 
-Ltac expand_ITER :=
+(* [expand_ITER] has an empty definition in wp.v, and is invoked by
+   [wp_loop_precondition_hook]. We redefine it here. *)
+
+Ltac expand_ITER ::=
   unfold
     ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
@@ -655,12 +658,6 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER, XITER, UXITER
   in h;
   simpl implication in h.
-
-(* Updating this hook (which is defined in wp.v) lets us to call [expand_ITER]
-   in every precondition of a loop, before [wp_precondition_hook] is called. *)
-
-Global Ltac wp_loop_precondition_hook ::=
-  expand_ITER.
 
 (* The tactic [ITER] should be used when the goal is [ITER ...]. *)
 

@@ -493,8 +493,12 @@ Ltac wp_precondition_secondary_hook :=
    [wp_apply ... with invariant: ...], that is, only when reasoning about a
    loop. *)
 
+Ltac expand_ITER :=
+  idtac. (* to be redefined in iteration.v *)
+
 Ltac wp_loop_precondition_hook :=
-  idtac.
+  try solve [ prove_Proper ];
+  expand_ITER.
 
 (* -------------------------------------------------------------------------- *)
 
