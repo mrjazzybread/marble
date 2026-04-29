@@ -629,7 +629,7 @@ Ltac expand_ITER :=
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET, ITERI_MULTISET,
-    ITER_SET,
+    ITER_SET, ITER_SET_UNIQUE,
     ITER, XITER, UXITER;
     simpl implication.
 
@@ -639,7 +639,7 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET, ITERI_MULTISET,
-    ITER_SET,
+    ITER_SET, ITER_SET_UNIQUE,
     ITER, XITER, UXITER
   in h;
   simpl implication in h.
