@@ -364,6 +364,14 @@ Variable hook : event _vertex → U → U.
 
 Variable inv : ghost → U → Prop.
 
+(* We use the loop invariant [inv] in calls to [foreach_start] and
+   [foreach_successor], whose specification requires [inv] to be
+   compatible with extensional equality of sets. (This requirement is
+   hidden in the definition of [ITER_SET].) Therefore we must impose
+   this requirement. *)
+
+Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
+
 (* The specification of the user function [hook] states that [hook]
    can expect the invariant [inv γ u] to hold, can expect to observe
    an event [e] such that [step γ e γ'] holds, and must update the
@@ -615,10 +623,14 @@ Proof.
   (* We reach the loop on the successors of [v]. The goal must be changed
      from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
   rewrite wpd_wp.
+  Ltac wp_loop_precondition_hook ::= idtac.
   wp_op wp_foreach_successor with invariant: (
     λ examined (s'' : { s'' | slt s'' (m, u) }),
       visit_post (marked', σ') examined (proj1_sig s'')
   ).
+  (* Compatibility. (This is a bit painful.) *)
+  { intros examined1 examined2 ?. intros ((m'' & u'') & ow) ? <-.
+    split; intros; unpack; pack; eauto; set_solver. }
   (* Initialization. *)
   { simpl. intro_visit_post. }
   (* Preservation. *)
@@ -808,6 +820,9 @@ Proof.
   set (γ := (marked, σ)).
   wp_op wp_foreach_start with invariant:
     (λ examined s, visit_post γ examined s).
+  (* Compatibility. (This is a bit painful.) *)
+  { intros examined1 examined2 ?. intros (m' & u') ? <-.
+    split; intros; unpack; pack; eauto; set_solver. }
   (* Initialization. *)
   { assert (wf γ).
     { econstructor; eauto with dfs set_solver. }
@@ -882,10 +897,9 @@ Defined.
 
 Variable inv : vertices → U → Prop.
 
-(* This administrative requirement is painful: the invariant [inv]
-   must be compatible with set equality. *)
+(* The invariant [inv] must be compatible with set equality. *)
 
-Variable Proper_inv : Proper (equiv ==> eq ==> iff) inv.
+Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
 
 Local Ltac proveInv :=
   match goal with h: inv ?marked ?u |- inv ?marked' ?u =>
@@ -930,6 +944,11 @@ Proof.
     let '(marked, σ) := γ in
     inv marked u
   ).
+  (* Compatibility. (This is a bit painful.) *)
+  { intros (marked1 & σ1) (marked2 & σ2) Hequiv.
+    unfold equiv in Hequiv. hnf in Hequiv. simpl in Hequiv.
+    intros u'' ? <-.
+    split; intros; unpack; pack; eauto; set_solver. }
   (* Preservation. *)
   { clear dependent u.
     intros (marked0 & σ0) (marked1 & σ1) u ? ?.
@@ -972,7 +991,6 @@ Lemma wp_enumerate' :
 Proof.
   intros. ITER. unfold enumerate'.
   wp_op wp_enumerate with invariant: inv.
-  admit. (* TODO extend ITER to allow requiring Proper inv *)
   (* Preservation. *)
   { intros. wp_op Hbody.
     + set_solver.
