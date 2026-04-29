@@ -20,7 +20,7 @@ Set Universe Polymorphism.
 (* This file defines a trivial Hoare logic for (pure) computations. *)
 
 (* The main judgement is [wp a Q]. It means that the computation [a]
-   admits the postcondition [Q]: that is, the result of [a] satisfies
+   has the postcondition [Q]: that is, the result of [a] satisfies
    the property [Q]. *)
 
 (* Naturally, Rocq does not distinguish between a computation and its
