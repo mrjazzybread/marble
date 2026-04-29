@@ -51,8 +51,8 @@ offers an example of this.
 To help users write specifications and verify programs, we define a simple
 program logic, in the style of Hoare logic.
 The judgement [`wp e Q`](wp.v:Definition wp)
-means that the expression `e` admits the postcondition `Q`:
-that is, result of `e` satisfies the property `Q`.
+means that the expression `e` has the postcondition `Q`:
+that is, the result of `e` satisfies the property `Q`.
 Naturally, Rocq does not distinguish between a computation and its result:
 they are considered equal. Thus, the definition of `wp e Q` is just `Q e`.
 Nevertheless, the judgement `wp` is useful: applying its reasoning rules lets
