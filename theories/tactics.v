@@ -219,3 +219,35 @@ Tactic Notation "forwards" simple_intropattern(h) ":" constr(lemma) :=
   assert (h: P); [
     unfold P; simple eapply lemma
   | subst P ].
+
+(* -------------------------------------------------------------------------- *)
+
+(* The tactic [prove_Proper] can prove a goal of the form [Proper _ _]
+   if this goal is trivial. Otherwise, it will just introduce the
+   hypotheses and leave the remaining goal untouched. *)
+
+(* Perhaps this tactic should be re-implemented using [eauto] together
+   with [Hint Extern] and [Hint Resolve], so it is extensible. *)
+
+Ltac proper_eat3 :=
+  let x1 := fresh "x" in
+  let x2 := fresh "x" in
+  let Hequiv := fresh "Hequiv" in
+  intros x1 x2 Hequiv;
+  try (unfold equiv in Hequiv; hnf in Hequiv);
+  try subst x2.
+
+Ltac proper_repeat :=
+  repeat match goal with
+  | |- Proper (_ ==> _) _ => proper_eat3
+  | |- (_ ==> _)%signature _ _      => proper_eat3
+  end;
+  try solve [ tauto ].
+
+Ltac prove_Proper :=
+  match goal with
+  | |- Proper (_ ==> _) _ =>
+      proper_repeat
+  | _ =>
+      fail
+  end.
