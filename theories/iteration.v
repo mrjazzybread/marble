@@ -92,6 +92,14 @@ Section Loops.
 Context {P : Type}.
 Implicit Types i j k : P.
 
+(* We assume that the type [P] is equipped with an equivalence [≡].
+   For example, [P] could be a type of sets, equipped with extensional
+   equality. Then, we require the user invariant [inv] to respect this
+   equality; otherwise, some producers could not be verified. *)
+(* In cases where [≡] is just Leibniz equality, this machinery is
+   unnecessary; nevertheless we make it mandatory, for simplicity. *)
+Context `{Equiv P}.
+
 (* [init] is the initial producer state. *)
 Variable init : P.
 
@@ -129,6 +137,8 @@ Implicit Types inv : P → S → Prop.
 
 Definition ITER :=
   ∀ inv s ,
+  (* The loop invariant must be compatible with [≡]. *)
+  Proper (equiv ==> eq ==> iff) inv →
   (* Initially, the producer state is [init] and the user state is [s].
      The invariant must hold. *)
   inv init s →
@@ -203,6 +213,7 @@ Implicit Types inv : P → S → outcome A → Prop.
 
 Definition XITER :=
   ∀ inv s,
+  Proper (equiv ==> eq ==> eq ==> iff) inv →
   (* Initially, [out] is [Continue]. *)
   inv init s Continue →
   (* When the loop body is invoked,
@@ -228,6 +239,7 @@ Variable uloop : WP (outcome A).
 
 Definition UXITER :=
   ∀ (inv : P → outcome A → Prop) ,
+  Proper (equiv ==> eq ==> iff) inv →
   inv init Continue →
   ( ∀ j0 j1 ,
     inv j0 Continue →
@@ -260,15 +272,23 @@ End Loops.
 (* One could also define a more general variant where the loop body is
    parameterized with the full history. *)
 
+(* The definition of [≡] on lists in stdpp is extensional equality of
+   the underlying sets. This is NOT what we want; we want equality of
+   ordered lists, up to equivalence of the list elements. Therefore
+   we use a local instance of [≡] here. In fact, at this time, we cut
+   corners and use just Leibniz equality, because it is suitable for
+   our current use cases. *)
+
 Definition ITERI_LIST {S A}
   (init xs : list A)
   (body : A → Z → S → WP S)
   (loop : S → WP S)
 : Prop
 :=
-  ITER
+  @ITER (list A) (eq)
     init
     ( λ history, history = xs )
+    S
     ( λ history0 history1 s Q,
       ∀ x i,
       init `prefix_of` history0 →
@@ -331,9 +351,10 @@ Definition ITERI_MULTISET {S A}
   (loop : S → WP S)
 : Prop
 :=
-  ITER
+  @ITER (list A) (eq)
     init
     ( λ history, history ≃ xs )
+    S
     ( λ history0 history1 s Q,
       ∀ x i,
       init `prefix_of` history0 →
@@ -367,6 +388,9 @@ Definition ITER_MULTISET {S A}
 
 (* [ITER_SET] allows repetitions: an element can be produced several
    times. [ITER_SET_UNIQUE] forbids repetitions. *)
+
+(* In this case, the user invariant [inv] must be compatible with
+   extensional equality of sets [≡]. *)
 
 Definition ITER_SET {S A} `{SemiSet A C}
   (init xs : C)
@@ -421,6 +445,8 @@ Section Nat.
 Open Scope nat_scope.
 
 (* The producer state [j] is the loop index. *)
+
+Local Instance equiv_nat : Equiv nat := (=).
 
 (* The function [nat_init i k dir] defines the initial producer state. *)
 
@@ -541,6 +567,8 @@ End Nat.
 (* Iteration on a semi-open interval [i, k) of the integers in [Z]. *)
 
 (* The producer state [j] is the loop index. *)
+
+Local Instance equiv_Z : Equiv Z := (=).
 
 (* The function [z_init i k dir] defines the initial producer state. *)
 
@@ -663,15 +691,15 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
 
 Ltac ITER :=
   expand_ITER;
-  intros ? ? Hinit Hbody.
+  intros ? ? Hcompatible Hinit Hbody.
 
 Ltac XITER :=
   expand_ITER;
-  intros ? ? Hinit Hbody.
+  intros ? ? Hcompatible Hinit Hbody.
 
 Ltac UXITER :=
   expand_ITER;
-  intros ? Hinit Hbody.
+  intros ? Hcompatible Hinit Hbody.
 
 (* The tactics [wp_continue] and [wp_break] help reason about invocations
    of [continue] and [break]. They recognize a suitable hypothesis and
