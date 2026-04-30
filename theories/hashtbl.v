@@ -27,9 +27,6 @@ Declare Instance IsInt_hash :
 
 (* Decidable equality over keys. *)
 Global Declare Instance EqK : EqDecision K.
-(* The type of keys must be countably infinite.  This is necessary in
-   order to have finite maps whose domain is in [K] *)
-Global Declare Instance CountK : Countable K.
 Open Scope uint63.
 
 (* Hash tables are arrays of buckets.  A bucket is an association list
@@ -52,8 +49,6 @@ Definition cmp_key (k : K) (x : K * V) :=
 
 Definition filter_key (k : K) (l : bucket) : bucket :=
   base.filter (cmp_key k)  l.
-
-(* Lemmas for working with [filter_key] *)
 
 Lemma filter_key_cons_True :
   forall k v b, filter_key k ((k, v) :: b) = (k, v) :: filter_key k b.
@@ -184,6 +179,13 @@ Definition no_garbage (n : Z) (tbl : list bucket) : Prop :=
     valid i tbl ->
     (k, v) ∈ (tbl !!! i) ->
     indexZ k n = i.
+
+Require Stdlib.Logic.Epsilon.
+
+Definition cardinality (m : K -> (list V)) :=
+  let s := Epsilon.epsilon (inhabits ([] : list V))
+    (fun (l : list V) => forall k v, v ∈ m k -> v ∈ l /\ NoDup l) in
+  len s.
 
 (* Correlates a hash table with a total function that maps keys to a
    list of values.  Here we combine the previous two definitions as
