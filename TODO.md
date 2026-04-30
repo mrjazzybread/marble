@@ -49,21 +49,15 @@
 
 ## Traverse
 
+* In `traverse` and `traverse_cps`, the user does not have access
+  to the marks array during the traversal. (In `traverse`, the user
+  has access to it at the end; in `traverse_cps`, not at all.) This
+  can probably be fixed.
+
 * Recreate the "beautiful hack" that allows us to not test whether
   a vertex is out of bounds?
   If we do not recreate this hack then we can use `make`
   instead of `init` to allocate the array of marks.
-
-* Define and verify the toplevel function.
-  Its specification should be an instance of `ITER`.
-
-* Define a simplified function where only `Enter` events are
-  observed. (Check that the code is simplified.) Prove that it
-  enumerates the reachable vertices (in an unspecified order).
-
-* Define an incremental/interruptible variant of DFS,
-  as a sequence (cascade) of events.
-  (No need for a user state there.)
 
 * Define a function that detects the existence of a cycle.
   This requires more physical state (another array to keep
