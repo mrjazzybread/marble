@@ -1149,7 +1149,7 @@ Inductive wf : set V → state → Prop :=
        and [ws], is well-formed. *)
     wf imarked (omarked, Frame (Some w) ws :: σ).
 
-Hint Constructors wf : wf.
+Local Hint Constructors wf : wf.
 
 (* A state [(marked, σ)] is final if every start vertex is marked and
    [σ] consists of a single frame. If this state is well-formed, then
@@ -1383,12 +1383,33 @@ Proof.
   eauto using wf_completion.
 Qed.
 
+(* If [(marked', σ')] is well-formed, similar to the initial state,
+   and has marked all of the start vertices, then it is a final state. *)
+
+Lemma wf_similar_final marked' σ' :
+  wf ∅ (marked', σ') →
+  similar [Frame None Empty] σ' →
+  start ⊆ marked' →
+  final (marked', σ').
+Proof.
+  intros Hwf Hsimilar ?.
+  dependent destruction Hsimilar.
+  dependent destruction Hwf.
+  econstructor; eauto.
+Qed.
+
 End Interactive.
+
+Hint Constructors wf : wf.
+
+Hint Resolve
+  wf_init
+  wf_step
+: wf.
 
 Hint Constructors similar : similar.
 
 Hint Resolve
   similar_reflexive
   similar_transitive
-  similar_store
 : similar.
