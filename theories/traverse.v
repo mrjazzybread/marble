@@ -127,6 +127,8 @@ Variable wp_foreach_start:
 
 Implicit Types marked imarked omarked : vertices.
 
+Implicit Types examined pushed : vertices.
+
 Implicit Type σ : stack vertex.
 
 (* We wish to specify what sequences of events the user can expect to
@@ -1032,6 +1034,405 @@ Proof.
   { clear dependent s.
     cbv beta. intros (m & u) (marked' & ?). unpack.
     wp_ret. }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
+
+(* We now define a second copy of our DFS algorithm, this time in CPS style.  *)
+
+(* The algorithm is essentially the same as earlier, but the traversal order
+   is not exactly the same. Because the successors of each vertex are PUSHED
+   onto the continuation in the order determined by [foreach_successor],
+   they are EXAMINED in the reverse order. *)
+
+(* This version of the code produces a cascade of events, that is, a lazy
+   list of events, where each event is produced on demand, when requested by
+   the consumer. Thus, the traversal can be interrupted and resumed by the
+   consumer. *)
+
+(* Because the cascade internally reads and updates an array [m], it must be
+   considered linear. That is, a cascade MUST NOT be resumed several times.   *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Cascades. *)
+
+(* A cascade is a finite sequence of events,
+   which are produced on demand. *)
+
+(* It is isomorphic to the type [Seq.t] in OCaml's standard library. *)
+
+(* The type of cascades, as well as the predicates that describe cascades,
+   could be parameterized with the type of events and with the labeled
+   transition system that describes the production of events. For now,
+   we do not introduce this parameterization. *)
+
+Inductive head :=
+| Event : event _vertex → (unit → head) → head
+| Done  : head.
+
+Definition cascade :=
+  unit → head.
+
+(* [isCascade c γ] and [isHead h γ] mean that the cascade [c] or the head
+   [h] represents a path, through the labeled transition system, from the
+   state [γ] to a final state. *)
+
+Inductive isHead : head → ghost → Prop :=
+| isHeadEvent :
+    ∀ γ _e e γ' c ,
+    isEvent _e e →
+    step γ e γ' →
+    wp (c()) (λ h, isHead h γ') → (* [isCascade c γ'] *)
+    isHead (Event _e c) γ
+| isHeadDone :
+    ∀ γ,
+    final γ →
+    isHead Done γ.
+
+Definition isCascade (c : cascade) (γ : ghost) :=
+  wp (c()) (λ h, isHead h γ).
+
+(* -------------------------------------------------------------------------- *)
+
+(* In the CPS-style algorithm, there is no user state [u : U] and no user
+   invariant [inv]. They are not needed, since the user is in control and
+   can write loops (if desired) outside of our view. *)
+
+(* Therefore, a runtime state of the algorithm need not be a pair [(m, u)].
+   It is just an array [m] of Boolean marks. *)
+
+(* The following definitions are used to justify termination. They are
+   similar to those given earlier, but concern [m] instead of [(m, u)]. *)
+
+Local Definition mlt m' m := lt (mweight m') (mweight m).
+Local Definition mle m' m := le (mweight m') (mweight m).
+Declare Scope state_scope.
+Infix "≤" := mle (at level 70) : state_scope.
+Infix "<" := mlt (at level 70) : state_scope.
+Open Scope state_scope.
+
+Local Notation msafe m :=
+  (Acc lt (mweight m)).
+
+Local Definition mbeyond m :=
+  { m' | m' ≤ m }.
+
+Local Definition mbelow m :=
+  { m' | m' < m }.
+
+Local Definition mbury {m1 m2} : m1 < m2 → mbeyond m1 → mbelow m2.
+Proof using.
+  intros ow12 (m0 & ow01). exists m0.
+  unfold mle, mlt in *. eauto using Nat.le_lt_trans.
+Defined.
+
+Local Definition mdecay {m} : mbelow m → mbeyond m.
+Proof using.
+  intros (m' & ow). exists m'.
+  unfold mlt, mle in *. eauto using Nat.lt_le_incl.
+Defined.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The code of the CPS-style DFS algorithm. *)
+
+(* The answer type is [head]. Thus, instead of returning a result of type
+   [mbeyond m], the recursive function [visit_cps] expects a continuation
+   of type [mbeyond m → head] and returns an answer of type [head]. *)
+
+(* There is no user function [hook]. Instead, to emit an event [_e], we
+   return [Event (_e, k)], where [k] is the current continuation. Thus,
+   the traversal is suspended and can be resumed by the user. *)
+
+(* The function [visit_cps] is tail-recursive, and the continuation [k]
+   can be viewed as a stack, which exists at runtime. Wrapping [k] in a
+   λ-abstraction, so as to construct a new continuation, amounts to
+   pushing data onto the stack. Applying [k] amounts to popping. This
+   formulation is somewhat remarkable: even though an explicit stack is
+   used, there is no need to argue about the size of the stack. The
+   termination argument is the same as in the previous version of the
+   code, and relies solely on the number of marked vertices. *)
+
+(* In the code in direct style, the loop on the successors of [v] would
+   EXAMINE each successor [w] in turn. (The state of that loop was the
+   marks array, of type [below s].) Here, in contrast, the loop PUSHES
+   each successor [w] in turn onto the continuation. (The state of this
+   loop is the continuation, of type [mbelow m → head].) Therefore, here,
+   the successors are examined in reverse order. This is still a valid DFS
+   traversal; but [visit] and [visit_cps] do not construct the same DFS
+   forest. *)
+
+Local Fixpoint visit_cps m _v (ACC : msafe m) (k : mbeyond m → head) : head :=
+  IFC (_v <? length m)%uint63 THEN λ Hv,
+  IFC get m _v THEN λ _,
+    k (exist m (Nat.le_refl (mweight m)))
+  ELSE λ Hunmarked,
+    let m' := set m _v true in
+    (* Emit an [Enter] event. *)
+    Event (Enter _v) @@ λ '(),
+    let ow := marking_decreases_weight m _v Hv Hunmarked in
+    (* Construct a continuation that emits an [Exit] event
+       and returns by invoking [k]. Name it [k], too. *)
+    let k (mow'' : mbelow m) :=
+      do mow'' ← mdecay mow'' ;
+      Event (Exit _v) @@ λ '(),
+      k mow''
+    in
+    (* [push k _w] pushes the vertex [w] onto [k]. *)
+    let push (k : mbelow m → head) _w : mbelow m → head :=
+      λ mow',
+        let (m', ow) := mow' in
+        visit_cps m' _w (Acc_inv ACC ow) @@ λ mow',
+        k (mbury ow mow')
+    in
+    (* Push every successor [w] of [v] onto the continuation. *)
+    do k ← foreach_successor k _v push ;
+    (* Then, run (return to) this continuation. *)
+    k (exist m' ow)
+  ELSE λ _,
+    k (exist m (Nat.le_refl (mweight m))).
+
+(* [visit_cps'] is a simply-typed wrapper for [visit_cps]. *)
+
+Local Definition visit_cps' m _v (k : marks → head) : head :=
+  visit_cps m _v
+    (Acc_intro_generator 32 Wf_nat.lt_wf (mweight m))
+    (λ mow, k (proj1_sig mow)).
+
+(* [traverse_cps] is the entry point of the traversal. *)
+
+Definition traverse_cps _n : cascade :=
+  (* Allocate an array of Boolean marks. *)
+  do m ←  init _n (λ _i, false) ;
+  (* Construct a trivial continuation. *)
+  do k ← λ m, Done ;
+  (* Push the start vertices onto this continuation. *)
+  do k ← foreach_start k (λ k _v, λ m, visit_cps' m _v k) ;
+  (* Wrap this continuation as a cascade, hiding [m]. *)
+  λ '(), k m.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A technical lemma about sets. *)
+
+(* Because this lemma involves a double negation, it requires membership in
+   a set to be decidable. *)
+
+Context `{!RelDecision (∈@{vertices})}.
+
+Local Lemma technical pushed0 pushed1 marked0 marked1 v w :
+  pushed0 ∪ {[w]} ≡ pushed1 →
+  successors v ∖ pushed1 ⊆ marked0 →
+  marked0 ⊆ marked1 →
+  {[w]} ⊆ marked1 →
+  successors v ∖ pushed0 ⊆ marked1.
+Proof using RelDecision0. clear- RelDecision0.
+  (* [set_solver] is unable to prove this goal. *)
+  intros.
+  transitivity (successors v ∖ (pushed1 ∖ {[w]})).
+  + eapply difference_mono_l. set_solver.
+  + rewrite difference_difference_r. (* needs [RelDecision ∈]. *)
+    (* Now [set_solver] succeeds. *)
+    set_solver.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* In direct style, we defined [visit_post], the postcondition of [visit].
+   In CPS style, instead, we define [isCont], the precondition of the
+   continuation of [visit_cps]. It expresses the same information. *)
+
+(* [isCont k γ examined] means that the continuation [k] can be applied to
+   a marks array [m'] provided [m'] is corresponds to a ghost state [γ']
+   such that [γ] and [γ'] are similar (that is, their stacks are related
+   by [similar], and [γ'] has more marked vertices than [γ]) and such
+   that, in the state [γ'], the vertices in the set [examined] have been
+   marked. *)
+
+(* In [isCont], the argument of the continuation [k], a marks array, has
+   type { m' : marks | P m' }. The property [P] plays no role. *)
+
+Local Definition isCont {P : marks → Prop} (k : sig P → head) γ examined :=
+  let (marked, σ) := γ in
+  ∀ m' pf marked' σ' γ',
+  (marked', σ') = γ' →
+  isMarks m' marked' →
+  marked ⊆ marked' →
+  similar σ σ' →
+  wf γ' →
+  examined ⊆ marked' →
+  wp (k (exist m' pf)) (λ h, isHead h γ').
+
+(* [isCont'] is a variant of [isCont] where the continuation [k] has a
+   simple type, that is, the marks array has type [marks]. *)
+
+Local Definition isCont' (k : marks → head) γ examined :=
+  let (marked, σ) := γ in
+  ∀ m' marked' σ' γ',
+  (marked', σ') = γ' →
+  isMarks m' marked' →
+  marked ⊆ marked' →
+  similar σ σ' →
+  wf γ' →
+  examined ⊆ marked' →
+  wp (k m') (λ h, isHead h γ').
+
+(* The specification of [visit_cps]. *)
+
+Local Lemma wp_visit_cps (i : nat) :
+  ∀ m _v v ACC (k : mbeyond m → head) marked σ γ,
+  mweight m = i →
+  (marked, σ) = γ →
+  isMarks m marked →
+  wf γ →
+  isInt _v v →
+  0 ≤ v < n →
+  edge (top σ) v →
+  isCont k γ {[v]} →
+  wp (visit_cps m _v ACC k) (λ h, isHead h γ).
+Proof.
+  clear dependent foreach_start start_respects_bound.
+  by well-founded induction on i along lt.
+  intros. wp_last Hcont. subst i γ.
+  destruct ACC. simpl visit_cps.
+  destructMarks. arrays.
+  wp_if; [| lia].
+  wp_if.
+  (* Case: [v] is marked already. *)
+  { wp_op Hcont; eauto with similar set_solver. }
+  (* Case: [v] is unmarked. *)
+  assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
+    by eauto using isMarks_set.
+  revert Hm'.
+  set (m' := set m _v true).
+  set (marked' := {[v]} ∪ marked).
+  set (σ' := Frame (Some v) Empty :: σ).
+  intro.
+  (* Emit an [Enter] event. *)
+  assert (step (marked, σ) (Enter v) (marked', σ')).
+  { econstructor; tc. }
+  wp_ret. eapply isHeadEvent; tc.
+  (* We reach the loop on the successors of [v]. *)
+  (* The loop invariant requires a little thought. As the loop progresses,
+     the set [pushed] grows from ∅ to [successors v]. The current state of
+     the loop is a continuation [k]. Initially, [k] is a continuation that
+     expects all vertices to have been examined: it satisfies the formula
+     [isCont k γ' (successors v)]. At the end, [k] is a continuation that
+     needs no vertices to have been examined: it satisfies [isCont k γ' ∅].
+     Therefore the loop invariant is [isCont k γ' examined] where [examined]
+     is [successors v ∖ pushed]. *)
+  wp_op wp_foreach_successor with invariant: (
+    λ pushed (k : mbelow m → head),
+      let examined := successors v ∖ pushed in
+      isCont k (marked', σ') examined
+  ).
+  (* Compatibility. *)
+  { do 6 intro. subst. unfold isCont. split; eauto with set_solver. }
+  (* Initialization. *)
+  (* In this subgoal, [pushed] is empty, so [examined] is [successors v].
+     Therefore we are reasoning about the continuation that is invoked
+     AFTER all successors have been examined. This corresponds to the code
+     that would FOLLOW the loop in direct style. *)
+  { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
+    unfold isCont. intros m'' ? marked'' σ'' ? <-. intros.
+    simpl mdecay. wp_bind_eq.
+    (* The structure of the ghost stack has been preserved. *)
+    match goal with h: similar _ _ |- _ => rename h into Hpost2 end.
+    unfold σ' in Hpost2.
+    assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
+    { inversion Hpost2. eauto. }
+    set (marked''' := marked'').
+    set (σ''' := store v vs σ).
+    (* Emit an [Exit] event. *)
+    assert (step (marked'', σ'') (Exit v) (marked''', σ''')).
+    { econstructor; eauto with set_solver. }
+    wp_ret. eapply isHeadEvent; tc.
+    (* Now return, by invoking [k]. *)
+    assert (wf (marked''', σ''')) by eauto with wf.
+    wp_op Hcont; unfold σ''';
+      eauto using similar_store with similar set_solver. }
+  (* Preservation. *)
+  { wp_body pushed0 pushed1 k''
+      introducing: (fun _ => set_step w; intros _w ?).
+    (* The loop body constructs and returns a new continuation. *)
+    wp_ret. unfold isCont. intros m'' ? marked'' σ'' ? <-. intros.
+    (* We are now looking at a recursive call. *)
+    (* The state at this point is described by [marked''] and [σ''].
+       The vertex [w], a successor of [v], is about to be examined. *)
+    assert (E v w) by set_solver.
+    wp_op IH; last eauto.
+    clear wp_foreach_successor IH. (* for clarity *)
+    (* There remains to argue that [isCont ...] implies [isCont ...]. *)
+    unfold isCont in *. simpl mbury.
+    eauto using technical with similar set_solver. }
+  (* Completion. *)
+  (* [pushed] is [successors v], so [examined] is empty. *)
+  { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
+    cbv beta zeta. intros k' (pushed & Hk' & Hpushed).
+    (* There remains to argue that [isCont ...] implies [isCont ...]. *)
+    eauto with similar wf set_solver. }
+Qed.
+
+(* The specification of [visit_cps']. *)
+
+Local Lemma wp_visit_cps' m _v v (k : marks → head) marked σ γ :
+  (marked, σ) = γ →
+  isMarks m marked →
+  wf γ →
+  isInt _v v →
+  0 ≤ v < n →
+  edge (top σ) v →
+  isCont' k γ {[v]} →
+  wp (visit_cps' m _v k) (λ h, isHead h γ).
+Proof.
+  intros. subst γ. unfold visit_cps'.
+  wp_op wp_visit_cps; last eauto.
+  (* There remains to argue that [isCont' ...] implies [isCont ...]. *)
+  unfold isCont, isCont' in *. simpl proj1_sig.
+  eauto.
+Qed.
+
+(* The specification of [traverse_cps]. *)
+
+(* The postcondition is simple: [traverse_cps _n] returns a cascade
+   of events that obeys the labeled transition system defined by the
+   initial state [γ0], the relation [step], and the predicate [final]. *)
+
+Lemma wp_traverse_cps :
+  ∀ _n, isInt _n n →
+  0 ≤ n ≤ max_array_length →
+  wp (traverse_cps _n) (λ c, isCascade c γ0).
+Proof.
+  intros. unfold traverse_cps.
+  wp_op (wp_init (λ _, false)) introducing: m.
+  { intros. wp_ret. }
+  assert (isMarks m ∅) by eauto using isMarks_intro with lia.
+  (* Build the final continuation. *)
+  eapply wp_bind with (P := λ k, isCont' k γ0 start).
+  { wp_ret. unfold isCont'. simpl. intros. subst.
+    wp_ret. eapply isHeadDone. eauto using wf_similar_final. }
+  intros k Hk.
+  (* Push the start vertices onto the continuation. *)
+  wp_op wp_foreach_start with invariant:
+    (λ pushed k, isCont' k γ0 (start ∖ pushed)).
+  (* Compatibility. *)
+  { do 6 intro. subst. unfold isCont'. split; eauto with set_solver. }
+  (* Initialization. *)
+  { unfold isCont' in *. eauto with set_solver. }
+  (* Preservation. *)
+  { wp_body pushed0 pushed1 k''
+      introducing: (fun _ => set_step w; intros _w ?).
+    (* The loop body constructs and returns a new continuation. *)
+    wp_ret. unfold isCont'. intros m'' marked'' σ'' ? <-. intros.
+    assert (edge (top [Frame None Empty]) w) by set_solver.
+    wp_op wp_visit_cps'; eauto with similar set_solver.
+    (* There remains to argue that [isCont' ...] implies [isCont' ...]. *)
+    unfold isCont' in *. eauto 3 with similar wf set_solver. }
+  (* Completion. *)
+  { intros k' (pushed & Hk' & Hpushed).
+    wp_ret. unfold isCascade. eauto with similar wf set_solver. }
 Qed.
 
 End G.

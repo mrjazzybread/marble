@@ -147,6 +147,9 @@ Extraction Inline
   traverse.visit'
   traverse.hook'
   traverse.enumerate'
+  traverse.mbury
+  traverse.mdecay
+  traverse.visit_cps'
 .
 
 Separate Extraction
@@ -204,4 +207,5 @@ Separate Extraction
   traverse.traverse
   traverse.enumerate
   traverse.enumerate'
+  traverse.traverse_cps
 .
