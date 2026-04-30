@@ -379,12 +379,11 @@ Qed.
 
 Lemma decrease s m _v u u' :
   s = (m, u) →
-  safe s →
   (_v <? length m)%uint63 = true →
   get m _v = false →
   (set m _v true, u') < s.
 Proof.
-  intros ? Hsafe Hv Hget. subst.
+  intros ? Hv Hget. subst.
   unfold slt, weight, mweight.
   eauto using marking_decreases_weight.
 Qed.
@@ -485,7 +484,7 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
     (* Construct an updated state. *)
     let s' := (m', u') in
     (* Construct a witness of the assertion [s' < s]. *)
-    let ow : s' < s := decrease s m _v u u' Hsmu ACC Hv Hunmarked in
+    let ow : s' < s := decrease s m _v u u' Hsmu Hv Hunmarked in
     (* Visit the successors of [v]. *)
     (* The loop body is a function of type [below s → vertex → below s],
        which can be passed to [foreach_successor]. Because [ACC] is at
