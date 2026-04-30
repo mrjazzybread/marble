@@ -44,17 +44,16 @@ Notation index k len :=
 Notation indexZ k len := (hash k mod len)%Z.
 
 (* Filters a bucket leaving only pairings whose key is [k]. *)
-Definition cmp_key (k : K) (x : K * V) :=
-  let (k', _) := x in k' = k.
+Notation filter_key k l :=
+  (base.filter (fun (x: K * V) => let (k', _) := x in k' = k) l).
 
-Definition filter_key (k : K) (l : bucket) : bucket :=
-  base.filter (cmp_key k)  l.
+(* Trivial lemmas to automate rewriting goals involving    [filter_key]*)
 
 Lemma filter_key_cons_True :
   forall k v b, filter_key k ((k, v) :: b) = (k, v) :: filter_key k b.
 Proof.
   intros.
-  unfold filter_key. by apply filter_cons_True.
+  by apply filter_cons_True.
 Qed.
 
 Lemma filter_key_cons_False :
@@ -66,29 +65,11 @@ Proof.
   unfold filter_key. by apply filter_cons_False.
 Qed.
 
-Lemma filter_key_nil :
-  forall k, filter_key k [] = [].
-Proof.
-  intros. unfold filter_key.
-  by rewrite filter_nil with (P:=cmp_key k).
-Qed.
-
-Lemma filter_key_cons :
-  forall k k' v b1 b2,
-    filter_key k b1 = filter_key k b2 ->
-    filter_key k ((k', v)::b1) = filter_key k ((k', v) :: b2).
-Proof.
-  intros.
-  destruct (decide (k = k')).
-  + subst. do 2 rewrite filter_key_cons_True. by f_equal.
-  + by do 2 rewrite filter_key_cons_False by auto.
-Qed.
-
 Hint Rewrite
+  @filter_nil
   filter_key_cons_False
   filter_key_cons_True
-  filter_key_cons
-  filter_key_nil using auto : cfilter.
+  using auto : cfilter.
 
 Ltac filter := autorewrite with cfilter.
 
@@ -122,10 +103,19 @@ Proof.
   induction b as [|[k' v] t Ih]; simpl; intros; subst b'.
   - auto.
   - case_decide.
-    + subst. rewrite filter_key_cons_True. by simpl.
-    + rewrite filter_key_cons_False by eauto.
-      rewrite Ih by eauto.
-      by rewrite filter_key_cons_False.
+    + subst. filter. by simpl.
+    + filter. auto.
+Qed.
+
+Lemma filter_key_cons :
+  forall k k' v b1 b2,
+    filter_key k b1 = filter_key k b2 ->
+    filter_key k ((k', v)::b1) = filter_key k ((k', v) :: b2).
+Proof.
+  intros.
+  destruct (decide (k = k')).
+  + subst. do 2 rewrite filter_key_cons_True. by f_equal.
+  + by do 2 rewrite filter_key_cons_False by auto.
 Qed.
 
 Lemma remove_assoc_bucket_ne :
@@ -138,8 +128,8 @@ Proof.
   induction b as [|[k'' v] t Ih]; simpl; intros b' H1 H2; subst b'.
   + auto.
   + case_decide.
-    - subst. by rewrite filter_key_cons_False.
-    - apply filter_key_cons. by rewrite Ih.
+    - subst. by filter.
+    - apply filter_key_cons. by apply Ih.
 Qed.
 
 Fixpoint find_assoc (k : K) (b : bucket) : option V :=
