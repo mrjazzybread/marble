@@ -197,6 +197,29 @@ Local Definition unmarked (b : bool) : nat :=
 Definition mweight m : nat :=
   sum_with unmarked m.
 
+(* Marking an unmarked vertex decreases the weight of the array. *)
+
+Lemma marking_decreases_weight m _v :
+  (_v <? length m)%uint63 = true →
+  get m _v = false →
+  (sum_with unmarked (set m _v true) < sum_with unmarked m)%nat.
+Proof.
+  intros Hv Hget.
+  (* This is a bit ugly. *)
+  set (v := (φ _v)%uint63).
+  assert (unsigned v). { unfold v. lia. }
+  assert (isInt _v v).  { eapply introIsInt. reflexivity. }
+  assert (Hvalid: valid v (to_list m))
+    by eauto using ltb_length_spec with typeclass_instances.
+  rewrite !sum_with_spec.
+  erewrite set_spec by eauto.
+  generalize (sum_list_with_insert unmarked v (to_list m) true Hvalid).
+  erewrite <- get_spec by eauto.
+  rewrite Hget.
+  simpl unmarked.
+  lia. (* ouf *)
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [isMarks m marked] means that the Boolean array [m] represents the set
@@ -363,19 +386,7 @@ Lemma decrease s m _v u u' :
 Proof.
   intros ? Hsafe Hv Hget. subst.
   unfold slt, weight, mweight.
-  (* This is a bit ugly. *)
-  set (v := (φ _v)%uint63).
-  assert (unsigned v). { unfold v. lia. }
-  assert (isInt _v v).  { eapply introIsInt. reflexivity. }
-  assert (Hvalid: valid v (to_list m))
-    by eauto using ltb_length_spec with typeclass_instances.
-  rewrite !sum_with_spec.
-  erewrite set_spec by eauto.
-  generalize (sum_list_with_insert unmarked v (to_list m) true Hvalid).
-  erewrite <- get_spec by eauto.
-  rewrite Hget.
-  simpl unmarked.
-  lia. (* ouf *)
+  eauto using marking_decreases_weight.
 Qed.
 
 (* Every state is safe. *)
