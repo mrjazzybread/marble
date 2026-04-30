@@ -145,6 +145,12 @@ Local Notation ghost :=
 
 Implicit Type γ : ghost.
 
+(* We write [γ0] for the initial state, where no vertex is marked
+   and the stack is empty. *)
+
+Local Notation γ0 :=
+  (∅, Frame None Empty :: []).
+
 (* A transition from state [γ] to state [γ'], emitting an event [e], is
    permitted if the relation [step] allows it. *)
 
@@ -820,7 +826,7 @@ Lemma wp_traverse :
   (* Provided the initial user state [u] and the empty ghost stack
      satisfy the user invariant [inv], *)
   ∀ u,
-  inv (∅, Frame None Empty :: []) u →
+  inv γ0 u →
   (* [traverse _n u] can be called. *)
   wp (traverse _n u) (λ '(m', u'),
     (* When it returns, a set of vertices [marked'] has been marked,
@@ -829,10 +835,12 @@ Lemma wp_traverse :
     ∃ marked' σ' vs,
     (* The array [m'] tells which vertices have been marked. *)
     isMarks m' marked' ∧
-    (* The ghost stack [σ'] stores the forest [vs]. *)
-    σ' = Frame None vs :: [] ∧
     (* The user invariant holds. *)
     inv (marked', σ') u' ∧
+    (* The following four statements express the fact that the state
+       [(marked, σ)] is well-formed and final. *)
+    (* The ghost stack [σ'] stores the forest [vs]. *)
+    σ' = Frame None vs :: [] ∧
     (* [vs] is a DFS forest. *)
     dfs marked' vs ∧
     (* The roots of the forest [vs] form a subset of the start vertices. *)
@@ -861,7 +869,7 @@ Proof.
     wp_op wp_visit' introducing: (m'' & u'').
     elim_visit_post marked'' σ''.
     intro_visit_post. }
-  (* Conclusion. *)
+  (* Completion. *)
   { cbv beta. intros (m' & u') (examined & ? & ?).
     elim_visit_post marked' σ'.
     edestruct wf_completion' as (vs & ? & ? & ?); tc.
@@ -983,7 +991,7 @@ Proof.
     { wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
     (* Case: [Exit]. *)
     { wp_ret. proveInv. }}
-  (* Conclusion. *)
+  (* Completion. *)
   { clear dependent u.
     cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
     pack; eauto using omarked_is_closure_start. }
@@ -1018,7 +1026,7 @@ Proof.
   { intros. wp_op Hbody.
     + set_solver.
     + cbv beta. eauto. }
-  (* Conclusion. *)
+  (* Completion. *)
   { clear dependent s.
     cbv beta. intros (m & u) (marked' & ?). unpack.
     wp_ret. }
