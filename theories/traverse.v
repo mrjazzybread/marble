@@ -244,6 +244,16 @@ Local Ltac destructMarks :=
     destruct h as (bs & ? & ? & ?)
   end.
 
+Lemma isMarks_intro m :
+  isArray m (listz.init n (λ _, false)) →
+  (0 ≤ n)%Z →
+  isMarks m ∅.
+Proof.
+  intros. introMarks. intros. list.
+  assert (∀ v, 0 ≤ v < n → v ∉ (∅ : vertices)) by set_solver.
+  tc.
+Qed.
+
 Local Instance isBool_get_mark m marked :
   ∀Int _v v,
   0 ≤ v < n →
@@ -834,23 +844,16 @@ Proof.
   intros. unfold traverse.
   wp_op (wp_init (λ _, false)) introducing: m.
   { intros. wp_ret. }
-  set (s := (m, u)).
-  set (marked := (∅ : vertices)).
-  set (σ := (Frame None Empty :: [] : stack vertex)).
-  set (γ := (marked, σ)).
+  assert (isMarks m ∅) by eauto using isMarks_intro with lia.
   wp_op wp_foreach_start with invariant:
-    (λ examined s, visit_post γ examined s).
+    (λ examined s, visit_post γ0 examined s).
   (* Compatibility. (This is a bit painful.) *)
   { intros examined1 examined2 ?. intros (m' & u') ? <-.
     split; intros; unpack; pack; eauto; set_solver. }
   (* Initialization. *)
-  { assert (wf γ).
-    { econstructor; eauto with dfs set_solver. }
-    intro_visit_post.
-    + assert (∀ v, 0 ≤ v < n → v ∉ marked) by set_solver.
-      introMarks. intros. list. tc. }
+  { intro_visit_post. }
   (* Preservation. *)
-  { clear s. clear dependent m. clear dependent u.
+  { clear dependent m. clear dependent u.
     intros examined0 examined1 (m' & u') ?.
     intros v ??? _v ?.
     assert (v ∈ start) by set_solver.
