@@ -156,6 +156,7 @@ Local Notation step :=
    graph [E]. *)
 
 Local Notation wf := (dfs.wf E start ∅).
+Local Notation final := (dfs.final start).
 
 Local Hint Constructors dfs.wf : wf.
 
@@ -203,7 +204,7 @@ Lemma marking_decreases_weight m _v :
   (_v <? length m)%uint63 = true →
   get m _v = false →
   (sum_with unmarked (set m _v true) < sum_with unmarked m)%nat.
-Proof.
+Proof using.
   intros Hv Hget.
   (* This is a bit ugly. *)
   set (v := (φ _v)%uint63).
@@ -248,7 +249,7 @@ Local Instance isBool_get_mark m marked :
   0 ≤ v < n →
   isMarks m marked →
   isBool1 (get m _v) (v ∈ marked).
-Proof.
+Proof using.
   intros. destructMarks.
   assert (fact: wp (get m _v) (eq (bs !!! v))).
   { wp_get b. eauto. }
@@ -257,13 +258,14 @@ Proof.
 Qed.
 
 Local Lemma mark_self marked v : v ∈ {[v]} ∪ marked.
-Proof. set_solver. Qed.
+Proof using. clear -marked. set_solver. Qed.
+
 Local Hint Resolve mark_self : marble.
 
 Local Lemma mark_unaffected marked v v' :
   v ≠ v' →
   v' ∈ {[v]} ∪ marked ↔ v' ∈ marked.
-Proof. set_solver. Qed.
+Proof using. clear -marked. set_solver. Qed.
 
 Lemma isMarks_set m marked :
   isMarks m marked →
@@ -271,7 +273,7 @@ Lemma isMarks_set m marked :
   0 ≤ v < n →
   v ∉ marked →
   isMarks (set m _v true) ({[v]} ∪ marked).
-Proof.
+Proof using. clear -m.
   intros. destructMarks.
   (* Switch to [wp] style *)
   assert (Hm': wp (set m _v true) (λ m, isMarks m ({[v]} ∪ marked))).
@@ -340,7 +342,7 @@ Definition below s :=
    is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
 
 Local Definition bury {s1 s2} : s1 < s2 → beyond s1 → below s2.
-Proof.
+Proof using.
   intros ow12 (s0 & ow01). exists s0.
   unfold sle, slt in *. eauto using Nat.le_lt_trans.
 Defined.
@@ -349,7 +351,7 @@ Defined.
    is below [s] then it is also beyond [s]. (Information is lost.) *)
 
 Local Definition decay {s} : below s → beyond s.
-Proof.
+Proof using.
   intros (s' & ow). exists s'.
   unfold slt, sle in *. eauto using Nat.lt_le_incl.
 Defined.
@@ -360,14 +362,14 @@ Defined.
 Local Lemma wpd_bury {s1 s2} (a : beyond s1) (pf : s1 < s2) Q :
   wpd a Q →
   wpd (bury pf a) Q.
-Proof.
+Proof using.
   unfold bury. destruct a. tauto.
 Qed.
 
 Local Lemma wpd_decay {s} (a : below s) Q :
   wpd a Q →
   wpd (decay a) Q.
-Proof.
+Proof using.
   unfold decay. destruct a. tauto.
 Qed.
 
@@ -375,7 +377,7 @@ Qed.
    a composite state of the form [((m', u'), ow)]. *)
 
 Local Definition transform {s} (f : U → U) : beyond s → beyond s.
-Proof.
+Proof using.
   intros ((m' & u') & ow).
   exists (m', f u'). assumption.
 Defined.
@@ -385,7 +387,7 @@ Defined.
 Local Lemma wpd_transform {s} f (s' : beyond s) Q :
   wpd s' (λ '(m', u'), wp (m', f u') Q) →
   wpd (transform f s') Q.
-Proof.
+Proof using.
   unfold transform. destruct s' as ((m' & u') & ?). eauto.
 Qed.
 
@@ -398,7 +400,7 @@ Lemma decrease s m _v u u' :
   (_v <? length m)%uint63 = true →
   get m _v = false →
   (set m _v true, u') < s.
-Proof.
+Proof using.
   intros ? Hv Hget. subst.
   unfold slt, weight, mweight.
   eauto using marking_decreases_weight.
@@ -407,7 +409,7 @@ Qed.
 (* Every state is safe. *)
 
 Local Lemma all_safe s : safe s.
-Proof.
+Proof using.
   eapply (Acc_intro_generator 32). eapply Wf_nat.lt_wf.
 Qed.
   (* Perhaps, in order to allow execution inside Rocq, [Defined] should
@@ -611,6 +613,7 @@ Lemma wpd_visit (i : nat) :
   edge (top σ) v →
   wpd (visit (m, u) _v ACC) (λ s', visit_post (marked, σ) {[v]} s').
 Proof.
+  clear dependent foreach_start start_respects_bound.
   by well-founded induction on i along lt.
   intros. subst i. destruct ACC. simpl visit.
   destructMarks. arrays.
@@ -670,6 +673,7 @@ Proof.
     cbv beta. intros (m''' & u''') ?.
     elim_visit_post marked''' σ'''.
     intro_visit_post. }
+  clear foreach_successor wp_foreach_successor IH. (* for clarity *)
   (* All successors of [v] have now been examined. *)
   intros ((m'' & u'') & ?). simpl proj1_sig.
   intros (examined & Hpost & Hexamined) ?.
@@ -727,7 +731,7 @@ Section FixedPoint.
 
 Local Lemma proj1_sig_bury {s1 s2} (pf : slt s1 s2) (s' : beyond s1) :
   proj1_sig (bury pf s') = proj1_sig s'.
-Proof.
+Proof using.
   destruct s'. eauto.
 Qed.
 
@@ -767,7 +771,7 @@ Lemma visit_eq (k : nat) :
         (m', u')
     else
       s.
-Proof.
+Proof using foreach_successor_parametric.
   by well-founded induction on k along lt.
   intros. subst k. destruct ACC as (ACC). simpl visit.
   destruct s as (m & u).
@@ -901,7 +905,7 @@ Definition plain_enumerate _n u :=
 Derive enumerate
   in (∀ _n u, enumerate _n u = plain_enumerate _n u)
   as enumerate_eq.
-Proof.
+Proof using.
   intros. unfold plain_enumerate, traverse, visit', visit, hook'.
   unfold enumerate; reflexivity.
 Defined.
