@@ -1151,6 +1151,18 @@ Inductive wf : set V → state → Prop :=
 
 Hint Constructors wf : wf.
 
+(* A state [(marked, σ)] is final if every start vertex is marked and
+   [σ] consists of a single frame. If this state is well-formed, then
+   the fact that there is a single frame can be expressed by writing
+   [top σ = None]. *)
+
+Inductive final : state → Prop :=
+| Final :
+    ∀ marked σ,
+    start ⊆ marked →
+    top σ = None →
+    final (marked, σ).
+
 (* Hints for the proofs that follow. *)
 
 Local Hint Resolve dfs_concat : dfs.
