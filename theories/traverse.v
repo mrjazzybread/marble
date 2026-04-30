@@ -265,6 +265,22 @@ Local Lemma mark_unaffected marked v v' :
   v' ∈ {[v]} ∪ marked ↔ v' ∈ marked.
 Proof. set_solver. Qed.
 
+Lemma isMarks_set m marked :
+  isMarks m marked →
+  ∀Int _v v,
+  0 ≤ v < n →
+  v ∉ marked →
+  isMarks (set m _v true) ({[v]} ∪ marked).
+Proof.
+  intros. destructMarks.
+  (* Switch to [wp] style *)
+  assert (Hm': wp (set m _v true) (λ m, isMarks m ({[v]} ∪ marked))).
+  { wp_set. introMarks. intros v' ?. case_lookup_insert.
+    + subst v'. tc.
+    + rewrite mark_unaffected by assumption. tc. }
+  rewrite wp_iff in Hm'. assumption.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The state of the depth-first search algorithm is a pair [(m, u)] where
@@ -606,11 +622,9 @@ Proof.
   (* Case: [v] is marked already. *)
   { eapply wpd_ret. intro_visit_post. }
   (* Case: [v] is unmarked. We mark this vertex. *)
-  assert (Hm': wp (set m _v true) (λ m, isMarks m ({[v]} ∪ marked))).
-  { wp_set. introMarks. intros v' ?. case_lookup_insert.
-    + subst v'. tc.
-    + rewrite mark_unaffected by assumption. tc. }
-  rewrite wp_iff in Hm'. revert Hm'.
+  assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
+    by eauto using isMarks_set.
+  revert Hm'.
   set (m' := set m _v true).
   set (marked' := {[v]} ∪ marked).
   set (σ' := Frame (Some v) Empty :: σ).
