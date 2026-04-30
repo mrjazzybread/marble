@@ -192,6 +192,10 @@ Inductive isEvent : event _vertex → event vertex → Prop :=
 
 Local Hint Constructors isEvent : marble.
 
+Local Hint Resolve similar_same_edges : marble.
+
+Local Hint Extern 1 (_ ≡ _) => reflexivity : marble.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The weight of an array [m] is defined as the number of unmarked
@@ -201,12 +205,12 @@ Local Hint Constructors isEvent : marble.
 Local Definition unmarked (b : bool) : nat :=
   if b then 0 else 1.
 
-Definition mweight m : nat :=
+Local Definition mweight m : nat :=
   sum_with unmarked m.
 
 (* Marking an unmarked vertex decreases the weight of the array. *)
 
-Lemma marking_decreases_weight m _v :
+Local Lemma marking_decreases_weight m _v :
   (_v <? length m)%uint63 = true →
   get m _v = false →
   (sum_with unmarked (set m _v true) < sum_with unmarked m)%nat.
@@ -234,7 +238,7 @@ Qed.
 
 Open Scope Z_scope.
 
-Definition isMarks m marked :=
+Local Definition isMarks m marked :=
   ∃ bs,
   isArray m bs ∧
   len bs = n ∧
@@ -250,7 +254,7 @@ Local Ltac destructMarks :=
     destruct h as (bs & ? & ? & ?)
   end.
 
-Lemma isMarks_intro m :
+Local Lemma isMarks_intro m :
   isArray m (listz.init n (λ _, false)) →
   (0 ≤ n)%Z →
   isMarks m ∅.
@@ -283,7 +287,7 @@ Local Lemma mark_unaffected marked v v' :
   v' ∈ {[v]} ∪ marked ↔ v' ∈ marked.
 Proof using. clear -marked. set_solver. Qed.
 
-Lemma isMarks_set m marked :
+Local Lemma isMarks_set m marked :
   isMarks m marked →
   ∀Int _v v,
   0 ≤ v < n →
@@ -326,7 +330,7 @@ Implicit Type s : S.
 
 (* The notion of weight is extended to states. *)
 
-Definition weight s :=
+Local Definition weight s :=
   let (m, _) := s in mweight m.
 
 (* We write [safe s] for the type of an accessibility witness. *)
@@ -337,8 +341,8 @@ Notation safe s :=
 (* The notations [s' ≤ s] and [s' < s] help reason about the weight
    of a state without visual overhead. *)
 
-Definition slt s' s := lt (weight s') (weight s).
-Definition sle s' s := le (weight s') (weight s).
+Local Definition slt s' s := lt (weight s') (weight s).
+Local Definition sle s' s := le (weight s') (weight s).
 Declare Scope state_scope.
 Infix "≤" := sle (at level 70) : state_scope.
 Infix "<" := slt (at level 70) : state_scope.
@@ -346,12 +350,12 @@ Open Scope state_scope.
 
 (* [beyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
 
-Definition beyond s :=
+Local Definition beyond s :=
   { s' | s' ≤ s }.
 
 (* [below s] is the type of a state [s'] such that [s' < s] holds. *)
 
-Definition below s :=
+Local Definition below s :=
   { s' | s' < s }.
 
 (* [bury], an identity function on states, proves that if a state [s0]
@@ -411,7 +415,7 @@ Qed.
    that if the vertex [_v] is unmarked in the state [s], which is the pair
    [(m, u)], then marking [_v] produces a new state of smaller weight. *)
 
-Lemma decrease s m _v u u' :
+Local Lemma decrease s m _v u u' :
   s = (m, u) →
   (_v <? length m)%uint63 = true →
   get m _v = false →
@@ -431,6 +435,8 @@ Qed.
   (* Perhaps, in order to allow execution inside Rocq, [Defined] should
      be used instead of [Qed]. However, making [all_safe] transparent
      causes some of the proofs below to run forever at [Qed] time. *)
+
+Local Opaque bury decay transform.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -501,7 +507,7 @@ Variable wp_hook :
    require an accessibility witness as an argument. Fortunately, this is
    possible! *)
 
-Fixpoint visit s _v (ACC : safe s) : beyond s :=
+Local Fixpoint visit s _v (ACC : safe s) : beyond s :=
   (* Destruct [s] as a pair [m, u] while keeping track of the equation. *)
   match s as b return s = b → _ with (m, u) => λ Hsmu,
   (* Test whether this vertex is valid. *)
@@ -558,7 +564,7 @@ Fixpoint visit s _v (ACC : safe s) : beyond s :=
    simplified version of it, which does not need an accessibility witness,
    and whose result type is just [S]. *)
 
-Definition visit' s _v : S :=
+Local Definition visit' s _v : S :=
   proj1_sig (visit s _v (all_safe s)).
 
 (* -------------------------------------------------------------------------- *)
@@ -585,7 +591,7 @@ Definition traverse _n u : S :=
    state [γ] then [s'] is a correct final runtime state where every vertex
    in the set [examined] is marked. *)
 
-Definition visit_post γ examined s' :=
+Local Definition visit_post γ examined s' :=
   let (marked, σ) := γ in
   let (m', u') := s' in
   ∃ marked' σ',
@@ -609,16 +615,12 @@ Local Ltac elim_visit_post marked' σ' :=
     unpack in h
   end.
 
-Local Hint Resolve similar_same_edges : marble.
-Local Hint Extern 1 (_ ≡ _) => reflexivity : marble.
-Local Opaque bury decay transform.
-
 (* The specification of [visit]. *)
 
 (* Because the result type of [visit] is a subset type,
    instead of [wp], we use the judgement [wpd]. *)
 
-Lemma wpd_visit (i : nat) :
+Local Lemma wpd_visit (i : nat) :
   ∀ m u _v v ACC marked σ,
   mweight m = i →
   isMarks m marked →
@@ -720,7 +722,7 @@ Qed.
 
 (* A specification of [visit']. *)
 
-Lemma wp_visit' :
+Local Lemma wp_visit' :
   ∀ m u _v v marked σ,
   isMarks m marked →
   inv (marked, σ) u →
@@ -768,7 +770,7 @@ Hypothesis foreach_successor_parametric:
 
 (* [visit'] satisfies the desired fixed point equation: *)
 
-Lemma visit_eq (k : nat) :
+Local Lemma visit_eq (k : nat) :
   ∀ s _v ACC,
   weight s = k →
   proj1_sig (visit s _v ACC) =
