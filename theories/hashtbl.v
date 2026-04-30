@@ -73,6 +73,8 @@ Hint Rewrite
 
 Ltac filter := autorewrite with cfilter.
 
+(* Association lists *)
+
 Fixpoint remove_assoc (k : K) (b : bucket) :=
   match b with
   |[] => []
@@ -230,6 +232,8 @@ Definition rm m (k : K) : K -> list V :=
 Definition rm_set m (k : K) (v : V) : K -> list V :=
   _set (rm m k) k v.
 
+(* Hash table operations and their respective specifications. *)
+
 Definition create (n : int) : hashtbl :=
   do a ← make n [] ; a.
 
@@ -309,6 +313,9 @@ Proof.
   subst b'. rewrite filter_key_cons_False by auto.
   apply H2 with i; by subst.
 Qed.
+
+(* Creates a case analysis for if [i] corresponds to the index of the
+   bucket for key [k] in a hash table whose array is of size [n]. *)
 
 Ltac case_bucket k n i :=
   destruct (decide (indexZ k n = i)).
