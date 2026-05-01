@@ -146,7 +146,7 @@ Extraction Inline
   traverse.transform
   traverse.visit'
   traverse.hook'
-  traverse.enumerate'
+  traverse.traverse_pre'
   traverse.mbury
   traverse.mdecay
   traverse.visit_cps'
@@ -205,7 +205,7 @@ Separate Extraction
   pqueue.extract
 
   traverse.traverse
-  traverse.enumerate
-  traverse.enumerate'
+  traverse.traverse_pre
+  traverse.traverse_pre'
   traverse.traverse_cps
 .

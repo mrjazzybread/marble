@@ -888,16 +888,16 @@ End U.
 
 (* -------------------------------------------------------------------------- *)
 
-(* We now define [enumerate], a simplified version of [traverse]. Instead of
-   emitting both vertex-entry and vertex-exit events, this function emits
-   just vertex-entry events. Thus its [hook] function expects just a vertex
-   as a parameter, as opposed to an event. *)
+(* We now define [traverse_pre], a simplified version of [traverse].
+   Instead of emitting both vertex-entry and vertex-exit events, this
+   function emits just vertex-entry events. Thus its [hook] function
+   expects just a vertex as a parameter, as opposed to an event. *)
 
-(* Because [enumerate] does not emit vertex-exit events, it is more
+(* Because [traverse_pre] does not emit vertex-exit events, it is more
    efficient than [traverse]. It performs more tail calls and requires
    less stack space. *)
 
-Section Enumerate.
+Section TraversePre.
 
 Context {U : Type}.
 Implicit Type u : U.
@@ -912,26 +912,26 @@ Local Definition hook' _e u :=
   | Exit  _  => u
   end.
 
-(* [plain_enumerate] is just [traverse] applied to [hook']. *)
+(* [plain_traverse_pre] is just [traverse] applied to [hook']. *)
 
-Definition plain_enumerate _n u :=
+Definition plain_traverse_pre _n u :=
   @traverse U hook' _n u.
 
 (* By specializing [traverse] and [visit] for [hook'], we obtain code
    where the vertex-exit events disappear. In the extracted OCaml code,
    the call from [visit] to [foreach_successor] becomes a tail call. *)
 
-Derive enumerate
-  in (∀ _n u, enumerate _n u = plain_enumerate _n u)
-  as enumerate_eq.
+Derive traverse_pre
+  in (∀ _n u, traverse_pre _n u = plain_traverse_pre _n u)
+  as traverse_pre_eq.
 Proof using.
-  intros. unfold plain_enumerate, traverse, visit', visit, hook'.
-  unfold enumerate; reflexivity.
+  intros. unfold plain_traverse_pre, traverse, visit', visit, hook'.
+  unfold traverse_pre; reflexivity.
 Defined.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A general specification of [enumerate]. *)
+(* A general specification of [traverse_pre]. *)
 
 (* We keep the same user invariant as in the specification of [traverse],
    but specify that the user observes only [Enter] events (via the hook).
@@ -956,12 +956,12 @@ Variable wp_exit :
   step γ (Exit v) γ' →
   inv γ' u.
 
-Lemma wp_enumerate_general :
+Lemma wp_traverse_pre_general :
   ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ∀ u, inv γ0 u →
-  wp (enumerate _n u) (λ '(m', u'), traverse_post inv (m', u')).
+  wp (traverse_pre _n u) (λ '(m', u'), traverse_post inv (m', u')).
 Proof.
-  intros. rewrite enumerate_eq. unfold plain_enumerate.
+  intros. rewrite traverse_pre_eq. unfold plain_traverse_pre.
   wp_op wp_traverse with invariant: inv.
   (* Preservation. *)
   { clear dependent u.
@@ -983,7 +983,7 @@ End Spec.
 
 (* -------------------------------------------------------------------------- *)
 
-(* A simplified specification of [enumerate]. *)
+(* A simplified specification of [traverse_pre]. *)
 
 (* This simplified specification does not guarantee that the vertices are
    produced in DFS pre-order. It guarantees that all reachable vertices
@@ -991,6 +991,8 @@ End Spec.
 
 (* As the producer state, we use a set of vertices. It is the set of
    vertices that have been examined so far. *)
+
+Section SimplifiedSpec.
 
 Variable inv : vertices → U → Prop.
 
@@ -1016,10 +1018,10 @@ Variable wp_hook :
   examined1 ⊆ closure start →
   wp (hook _v u) (λ u', inv examined1 u').
 
-Lemma wp_enumerate_simplified :
+Lemma wp_traverse_pre_simplified :
   ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ∀ u, inv ∅ u →
-  wp (enumerate _n u) (λ '(m', u'),
+  wp (traverse_pre _n u) (λ '(m', u'),
     ∃ marked',
     isMarks m' marked' ∧
     inv marked' u' ∧
@@ -1028,7 +1030,7 @@ Lemma wp_enumerate_simplified :
   ).
 Proof.
   intros.
-  wp_op wp_enumerate_general with invariant: (λ γ u,
+  wp_op wp_traverse_pre_general with invariant: (λ γ u,
     let '(marked, σ) := γ in inv marked u
   ); clear dependent u.
   (* Compatibility. (This is a bit painful.) *)
@@ -1051,33 +1053,34 @@ Proof.
     pack; eauto using omarked_is_closure_start. }
 Qed.
 
-End Enumerate.
+End SimplifiedSpec.
+End TraversePre.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [enumerate'] is a simplified version of [enumerate] where we return
-   just the final user state [u], not the marks array [m]. *)
+(* [traverse_pre'] is a simplified version of [traverse_pre] where we
+   return just the final user state [u], not the marks array [m]. *)
 
-Definition enumerate' {U} hook _n (u : U) : U :=
-  do (m, u) ← enumerate hook _n u ;
+Definition traverse_pre' {U} hook _n (u : U) : U :=
+  do (m, u) ← traverse_pre hook _n u ;
   u.
 
 (* Although dropping [m] may seem silly, this allows us to give a
-   specification of [enumerate'] as a higher-order iteration function.
+   specification of [traverse_pre'] as a higher-order iteration function.
    This specification is an instance of [ITER_SET_UNIQUE]. It states
-   that [enumerate'] enumerates the reachable vertices of the graph [E],
+   that [traverse_pre'] enumerates the reachable vertices of the graph [E],
    without repetition, in an unspecified order. *)
 
-Lemma wp_enumerate' :
+Lemma wp_traverse_pre' :
   ∀ {U} (hook : _vertex → U → U),
   ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ITER_SET_UNIQUE
     ∅ (closure E start)
     (λ v u Q, ∀ _v, isInt _v v → 0 ≤ v < n → wp (hook _v u) Q)
-    (λ u Q, wp (enumerate' hook _n u) Q).
+    (λ u Q, wp (traverse_pre' hook _n u) Q).
 Proof.
-  intros. ITER. unfold enumerate'.
-  wp_op wp_enumerate_simplified with invariant: inv.
+  intros. ITER. unfold traverse_pre'.
+  wp_op wp_traverse_pre_simplified with invariant: inv.
   (* Preservation. *)
   { intros. wp_op Hbody.
     + set_solver.
