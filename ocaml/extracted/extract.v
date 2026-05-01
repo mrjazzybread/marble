@@ -145,8 +145,9 @@ Extraction Inline
   traverse.decay
   traverse.transform
   traverse.visit'
-  traverse.hook'
+  traverse.hook_pre
   traverse.traverse_pre'
+  traverse.hook_post
   traverse.mbury
   traverse.mdecay
   traverse.visit_cps'
@@ -207,5 +208,6 @@ Separate Extraction
   traverse.traverse
   traverse.traverse_pre
   traverse.traverse_pre'
+  traverse.traverse_post
   traverse.traverse_cps
 .

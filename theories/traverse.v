@@ -827,7 +827,7 @@ End FixedPoint.
    marked; the ghost stack is [σ']; and a DFS forest has been virtually
    constructed. (This forest does not exist at runtime.) *)
 
-Definition traverse_post '(m', u') :=
+Definition traverse_postcondition '(m', u') :=
   ∃ marked' σ' vs,
   (* The array [m'] tells which vertices have been marked. *)
   isMarks m' marked' ∧
@@ -855,7 +855,7 @@ Lemma wp_traverse :
   ∀ u,
   inv γ0 u →
   (* [traverse _n u] can be called. *)
-  wp (traverse _n u) (λ s', traverse_post s').
+  wp (traverse _n u) (λ s', traverse_postcondition s').
 Proof.
   intros. unfold traverse.
   wp_op (wp_init (λ _, false)) introducing: m.
@@ -902,11 +902,11 @@ Section TraversePre.
 Context {U : Type}.
 Implicit Type u : U.
 
-(* [hook'] passes [Enter] events on to [hook] and ignores [Exit] events. *)
+(* [hook_pre] passes [Enter] events on to [hook] and ignores [Exit] events. *)
 
 Variable hook : _vertex → U → U.
 
-Local Definition hook' _e u :=
+Local Definition hook_pre _e u :=
   match _e with
   | Enter _v => hook _v u
   | Exit  _  => u
@@ -915,9 +915,9 @@ Local Definition hook' _e u :=
 (* [plain_traverse_pre] is just [traverse] applied to [hook']. *)
 
 Definition plain_traverse_pre _n u :=
-  @traverse U hook' _n u.
+  @traverse U hook_pre _n u.
 
-(* By specializing [traverse] and [visit] for [hook'], we obtain code
+(* By specializing [traverse] and [visit] for [hook_pre], we obtain code
    where the vertex-exit events disappear. In the extracted OCaml code,
    the call from [visit] to [foreach_successor] becomes a tail call. *)
 
@@ -925,7 +925,7 @@ Derive traverse_pre
   in (∀ _n u, traverse_pre _n u = plain_traverse_pre _n u)
   as traverse_pre_eq.
 Proof using.
-  intros. unfold plain_traverse_pre, traverse, visit', visit, hook'.
+  intros. unfold plain_traverse_pre, traverse, visit', visit, hook_pre.
   unfold traverse_pre; reflexivity.
 Defined.
 
@@ -959,7 +959,7 @@ Variable wp_exit :
 Lemma wp_traverse_pre_general :
   ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ∀ u, inv γ0 u →
-  wp (traverse_pre _n u) (λ '(m', u'), traverse_post inv (m', u')).
+  wp (traverse_pre _n u) (λ s', traverse_postcondition inv s').
 Proof.
   intros. rewrite traverse_pre_eq. unfold plain_traverse_pre.
   wp_op wp_traverse with invariant: inv.
@@ -967,7 +967,7 @@ Proof.
   { clear dependent u.
     intros (marked0 & σ0) (marked1 & σ1) u ? ?.
     intros _e e Hevent Hstep.
-    unfold hook'.
+    unfold hook_pre.
     dependent destruction Hevent.
     (* Case: [Enter]. *)
     { wp_op wp_hook introducing: u'. eauto. }
@@ -976,7 +976,7 @@ Proof.
   (* Completion. *)
   { clear dependent u.
     cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
-    unfold traverse_post. pack; eauto. }
+    unfold traverse_postcondition. pack; eauto. }
 Qed.
 
 End Spec.
@@ -1055,6 +1055,98 @@ Qed.
 
 End SimplifiedSpec.
 End TraversePre.
+
+(* -------------------------------------------------------------------------- *)
+
+(* We now define [traverse_post], a simplified version of [traverse].
+   Instead of emitting both vertex-entry and vertex-exit events, this
+   function emits just vertex-exit events. Thus its [hook] function
+   expects just a vertex as a parameter, as opposed to an event. *)
+
+Section TraversePost.
+
+Context {U : Type}.
+Implicit Type u : U.
+
+(* [hook_post] passes [Exit] events on to [hook]
+   and ignores [Enter] events. *)
+
+Variable hook : _vertex → U → U.
+
+Local Definition hook_post _e u :=
+  match _e with
+  | Enter _  => u
+  | Exit  _v => hook _v u
+  end.
+
+(* [plain_traverse_post] is just [traverse] applied to [hook_post]. *)
+
+Definition plain_traverse_post _n u :=
+  @traverse U hook_post _n u.
+
+(* By specializing [traverse] and [visit] for [hook_post], we obtain code
+   where the vertex-entry events disappear. *)
+
+Derive traverse_post
+  in (∀ _n u, traverse_post _n u = plain_traverse_post _n u)
+  as traverse_post_eq.
+Proof using.
+  intros. unfold plain_traverse_post, traverse, visit', visit, hook_post.
+  unfold traverse_post; reflexivity.
+Defined.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A general specification of [traverse_post]. *)
+
+(* We keep the same user invariant as in the specification of [traverse],
+   but specify that the user observes only [Exit] events (via the hook).
+   We require the invariant to be preserved by [Enter] events, which are
+   not observable. *)
+
+Section Spec.
+
+Variable inv : ghost → U → Prop.
+
+Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
+
+Variable wp_hook :
+  ∀ γ γ' u, inv γ u → wf γ →
+  ∀Int _v v, 0 ≤ v < n →
+  step γ (Exit v) γ' →
+  wp (hook _v u) (λ u', inv γ' u').
+
+Variable wp_enter :
+  ∀ γ γ' u, inv γ u → wf γ →
+  ∀Int _v v, 0 ≤ v < n →
+  step γ (Enter v) γ' →
+  inv γ' u.
+
+Lemma wp_traverse_post_general :
+  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
+  ∀ u, inv γ0 u →
+  wp (traverse_post _n u) (λ s', traverse_postcondition inv s').
+Proof.
+  intros. rewrite traverse_post_eq. unfold plain_traverse_post.
+  wp_op wp_traverse with invariant: inv.
+  (* Preservation. *)
+  { clear dependent u.
+    intros (marked0 & σ0) (marked1 & σ1) u ? ?.
+    intros _e e Hevent Hstep.
+    unfold hook_post.
+    dependent destruction Hevent.
+    (* Case: [Enter]. *)
+    { wp_ret. }
+    (* Case: [Exit]. *)
+    { wp_op wp_hook introducing: u'. eauto. }}
+  (* Completion. *)
+  { clear dependent u.
+    cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
+    unfold traverse_postcondition. pack; eauto. }
+Qed.
+
+End Spec.
+End TraversePost.
 
 (* -------------------------------------------------------------------------- *)
 
