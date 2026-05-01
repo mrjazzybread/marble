@@ -11,7 +11,7 @@
 (******************************************************************************)
 
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
-From stdpp Require Import numbers list.
+From stdpp Require Import numbers list well_founded.
 From stdpp Require Import sets propset.
 From listz Require Import listz.
 Notation len := length.
@@ -207,7 +207,7 @@ Local Hint Extern 1 (_ ≡ _) => reflexivity : marble.
 Local Definition unmarked (b : bool) : nat :=
   if b then 0 else 1.
 
-Local Definition mweight m : nat :=
+Local Definition weight m : nat :=
   sum_with unmarked m.
 
 (* Marking an unmarked vertex decreases the weight of the array. *)
@@ -215,9 +215,9 @@ Local Definition mweight m : nat :=
 Local Lemma marking_decreases_weight m _v :
   (_v <? length m)%uint63 = true →
   get m _v = false →
-  (mweight (set m _v true) < mweight m)%nat.
+  (weight (set m _v true) < weight m)%nat.
 Proof using.
-  unfold mweight. intros Hv Hget.
+  unfold weight. intros Hv Hget.
   (* This is a bit ugly. *)
   set (v := (φ _v)%uint63).
   assert (unsigned v). { unfold v. lia. }
@@ -232,6 +232,54 @@ Proof using.
   simpl unmarked.
   lia. (* ouf *)
 Qed.
+
+(* The marks array evolves along the following relation. *)
+
+Local Definition mlt m1 m2 :=
+  (weight m1 < weight m2)%nat.
+
+Local Definition mle m1 m2 :=
+  (weight m1 ≤ weight m2)%nat.
+
+Declare Scope marks_scope.
+Delimit Scope marks_scope with marks.
+Infix "≤" := mle (at level 70) : marks_scope.
+Infix "<" := mlt (at level 70) : marks_scope.
+
+Section M.
+Open Scope marks_scope.
+
+Local Lemma mle_refl m : m ≤ m.
+Proof. unfold mle. lia. Qed.
+
+Local Lemma mle_trans {m1 m2 m3} : m1 ≤ m2 → m2 ≤ m3 → m1 ≤ m3.
+Proof. unfold mle. lia. Qed.
+
+Local Lemma mlt_mle_trans {m1 m2 m3} : m1 < m2 → m2 ≤ m3 → m1 < m3.
+Proof. unfold mle, mlt. lia. Qed.
+
+Local Lemma mle_mlt_trans {m1 m2 m3} : m1 ≤ m2 → m2 < m3 → m1 < m3.
+Proof. unfold mle, mlt. lia. Qed.
+
+Local Lemma mlt_mle_incl {m1 m2} : m1 < m2 → m1 ≤ m2.
+Proof. unfold mle, mlt. lia. Qed.
+
+Local Lemma wf_mlt : well_founded mlt.
+Proof.
+  eapply wf_projected with (f := weight); [| eapply Wf_nat.lt_wf ].
+  intros m1 m2. unfold mlt. tauto.
+Qed.
+
+End M.
+
+(* Rocq 9.1: explicitly instantiating [init] may be necessary to avoid
+   divergence when Rocq type-checks the definition of [traverse]. *)
+
+Local Instance inhabited_bool : Inhabited bool.
+Proof. econstructor. exact true. Qed.
+
+Local Notation init :=
+  (@init bool inhabited_bool).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -330,75 +378,76 @@ Implicit Type s : S.
 (* We now make a series of definitions that play a role in the proof
    of termination of the recursive function [visit]. *)
 
-(* The notion of weight is extended to states. *)
+(* The ordering is extended to states. *)
 
-Local Definition weight s :=
-  let (m, _) := s in mweight m.
+Local Definition slt s1 s2 :=
+  let (m1, _) := s1 in let (m2, _) := s2 in (m1 < m2)%marks.
 
-(* We write [safe s] for the type of an accessibility witness. *)
+Local Definition sle s1 s2 :=
+  let (m1, _) := s1 in let (m2, _) := s2 in (m1 ≤ m2)%marks.
 
-Notation safe s :=
-  (Acc lt (weight s)).
-
-(* The notations [s' ≤ s] and [s' < s] help reason about the weight
-   of a state without visual overhead. *)
-
-Local Definition slt s' s := lt (weight s') (weight s).
-Local Definition sle s' s := le (weight s') (weight s).
 Declare Scope state_scope.
+Delimit Scope state_scope with state.
 Infix "≤" := sle (at level 70) : state_scope.
 Infix "<" := slt (at level 70) : state_scope.
+
 Open Scope state_scope.
 
-(* [beyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
+Local Lemma sle_refl s : s ≤ s.
+Proof. unfold sle. destruct s. eapply mle_refl. Qed.
 
-Local Definition beyond s :=
-  { s' | s' ≤ s }.
+Local Lemma sle_trans {s1 s2 s3} : s1 ≤ s2 → s2 ≤ s3 → s1 ≤ s3.
+Proof. unfold sle. destruct s1, s2, s3. eauto using mle_trans. Qed.
 
-(* [below s] is the type of a state [s'] such that [s' < s] holds. *)
+Local Lemma slt_sle_trans {s1 s2 s3} : s1 < s2 → s2 ≤ s3 → s1 < s3.
+Proof. unfold sle, slt. destruct s1, s2, s3. eauto using mlt_mle_trans. Qed.
 
-Local Definition below s :=
-  { s' | s' < s }.
+Local Lemma sle_slt_trans {s1 s2 s3} : s1 ≤ s2 → s2 < s3 → s1 < s3.
+Proof. unfold sle, slt. destruct s1, s2, s3. eauto using mle_mlt_trans. Qed.
 
-(* [bury], an identity function on states, proves that if a state [s0]
-   is beyond [s1], and if [s1 < s2] holds, then [s0] is below [s2]. *)
+Local Lemma slt_sle_incl {s1 s2} : s1 < s2 → s1 ≤ s2.
+Proof. unfold sle, slt. destruct s1, s2. eauto using mlt_mle_incl. Qed.
 
-Local Definition bury {s1 s2} : s1 < s2 → beyond s1 → below s2.
-Proof using.
-  intros ow12 (s0 & ow01). exists s0.
-  unfold sle, slt in *. eauto using Nat.le_lt_trans.
-Defined.
-
-(* [decay], an identity function on states, proves that if a state [s']
-   is below [s] then it is also beyond [s]. (Information is lost.) *)
-
-Local Definition decay {s} : below s → beyond s.
-Proof using.
-  intros (s' & ow). exists s'.
-  unfold slt, sle in *. eauto using Nat.lt_le_incl.
-Defined.
-
-(* [bury] and [decay] are identity functions, so, while reasoning via
-   [wpd] judgements, they have no effect. *)
-
-Local Lemma wpd_bury {s1 s2} (a : beyond s1) (pf : s1 < s2) Q :
-  wpd a Q →
-  wpd (bury pf a) Q.
-Proof using.
-  unfold bury. destruct a. tauto.
+Local Lemma wf_slt : well_founded slt.
+Proof.
+  eapply wf_projected with (f := fst); [| eapply wf_mlt ].
+  intros (m1 & u1) (m2 & u2). unfold slt. tauto.
 Qed.
 
-Local Lemma wpd_decay {s} (a : below s) Q :
-  wpd a Q →
-  wpd (decay a) Q.
+(* [sbeyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
+
+Local Definition sbeyond s :=
+  { s' | s' ≤ s }.
+
+(* [srefl s] is the state [s] at type [beyond s]. *)
+
+Local Definition srefl s : sbeyond s.
 Proof using.
-  unfold decay. destruct a. tauto.
+  unfold sbeyond. exists s. eapply sle_refl.
+Defined.
+
+(* [strans], an identity function on states, proves that if [s1 ≤ s2] holds,
+   and a state [s0] is beyond [s1], then [s0] is also beyond [s2]. *)
+
+Local Definition strans {s1 s2} : s1 ≤ s2 → sbeyond s1 → sbeyond s2.
+Proof using.
+  intros ow12 (s0 & ow01). exists s0. eauto using sle_trans.
+Defined.
+
+(* [strans] is an identity functions, so, while reasoning via [wpd]
+   judgements, it has no effect. *)
+
+Local Lemma wpd_strans {s1 s2} (a : sbeyond s1) (pf : s1 ≤ s2) Q :
+  wpd a Q →
+  wpd (strans pf a) Q.
+Proof using.
+  unfold strans. destruct a. tauto.
 Qed.
 
 (* [transform] applies a transformation [f] to the component [u] in
    a composite state of the form [((m', u'), ow)]. *)
 
-Local Definition transform {s} (f : U → U) : beyond s → beyond s.
+Local Definition transform {s} (f : U → U) : sbeyond s → sbeyond s.
 Proof using.
   intros ((m' & u') & ow).
   exists (m', f u'). assumption.
@@ -406,7 +455,7 @@ Defined.
 
 (* A reasoning rule for [transform]. *)
 
-Local Lemma wpd_transform {s} f (s' : beyond s) Q :
+Local Lemma wpd_transform {s} f (s' : sbeyond s) Q :
   wpd s' (λ '(m', u'), wp (m', f u') Q) →
   wpd (transform f s') Q.
 Proof using.
@@ -423,22 +472,10 @@ Local Lemma decrease s m _v u u' :
   get m _v = false →
   (set m _v true, u') < s.
 Proof using.
-  intros ? Hv Hget. subst.
-  unfold slt, weight, mweight.
+  intros -> Hv Hget.
+  unfold slt, mlt.
   eauto using marking_decreases_weight.
 Qed.
-
-(* Every state is safe. *)
-
-Local Lemma all_safe s : safe s.
-Proof using.
-  eapply (Acc_intro_generator 32). eapply Wf_nat.lt_wf.
-Qed.
-  (* Perhaps, in order to allow execution inside Rocq, [Defined] should
-     be used instead of [Qed]. However, making [all_safe] transparent
-     causes some of the proofs below to run forever at [Qed] time. *)
-
-Local Opaque bury decay transform.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -495,21 +532,19 @@ Variable wp_hook :
 (* The main recursive function: [visit].  *)
 
 (* [visit] expects a state [s], a vertex [_v], and a proof that [s] is
-   safe (accessible). This proof is used to justify termination; the
-   function is defined by structural recursion on [ACC]. *)
+   accessible. It is defined by structural recursion on [ACC]. *)
 
-(* [visit s _v ACC] produces a result of type [beyond s], that is, a new
+(* [visit s _v ACC] produces a result of type [sbeyond s], that is, a new
    state [s'] such that [s' ≤ s] holds. This information is required,
    while iterating on the successors of a state, to prove that every call
    to [visit] in this sequence is permitted. *)
 
-(* To iterate on the successors, we use a normal (simply-typed) iteration
-   function. This requires us to package [visit] as a function whose
-   argument state and result state have the same type, and which does not
-   require an accessibility witness as an argument. Fortunately, this is
-   possible! *)
+(* To iterate on the successors, we use a simply-typed iteration function.
+   This requires us to package [visit] as a function whose argument state
+   and result state have the same type, and which does not require [ACC].
+   Fortunately, this is possible! *)
 
-Local Fixpoint visit s _v (ACC : safe s) : beyond s :=
+Local Fixpoint visit s _v (ACC : Acc slt s) : sbeyond s :=
   (* Destruct [s] as a pair [m, u] while keeping track of the equation. *)
   match s as b return s = b → _ with (m, u) => λ Hsmu,
   (* Test whether this vertex is valid. *)
@@ -517,7 +552,7 @@ Local Fixpoint visit s _v (ACC : safe s) : beyond s :=
   (* Test whether this vertex is marked. *)
   IFC get m _v THEN λ _,
     (* It is marked: do nothing. *)
-    exist s (Nat.le_refl (weight s))
+    srefl s
   ELSE λ Hunmarked,
     (* Mark this vertex. *)
     let m' := set m _v true in
@@ -528,26 +563,24 @@ Local Fixpoint visit s _v (ACC : safe s) : beyond s :=
     (* Construct a witness of the assertion [s' < s]. *)
     let ow : s' < s := decrease s m _v u u' Hsmu Hv Hunmarked in
     (* Visit the successors of [v]. *)
-    (* The loop body is a function of type [below s → vertex → below s],
+    (* The loop body is a function of type [sbeyond s' → vertex → sbeyond s'],
        which can be passed to [foreach_successor]. Because [ACC] is at
        hand, any call to [visit] on a state that is smaller than [s] is
        permitted. Thus the loop body does not need an accessibility
        witness as an argument. Its free variables are [visit] and [ACC]. *)
-    do sow'' ← foreach_successor (exist s' ow) _v (
-      λ (sow' : below s) _w ,
-        let (s', ow) := sow' in
-        bury ow (visit s' _w (Acc_inv ACC ow))
+    do sow'' ← foreach_successor (srefl s') _v (
+      λ (sow'' : sbeyond s') _w ,
+        let (s'', ow'') := sow'' in
+        strans ow'' (visit s'' _w (Acc_inv ACC (sle_slt_trans ow'' ow)))
     ) ;
-    (* Forget that we went below [s]. *)
-    do sow'' ← decay sow'' ;
     (* Invoke [hook] to signal that we are exiting [_v]. *)
     do sow'' ← transform (hook (Exit _v)) sow'' ;
-    sow''
+    strans (slt_sle_incl ow) sow''
   ELSE λ _,
      (* This vertex is out-of-bounds. Ignore it. This lets us prove
         termination without imposing any conditions on the vertices
         that we receive. *)
-    exist s (Nat.le_refl (weight s))
+    srefl s
   end eq_refl.
 
 (* In an earlier version of this code, we did not test whether [v] is
@@ -567,7 +600,10 @@ Local Fixpoint visit s _v (ACC : safe s) : beyond s :=
    and whose result type is just [S]. *)
 
 Local Definition visit' s _v : S :=
-  proj1_sig (visit s _v (all_safe s)).
+  do sow ← visit s _v (wf_slt s) ;
+  proj1_sig sow.
+  (* TODO would like to use [Acc_intro_generator] here, but this
+          causes divergence at Qed in the lemma [wp_visit']. *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -617,25 +653,27 @@ Local Ltac elim_visit_post marked' σ' :=
     unpack in h
   end.
 
+Local Hint Resolve sle_slt_trans : marble.
+
 (* The specification of [visit]. *)
 
 (* Because the result type of [visit] is a subset type,
    instead of [wp], we use the judgement [wpd]. *)
 
-Local Lemma wpd_visit (i : nat) :
-  ∀ m u _v v ACC marked σ,
-  mweight m = i →
+Local Lemma wpd_visit s (ACC : Acc slt s) :
+  ∀ m u _v v marked σ,
+  s = (m, u) →
   isMarks m marked →
   inv (marked, σ) u →
   wf (marked, σ) →
   isInt _v v →
   0 ≤ v < n →
   edge (top σ) v →
-  wpd (visit (m, u) _v ACC) (λ s', visit_post (marked, σ) {[v]} s').
+  wpd (visit s _v ACC) (λ s', visit_post (marked, σ) {[v]} s').
 Proof.
   clear dependent foreach_start start_respects_bound.
-  by well-founded induction on i along lt.
-  intros. subst i. destruct ACC. simpl visit.
+  by dependent induction on s ACC. intros s ? ?.
+  intros. subst s. simpl visit.
   destructMarks. arrays.
   (* Because we require [v < n], the first branch of this conditional
      construct must be taken. The second branch is dead. *)
@@ -658,22 +696,24 @@ Proof.
   eapply wpd_bind.
   { eapply wp_hook; tc. }
   cbv beta; intros u' ?.
+  assert ((m', u') < (m, u)).
+  { eapply decrease; eauto. }
   (* The state at this point is described by [marked'], [σ'], [u']. *)
   eapply wpd_wpd_bind_unary.
   (* We reach the loop on the successors of [v]. The goal must be changed
      from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
   rewrite wpd_wp.
   wp_op wp_foreach_successor with invariant: (
-    λ examined (s'' : { s'' | slt s'' (m, u) }),
+    λ examined (s'' : sbeyond (m', u')),
       visit_post (marked', σ') examined (proj1_sig s'')
   ).
   (* Compatibility. (This is a bit painful.) *)
-  { intros examined1 examined2 ?. intros ((m'' & u'') & ow) ? <-.
+  { intros examined1 examined2 ?. intros ((m'' & u'') & ?) ? <-.
     split; intros; unpack; pack; eauto; set_solver. }
   (* Initialization. *)
   { simpl. intro_visit_post. }
   (* Preservation. *)
-  { wp_body examined0 examined1 ((m'' & u'') & ow)
+  { wp_body examined0 examined1 ((m'' & u'') & ow'')
       introducing: (fun _ => set_step w; intros _w ?).
     elim_visit_post marked'' σ''.
     assert (E v w) by set_solver.
@@ -682,10 +722,8 @@ Proof.
        set [examined0], a subset of [marked'']. The vertex [w], also
        a successor of [v], is about to be examined. *)
     (* Change the goal back into [wpd] format. *)
-    eapply wp_wpd
-      with (Q1 := λ s'', visit_post (marked', σ') examined1 s'');
-      [| solve [ eauto] ].
-    eapply wpd_bury.
+    eapply wp_wpd; [| eauto ].
+    eapply wpd_strans.
     (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
     eapply wpd_conseq.
     { eapply IH; try reflexivity; tc. }
@@ -698,10 +736,6 @@ Proof.
   intros ((m'' & u'') & ?). simpl proj1_sig.
   intros (examined & Hpost & Hexamined) ?.
   elim_visit_post marked'' σ''.
-  (* Decay. *)
-  eapply wpd_wpd_bind_unary.
-  eapply wpd_decay. eapply wpd_ret.
-  simpl proj1_sig. intro.
   (* The structure of the stack has been preserved. *)
   unfold σ' in Hpost2.
   assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
@@ -736,7 +770,8 @@ Local Lemma wp_visit' :
 Proof.
   intros. unfold visit'. eapply wpd_visit; tc.
 Qed.
-  (* This [Qed] diverges if [all_safe] is transparent. *)
+  (* This [Qed] diverges if [Acc_intro_generator] is used
+     in the definition of [visit']. *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -745,14 +780,14 @@ Qed.
    showing this proof for pedagogical purposes; it is super difficult
    if one does not approach it in exactly the right way. *)
 
-(* Under [proj1_sig], the coercion [bury] vanishes. *)
+(* Under [proj1_sig], the coercion [strans] vanishes. *)
 
 Section FixedPoint.
 
-Local Lemma proj1_sig_bury {s1 s2} (pf : slt s1 s2) (s' : beyond s1) :
-  proj1_sig (bury pf s') = proj1_sig s'.
+Local Lemma proj1_sig_strans {s1 s2} (pf : s1 ≤ s2) (s0 : sbeyond s1) :
+  proj1_sig (strans pf s0) = proj1_sig s0.
 Proof using.
-  destruct s'. eauto.
+  destruct s0. eauto.
 Qed.
 
 (* Because [foreach_successor] is an unknown function, we must assume
@@ -772,9 +807,7 @@ Hypothesis foreach_successor_parametric:
 
 (* [visit'] satisfies the desired fixed point equation: *)
 
-Local Lemma visit_eq (k : nat) :
-  ∀ s _v ACC,
-  weight s = k →
+Local Lemma visit_eq s ACC : ∀ _v,
   proj1_sig (visit s _v ACC) =
     let (m, u) := s in
     if (_v <? length m)%uint63 then
@@ -792,29 +825,33 @@ Local Lemma visit_eq (k : nat) :
     else
       s.
 Proof using foreach_successor_parametric.
-  by well-founded induction on k along lt.
-  intros. subst k. destruct ACC as (ACC). simpl visit.
+  by dependent induction on s ACC. intros s ? ?.
+  intros. simpl visit.
   destruct s as (m & u).
   eapply IFC_if_dep; intro; [| eauto ].
   eapply IFC_if_dep; intro; [ eauto |].
   (* Eliminate [do m' ← ...], which appears only on one side. *)
-  unfold bind at 5.
+  unfold bind at 4.
   eapply bind_eq_dep; [ eauto | intro u' ].
-  eapply bind_eq_dep_dep; [| clear u' ].
+  eapply bind_eq_dep_dep.
   (* The loop. *)
-  { eapply foreach_successor_parametric
-      with (A := λ (s1 : below (m, u)) (s2 : S), proj1_sig s1 = s2);
-      [| eauto ].
-    intros (s' & ?) ?. simpl. intros <- _w.
-    rewrite proj1_sig_bury.
+  { eapply foreach_successor_parametric with (A :=
+      λ (s1 : sbeyond (set m _v true, u')) (s2 : S),
+          proj1_sig s1 = s2
+    ); [| eauto ].
+    intros (s'' & ow'') ?. simpl. intros <- _w.
+    rewrite proj1_sig_strans.
     unfold visit'.
+    unfold bind.
+    set (ow := decrease (m, u) m _v u u' eq_refl pf1 pf2).
     (* The goal boils down to proving that the parameter [ACC] is
        computationally irrelevant; that is, it does not influence
        the first projection of the result of [visit]. *)
-    erewrite !IH by eauto. (* rewrite both sides *)
+    unfold bind.
+    do 2 rewrite IH by tc.
     reflexivity. }
   (* The code that follows the loop. *)
-  intros (m' & u') ?. reflexivity.
+  intros (m'' & u'') ?. reflexivity.
 Qed.
 
 End FixedPoint.
@@ -1253,32 +1290,24 @@ Definition isCascade (c : cascade) (γ : ghost) :=
 (* The following definitions are used to justify termination. They are
    similar to those given earlier, but concern [m] instead of [(m, u)]. *)
 
-Local Definition mlt m' m := lt (mweight m') (mweight m).
-Local Definition mle m' m := le (mweight m') (mweight m).
-Declare Scope state_scope.
-Infix "≤" := mle (at level 70) : state_scope.
-Infix "<" := mlt (at level 70) : state_scope.
-Open Scope state_scope.
-
-Local Notation msafe m :=
-  (Acc lt (mweight m)).
+Open Scope marks_scope.
 
 Local Definition mbeyond m :=
   { m' | m' ≤ m }.
 
-Local Definition mbelow m :=
-  { m' | m' < m }.
+(* [mrefl m] is [m] at type [mbeyond m]. *)
 
-Local Definition mbury {m1 m2} : m1 < m2 → mbeyond m1 → mbelow m2.
+Local Definition mrefl m : mbeyond m.
 Proof using.
-  intros ow12 (m0 & ow01). exists m0.
-  unfold mle, mlt in *. eauto using Nat.le_lt_trans.
+  unfold mbeyond. exists m. eapply mle_refl.
 Defined.
 
-Local Definition mdecay {m} : mbelow m → mbeyond m.
+(* [mtrans], an identity function, proves that if [m1 ≤ m2] holds,
+   and [m0] is beyond [m1], then [m0] is also beyond [m2]. *)
+
+Local Definition mtrans {m1 m2} : m1 ≤ m2 → mbeyond m1 → mbeyond m2.
 Proof using.
-  intros (m' & ow). exists m'.
-  unfold mlt, mle in *. eauto using Nat.lt_le_incl.
+  intros ow12 (m0 & ow01). exists m0. eauto using mle_trans.
 Defined.
 
 (* -------------------------------------------------------------------------- *)
@@ -1311,41 +1340,41 @@ Defined.
    traversal; but [visit] and [visit_cps] do not construct the same DFS
    forest. *)
 
-Local Fixpoint visit_cps m _v (ACC : msafe m) (k : mbeyond m → head) : head :=
+Local Fixpoint visit_cps m _v (ACC : Acc mlt m) (k : mbeyond m → head) : head :=
   IFC (_v <? length m)%uint63 THEN λ Hv,
   IFC get m _v THEN λ _,
-    k (exist m (Nat.le_refl (mweight m)))
+    k (mrefl m)
   ELSE λ Hunmarked,
     let m' := set m _v true in
     (* Emit an [Enter] event. *)
     Event (Enter _v) @@ λ '(),
-    let ow := marking_decreases_weight m _v Hv Hunmarked in
+    let ow : m' < m := marking_decreases_weight m _v Hv Hunmarked in
     (* Construct a continuation that emits an [Exit] event
        and returns by invoking [k]. Name it [k], too. *)
-    let k (mow'' : mbelow m) :=
-      do mow'' ← mdecay mow'' ;
+    let k (mow'' : mbeyond m') :=
+      do mow'' ← mow'' ;
       Event (Exit _v) @@ λ '(),
-      k mow''
+      k (mtrans (mlt_mle_incl ow) mow'')
     in
     (* [push k _w] pushes the vertex [w] onto [k]. *)
-    let push (k : mbelow m → head) _w : mbelow m → head :=
-      λ mow',
-        let (m', ow) := mow' in
-        visit_cps m' _w (Acc_inv ACC ow) @@ λ mow',
-        k (mbury ow mow')
+    let push (k : mbeyond m' → head) _w : mbeyond m' → head :=
+      λ mow'',
+        let (m'', ow'') := mow'' in
+        visit_cps m'' _w (Acc_inv ACC (mle_mlt_trans ow'' ow)) @@ λ mow'',
+        k (mtrans ow'' mow'')
     in
     (* Push every successor [w] of [v] onto the continuation. *)
     do k ← foreach_successor k _v push ;
     (* Then, run (return to) this continuation. *)
-    k (exist m' ow)
+    k (mrefl m')
   ELSE λ _,
-    k (exist m (Nat.le_refl (mweight m))).
+    k (mrefl m).
 
 (* [visit_cps'] is a simply-typed wrapper for [visit_cps]. *)
 
 Local Definition visit_cps' m _v (k : marks → head) : head :=
   visit_cps m _v
-    (Acc_intro_generator 32 Wf_nat.lt_wf (mweight m))
+    (Acc_intro_generator 64 wf_mlt m)
     (λ mow, k (proj1_sig mow)).
 
 (* [traverse_cps] is the entry point of the traversal. *)
@@ -1399,9 +1428,9 @@ Qed.
    marked. *)
 
 (* In [isCont], the argument of the continuation [k], a marks array, has
-   type { m' : marks | P m' }. The property [P] plays no role. *)
+   type [mbeyond m]. *)
 
-Local Definition isCont {P : marks → Prop} (k : sig P → head) γ examined :=
+Local Definition isCont {m} (k : mbeyond m → head) γ examined :=
   let (marked, σ) := γ in
   ∀ m' pf marked' σ' γ',
   (marked', σ') = γ' →
@@ -1426,11 +1455,12 @@ Local Definition isCont' (k : marks → head) γ examined :=
   examined ⊆ marked' →
   wp (k m') (λ h, isHead h γ').
 
+Local Hint Resolve mle_mlt_trans : marble.
+
 (* The specification of [visit_cps]. *)
 
-Local Lemma wp_visit_cps (i : nat) :
-  ∀ m _v v ACC (k : mbeyond m → head) marked σ γ,
-  mweight m = i →
+Local Lemma wp_visit_cps m (ACC : Acc mlt m) :
+  ∀ _v v (k : mbeyond m → head) marked σ γ,
   (marked, σ) = γ →
   isMarks m marked →
   wf γ →
@@ -1441,14 +1471,14 @@ Local Lemma wp_visit_cps (i : nat) :
   wp (visit_cps m _v ACC k) (λ h, isHead h γ).
 Proof.
   clear dependent foreach_start start_respects_bound.
-  by well-founded induction on i along lt.
-  intros. wp_last Hcont. subst i γ.
-  destruct ACC. simpl visit_cps.
+  by dependent induction on m ACC. intros m ? ?.
+  intros. wp_last Hcont. subst γ.
+  simpl visit_cps.
   destructMarks. arrays.
   wp_if; [| lia].
   wp_if.
   (* Case: [v] is marked already. *)
-  { wp_op Hcont; eauto with similar set_solver. }
+  { unfold mrefl. wp_op Hcont; eauto with similar set_solver. }
   (* Case: [v] is unmarked. *)
   assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
     by eauto using isMarks_set.
@@ -1471,7 +1501,7 @@ Proof.
      Therefore the loop invariant is [isCont k γ' examined] where [examined]
      is [successors v ∖ pushed]. *)
   wp_op wp_foreach_successor with invariant: (
-    λ pushed (k : mbelow m → head),
+    λ pushed (k : mbeyond m' → head),
       let examined := successors v ∖ pushed in
       isCont k (marked', σ') examined
   ).
@@ -1484,7 +1514,7 @@ Proof.
      that would FOLLOW the loop in direct style. *)
   { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
     unfold isCont. intros m'' ? marked'' σ'' ? <-. intros.
-    simpl mdecay. wp_bind_eq.
+    wp_bind_eq.
     (* The structure of the ghost stack has been preserved. *)
     match goal with h: similar _ _ |- _ => rename h into Hpost2 end.
     unfold σ' in Hpost2.
@@ -1498,21 +1528,23 @@ Proof.
     wp_ret. eapply isHeadEvent; tc.
     (* Now return, by invoking [k]. *)
     assert (wf (marked''', σ''')) by eauto with wf.
-    wp_op Hcont; unfold σ''';
+    unfold mtrans. wp_op Hcont; unfold σ''';
       eauto using similar_store with similar set_solver. }
   (* Preservation. *)
   { wp_body pushed0 pushed1 k''
       introducing: (fun _ => set_step w; intros _w ?).
+    assert (m' < m).
+    { eapply marking_decreases_weight; assumption. }
     (* The loop body constructs and returns a new continuation. *)
     wp_ret. unfold isCont. intros m'' ? marked'' σ'' ? <-. intros.
     (* We are now looking at a recursive call. *)
     (* The state at this point is described by [marked''] and [σ''].
        The vertex [w], a successor of [v], is about to be examined. *)
     assert (E v w) by set_solver.
-    wp_op IH; last eauto.
+    wp_op IH; tc.
     clear wp_foreach_successor IH. (* for clarity *)
     (* There remains to argue that [isCont ...] implies [isCont ...]. *)
-    unfold isCont in *. simpl mbury.
+    unfold isCont in *. unfold mtrans.
     eauto using technical with similar set_solver. }
   (* Completion. *)
   (* [pushed] is [successors v], so [examined] is empty. *)
