@@ -821,6 +821,29 @@ End FixedPoint.
 
 (* -------------------------------------------------------------------------- *)
 
+(* The postcondition of [traverse]. *)
+
+(* When [traverse] terminates, a set of vertices [marked'] has been
+   marked; the ghost stack is [σ']; and a DFS forest has been virtually
+   constructed. (This forest does not exist at runtime.) *)
+
+Definition traverse_post '(m', u') :=
+  ∃ marked' σ' vs,
+  (* The array [m'] tells which vertices have been marked. *)
+  isMarks m' marked' ∧
+  (* The user invariant holds. *)
+  inv (marked', σ') u' ∧
+  (* The following four statements express the fact that the state
+     [(marked, σ)] is well-formed and final. *)
+  (* The ghost stack [σ'] stores the forest [vs]. *)
+  σ' = Frame None vs :: [] ∧
+  (* [vs] is a DFS forest. *)
+  dfs marked' vs ∧
+  (* The roots of the forest [vs] form a subset of the start vertices. *)
+  roots vs ⊆ start ∧
+  (* Every start vertex is marked. *)
+  start ⊆ marked'.
+
 (* A specification of [traverse]. *)
 
 Lemma wp_traverse :
@@ -832,26 +855,7 @@ Lemma wp_traverse :
   ∀ u,
   inv γ0 u →
   (* [traverse _n u] can be called. *)
-  wp (traverse _n u) (λ '(m', u'),
-    (* When it returns, a set of vertices [marked'] has been marked,
-       the ghost stack is [σ'], and a DFS forest has been virtually
-       constructed. (This forest does not exist at runtime.) *)
-    ∃ marked' σ' vs,
-    (* The array [m'] tells which vertices have been marked. *)
-    isMarks m' marked' ∧
-    (* The user invariant holds. *)
-    inv (marked', σ') u' ∧
-    (* The following four statements express the fact that the state
-       [(marked, σ)] is well-formed and final. *)
-    (* The ghost stack [σ'] stores the forest [vs]. *)
-    σ' = Frame None vs :: [] ∧
-    (* [vs] is a DFS forest. *)
-    dfs marked' vs ∧
-    (* The roots of the forest [vs] form a subset of the start vertices. *)
-    roots vs ⊆ start ∧
-    (* Every start vertex is marked. *)
-    start ⊆ marked'
-  ).
+  wp (traverse _n u) (λ s', traverse_post s').
 Proof.
   intros. unfold traverse.
   wp_op (wp_init (λ _, false)) introducing: m.
@@ -884,10 +888,10 @@ End U.
 
 (* -------------------------------------------------------------------------- *)
 
-(* We now define [enumerate], a simplified version of [traverse]. Instead
-   of emitting both vertex-entry and vertex-exit events, this function
-   emits just vertex-entry events. Thus its [hook] function expects just
-   a vertex as a parameter, as opposed to an event. *)
+(* We now define [enumerate], a simplified version of [traverse]. Instead of
+   emitting both vertex-entry and vertex-exit events, this function emits
+   just vertex-entry events. Thus its [hook] function expects just a vertex
+   as a parameter, as opposed to an event. *)
 
 (* Because [enumerate] does not emit vertex-exit events, it is more
    efficient than [traverse]. It performs more tail calls and requires
@@ -925,14 +929,70 @@ Proof using.
   unfold enumerate; reflexivity.
 Defined.
 
-(* The user's loop invariant. *)
+(* -------------------------------------------------------------------------- *)
 
-(* This time, as the producer state, we use a set of vertices, which
-   is the set of vertices that have been examined. *)
+(* A general specification of [enumerate]. *)
+
+(* We keep the same user invariant as in the specification of [traverse],
+   but specify that the user observes only [Enter] events (via the hook).
+   We require the invariant to be preserved by [Exit] events, which are
+   not observable. *)
+
+Section Spec.
+
+Variable inv : ghost → U → Prop.
+
+Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
+
+Variable wp_hook :
+  ∀ γ γ' u, inv γ u → wf γ →
+  ∀Int _v v, 0 ≤ v < n →
+  step γ (Enter v) γ' →
+  wp (hook _v u) (λ u', inv γ' u').
+
+Variable wp_exit :
+  ∀ γ γ' u, inv γ u → wf γ →
+  ∀Int _v v, 0 ≤ v < n →
+  step γ (Exit v) γ' →
+  inv γ' u.
+
+Lemma wp_enumerate_general :
+  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
+  ∀ u, inv γ0 u →
+  wp (enumerate _n u) (λ '(m', u'), traverse_post inv (m', u')).
+Proof.
+  intros. rewrite enumerate_eq. unfold plain_enumerate.
+  wp_op wp_traverse with invariant: inv.
+  (* Preservation. *)
+  { clear dependent u.
+    intros (marked0 & σ0) (marked1 & σ1) u ? ?.
+    intros _e e Hevent Hstep.
+    unfold hook'.
+    dependent destruction Hevent.
+    (* Case: [Enter]. *)
+    { wp_op wp_hook introducing: u'. eauto. }
+    (* Case: [Exit]. *)
+    { wp_ret. }}
+  (* Completion. *)
+  { clear dependent u.
+    cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
+    unfold traverse_post. pack; eauto. }
+Qed.
+
+End Spec.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A simplified specification of [enumerate]. *)
+
+(* This simplified specification does not guarantee that the vertices are
+   produced in DFS pre-order. It guarantees that all reachable vertices
+   are enumerated, without repetition, in an unspecified order. *)
+
+(* As the producer state, we use a set of vertices. It is the set of
+   vertices that have been examined so far. *)
 
 Variable inv : vertices → U → Prop.
-
-(* The invariant [inv] must be compatible with set equality. *)
 
 Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
 
@@ -945,11 +1005,6 @@ Local Ltac proveInv :=
 Local Notation closure vs :=
   (closure E vs).
 
-(* In comparison with [wp_traverse], the lemma [wp_enumerate] offers a
-   simplified statement. We do not advertise the fact that vertices are
-   produced in DFS pre-order. We advertise only the fact that we enumerate
-   the reachable vertices, without repetition, in an unspecified order. *)
-
 Variable wp_hook :
   ∀ examined0 examined1 u,
   inv examined0 u →
@@ -961,47 +1016,44 @@ Variable wp_hook :
   examined1 ⊆ closure start →
   wp (hook _v u) (λ u', inv examined1 u').
 
-Lemma wp_enumerate :
+Lemma wp_enumerate_simplified :
   ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ∀ u, inv ∅ u →
   wp (enumerate _n u) (λ '(m', u'),
     ∃ marked',
-    (* The array [m'] tells which vertices have been marked. *)
     isMarks m' marked' ∧
-    (* The user invariant holds. *)
     inv marked' u' ∧
     (* The marked vertices are exactly the reachable vertices. *)
     marked' ≡ closure start
   ).
 Proof.
-  intros. rewrite enumerate_eq. unfold plain_enumerate.
-  wp_op wp_traverse with invariant: (λ γ u,
-    let '(marked, σ) := γ in
-    inv marked u
-  ).
+  intros.
+  wp_op wp_enumerate_general with invariant: (λ γ u,
+    let '(marked, σ) := γ in inv marked u
+  ); clear dependent u.
   (* Compatibility. (This is a bit painful.) *)
   { intros (marked1 & σ1) (marked2 & σ2) Hequiv.
     unfold equiv in Hequiv. hnf in Hequiv. simpl in Hequiv.
     intros u'' ? <-.
     split; intros; unpack; pack; eauto; set_solver. }
-  (* Preservation. *)
-  { clear dependent u.
-    intros (marked0 & σ0) (marked1 & σ1) u ? ?.
-    intros _e e Hevent Hstep.
-    unfold hook'.
-    dependent destruction Hevent;
+  (* [Enter] events. *)
+  { intros (marked0 & σ0) (marked1 & σ1) u ? ?.
+    intros _v v ? ? Hstep.
     dependent destruction Hstep.
-    (* Case: [Enter]. *)
-    { wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
-    (* Case: [Exit]. *)
-    { wp_ret. proveInv. }}
+    wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
+  (* [Exit] events. *)
+  { intros (marked0 & σ0) (marked1 & σ1) u ? ?.
+    intros _v v ? ? Hstep.
+    dependent destruction Hstep.
+    proveInv. }
   (* Completion. *)
-  { clear dependent u.
-    cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
+  { cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
     pack; eauto using omarked_is_closure_start. }
 Qed.
 
 End Enumerate.
+
+(* -------------------------------------------------------------------------- *)
 
 (* [enumerate'] is a simplified version of [enumerate] where we return
    just the final user state [u], not the marks array [m]. *)
@@ -1014,7 +1066,7 @@ Definition enumerate' {U} hook _n (u : U) : U :=
    specification of [enumerate'] as a higher-order iteration function.
    This specification is an instance of [ITER_SET_UNIQUE]. It states
    that [enumerate'] enumerates the reachable vertices of the graph [E],
-   without repetitions, in an unspecified order. *)
+   without repetition, in an unspecified order. *)
 
 Lemma wp_enumerate' :
   ∀ {U} (hook : _vertex → U → U),
@@ -1025,7 +1077,7 @@ Lemma wp_enumerate' :
     (λ u Q, wp (enumerate' hook _n u) Q).
 Proof.
   intros. ITER. unfold enumerate'.
-  wp_op wp_enumerate with invariant: inv.
+  wp_op wp_enumerate_simplified with invariant: inv.
   (* Preservation. *)
   { intros. wp_op Hbody.
     + set_solver.
