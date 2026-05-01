@@ -63,3 +63,26 @@ Qed.
       pattern x, Ax; eapply Acc_dep_ind_strong; clear x Ax
 
     where x and Ax are the names that appear in your goal. *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* [delay] is a variant of [Acc_intro_generator].
+
+   Whereas [Acc_intro_generator n] maps [∀ x, Acc R x] to itself,
+   [delay n] maps [Acc R x] to itself.
+
+   Thus [delay] can be applied to an accessible element
+   in a setting where not every element is accessible. *)
+
+Section A.
+
+  Context {A : Type}.
+  Context {R : A -> A -> Prop}.
+
+  Fixpoint delay n {x} (Ax : Acc R x) : Acc R x :=
+    match n with
+    | O   => Ax
+    | S n => Acc_intro x (λ y Ryx, delay n (delay n (Acc_inv Ax Ryx)))
+  end.
+
+End A.
