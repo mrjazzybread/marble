@@ -215,9 +215,9 @@ Local Definition mweight m : nat :=
 Local Lemma marking_decreases_weight m _v :
   (_v <? length m)%uint63 = true →
   get m _v = false →
-  (sum_with unmarked (set m _v true) < sum_with unmarked m)%nat.
+  (mweight (set m _v true) < mweight m)%nat.
 Proof using.
-  intros Hv Hget.
+  unfold mweight. intros Hv Hget.
   (* This is a bit ugly. *)
   set (v := (φ _v)%uint63).
   assert (unsigned v). { unfold v. lia. }
