@@ -966,57 +966,14 @@ Proof using.
   unfold traverse_pre; reflexivity.
 Defined.
 
-(* -------------------------------------------------------------------------- *)
+(* We do not state the most general specification of [traverse_pre].
+   To reason about [traverse_pre], use [rewrite traverse_pre_eq]
+   followed with [unfold plain_traverse_pre, hook_pre]; then reason
+   using the lemma [wp_traverse]. *)
 
-(* A general specification of [traverse_pre]. *)
-
-(* We keep the same user invariant as in the specification of [traverse],
-   but specify that the user observes only [Enter] events (via the hook).
-   We require the invariant to be preserved by [Exit] events, which are
-   not observable. *)
-
-Section Spec.
-
-Variable inv : ghost → U → Prop.
-
-Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
-
-Variable wp_hook :
-  ∀ γ γ' u, inv γ u → wf γ →
-  ∀Int _v v, 0 ≤ v < n →
-  step γ (Enter v) γ' →
-  wp (hook _v u) (λ u', inv γ' u').
-
-Variable wp_exit :
-  ∀ γ γ' u, inv γ u → wf γ →
-  ∀Int _v v, 0 ≤ v < n →
-  step γ (Exit v) γ' →
-  inv γ' u.
-
-Lemma wp_traverse_pre_general :
-  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
-  ∀ u, inv γ0 u →
-  wp (traverse_pre _n u) (λ s', traverse_postcondition inv s').
-Proof.
-  intros. rewrite traverse_pre_eq. unfold plain_traverse_pre.
-  wp_op wp_traverse with invariant: inv.
-  (* Preservation. *)
-  { clear dependent u.
-    intros (marked0 & σ0) (marked1 & σ1) u ? ?.
-    intros _e e Hevent Hstep.
-    unfold hook_pre.
-    dependent destruction Hevent.
-    (* Case: [Enter]. *)
-    { wp_op wp_hook introducing: u'. eauto. }
-    (* Case: [Exit]. *)
-    { wp_ret. }}
-  (* Completion. *)
-  { clear dependent u.
-    cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
-    unfold traverse_postcondition. pack; eauto. }
-Qed.
-
-End Spec.
+(* Thus, the user invariant must be as required by [wp_traverse].
+   Bceause [Exit] events are not observable, the invariant must be
+   preserved by [Exit] events. *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1067,7 +1024,8 @@ Lemma wp_traverse_pre_simplified :
   ).
 Proof.
   intros.
-  wp_op wp_traverse_pre_general with invariant: (λ γ u,
+  rewrite traverse_pre_eq. unfold plain_traverse_pre.
+  wp_op wp_traverse with invariant: (λ γ u,
     let '(marked, σ) := γ in inv marked u
   ); clear dependent u.
   (* Compatibility. (This is a bit painful.) *)
@@ -1075,16 +1033,16 @@ Proof.
     unfold equiv in Hequiv. hnf in Hequiv. simpl in Hequiv.
     intros u'' ? <-.
     split; intros; unpack; pack; eauto; set_solver. }
-  (* [Enter] events. *)
+  (* Preservation. *)
   { intros (marked0 & σ0) (marked1 & σ1) u ? ?.
-    intros _v v ? ? Hstep.
-    dependent destruction Hstep.
-    wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
-  (* [Exit] events. *)
-  { intros (marked0 & σ0) (marked1 & σ1) u ? ?.
-    intros _v v ? ? Hstep.
-    dependent destruction Hstep.
-    proveInv. }
+    intros _e e Hevent Hstep.
+    dependent destruction Hevent;
+    dependent destruction Hstep;
+    unfold hook_pre.
+    (* [Enter]. *)
+    { wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
+    (* [Exit]. *)
+    { wp_ret. proveInv. }}
   (* Completion. *)
   { cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
     pack; eauto using omarked_is_closure_start. }
@@ -1132,57 +1090,15 @@ Proof using.
   unfold traverse_post; reflexivity.
 Defined.
 
-(* -------------------------------------------------------------------------- *)
+(* We do not state the most general specification of [traverse_post].
+   To reason about [traverse_post], use [rewrite traverse_post_eq]
+   followed with [unfold plain_traverse_post, hook_post]; then reason
+   using the lemma [wp_traverse]. *)
 
-(* A general specification of [traverse_post]. *)
+(* Thus, the user invariant must be as required by [wp_traverse].
+   Bceause [Enter] events are not observable, the invariant must be
+   preserved by [Enter] events. *)
 
-(* We keep the same user invariant as in the specification of [traverse],
-   but specify that the user observes only [Exit] events (via the hook).
-   We require the invariant to be preserved by [Enter] events, which are
-   not observable. *)
-
-Section Spec.
-
-Variable inv : ghost → U → Prop.
-
-Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
-
-Variable wp_hook :
-  ∀ γ γ' u, inv γ u → wf γ →
-  ∀Int _v v, 0 ≤ v < n →
-  step γ (Exit v) γ' →
-  wp (hook _v u) (λ u', inv γ' u').
-
-Variable wp_enter :
-  ∀ γ γ' u, inv γ u → wf γ →
-  ∀Int _v v, 0 ≤ v < n →
-  step γ (Enter v) γ' →
-  inv γ' u.
-
-Lemma wp_traverse_post_general :
-  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
-  ∀ u, inv γ0 u →
-  wp (traverse_post _n u) (λ s', traverse_postcondition inv s').
-Proof.
-  intros. rewrite traverse_post_eq. unfold plain_traverse_post.
-  wp_op wp_traverse with invariant: inv.
-  (* Preservation. *)
-  { clear dependent u.
-    intros (marked0 & σ0) (marked1 & σ1) u ? ?.
-    intros _e e Hevent Hstep.
-    unfold hook_post.
-    dependent destruction Hevent.
-    (* Case: [Enter]. *)
-    { wp_ret. }
-    (* Case: [Exit]. *)
-    { wp_op wp_hook introducing: u'. eauto. }}
-  (* Completion. *)
-  { clear dependent u.
-    cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
-    unfold traverse_postcondition. pack; eauto. }
-Qed.
-
-End Spec.
 End TraversePost.
 
 (* -------------------------------------------------------------------------- *)
