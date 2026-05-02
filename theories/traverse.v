@@ -276,7 +276,7 @@ End M.
    divergence when Rocq type-checks the definition of [traverse]. *)
 
 Local Instance inhabited_bool : Inhabited bool.
-Proof. econstructor. exact true. Qed.
+Proof. econstructor. exact true. Defined.
 
 Local Notation init :=
   (@init bool inhabited_bool).

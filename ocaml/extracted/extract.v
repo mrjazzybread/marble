@@ -141,15 +141,15 @@ From marble Require pqueue.
 From marble Require traverse.
 
 Extraction Inline
-  traverse.bury
-  traverse.decay
+  traverse.srefl
+  traverse.strans
   traverse.transform
   traverse.visit'
   traverse.hook_pre
   traverse.traverse_pre'
   traverse.hook_post
-  traverse.mbury
-  traverse.mdecay
+  traverse.mrefl
+  traverse.mtrans
   traverse.visit_cps'
 .
 
