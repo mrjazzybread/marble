@@ -150,6 +150,9 @@ Local Notation ghost :=
 
 Implicit Type γ : ghost.
 
+Global Instance equiv_ghost : Equiv ghost :=
+  λ '(marked0, σ0) '(marked1, σ1), marked0 ≡ marked1 ∧ σ0 = σ1.
+
 (* We write [γ0] for the initial state, where no vertex is marked
    and the stack is empty. *)
 
@@ -503,7 +506,13 @@ Variable inv : ghost → U → Prop.
    hidden in the definition of [ITER_SET].) Therefore we must impose
    this requirement. *)
 
-Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
+Variable compatible_inv :
+  Proper ((@equiv _ equiv_ghost) ==> eq ==> iff) inv.
+
+(* The invariant must hold initially. *)
+
+Variable u0 : U.
+Variable initialization : inv γ0 u0.
 
 (* The specification of the user function [hook] states that [hook]
    can expect the invariant [inv γ u] to hold, can expect to observe
@@ -610,19 +619,19 @@ Local Definition visit' s _v : S :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* [traverse u] is the main function of the depth-first search
-   algorithm. It traverses the graph with initial user state [u]. *)
+(* [traverse] is the main function of the depth-first search
+   algorithm. It traverses the graph with initial user state [u0]. *)
 
 (* The number of vertices is given by [_n].
    The start vertices are given by [foreach_start].
    The successors of a vertex are given by [foreach_successor].
    The algorithm emits events by invoking [hook]. *)
 
-Definition traverse u : S :=
+Definition traverse : S :=
   (* Allocate an array of Boolean marks. *)
-  do m ←  init _n (λ _i, false) ;
+  do m0 ←  init _n (λ _i, false) ;
   (* Visit the start vertices. *)
-  foreach_start (m, u) visit'.
+  foreach_start (m0, u0) visit'.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -887,12 +896,7 @@ Definition traverse_postcondition '(m', u') :=
 (* A specification of [traverse]. *)
 
 Lemma wp_traverse :
-  (* Provided the initial user state [u] and the empty ghost stack
-     satisfy the user invariant [inv], *)
-  ∀ u,
-  inv γ0 u →
-  (* [traverse u] can be called. *)
-  wp (traverse u) (λ s', traverse_postcondition s').
+  wp traverse (λ s', traverse_postcondition s').
 Proof.
   intros. unfold traverse.
   wp_op (wp_init (λ _, false)) introducing: m.
@@ -906,7 +910,7 @@ Proof.
   (* Initialization. *)
   { intro_visit_post. }
   (* Preservation. *)
-  { clear dependent m. clear dependent u.
+  { clear dependent m.
     intros examined0 examined1 (m' & u') ?.
     intros v ??? _v ?.
     assert (v ∈ start) by set_solver.
@@ -951,15 +955,15 @@ Local Definition hook_pre _e u :=
 
 (* [plain_traverse_pre] is just [traverse] applied to [hook']. *)
 
-Definition plain_traverse_pre u :=
-  @traverse U hook_pre u.
+Definition plain_traverse_pre :=
+  @traverse U hook_pre.
 
 (* By specializing [traverse] and [visit] for [hook_pre], we obtain code
    where the vertex-exit events disappear. In the extracted OCaml code,
    the call from [visit] to [foreach_successor] becomes a tail call. *)
 
 Derive traverse_pre
-  in (∀ u, traverse_pre u = plain_traverse_pre u)
+  in (traverse_pre = plain_traverse_pre)
   as traverse_pre_eq.
 Proof using.
   intros. unfold plain_traverse_pre, traverse, visit', visit, hook_pre.
@@ -992,11 +996,8 @@ Variable inv : vertices → U → Prop.
 
 Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
 
-Local Ltac proveInv :=
-  match goal with h: inv ?marked ?u |- inv ?marked' ?u =>
-    assert (marked' ≡ marked) as -> by set_solver;
-    exact h
-  end.
+Variable u0 : U.
+Variable initialization : inv ∅ u0.
 
 Variable wp_hook :
   ∀ examined0 examined1 u,
@@ -1009,9 +1010,14 @@ Variable wp_hook :
   examined1 ⊆ closure start →
   wp (hook _v u) (λ u', inv examined1 u').
 
+Local Ltac proveInv :=
+  match goal with h: inv ?marked ?u |- inv ?marked' ?u =>
+    assert (marked' ≡ marked) as -> by set_solver;
+    exact h
+  end.
+
 Lemma wp_traverse_pre_simplified :
-  ∀ u, inv ∅ u →
-  wp (traverse_pre u) (λ '(m', u'),
+  wp (traverse_pre u0) (λ '(m', u'),
     ∃ marked',
     isMarks m' marked' ∧
     inv marked' u' ∧
@@ -1023,7 +1029,7 @@ Proof.
   rewrite traverse_pre_eq. unfold plain_traverse_pre.
   wp_op wp_traverse with invariant: (λ γ u,
     let '(marked, σ) := γ in inv marked u
-  ); clear dependent u.
+  ).
   (* Compatibility. (This is a bit painful.) *)
   { intros (marked1 & σ1) (marked2 & σ2) Hequiv.
     unfold equiv in Hequiv. hnf in Hequiv. simpl in Hequiv.
