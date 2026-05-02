@@ -103,6 +103,9 @@ Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) �
 
 Variable E : relation vertex.
 
+Local Notation successors v := (image E {[v]}).
+Local Notation closure vs   := (closure E vs).
+
 (* No edge can leave the interval [0, n). *)
 
 Hypothesis edges_respect_bound :
@@ -112,9 +115,6 @@ Hypothesis edges_respect_bound :
    successors of the vertex [v]. They can be enumerated in an arbitrary
    order, and it is permitted for a vertex [w] to be presented several
    times. *)
-
-Local Notation successors v :=
-  (image E {[v]}).
 
 Variable wp_foreach_successor:
   ∀ {A} (body : A → _vertex → A),
@@ -998,9 +998,6 @@ Local Ltac proveInv :=
     exact h
   end.
 
-Local Notation closure vs :=
-  (closure E vs).
-
 Variable wp_hook :
   ∀ examined0 examined1 u,
   inv examined0 u →
@@ -1118,7 +1115,7 @@ Definition traverse_pre' {U} hook (u : U) : U :=
 Lemma wp_traverse_pre' :
   ∀ {U} (hook : _vertex → U → U),
   ITER_SET_UNIQUE
-    ∅ (closure E start)
+    ∅ (closure start)
     (λ v u Q, ∀ _v, isInt _v v → 0 ≤ v < n → wp (hook _v u) Q)
     (λ u Q, wp (traverse_pre' hook u) Q).
 Proof.
@@ -1133,6 +1130,15 @@ Proof.
     cbv beta. intros (m & u) (marked' & ?). unpack.
     wp_ret. }
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* WIP *)
+
+Check @traverse_post.
+
+Definition postorder :=
+  traverse
 
 (* -------------------------------------------------------------------------- *)
 (* -------------------------------------------------------------------------- *)
