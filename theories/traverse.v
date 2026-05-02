@@ -1139,12 +1139,88 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* WIP *)
+(* Lists of vertices. *)
 
-Check @traverse_post.
+Local Notation isList := (Forall2 isInt).
 
-Definition postorder :=
-  traverse
+Local Lemma isList_nil :
+  isList [] [].
+Proof.
+  econstructor.
+Qed.
+
+Local Lemma isList_singleton _v v :
+  isInt _v v →
+  isList {[_v]} {[v]}.
+Proof.
+  intros. econstructor; [ assumption | econstructor ].
+Qed.
+
+Local Hint Resolve
+  isList_nil
+  isList_singleton
+  Forall2_app
+: marble.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [list_rev_post] traverses the graph and constructs a list of the reachable
+   vertices, in reverse postorder. That is, a vertex is pushed onto the list
+   when it is exited, and it is pushed in front of the list. *)
+
+Definition plain_list_rev_post : list _vertex :=
+  do (m, _vs) ← traverse_post (λ _v _vs, _v :: _vs) [] ;
+  _vs.
+
+Derive list_rev_post
+  in (list_rev_post = plain_list_rev_post)
+  as list_rev_post_eq.
+Proof using.
+  intros. unfold plain_list_rev_post, traverse_post.
+  unfold list_rev_post; reflexivity.
+Defined.
+
+(* The specification of [list_rev_post]. *)
+
+Lemma wp_list_post :
+  wp list_rev_post (λ _vs, ∃ marked vs,
+    dfs marked vs ∧
+    roots vs ⊆ start ∧
+    marked ≡ closure start ∧
+    isList _vs (rev (postorder vs))
+  ).
+Proof.
+  rewrite list_rev_post_eq. unfold plain_list_rev_post.
+  rewrite traverse_post_eq. unfold plain_traverse_post.
+  wp_op wp_traverse with invariant: (λ γ _vs,
+    let (marked, σ) := γ in
+    isList _vs (rev (postorder_stack σ))
+  ).
+  (* Compatibility. *)
+  { intros (marked0 & σ) (marked1 & σ') Hequiv.
+    unfold equiv in Hequiv. hnf in Hequiv. unpack. subst σ'.
+    intros _vs ? <-. tauto. }
+  (* Preservation. *)
+  { intros (marked & σ) (marked' & σ') _vs Hinv Hwf.
+    intros _e e Hevent Hstep.
+    dependent destruction Hevent;
+    dependent destruction Hstep;
+    unfold hook_post; wp_ret.
+    (* [Enter]. *)
+    { simpl. list. assumption. }
+    (* [Exit]. *)
+    { dependent destruction Hwf.
+      erewrite postorder_stack_store by eauto.
+      rewrite !rev_app_distr. simpl. list.
+      simpl in Hinv. rewrite rev_app_distr in Hinv.
+      tc. }}
+  (* Completion. *)
+  { intros (m & _vs).
+    unfold traverse_postcondition.
+    intros (marked' & σ' & vs & Hpost). unpack.
+    subst σ'. simpl in Hpost0.
+    wp_ret. pack; eauto using omarked_is_closure_start. }
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 (* -------------------------------------------------------------------------- *)

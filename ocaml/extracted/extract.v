@@ -209,5 +209,6 @@ Separate Extraction
   traverse.traverse_pre
   traverse.traverse_pre'
   traverse.traverse_post
+  traverse.list_rev_post
   traverse.traverse_cps
 .

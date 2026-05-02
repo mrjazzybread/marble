@@ -1398,6 +1398,28 @@ Proof.
   econstructor; eauto.
 Qed.
 
+(* The postorder enumeration of the vertices in a stack. *)
+
+Fixpoint postorder_stack (σ : stack) :=
+  match σ with
+  | [] =>
+      []
+  | Frame ov vs :: σ =>
+      (* The optional vertex [ov] is NOT part of the postorder enumeration:
+         it will become part of this enumeration only when this stack frame
+         is popped. *)
+      postorder_stack σ ++ postorder vs
+  end.
+
+Lemma postorder_stack_store imarked omarked v ws σ :
+  wf imarked (omarked, σ) →
+  postorder_stack (store v ws σ) =
+  postorder_stack σ ++ postorder ws ++ {[v]}.
+Proof.
+  intros Hwf. dependent destruction Hwf; unfold store; simpl;
+  rewrite postorder_concat; simpl; list; eauto.
+Qed.
+
 End Interactive.
 
 Hint Constructors wf : wf.
