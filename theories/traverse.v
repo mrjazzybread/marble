@@ -63,20 +63,16 @@ Local Notation vertices := (propset vertex).
 
 Section G.
 
+(* The vertices must be numbered from 0 to [n], excluded. *)
+
+Variable _n : int.
+Variable n : Z.
+Variable isInt_n : isInt _n n.
+Variable bound_n : 0 ≤ n ≤ max_array_length.
+
 (* [foreach_start] iterates on the start vertices. *)
 
 Variable foreach_start : ∀ {A}, A → (A → _vertex → A) → A.
-
-(* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
-
-(* Fortunately, no properties of this function are needed in the proof of
-   termination of [visit]. *)
-
-Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
-
-(* The vertices must be numbered from 0 to [n], excluded. *)
-
-Variable n : Z.
 
 (* [start] is the set of vertices where the traversal should begin. *)
 
@@ -86,6 +82,22 @@ Variable start : vertices.
 
 Hypothesis start_respects_bound :
   ∀ v, v ∈ start → 0 ≤ v < n.
+
+(* [foreach_start] must enumerate the vertices in the set [start],
+   in an arbitrary order, possibly with repetitions. *)
+
+Variable wp_foreach_start:
+  ∀ {A} (body : A → _vertex → A),
+  ITER_SET ∅ start
+    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ a Q, wp (foreach_start a body) Q).
+
+(* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
+
+(* Fortunately, no properties of this function are needed in the proof of
+   termination of [visit]. *)
+
+Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
 
 (* The vertices form a directed graph. *)
 
@@ -111,15 +123,6 @@ Variable wp_foreach_successor:
   ITER_SET ∅ (successors v)
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_successor a _v body) Q).
-
-(* [foreach_start] must enumerate the vertices in the set [start],
-   in an arbitrary order, possibly with repetitions. *)
-
-Variable wp_foreach_start:
-  ∀ {A} (body : A → _vertex → A),
-  ITER_SET ∅ start
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_start a body) Q).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -441,7 +444,7 @@ Local Lemma wpd_strans {s1 s2} (a : sbeyond s1) (pf : s1 ≤ s2) Q :
   wpd a Q →
   wpd (strans pf a) Q.
 Proof using.
-  unfold strans. destruct a. tauto.
+  unfold strans, wpd. destruct a. simpl. eauto.
 Qed.
 
 (* [transform] applies a transformation [f] to the component [u] in
@@ -607,15 +610,15 @@ Local Definition visit' s _v : S :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* [traverse _n u] is the main function of the depth-first search
-   algorithm. It traverses a directed graph whose vertices are
-   numbered in the range [0, n), with initial user state [u]. *)
+(* [traverse u] is the main function of the depth-first search
+   algorithm. It traverses the graph with initial user state [u]. *)
 
-(* The start vertices are given by [foreach_start].
+(* The number of vertices is given by [_n].
+   The start vertices are given by [foreach_start].
    The successors of a vertex are given by [foreach_successor].
    The algorithm emits events by invoking [hook]. *)
 
-Definition traverse _n u : S :=
+Definition traverse u : S :=
   (* Allocate an array of Boolean marks. *)
   do m ←  init _n (λ _i, false) ;
   (* Visit the start vertices. *)
@@ -884,15 +887,12 @@ Definition traverse_postcondition '(m', u') :=
 (* A specification of [traverse]. *)
 
 Lemma wp_traverse :
-  (* Provided [n] is not too large, *)
-  ∀ _n, isInt _n n →
-  0 ≤ n ≤ max_array_length →
   (* Provided the initial user state [u] and the empty ghost stack
      satisfy the user invariant [inv], *)
   ∀ u,
   inv γ0 u →
-  (* [traverse _n u] can be called. *)
-  wp (traverse _n u) (λ s', traverse_postcondition s').
+  (* [traverse u] can be called. *)
+  wp (traverse u) (λ s', traverse_postcondition s').
 Proof.
   intros. unfold traverse.
   wp_op (wp_init (λ _, false)) introducing: m.
@@ -951,15 +951,15 @@ Local Definition hook_pre _e u :=
 
 (* [plain_traverse_pre] is just [traverse] applied to [hook']. *)
 
-Definition plain_traverse_pre _n u :=
-  @traverse U hook_pre _n u.
+Definition plain_traverse_pre u :=
+  @traverse U hook_pre u.
 
 (* By specializing [traverse] and [visit] for [hook_pre], we obtain code
    where the vertex-exit events disappear. In the extracted OCaml code,
    the call from [visit] to [foreach_successor] becomes a tail call. *)
 
 Derive traverse_pre
-  in (∀ _n u, traverse_pre _n u = plain_traverse_pre _n u)
+  in (∀ u, traverse_pre u = plain_traverse_pre u)
   as traverse_pre_eq.
 Proof using.
   intros. unfold plain_traverse_pre, traverse, visit', visit, hook_pre.
@@ -1013,9 +1013,8 @@ Variable wp_hook :
   wp (hook _v u) (λ u', inv examined1 u').
 
 Lemma wp_traverse_pre_simplified :
-  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ∀ u, inv ∅ u →
-  wp (traverse_pre _n u) (λ '(m', u'),
+  wp (traverse_pre u) (λ '(m', u'),
     ∃ marked',
     isMarks m' marked' ∧
     inv marked' u' ∧
@@ -1076,14 +1075,14 @@ Local Definition hook_post _e u :=
 
 (* [plain_traverse_post] is just [traverse] applied to [hook_post]. *)
 
-Definition plain_traverse_post _n u :=
-  @traverse U hook_post _n u.
+Definition plain_traverse_post u :=
+  @traverse U hook_post u.
 
 (* By specializing [traverse] and [visit] for [hook_post], we obtain code
    where the vertex-entry events disappear. *)
 
 Derive traverse_post
-  in (∀ _n u, traverse_post _n u = plain_traverse_post _n u)
+  in (∀ u, traverse_post u = plain_traverse_post u)
   as traverse_post_eq.
 Proof using.
   intros. unfold plain_traverse_post, traverse, visit', visit, hook_post.
@@ -1106,8 +1105,8 @@ End TraversePost.
 (* [traverse_pre'] is a simplified version of [traverse_pre] where we
    return just the final user state [u], not the marks array [m]. *)
 
-Definition traverse_pre' {U} hook _n (u : U) : U :=
-  do (m, u) ← traverse_pre hook _n u ;
+Definition traverse_pre' {U} hook (u : U) : U :=
+  do (m, u) ← traverse_pre hook u ;
   u.
 
 (* Although dropping [m] may seem silly, this allows us to give a
@@ -1118,11 +1117,10 @@ Definition traverse_pre' {U} hook _n (u : U) : U :=
 
 Lemma wp_traverse_pre' :
   ∀ {U} (hook : _vertex → U → U),
-  ∀ _n, isInt _n n → 0 ≤ n ≤ max_array_length →
   ITER_SET_UNIQUE
     ∅ (closure E start)
     (λ v u Q, ∀ _v, isInt _v v → 0 ≤ v < n → wp (hook _v u) Q)
-    (λ u Q, wp (traverse_pre' hook _n u) Q).
+    (λ u Q, wp (traverse_pre' hook u) Q).
 Proof.
   intros. ITER. unfold traverse_pre'.
   wp_op wp_traverse_pre_simplified with invariant: inv.
@@ -1295,7 +1293,7 @@ Local Definition visit_cps' m _v (k : marks → head) : head :=
 
 (* [traverse_cps] is the entry point of the traversal. *)
 
-Definition traverse_cps _n : cascade :=
+Definition traverse_cps : cascade :=
   (* Allocate an array of Boolean marks. *)
   do m ←  init _n (λ _i, false) ;
   (* Construct a trivial continuation. *)
@@ -1491,14 +1489,12 @@ Qed.
 
 (* The specification of [traverse_cps]. *)
 
-(* The postcondition is simple: [traverse_cps _n] returns a cascade
+(* The postcondition is simple: [traverse_cps] returns a cascade
    of events that obeys the labeled transition system defined by the
    initial state [γ0], the relation [step], and the predicate [final]. *)
 
 Lemma wp_traverse_cps :
-  ∀ _n, isInt _n n →
-  0 ≤ n ≤ max_array_length →
-  wp (traverse_cps _n) (λ c, isCascade c γ0).
+  wp traverse_cps (λ c, isCascade c γ0).
 Proof.
   intros. unfold traverse_cps.
   wp_op (wp_init (λ _, false)) introducing: m.
