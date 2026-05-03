@@ -1319,6 +1319,17 @@ Proof.
   + eauto using prove_reaches_self with set_solver.
 Qed.
 
+(* A well-formed stack has length at least 1. *)
+
+Lemma wf_nonempty imarked omarked σ :
+  wf imarked (omarked, σ) →
+  1 ≤ length σ.
+Proof.
+  intros Hwf. dependent destruction Hwf; subst; length.
+  + lia.
+  + unfold stack in *. lengths. lia.
+Qed.
+
 (* Between the moment where a vertex is entered and the moment where this
    vertex is exited, the stack does not change at all, except possibly in
    the top frame, where new trees can be stored. *)
