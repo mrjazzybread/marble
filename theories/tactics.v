@@ -251,3 +251,37 @@ Ltac prove_Proper :=
   | _ =>
       fail
   end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* [dependent destruction] is comfortable, but is too aggressive: it can
+   substitute away variables that have nothing to do with the hypothesis
+   that is being destructed. (It can even substitute away a section
+   variable!) As a workaround, [destruction h] is less aggressive; after
+   applying [inversion], it exploits only the equalities introduced by
+   [inversion]. *)
+
+Ltac substRecentEqs :=
+  lazymatch goal with
+  | h: _ |- _ =>
+      match type of h with
+      | unit =>
+          clear h
+      | (?x = ?y) =>
+          first [ subst x | subst y | revert h ];
+          substRecentEqs
+      | _ =>
+          revert h;
+          substRecentEqs
+      end
+  end;
+  intros.
+
+Ltac destruction h :=
+  (* Introduce a mark. *)
+  generalize (); intro;
+  (* Perform inversion. *)
+  inversion h;
+  (* Perform substitutions by exploiting the recent equalities,
+     down to the mark. *)
+  substRecentEqs.
