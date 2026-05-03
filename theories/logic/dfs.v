@@ -807,29 +807,37 @@ Qed.
    graph is the support of the forest [w/ws :: vs]. Indeed, because
    [imarked] is closed, the left-hand trees cannot reach [w]. *)
 
-Lemma bound_closure_reverse imarked w ws vs :
-  dfs imarked ⊤ (NonEmpty w ws vs) →
+(* The hypothesis [closed (flip E) omarked] states that no reverse edge
+   can exit the set [omarked]. This implies that [vs] represents all of
+   the trees towards the right; there are no more. To satisfy this
+   hypothesis, it suffices to let [omarked] be the set of all vertices. *)
+
+Lemma bound_closure_reverse imarked omarked w ws vs :
+  dfs imarked omarked (NonEmpty w ws vs) →
   closed_ imarked →
+  closed (flip E) omarked →
   closure (flip E) {[w]} ⊆ support (NonEmpty w ws vs).
 Proof.
-  (* This lemma does require that [omarked] be [⊤], as this means that
-     [vs] represents *all* of the trees towards the right; there are no
-     more. *)
-  intros.
+  intros hdfs hclosed huniv.
   eapply prove_closure_subset; [ simpl; set_solver |].
   erewrite dfs_determines_support; [| eauto ].
-  rewrite closed_path. set_solver.
+  rewrite closed_path.
+  (* [closed (flip E) (omarked ∖ imarked)] is needed here, and we have
+     [closed (flip E) omarked]. The latter implies the former because
+     [imarked] is closed. *)
+  set_solver.
 Qed.
 
 (* By combining the previous two lemmas, we find that the strongly
    connected component of [w] must be a subset of the tree [w/ws]. *)
 
-Lemma bound_scc imarked w ws vs :
-  dfs imarked ⊤ (NonEmpty w ws vs) →
+Lemma bound_scc imarked omarked w ws vs :
+  dfs imarked omarked (NonEmpty w ws vs) →
   closed_ imarked →
+  closed (flip E) omarked →
   component_ w ⊆ {[w]} ∪ support ws.
 Proof.
-  intros hdfs hclosed.
+  intros hdfs hclosed huniv.
   (* By definition, [component_ w] is the intersection of the vertices
      that [w] can reach and the vertices that can reach [w]. *)
   eapply subset_transitive; [ eapply prove_subset_intersection_right | ].
@@ -838,21 +846,22 @@ Proof.
   (* The previous two lemmas provide upper bounds for the members
      of this intersection. *)
   + generalize (bound_closure_direct hdfs hclosed); intro.
-    generalize (bound_closure_reverse hdfs hclosed); intro.
+    generalize (bound_closure_reverse hdfs hclosed huniv); intro.
     dfs_imarked. dfs_monotonic.
-    set_solver.
+    set_solver. (* a bit slow *)
 Qed.
 
 (* Now, let us further assume that [w] is the root of the last tree in a
    DFS forest. Then, the strongly connected component of [w] is exactly
    the closure of [w] in the reverse graph. *)
 
-Lemma last_scc {imarked vs w ws} :
-  dfs imarked ⊤ (concat vs (NonEmpty w ws Empty)) →
+Lemma last_scc {imarked omarked vs w ws} :
+  dfs imarked omarked (concat vs (NonEmpty w ws Empty)) →
   closed_ imarked →
+  closed (flip E) omarked →
   component_ w ≡ closure (flip E) {[w]}.
 Proof.
-  intros hdfs hclosed.
+  intros hdfs hclosed huniv.
   (* Only one inclusion is non-trivial. *)
   eapply subset_antisymmetric; [ apply prove_component_subset_closure_flip |].
   (* The strongly connected component of [w] is the intersection
@@ -881,17 +890,18 @@ Qed.
 Lemma exact_closure imarked omarked w ws vs :
   dfs imarked omarked (NonEmpty w ws vs) →
   closed_ imarked →
-  closed_ (⊤ ∖ imarked) →
+  closed (flip E) imarked →
   closure_ {[w]} ≡ {[w]} ∪ support ws.
 Proof.
-  intros hdfs hci hcci. intros. eapply subset_antisymmetric.
+  intros hdfs hci hrci. intros. eapply subset_antisymmetric.
   (* This inclusion follows from [bound_closure_direct], with the
-     additional proviso that there is no overlap with [imarked]. We know
-     that [w] is not in [imarked], and the hypothesis that [⊤ ∖ imarked]
-     is closed ensures that the closure of [w] lies outside [imarked]. *)
-  { rewrite <- closed_path in hcci. (* no escape *)
-    generalize (bound_closure_direct hdfs hci); intro.
+     additional proviso that there is no overlap with [imarked]. [w] is
+     not in [imarked], and the hypothesis that [imarked] is reverse-closed
+     ensures that the closure of [w] lies outside [imarked]. *)
+  { generalize (bound_closure_direct hdfs hci); intro.
     assert (w ∉ imarked) by eauto using root_is_unmarked.
+    assert (fact: closed_ (⊤ ∖ imarked)) by set_solver.
+    rewrite <- closed_path in fact. (* no escape *)
     set_solver. }
   (* Now, the reverse inclusion is easy. *)
   { eauto using reaches_root_support with reaches. }

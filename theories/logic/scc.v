@@ -553,6 +553,7 @@ Proof.
   rewrite hm.
   forwards: (bound_scc Hdfs2).
   { eauto using dfs_closed with closed. }
+  { set_solver. }
   eapply dfs_disjoint_concat in Hdfs. simpl in Hdfs.
   set_solver.
 Qed.
@@ -630,11 +631,12 @@ Proof.
   forwards: dfs_disjoint. econstructor; eauto.
   (* We know that the component of [root2] is its reverse closure. *)
   forwards fact1: (last_scc hdfs1 hclosed1).
+  { set_solver. }
   (* Hence, it is the very first tree of the forest [f2]. *)
   forwards fact2: exact_closure.
   { econstructor; eauto. }
-  { eauto. }
-  { set_solver. }
+  { assumption. }
+  { assumption. }
   (* Furthermore, this component forms a prefix of the last tree of [f1],
      that is, of the tree [root2/sons1]. In fact, it forms a prefix of
      the forest [f1] as a whole. *)
