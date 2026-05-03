@@ -1187,6 +1187,26 @@ Local Hint Extern 1 (roots (concat _ _) ⊆ _) =>
   rewrite roots_concat
 : set_solver.
 
+(* The set of marked vertices grows over time. *)
+
+Lemma wf_monotonic imarked γ :
+  wf imarked γ →
+  ∀ omarked σ,
+  γ = (omarked, σ) →
+  imarked ⊆ omarked.
+Proof.
+  induction 1; intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  dfs_monotonic; set_solver.
+Qed.
+
+Ltac wf_monotonic :=
+  repeat match goal with
+  h: wf _ _ |- _ =>
+    generalize (wf_monotonic h eq_refl); revert h
+  end;
+  intros.
+
 (* A stack that contains just one empty frame is well-formed. *)
 
 Lemma wf_init :
