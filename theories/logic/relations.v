@@ -543,6 +543,15 @@ Lemma path_flip_equiv :
     (path (flip E)).
 Proof. repeat intro. eapply path_flip. Qed.
 
+Lemma prove_closed_path_complement vs :
+  closed (path E) vs →
+  closed (path (flip E)) (⊤ ∖ vs).
+Proof.
+  intros.
+  rewrite <- path_flip_equiv.
+  set_solver.
+Qed.
+
 (* The strongly connected components are the same with respect to [E]
    and with respect to [flip E]. *)
 
@@ -590,22 +599,44 @@ Proof.
   unfold scc. eauto using use_path_flip.
 Qed.
 
-(* If [vs] is closed under successor, then its complement is closed
-   under predecessor. *)
+(* If [vs] is closed under successor
+   then its complement is closed under predecessor. *)
 
 Lemma prove_closed_complement vs :
   closed E vs →
   closed (flip E) (⊤ ∖ vs).
 Proof. set_solver. (* wow *) Qed.
 
-End Flip.
-
-Lemma prove_closed_path_complement {V} (E : V → V → Prop) vs :
-  closed (path E) vs →
-  closed (path (flip E)) (⊤ ∖ vs).
+Lemma use_closed_complement `{!RelDecision (∈@{set V})} vs :
+  closed (flip E) (⊤ ∖ vs) →
+  closed E vs.
 Proof.
   intros.
-  rewrite <- path_flip_equiv.
-  eapply prove_closed_complement.
+  assert (fact: closed E (⊤ ∖ (⊤ ∖ vs))) by set_solver.
+  rewrite double_complement in fact by assumption.
   assumption.
 Qed.
+
+Lemma closed_complement `{!RelDecision (∈@{set V})} vs :
+  closed (flip E) (⊤ ∖ vs) ↔
+  closed E vs.
+Proof.
+  split; eauto using prove_closed_complement, use_closed_complement.
+Qed.
+
+End Flip.
+
+Section Again.
+
+Variable V : Type.
+Variable E : V → V → Prop.
+
+Lemma closed_complement' `{!RelDecision (∈@{set V})} vs :
+  closed E (⊤ ∖ vs) ↔
+  closed (flip E) vs.
+Proof.
+  change E with (flip (flip E)) at 1.
+  eauto using closed_complement.
+Qed.
+
+End Again.
