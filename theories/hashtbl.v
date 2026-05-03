@@ -27,6 +27,9 @@ Declare Instance IsInt_hash :
 
 (* Decidable equality over keys. *)
 Global Declare Instance EqK : EqDecision K.
+(* The type of keys is countably infinite. *)
+Global Declare Instance CoutntK : Countable K.
+
 Open Scope uint63.
 
 (* Hash tables are arrays of buckets.  A bucket is an association list
@@ -153,16 +156,155 @@ Ltac assoc := autorewrite with cassoc.
 Tactic Notation "assoc" "in" "*" :=
   autorewrite with cassoc in *.
 
+Notation hmap := (gmap K (list V)).
+
+(* Some definitions to facilitate working with functions as infinite
+   maps.
+
+    Remark: we leverage the fact that the Instance of the in habited
+    type class for lists is the empty list.*)
+
+Definition _add (m : hmap) (k : K) (v : V) := <[k:= v :: m !!! k]> m.
+
+Definition rm (m : hmap) (k : K) :=
+  <[k:=tl (m !!! k)]> m.
+
+Definition rm_add (m : hmap) (k : K) (v : V) :=
+  _add (rm m k) k v.
+
+Definition cardinality (h : hmap) :=
+  (map_fold (fun _ v acc => acc + len v) 0 h)%Z.
+
+Lemma cardinality_empty :
+  cardinality ∅ = 0%Z.
+Proof.
+  apply map_fold_empty.
+Qed.
+
+Hint Rewrite
+  @fin_maps.insert_empty
+  using auto : cmap.
+
+Ltac map := autorewrite with cmap.
+
+Lemma cardinality_insert_fresh :
+  forall m k l n,
+    cardinality m = n ->
+    m !! k = None ->
+    cardinality (<[k:=l]>m) = (len l + n)%Z.
+Proof.
+  intros.
+  subst n.
+  unfold cardinality.
+  rewrite map_fold_insert; tc.
+Qed.
+
+Lemma cardinality_delete :
+  forall m k l n,
+    cardinality m = n ->
+    m !! k = Some l ->
+    (cardinality (delete k m) + len l)%Z = n.
+Proof.
+  intros. subst n. unfold cardinality.
+  rewrite map_fold_delete with (m:=m); tc.
+Qed.
+
+Lemma cardinality_insert :
+  forall m k l n,
+    cardinality m = n ->
+    cardinality (<[k:=l]>m) = (n + len l - len (m !!! k))%Z.
+Proof.
+  intros m k l n H1.
+  intros.
+  unfold _add.
+  destruct (decide (m !! k = None)) as [E1 | E1].
+  - rewrite fin_maps.lookup_total_alt. rewrite E1.
+    simpl. rewrite cardinality_insert_fresh with (n:=n) by auto. length. lia.
+  - rewrite <- insert_delete_eq.
+    rewrite cardinality_insert_fresh with (n:=(n - len (m !!! k))%Z).
+    + length. lia.
+    + rewrite <- cardinality_delete with (n:=n) (k:=k) (l:= m !!! k) (m:=m); auto with lia.
+      remember (m !! k) as l' eqn:E2.
+      destruct l' as [x|].
+      { by rewrite lookup_total_correct with (x:=x). }
+      { contradiction. }
+    + by rewrite lookup_delete_eq.
+Qed.
+
+Ltac cinsert n := rewrite cardinality_insert with (n:=n) by auto.
+
+Lemma cardinality_add :
+  forall m n k v,
+    cardinality m = n ->
+    cardinality (_add m k v) = (n + 1)%Z.
+Proof.
+  intros.
+  unfold _add.
+  cinsert n.
+  length. lia.
+Qed.
+
+Lemma cardinality_rm_empty :
+  forall m n k,
+    cardinality m = n ->
+    m !!! k = [] ->
+    cardinality (rm m k) = n%Z.
+Proof.
+  intros m n k H1 H2.
+  unfold rm.
+  cinsert n.
+  rewrite H2. by length.
+Qed.
+
+Lemma cardinality_rm :
+  forall m n k,
+    cardinality m = n ->
+    m !!! k <> [] ->
+    cardinality (rm m k) = (n - 1)%Z.
+Proof.
+  intros.
+  unfold rm.
+  cinsert n.
+  remember (m !!! k) as l eqn:E.
+  destruct l. contradiction.
+  by length.
+Qed.
+
+Lemma cardinality_rm_add_empty :
+  forall m n k v,
+    cardinality m = n ->
+    m !!! k = [] ->
+    cardinality (rm_add m k v) = (n + 1)%Z.
+Proof.
+  intros.
+  unfold rm_add.
+  rewrite cardinality_add with (n:=cardinality(rm m k)) by auto.
+  rewrite cardinality_rm_empty with (n:=cardinality m) by auto.
+  lia.
+Qed.
+
+Lemma cardinality_rm_add :
+  forall m n k v,
+    cardinality m = n ->
+    m !!! k <> [] ->
+    cardinality (rm_add m k v) = n.
+Proof.
+  intros.
+  unfold rm_add.
+  rewrite cardinality_add with (n:=cardinality(rm m k)) by auto.
+  rewrite cardinality_rm with (n:=cardinality m) by auto. lia.
+Qed.
+
 (* Relates a list of buckets to a total function from keys to lists of
    values, where [n] is the length of the [tbl].  For every key [k],
    [m] returns the list of values mapped to [k] in [tbl].  If [k] is
    not in [tbl], [m] returns the empty list.  This definition only
    considers the bucket whose index corresponds to the hash of [k]. *)
-Definition valid_buckets (n : Z) (tbl : list bucket) (m : K -> (list V)) : Prop :=
+Definition valid_buckets (n : Z) (tbl : list bucket) (m : hmap) : Prop :=
   forall i b k,
     indexZ k n = i ->
     b = filter_key k (tbl !!! i) ->
-    m k = map snd b.
+    m !!! k = map snd b.
 
 (* If a key [k] is in a bucket of index [i], then [i] must correspond
 to the hash of [k]. *)
@@ -172,20 +314,13 @@ Definition no_garbage (n : Z) (tbl : list bucket) : Prop :=
     (k, v) ∈ (tbl !!! i) ->
     indexZ k n = i.
 
-Require Stdlib.Logic.Epsilon.
-
-Definition cardinality (m : K -> (list V)) :=
-  let s := Epsilon.epsilon (inhabits ([] : list V))
-    (fun (l : list V) => forall k v, v ∈ m k -> v ∈ l /\ NoDup l) in
-  len s.
-
 (* Correlates a hash table with a total function that maps keys to a
    list of values.  Here we combine the previous two definitions as
    well as stating that a hash table has the same properties as a
    non-empty array.  The condition that the table must be non-empty is
    necessary for array accesses to be valid since the array is not
    resizable for now. *)
-Definition isHashtbl (h : hashtbl) (m : K -> (list V)) :=
+Definition isHashtbl (h : hashtbl) (m : hmap) :=
   ∃ l n, isArray h l ∧ n = len l ∧ 0 < n ∧
       no_garbage n l ∧ valid_buckets n l m.
 
@@ -220,18 +355,6 @@ Local Ltac index_intro k _n n :=
   set (i := indexZ k n);
   assert (isInt _i i) by tc.
 
-(* Some definitions to facilitate working with functions as infinite
-   maps. *)
-
-Definition _empty := fun (_ : K) => [] : list V.
-Notation "'∅'" := _empty.
-Definition _set m (k : K) (v : V) :=
-  (fun k' => if decide (k = k') then v :: m k' else m k').
-Definition rm m (k : K) : K -> list V :=
-  (fun k' => if (decide (k = k')) then tl (m k') else m k').
-Definition rm_set m (k : K) (v : V) : K -> list V :=
-  _set (rm m k) k v.
-
 (* Hash table operations and their respective specifications. *)
 
 Definition create (n : int) : hashtbl :=
@@ -248,8 +371,8 @@ Proof.
     do 2 list in *. apply not_elem_of_nil in H3.
     contradiction. }
   { intros i b k H3 H4.
-    list in H3. list in H4.
-    subst. simpl. auto. }
+    list in H4.
+    subst. by simpl. }
 Qed.
 
 Definition add (h : hashtbl) k v :=
@@ -291,7 +414,7 @@ Lemma valid_insert_bucket_eq :
     valid_buckets n l m ->
     b = l !!! indexZ k n ->
     b' = filter_key k ((k, v) :: b) ->
-    v :: m k = map snd b'.
+    v :: (m !!! k) = map snd b'.
 Proof.
   intros k v l m n b b' H1 H2 H3 H4.
   subst b'. filter. simpl. f_equal.
@@ -307,7 +430,7 @@ Lemma valid_insert_bucket_ne :
     b = l !!! indexZ k n ->
     b' = filter_key k' ((k, v) :: b) ->
     k ≠ k' ->
-    m k' = map snd b'.
+    m !!! k' = map snd b'.
 Proof.
   intros k k' i ????? b' H1 H2 ?????.
   subst b'. rewrite filter_key_cons_False by auto.
@@ -328,19 +451,23 @@ Lemma valid_buckets_insert :
     b = tbl !!! i ->
     valid_buckets n tbl m ->
     valid_buckets n (<[i:=(k, v) :: b]> tbl)
-      (_set m k v).
+      (_add m k v).
 Proof.
   intros i n tbl k v b m ???? H5.
   intros i' b' k' ? ?.
   (* The updated map as described in the postcondition
      accurately models the updated hash table. *)
-  unfold _set. destruct decide.
+  unfold _add. destruct (decide (k = k')).
   + (* When we apply the updated map with the key we pass as
          argument. *)
+    subst k'.
+    rewrite fin_maps.lookup_total_insert_eq.
     apply valid_insert_bucket_eq with tbl n (tbl !!! i);
       subst; by list.
   + (* When we apply the updated map with a different key [k']. *)
-    case_bucket k n i'; [apply H5 with i| apply H5 with i'];
+    rewrite fin_maps.lookup_total_insert_ne by auto.
+    case_bucket k n i';
+      [apply H5 with i| apply H5 with i'];
       subst; list; simpl; by filter.
 Qed.
 
@@ -348,7 +475,7 @@ Lemma wp_add :
   forall h m k v,
     isHashtbl h m ->
     wp (add h k v)
-      (λ h, isHashtbl h (_set m k v)).
+      (λ h, isHashtbl h (_add m k v)).
 Proof.
   intros h m k v H.
   unfold add.
@@ -403,14 +530,17 @@ Lemma valid_buckets_remove :
 Proof.
   intros n i k b b' tbl m H1 H2 H3 H4 H5 H6 i' b'' k' H7 H8.
   unfold rm.
-  case_decide.
+  destruct (decide (k = k')).
   { subst b'' b' k i'. list.
     rewrite remove_assoc_bucket_eq with (b:=b) by auto.
+    rewrite fin_maps.lookup_total_insert_eq.
     list. f_equal. subst b.
     apply H6 with (i := i); by subst. }
-  { case_bucket k' n i.
+  { rewrite fin_maps.lookup_total_insert_ne by auto.
+    case_bucket k' n i.
     + subst b'' i'. list.
       rewrite remove_assoc_bucket_ne with (k:=k) (b:=b) by auto.
+
       apply H6 with i; by subst.
     + subst b''. list.
       apply H6 with i'; by subst. }
@@ -456,7 +586,7 @@ Qed.
 Lemma wp_replace :
   forall h m k v,
     isHashtbl h m ->
-    wp (replace h k v) (λ h, isHashtbl h (rm_set m k v)).
+    wp (replace h k v) (λ h, isHashtbl h (rm_add m k v)).
 Proof.
   intros h m k v H.
   unfold replace.
@@ -494,7 +624,7 @@ Qed.
 Lemma get_wp :
   forall h m k,
     isHashtbl h m ->
-    wp (get h k) (λ v, head (m k) = v).
+    wp (get h k) (λ v, head (m !!! k) = v).
 Proof.
   intros h m k H.
   unfold get.
