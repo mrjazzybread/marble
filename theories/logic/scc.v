@@ -13,14 +13,16 @@ Set Implicit Arguments.
 
 (* -------------------------------------------------------------------------- *)
 
-(* This is the description of the algorithm, in three lines. *)
+(* This is the description of the algorithm, in four lines. *)
 
 Definition scc_description {V} (E : V → V → Prop) (f2 : forest V) :=
-  ∃ f1,
+  ∃ f1 top,
+  (* The set [top] is reverse closed. (It can be the set of all vertices.) *)
+  closed (flip E) top ∧
   (* Some forest [f1] is produced by a DFS traversal of the graph. *)
-  dfs E ∅ ⊤ f1 ∧
+  dfs E ∅ top f1 ∧
   (* The forest [f2] is produced by a DFS traversal of the reverse graph. *)
-  dfs (flip E) ∅ ⊤ f2 ∧
+  dfs (flip E) ∅ top f2 ∧
   (* And the roots of [f2] are visited in the reverse postorder of [f1]. *)
   ordered (rev (postorder f1)) f2.
 
@@ -531,15 +533,16 @@ Qed.
 (* In the particular case where the distinguished vertex [r] is the last
    root of the forest, the same can be said. *)
 
-Lemma filter_last_scc `{!RelDecision (∈@{set V})} imarked ws vs :
-  dfs E imarked ⊤ (concat vs (NonEmpty r ws Empty)) →
+Lemma filter_last_scc `{!RelDecision (∈@{set V})} imarked omarked ws vs :
+  dfs E imarked omarked (concat vs (NonEmpty r ws Empty)) →
   closed E imarked →
+  closed (flip E) omarked →
   ∃ ws',
   filter (concat vs (NonEmpty r ws Empty)) (concat vs ws').
 Proof.
   (* The proof consists in applying [filter_reflexive] to the forest [vs]
      and applying [filter_scc] to the tree [w/ws]. *)
-  intros Hdfs ?.
+  intros Hdfs ? ?.
   generalize Hdfs;
   intros (mmarked & Hdfs1 & Hdfs2)%dfs_concat_inversion.
   edestruct filter_scc.
@@ -553,7 +556,7 @@ Proof.
   rewrite hm.
   forwards: (bound_scc Hdfs2).
   { eauto using dfs_closed with closed. }
-  { set_solver. }
+  { assumption. }
   eapply dfs_disjoint_concat in Hdfs. simpl in Hdfs.
   set_solver.
 Qed.
@@ -586,6 +589,8 @@ Qed.
 Lemma scc_soundness_main_lemma {V} `{!RelDecision (∈@{set V})} :
   ∀ f2,
   ∀ E : V → V → Prop,
+  ∀ top : set V,
+  closed (flip E) top →
   ∀ masked,
   (* The masked vertices have been removed from the graph. They
      probably have no outgoing or incoming edges. For now, we only
@@ -594,20 +599,22 @@ Lemma scc_soundness_main_lemma {V} `{!RelDecision (∈@{set V})} :
   closed E masked →
   closed (flip E) masked →
   ∀ f1,
-  dfs E masked ⊤ f1 →
-  dfs (flip E) masked ⊤ f2 →
+  dfs E masked top f1 →
+  dfs (flip E) masked top f2 →
   ordered (rev (postorder f1)) f2 →
   is_scc_forest E f2.
 Proof.
   (* As proposed by Wegener, the proof is by induction on the forest [f2]. *)
   induction f2 as [| root2 sons2 _ tail2 IHtail2 ];
-  intros E masked hclosed1 hclosed2 f1 hdfs1 hdfs2 ho;
+  intros E top ? masked hclosed1 hclosed2 f1 hdfs1 hdfs2 ho;
   dependent destruction hdfs2.
 
   (* Case: [f2] is empty. The result is immediate. *)
   { constructor. }
 
   (* Case: [f2] is non-empty. *)
+  rename imarked into masked.
+  rename omarked into top.
   dependent destruction ho.
 
   (* Sub-case: the reverse post-order of [f1] begins with a vertex [r]
@@ -645,6 +652,7 @@ Proof.
   { tc. }
   { eexact hdfs1. }
   { eauto with closed. }
+  { assumption. }
   (* We now consider a smaller graph, where the vertices of [scc root2]
      are removed. We argue that, with respect to this smaller graph,
      we still have a DFS forest [f1'], obtained from [f1] by removing
@@ -656,39 +664,40 @@ Proof.
      hypothesis in order to prove that [tail2] is an SCC forest. *)
   assert (fact: component E root2 ≡ {[root2]} ∪ support sons2).
   { by rewrite fact1, fact2. }
-  set (masked := component E root2).
-  assert (factm: masked ≡ {[root2]} ∪ support sons2).
+  set (masked' := component E root2).
+  assert (factm: masked' ≡ {[root2]} ∪ support sons2).
   { exact fact. }
   constructor.
   { exact fact. }
-  eapply is_scc_forest_inclusion with (masked := masked); [
-    unfold masked; reflexivity
+  eapply is_scc_forest_inclusion with (masked := masked'); [
+    unfold masked'; reflexivity
   | tc
    | (* open *)
-   | unfold masked; rewrite fact1, fact2; assumption
+   | unfold masked'; rewrite fact1, fact2; assumption
   ].
   (* Let us now apply the induction hypothesis to a smaller graph. We wish
      to exclude the vertices in [scc root2]. *)
-  eapply IHtail2 with (masked := union imarked masked).
-  (* Premise 1. The new set of masked vertices is still closed. *)
-  { eapply prove_closed_union.
-    - eapply still_closed. eauto with closed.
-    - generalize (@image_masked_direct _ masked E); intro.
-      set_solver. }
-  (* Premise 2. The new set of masked vertices is still reverse closed. *)
-  { eapply prove_closed_union.
-    - rewrite reverse_masked_equiv.
-      eapply still_closed. eauto with closed.
-    - generalize (@image_masked_reverse _ masked E); intro.
-      set_solver. }
-  (* Premise 3. *)
-  { dfs2. eexact hdfs1'. set_solver. }
-  (* Premise 4. We have a valid DFS over [tail2]. *)
+  eapply IHtail2 with (top := top) (masked := union masked masked').
+  (* Premise 1. [top] is still closed. *)
+  { unfold E'. intros w (v & ?). unpack. set_solver. }
+  (* Premise 2. The new set of masked vertices is still closed. *)
+  { unfold E'. intros w (v & ?). unpack. set_solver. }
+  (* TODO still_closed, image_masked_direct, image_masked_reverse unused? *)
+  (* Premise 3. The new set of masked vertices is still reverse closed. *)
+  { unfold E', flip. intros v (w & ?). unpack. set_solver. }
+  (* Premise 4. *)
+  { dfs2. eexact hdfs1'.
+    assert (root2 ∈ top).
+    { dfs_monotonic. set_solver. }
+    assert (support sons2 ⊆ top).
+    { apply dfs_omarked in hdfs2_1. dfs_monotonic. set_solver. }
+    set_solver. }
+  (* Premise 6. We have a valid DFS over [tail2]. *)
   { rewrite reverse_masked_equiv.
     eapply dfs_filter_remainder; [| set_solver ].
     rewrite factm, union_assoc.
     eauto using dfs_second_premise_reformulation. }
-  (* Premise 5. Requires reasoning about [ordered]. *)
+  (* Premise 7. Requires reasoning about [ordered]. *)
   { eapply ordered_equpto.
     + eapply OrderedSkip with (r := root2). set_solver. eauto.
     + match goal with h: {[_]} ++ _ = _ |- _ => rewrite h end.
