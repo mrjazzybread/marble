@@ -256,29 +256,6 @@ Hint Unfold E' : E'.
 Lemma fewer_edges v w : E' v w → E v w.
 Proof. unfold E'. tauto. Qed.
 
-(* Hence, if a set is closed with respect to [E], then it is also closed
-   with respect to [E']. *)
-
-Lemma still_closed vs : closed E vs → closed E' vs.
-Proof.
-  generalize (into_contravariant_E fewer_edges). eauto.
-Qed.
-
-(* The set [masked] is closed with respect to [E'] and [flip E'].
-   This is due to the fact that a masked vertex has no incoming or
-   outgoing edges. *)
-
-Lemma image_masked_direct: into E' masked ∅.
-Proof.
-  unfold E'. set_solver.
-Qed.
-
-Lemma image_masked_reverse:
-  into (flip E') masked ∅.
-Proof.
-  unfold flip, E'. set_solver.
-Qed.
-
 (* A path from [x] to [z] is preserved unless there is a masked
    vertex [y] on this path. *)
 
@@ -682,7 +659,6 @@ Proof.
   { unfold E'. intros w (v & ?). unpack. set_solver. }
   (* Premise 2. The new set of masked vertices is still closed. *)
   { unfold E'. intros w (v & ?). unpack. set_solver. }
-  (* TODO still_closed, image_masked_direct, image_masked_reverse unused? *)
   (* Premise 3. The new set of masked vertices is still reverse closed. *)
   { unfold E', flip. intros v (w & ?). unpack. set_solver. }
   (* Premise 4. *)
