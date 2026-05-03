@@ -104,6 +104,7 @@ Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) �
 Variable E : relation vertex.
 
 Local Notation successors v := (image E {[v]}).
+Local Notation closed vs    := (closed E vs).
 Local Notation closure vs   := (closure E vs).
 
 (* No edge can leave the interval [0, n). *)
@@ -123,6 +124,45 @@ Variable wp_foreach_successor:
   ITER_SET ∅ (successors v)
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_successor a _v body) Q).
+
+(* -------------------------------------------------------------------------- *)
+
+(* Let us write [universe] for the set of all vertices. *)
+
+Definition universe : vertices :=
+  {[ v | 0 ≤ v < n ]}.
+
+Lemma start_subset_universe : start ⊆ universe.
+Proof using start_respects_bound.
+  clear -start_respects_bound.
+  set_solver.
+Qed.
+
+Lemma closed_universe : closed universe.
+Proof using edges_respect_bound.
+  clear -edges_respect_bound.
+  set_solver.
+Qed.
+
+Lemma closure_start_subset_universe : closure start ⊆ universe.
+Proof using start_respects_bound edges_respect_bound.
+  eapply prove_closure_subset.
+  + eapply start_subset_universe.
+  + rewrite closed_path. eapply closed_universe.
+Qed.
+
+(* If every vertex is a start vertex then every vertex is reachable. *)
+
+Lemma closure_start_is_universe :
+  universe ⊆ start →
+  closure start ≡ universe.
+Proof.
+  intros. eapply subset_antisymmetric.
+  + eapply closure_start_subset_universe.
+  + transitivity start.
+    - assumption.
+    - eauto using reaches_reflexive.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
