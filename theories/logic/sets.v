@@ -46,6 +46,12 @@ Lemma prove_subset_union_diff `{!RelDecision (∈@{set V})} vs ws :
   vs ⊆ (vs ∖ ws) ∪ ws.
 Proof. rewrite difference_union. set_solver. Qed.
 
+Lemma double_complement `{!RelDecision (∈@{set V})} vs :
+  ⊤ ∖ (⊤ ∖ vs) ≡ vs.
+Proof.
+  rewrite difference_difference_r. set_solver.
+Qed.
+
 Lemma prove_subset_intersection_right vs vs1 vs2 :
   vs ⊆ vs1 -> vs ⊆ vs2 -> vs ⊆ vs1 ∩ vs2.
 Proof. set_solver. Qed.
