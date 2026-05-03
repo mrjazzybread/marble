@@ -42,12 +42,22 @@
 
 ## DFS
 
-* Replace ⊤ with a smaller set where needed,
-  so we can reason about finite graphs.
-
 * Extend the documentation with a section on DFS.
 
 ## Traverse
+
+* Instead of making the state a pair `(m, u)`,
+  we could make it just `u` and assume that
+  there is a way of getting/setting marks.
+  This would remove a level of indirection when `u` itself
+  needs to be a tuple (or when `u` is unit).
+  Also, perhaps this would open the way to an optional 3-color scheme.
+  The hook would have to prove that it preserves the Boolean view
+  of the marks (grey → black allowed).
+  Also, this should allow numbering vertices in discovery order
+  and using the numbers as marks.
+  Also, this should lead us to more general code where the vertices
+  are not necessarily numbers in [0, n).
 
 * In `traverse` and `traverse_cps`, the user does not have access
   to the marks array during the traversal. (In `traverse`, the user
