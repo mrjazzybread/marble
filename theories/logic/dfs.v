@@ -1075,6 +1075,12 @@ Definition store w ws σ : stack :=
       Frame ov (concat vs (NonEmpty w ws Empty)) :: σ
   end.
 
+Lemma length_store σ w ws :
+  length (store w ws σ) = length σ.
+Proof.
+  destruct σ as [| [ov vs]]; simpl store; length; eauto.
+Qed.
+
 (* The labeled transition system [step] describes the evolution of the
    state, and the corresponding observable events, as the depth-first
    search traversal progresses. *)
