@@ -10,7 +10,6 @@
 (*                                                                            *)
 (******************************************************************************)
 
-From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
 From stdpp Require Import numbers list well_founded.
 From stdpp Require Import sets propset.
 From listz Require Import listz.
@@ -238,6 +237,9 @@ Inductive isEvent : event _vertex → event vertex → Prop :=
 | IsEventExit:
     ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Exit _v) (Exit v).
 
+Local Ltac destructEvent :=
+  match goal with h: isEvent _ _ |- _ => destruction h end.
+
 Local Hint Constructors isEvent : marble.
 
 Local Hint Resolve similar_same_edges : marble.
@@ -323,9 +325,6 @@ End M.
 
 Local Instance inhabited_bool : Inhabited bool.
 Proof. econstructor. exact true. Defined.
-
-Local Notation init :=
-  (@init bool inhabited_bool).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -669,7 +668,7 @@ Local Definition visit' s _v : S :=
 
 Definition traverse : S :=
   (* Allocate an array of Boolean marks. *)
-  do m0 ←  init _n (λ _i, false) ;
+  do m0 ←  @init bool inhabited_bool _n (λ _i, false) ;
   (* Visit the start vertices. *)
   foreach_start (m0, u0) visit'.
 
@@ -1078,9 +1077,7 @@ Proof.
   (* Preservation. *)
   { intros (marked0 & σ0) (marked1 & σ1) u ? ?.
     intros _e e Hevent Hstep.
-    dependent destruction Hevent;
-    dependent destruction Hstep;
-    unfold hook_pre.
+    destructEvent; destructStep; unfold hook_pre.
     (* [Enter]. *)
     { wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
     (* [Exit]. *)
@@ -1181,6 +1178,9 @@ Qed.
 
 (* Lists of vertices. *)
 
+(* TODO if [isArray] was parameterized with a relation [_A → A → Prop]
+   then the predicate [isList] would not be needed. *)
+
 Local Notation isList := (Forall2 isInt).
 
 Local Lemma isList_nil :
@@ -1199,7 +1199,9 @@ Qed.
 Local Hint Resolve
   isList_nil
   isList_singleton
+  Forall2_insert
   Forall2_app
+  Forall2_replicate
 : marble.
 
 (* -------------------------------------------------------------------------- *)
@@ -1243,13 +1245,11 @@ Proof.
   (* Preservation. *)
   { intros (marked & σ) (marked' & σ') _vs Hinv Hwf.
     intros _e e Hevent Hstep.
-    dependent destruction Hevent;
-    dependent destruction Hstep;
-    unfold hook_post; wp_ret.
+    destructEvent; destructStep; unfold hook_post; wp_ret.
     (* [Enter]. *)
     { simpl. list. assumption. }
     (* [Exit]. *)
-    { dependent destruction Hwf.
+    { destructWf.
       erewrite postorder_stack_store by eauto.
       rewrite !rev_app_distr. simpl. list.
       simpl in Hinv. rewrite rev_app_distr in Hinv.
