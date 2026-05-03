@@ -754,16 +754,16 @@ Proof.
   apply filter_key_assoc.
 Qed.
 
-Definition length (h : hashtbl) : int :=
+Definition hlength (h : hashtbl) : int :=
   fst h.
 
 Lemma length_spec :
   forall h m,
     isHashtbl h m ->
-    wp (length h) (λ n, isInt n (cardinality m)).
+    wp (hlength h) (λ n, isInt n (cardinality m)).
 Proof.
   intros.
-  unfold length.
+  unfold hlength.
   wp_ret.
   by destructIsHashtbl h.
 Qed.
@@ -775,11 +775,77 @@ Fixpoint bucket_iter_right {S} (b : bucket) (s : S) f : S:=
      do s' ← bucket_iter_right b' s f;
      f k v  s' end.
 
+Definition fold_right_spec {S} b (f : K -> V -> S -> S) :=
+    ITER_LIST [] (List.rev b)
+      (λ (x : K * V) s Q,
+        forall k v, x = (k, v) -> wp (f k v s) Q)
+      (λ s Q, wp (bucket_iter_right b s f) Q).
+
+Lemma bucket_iter_right_wp {S} b f :
+  @fold_right_spec S b f.
+Proof.
+  unfold fold_right_spec.
+  induction b as [|[k v] b Ih];
+    simpl bucket_iter_right; intros; ITER; list in *.
+  - wp_ret.
+  - wp_op Ih shadowing:s.
+    { intros. wp_op Hbody.
+      - simpl. by apply prefix_app_r.
+      - by intros. }
+    {
+      wp_op Hbody.
+      - subst. simpl. by list.
+      - intros. simpl. exists  (rev b ++ [(k, v)]).
+        split; auto. by subst.
+    }
+Qed.
+
 Definition iter_rev {S} (h : hashtbl) (s : S) f : S :=
-  iteri h s (fun _ b s => bucket_iter_right b s f).
+  iteri (snd h) s (fun _ b s => bucket_iter_right b s f).
+
+Lemma wp_iter_rev :
+  forall S h m f,
+  isHashtbl h m →
+  ITER_LIST [] (map_to_list m)
+    (λ (x : K * (list V)) s Q,
+      forall k (l : list V) b,
+      x = (k, l) ->
+      b = List.map (fun l => (k, l)) (m !!! k) ->
+      fold_right_spec b f)
+    (λ (s : S) Q, wp (iter_rev h s f) Q).
+Proof.
+  intros.
+  destructIsHashtbl h.
+  unfold iter_rev.
+  induction m using map_first_key_ind; ITER.
+Admitted.
 
 Definition resize (h : hashtbl) : hashtbl :=
-  do n ← (length h) * 2;
-  do h' ← make n [];
-  iter_rev h h'
+  do (p, h) ← h;
+  do n ← length h;
+  do n ← n * 2;
+  do a ← make n [];
+  do h' ← (0, a);
+  iter_rev (p, h) h'
     (fun k v h'' => add h'' k v).
+
+Lemma resize_spec :
+  forall h m,
+    isHashtbl h m ->
+    wp (resize h) (λ h, isHashtbl h m).
+Proof.
+  unfold resize.
+  intros.
+  destructIsHashtbl h.
+  wp_bind_eq.
+  wp_length n'.
+  wp_bind_eq.
+  wp_make a'.
+  { admit. }
+  wp_bind_eq.
+  wp_op wp_iter_rev.
+  { admit. }
+  { admit. }
+  { admit. }
+  { admit. }
+Admitted.
