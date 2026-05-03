@@ -1447,7 +1447,169 @@ Proof.
   rewrite postorder_concat; simpl; list; eauto.
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
+(* [bottom σ] is the vertex found in the second frame of the stack [σ],
+   starting from the bottom. (The bottommost frame does not contain a
+   vertex.) *)
+
+Fixpoint bottom σ : option V :=
+  match σ with
+  | Frame ov vs :: Frame _ _ :: [] => ov
+  |                Frame _ _ :: [] => None
+  |                             [] => None
+  | Frame ov vs :: σ               => bottom σ
+  end.
+
+(* If the stack [σ] is well-formed and has exactly two frames, then
+   its bottom vertex is found in its top frame. *)
+
+Lemma bottom_two imarked omarked ov vs σ :
+  wf imarked (omarked, Frame ov vs :: σ) →
+  length σ = 1 →
+  bottom (Frame ov vs :: σ) = ov.
+Proof.
+  intros Hwf Hlen.
+  dependent destruction Hwf; [ eauto |].
+  dependent destruction Hwf; [ eauto | exfalso].
+  apply wf_nonempty in Hwf. length in Hlen. lia.
+Qed.
+
+(* If the stack [σ] is well-formed and has at least two frames, then
+   pushing a new frame onto it does not change its bottom vertex. *)
+
+Lemma bottom_push imarked omarked ov vs σ :
+  wf imarked (omarked, Frame ov vs :: σ) →
+  length σ ≠ 1 →
+  bottom (Frame ov vs :: σ) = bottom σ.
+Proof.
+  (* I had difficulty finding this proof. *)
+  intros Hwf Hlen.
+  dependent destruction Hwf; [ eauto |].
+  dependent destruction Hwf; [ length in Hlen; lia |].
+  destruct σ0 as [| [ ? ? ] ? ].
+  { exfalso. dependent destruction Hwf. }
+  eauto.
+Qed.
+
+(* Storing a new tree into the top stack frame does not affect [bottom]. *)
+
+Lemma bottom_store v vs σ :
+  bottom (store v vs σ) = bottom σ.
+Proof.
+  destruct σ as [| [ ow ws ] σ ]; eauto.
+Qed.
+
+Lemma bottom_frame_concat v vs w ws σ :
+  bottom (Frame (Some v) (concat vs (NonEmpty w ws Empty)) :: σ) =
+  bottom (Frame (Some v) vs :: σ).
+Proof.
+  reflexivity.
+Qed.
+
+(* [isRootMap roots vs] means that [roots], a map of vertices to
+   vertices, correctly records the root of every vertex in [vs].
+   That is, every vertex [v] in the forest [vs] is mapped to the
+   root of its tree in [vs]. *)
+
+Inductive isRootMap (roots : V → V) : forest V → Prop :=
+| IsRootMapEmpty :
+    isRootMap roots Empty
+| IsRootMapNonEmpty :
+    ∀ w ws vs,
+    (∀ w', w' ∈ {[w]} ∪ support ws → roots w' = w) →
+    isRootMap roots vs →
+    isRootMap roots (NonEmpty w ws vs).
+
+(* [isRootMapStack roots σ] means that [roots] correctly records
+   the root of every vertex in the stack [σ]. *)
+
+Inductive isRootMapStack (roots : V → V) : stack → Prop :=
+| IsRootListOneFrame :
+    (* In the bottom frame, we require [roots] to be a correct
+       root map for the forest [vs]. *)
+    ∀ vs,
+    isRootMap roots vs →
+    isRootMapStack roots (Frame None vs :: [])
+| IsRootListSeveralFrames :
+    (* In every other frame, we require [w] and [ws] to be mapped
+       to the bottom vertex of the stack, namely [v], as this vertex
+       will become the root of the tree that is being constructed. *)
+    (* In this case, [σ] must be nonempty. *)
+    ∀ v w ws σ,
+    isRootMapStack roots σ →
+    bottom (Frame (Some w) ws :: σ) = Some v →
+    (∀ w', w' ∈ {[w]} ∪ support ws → roots w' = v) →
+    isRootMapStack roots (Frame (Some w) ws :: σ).
+
+Hint Constructors isRootMap isRootMapStack : isRootMap.
+
+(* A trivial lemma. *)
+
+Lemma isRootMap_concat roots f1 f2 :
+  isRootMap roots f1 →
+  isRootMap roots f2 →
+  isRootMap roots (concat f1 f2).
+Proof.
+  induction 1; simpl concat; intros; [ eauto |].
+  econstructor; eauto.
+Qed.
+
+Hint Resolve isRootMap_concat : isRootMap.
+
+(* [isRootMapStack] holds of an arbitrary roots map and an empty stack. *)
+
+Lemma isRootMapStack_init roots :
+  isRootMapStack roots [Frame None Empty].
+Proof.
+  econstructor. econstructor.
+Qed.
+
+(* [isRootMapStack] is preserved by [Exit] transitions. *)
+
+Lemma isRootMapStack_store imarked omarked roots w ws σ :
+  wf imarked (omarked, Frame (Some w) ws :: σ) →
+  isRootMapStack roots (Frame (Some w) ws :: σ) →
+  isRootMapStack roots (store w ws σ).
+Proof using.
+  intros Hwf Hroots.
+  dependent destruction Hroots.
+  generalize Hwf; intro Hcopy.
+  dependent destruction Hwf.
+  dependent destruction Hwf.
+  { dependent destruction Hroots. simpl in *.
+    assert (w = v) by congruence. subst w.
+    unfold store. eauto with isRootMap. }
+  { match goal with foo: stack |- _ => rename foo into σ end.
+    assert (1 ≤ length σ) by eauto using wf_nonempty.
+    erewrite bottom_push in * by (length; eauto with lia).
+    dependent destruction Hroots.
+    match goal with h1: bottom _ = Some ?v1,
+                    h2: bottom _ = Some ?v2 |- _ =>
+      assert (v1 = v2) by congruence; subst v1; clear h1
+    end.
+    match goal with h1: ∀ w' : V, _, h2: ∀ w' : V, _ |- _ =>
+      rename h2 into Htop; rename h1 into Hnext end.
+    unfold store. econstructor.
+    { assumption. }
+    { rewrite bottom_frame_concat. eauto. }
+    { intros w' Hw'.
+      rewrite support_concat in Hw'. simpl support in Hw'.
+      set_unfold in Hw'.
+      repeat destruct Hw' as [Hw'|Hw']; last tauto.
+      + eapply Hnext. eauto with set_solver.
+      + eapply Hnext. eauto with set_solver.
+      + eapply Htop. eauto with set_solver.
+      + eapply Htop. eauto 2 with set_solver. }}
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 End Interactive.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Hints and tactics. *)
 
 Hint Constructors wf : wf.
 
@@ -1462,3 +1624,14 @@ Hint Resolve
   similar_reflexive
   similar_transitive
 : similar.
+
+Ltac destructStep :=
+  match goal with h: step _ _ _ _ _ |- _ => destruction h end.
+
+Ltac destructWf :=
+  match goal with h: wf _ _ _ _ |- _ => destruction h end.
+
+Ltac wf_nonempty :=
+  repeat match goal with
+  | h : wf _ _ _ _ |- _ => generalize (wf_nonempty h); revert h
+  end; intros.
