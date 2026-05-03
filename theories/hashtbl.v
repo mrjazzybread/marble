@@ -36,7 +36,7 @@ Open Scope uint63.
    of keys to values.  Keys may appear more than once in the same
    bucket but can never belong to two buckets simultaneously. *)
 Definition bucket := (list (K * V)).
-Definition hashtbl := array bucket.
+Definition hashtbl := (int * array bucket)%type.
 
 (* Function that calculates the index of a particular key using
 [hash].  In machine integers and ideal integers. *)
@@ -68,6 +68,25 @@ Proof.
   unfold filter_key. by apply filter_cons_False.
 Qed.
 
+Lemma filter_key_nin :
+  forall k b,
+    (∀ v : V, (k, v) ∉ b) ->
+    map snd (filter_key k b) = [].
+Proof.
+  intros k b H1.
+  induction b as [|[k' v] t Ih].
+  - auto.
+  - rewrite filter_key_cons_False.
+    + apply Ih. intros v'.
+      specialize H1 with v'.
+      rewrite not_elem_of_cons in H1.
+      by destruct H1.
+    + specialize H1 with v.
+      rewrite not_elem_of_cons in H1.
+      destruct H1.
+      intros H3. by subst.
+Qed.
+
 Hint Rewrite
   @filter_nil
   filter_key_cons_False
@@ -80,36 +99,66 @@ Ltac filter := autorewrite with cfilter.
 
 Fixpoint remove_assoc (k : K) (b : bucket) :=
   match b with
-  |[] => []
+  |[] => (false, [])
   |(x, v) :: t =>
-     if decide (x = k) then t else
-       (x, v) :: remove_assoc k t
+     if decide (x = k) then (true, t) else
+       let (r, t) := remove_assoc k t in
+       (r, (x, v) :: t)
   end.
+
+Instance remove_assoc_is_bool :
+  forall k b r b',
+    (r, b') = (remove_assoc k b) ->
+    isBool r (∃ v, (k, v) ∈ b) (forall v, (k, v) ∉ b).
+Proof.
+  intros k b r.
+  destruct r; simpl; induction b as [|[k' v] b'' Ih]; intros b' H1.
+  - inversion H1.
+  - simpl in H1.
+    case_decide.
+    + injection H1. intros. subst b' k'.
+      exists v. rewrite elem_of_cons. auto.
+    + destruct (remove_assoc k b'').
+      injection H1. intros. subst b' b.
+      specialize Ih with l.
+      destruct Ih as [v' Ih]. auto.
+      exists v'. rewrite elem_of_cons. auto.
+  - intros. apply not_elem_of_nil.
+  - simpl in H1.
+    case_decide.
+    + injection H1. discriminate.
+    + intros v'. rewrite not_elem_of_cons. split.
+      { intros H2. injection H2. by subst. }
+      { apply Ih with (tail b'). destruct (remove_assoc k b''). injection H1. intros. by subst. }
+Qed.
+
+
 
 Lemma remove_assoc_in :
   forall b k k' v,
-    (k', v) ∈ remove_assoc k b ->
+    (k', v) ∈ snd (remove_assoc k b) ->
     (k', v) ∈ b.
 Proof.
   intros b k k' v H1.
   induction b as [|[k'' v'] t Ih]; simpl in H1.
   + apply not_elem_of_nil in H1. contradiction.
   + destruct decide in H1; apply elem_of_cons. auto.
+    destruct remove_assoc.
    apply elem_of_cons in H1 as [H1 | H1].
    auto. right. by apply Ih.
 Qed.
 
 Lemma remove_assoc_bucket_eq :
   forall k b b',
-    b' = remove_assoc k b ->
+    b' = snd (remove_assoc k b) ->
     filter_key k b' = tl (filter_key k b).
 Proof.
   intros k b.
-  induction b as [|[k' v] t Ih]; simpl; intros; subst b'.
-  - auto.
-  - case_decide.
-    + subst. filter. by simpl.
-    + filter. auto.
+  induction b as [|[k' v] t Ih]; simpl; intros b' H1; subst b'. auto.
+  case_decide.
+  - subst. filter. by simpl.
+  - filter. destruct remove_assoc. simpl.
+    filter. auto.
 Qed.
 
 Lemma filter_key_cons :
@@ -125,7 +174,7 @@ Qed.
 
 Lemma remove_assoc_bucket_ne :
   forall k k' b b',
-    b' = remove_assoc k b ->
+    b' = snd (remove_assoc k b) ->
     k' ≠ k ->
     filter_key k' b' = filter_key k' b.
 Proof.
@@ -134,7 +183,7 @@ Proof.
   + auto.
   + case_decide.
     - subst. by filter.
-    - apply filter_key_cons. by apply Ih.
+    - destruct remove_assoc. simpl. apply filter_key_cons. by apply Ih.
 Qed.
 
 Fixpoint find_assoc (k : K) (b : bucket) : option V :=
@@ -321,11 +370,14 @@ Definition no_garbage (n : Z) (tbl : list bucket) : Prop :=
    necessary for array accesses to be valid since the array is not
    resizable for now. *)
 Definition isHashtbl (h : hashtbl) (m : hmap) :=
-  ∃ l n, isArray h l ∧ n = len l ∧ 0 < n ∧
-      no_garbage n l ∧ valid_buckets n l m.
+  let (popu, arr) := h in
+  ∃ l n, isArray arr l ∧ n = len l ∧
+           isInt popu (cardinality m) ∧ 0 < n ∧
+           no_garbage n l ∧ valid_buckets n l m.
 
 (* Destructs a isHashtbl hypothesis. *)
-Local Ltac destructIsHashtbl :=
+Local Ltac destructIsHashtbl h :=
+  destruct h;
   match goal with h: isHashtbl ?v _ |- _ =>
     unfold isHashtbl in h;
     let c := fresh "l" in
@@ -349,8 +401,8 @@ Local Ltac introIsHashtbl :=
    necessary although it makes following the proofs a little
    easier. *)
 Local Ltac index_intro k _n n :=
-  let _i := fresh "i'" in
-  let i := fresh "i" in
+  let _i := fresh "_i" in
+  let i := fresh "i'" in
   set (_i:= index k _n);
   set (i := indexZ k n);
   assert (isInt _i i) by tc.
@@ -358,7 +410,7 @@ Local Ltac index_intro k _n n :=
 (* Hash table operations and their respective specifications. *)
 
 Definition create (n : int) : hashtbl :=
-  do a ← make n [] ; a.
+  do a ← make n [] ; (0, a).
 
 Lemma wp_create :
   ∀Int _n n,
@@ -367,6 +419,7 @@ Lemma wp_create :
 Proof.
   intros _n n H1 H2. unfold create. wp_make a.
   wp_ret. introIsHashtbl.
+  { rewrite cardinality_empty. tc. }
   { unfold no_garbage. intros.
     do 2 list in *. apply not_elem_of_nil in H3.
     contradiction. }
@@ -376,11 +429,12 @@ Proof.
 Qed.
 
 Definition add (h : hashtbl) k v :=
+  do (popu, h) ← h;
   do _n ← length h;
   do i ← index k _n;
   do b ← get h i;
   do h' ← set h i ((k, v) :: b);
-  h'.
+  (popu + 1,h').
 
 (* If the list representation of a hash table does not contain keys in
    incorrect indexes and a new key is added in the correct index, the
@@ -479,59 +533,74 @@ Lemma wp_add :
 Proof.
   intros h m k v H.
   unfold add.
-  destructIsHashtbl.
+  destructIsHashtbl h.
+  wp_bind_eq.
   wp_length _n.
   index_intro k _n n.
   wp_bind_eq.
-  index_intro k _n n.
   wp_get b.
   wp_set.
   wp_ret.
   introIsHashtbl.
+  - rewrite cardinality_add with (n:=cardinality m) by auto. tc.
   - subst. apply no_garbage_insert; auto.
   - apply valid_buckets_insert; by subst.
 Qed.
 
 Definition remove (h : hashtbl) (k : K) :=
+  do (n, h) ← h;
   do l ← length h;
   do i ← index k l;
   do b ← get h i;
-  do b' ← remove_assoc k b;
-  set h i b'.
+  do (r, b') ← remove_assoc k b;
+  do h' ← set h i b';
+  do n' ← if r then n - 1 else n;
+  (n', h').
 
 Hint Rewrite <- tl_map : clist.
 
 Lemma no_garbage_remove :
-  forall n tbl k i b b',
+  forall n tbl k i b b' r,
     i = indexZ k n ->
     n = len tbl ->
-    b' = remove_assoc k b ->
+    (r, b') = remove_assoc k b ->
     no_garbage n tbl ->
     b = tbl !!! i ->
     no_garbage n (<[i:=b']> tbl).
 Proof.
-  intros n tbl k i b b' ??? NG ? i' k' v??.
+  intros n tbl k i b b' r ??? NG ? i' k' v??.
   list in *.
   apply NG with v. auto.
   destruct (decide (i = i')); subst; list in *. 2: auto.
-  by apply remove_assoc_in with k.
+  apply remove_assoc_in with k.
+  destruct remove_assoc.
+  injection H1. simpl. intros. subst. auto.
+Qed.
+
+Lemma get_snd :
+  forall A B (p1 : A * B) (p2 : A * B),
+    p1 = p2 -> snd p1 = snd p2.
+Proof.
+  intros.
+  subst. auto.
 Qed.
 
 Lemma valid_buckets_remove :
-  forall n i k b b' tbl m,
+  forall n i k b b' r tbl m,
     0 < n ->
     n = len tbl ->
     i = indexZ k n ->
     b = tbl !!! i ->
-    b' = remove_assoc k b ->
+    (r, b') = remove_assoc k b ->
     valid_buckets n tbl m ->
     valid_buckets n (<[i:=b']> tbl) (rm m k)
   .
 Proof.
-  intros n i k b b' tbl m H1 H2 H3 H4 H5 H6 i' b'' k' H7 H8.
+  intros n i k b b' r tbl m H1 H2 H3 H4 H5 H6 i' b'' k' H7 H8.
   unfold rm.
+  apply get_snd in H5. simpl in H5.
   destruct (decide (k = k')).
-  { subst b'' b' k i'. list.
+  { subst b'' k i'. list.
     rewrite remove_assoc_bucket_eq with (b:=b) by auto.
     rewrite fin_maps.lookup_total_insert_eq.
     list. f_equal. subst b.
@@ -540,10 +609,38 @@ Proof.
     case_bucket k' n i.
     + subst b'' i'. list.
       rewrite remove_assoc_bucket_ne with (k:=k) (b:=b) by auto.
-
       apply H6 with i; by subst.
     + subst b''. list.
       apply H6 with i'; by subst. }
+Qed.
+
+Lemma non_empty_bucket :
+  forall n tbl i m b k,
+  valid_buckets n tbl m ->
+  i = indexZ k n ->
+  b = tbl !!! i ->
+  (∃ v : V, (k, v) ∈ b) ->
+  m !!! k ≠ [].
+Proof.
+  intros n tbl i m b k H1 H2 H3 [v H4].
+  rewrite H1 with (i:=i) (b:=filter_key k b) by auto with subst.
+  intros H5.
+  apply map_eq_nil in H5.
+  Search filter nil.
+  by apply filter_nil_not_elem_of with (l:=b) (x:=(k, v)) in H5.
+Qed.
+
+Lemma empty_bucket :
+  forall n tbl i m b k,
+  valid_buckets n tbl m ->
+  i = indexZ k n ->
+  b = tbl !!! i ->
+  (forall v : V, (k, v) ∉ b) ->
+  m !!! k = [].
+Proof.
+  intros n tbl i m b k H1 H2 H3 H4.
+  rewrite H1 with (i:=i) (b:=filter_key k b) by auto with subst.
+  by rewrite filter_key_nin.
 Qed.
 
 Lemma wp_remove :
@@ -553,27 +650,37 @@ Lemma wp_remove :
        (λ h', isHashtbl h' (rm m k)).
 Proof.
   intros h m k H.
-  destructIsHashtbl.
+  destructIsHashtbl h.
   unfold remove.
+  wp_bind_eq.
   wp_length _n.
   index_intro k _n n.
   wp_bind_eq.
   wp_get b.
-  set (b' := remove_assoc k b).
+  remember (remove_assoc k b) as b' eqn:E.
+  destruct b' as [r b'].
   wp_bind_eq.
   wp_set.
-  introIsHashtbl.
-  - subst n. by apply no_garbage_remove with k b.
-  - apply valid_buckets_remove with b; by subst.
+  wp_if; wp_ret; wp_ret;
+    introIsHashtbl.
+  2, 5: subst n; by apply no_garbage_remove with k b r.
+  2, 4: apply valid_buckets_remove with b r; by subst.
+  - rewrite cardinality_rm with (n:=cardinality m); tc.
+    by apply non_empty_bucket with (tbl:=l) (b:=b) (i:= i')  (n:=n).
+  - rewrite cardinality_rm_empty with (n:=cardinality m); tc.
+    by apply empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=n).
 Qed.
 
 Definition replace (h : hashtbl) (k : K) (v : V) :=
-  do n ← length h;
-  do i ← index k n;
+  do (n, h) ← h;
+  do l ← length h;
+  do i ← index k l;
   do b ← get h i;
-  do b' ← remove_assoc k b;
+  do (r, b') ← remove_assoc k b;
   do b' ← (k, v) :: b';
-  set h i b'.
+  do n' ← if r then n else n + 1;
+  do h' ← set h i b';
+  (n', h').
 
 Lemma decompose_replace :
   forall (i : Z) x b (tbl : list bucket),
@@ -590,23 +697,31 @@ Lemma wp_replace :
 Proof.
   intros h m k v H.
   unfold replace.
-  destructIsHashtbl.
+  destructIsHashtbl h.
+  wp_bind_eq.
   wp_length _n.
   index_intro k _n n.
   wp_bind_eq.
   wp_get b.
   wp_bind_eq.
+  remember (remove_assoc k b) as b' eqn:E.
+  destruct b' as [r b'].
   wp_bind_eq.
-  wp_set.
-  set (b' := remove_assoc k b).
-  introIsHashtbl; subst n; simpl; rewrite decompose_replace.
-  - apply no_garbage_insert. 1, 3, 4: by list.
-    apply no_garbage_remove with k b; subst; by list.
-  - apply valid_buckets_insert. 1, 4: by list. 1, 2: lia.
-    apply valid_buckets_remove with b; auto.
+  wp_if; wp_ret; wp_bind_eq; wp_set; wp_ret;
+  introIsHashtbl; subst n; simpl.
+  2, 3, 5, 6: rewrite decompose_replace.
+  2, 4: apply no_garbage_insert; (try (by list)).
+  2, 3: apply no_garbage_remove with k b r; subst; by list.
+  2, 3: apply valid_buckets_insert; (try by list); try lia.
+  2, 3: apply valid_buckets_remove with b r; auto.
+  + rewrite cardinality_rm_add with (n:=cardinality m); tc.
+    by apply non_empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=len l).
+  + rewrite cardinality_rm_add_empty with (n:=cardinality m); tc.
+    by apply empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=len l).
 Qed.
 
 Definition get (h : hashtbl) (k : K) :=
+  do (_, h) ← h;
   do n ← length h;
   do i ← index k n;
   do b ← get h i;
@@ -628,14 +743,43 @@ Lemma get_wp :
 Proof.
   intros h m k H.
   unfold get.
-  destructIsHashtbl.
+  destructIsHashtbl h.
+  wp_bind_eq.
   wp_length _n.
-  set (_i := index k _n).
-  set (i := indexZ k n).
-  assert (isInt _i i) by tc.
+  index_intro k _n n.
   wp_bind_eq.
   wp_get b.
   wp_ret.
-  rewrite H3 with (i:=i) (b:=filter_key k b); subst; auto.
+  rewrite H4 with (i:=i') (b:=filter_key k b); subst; auto.
   apply filter_key_assoc.
 Qed.
+
+Definition length (h : hashtbl) : int :=
+  fst h.
+
+Lemma length_spec :
+  forall h m,
+    isHashtbl h m ->
+    wp (length h) (λ n, isInt n (cardinality m)).
+Proof.
+  intros.
+  unfold length.
+  wp_ret.
+  by destructIsHashtbl h.
+Qed.
+
+Fixpoint bucket_iter_right {S} (b : bucket) (s : S) f : S:=
+  match b with
+  |[] => s
+  |(k, v)::b' =>
+     do s' ← bucket_iter_right b' s f;
+     f k v  s' end.
+
+Definition iter_rev {S} (h : hashtbl) (s : S) f : S :=
+  iteri h s (fun _ b s => bucket_iter_right b s f).
+
+Definition resize (h : hashtbl) : hashtbl :=
+  do n ← (length h) * 2;
+  do h' ← make n [];
+  iter_rev h h'
+    (fun k v h'' => add h'' k v).
