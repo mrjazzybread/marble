@@ -1361,95 +1361,30 @@ Proof.
   lia.
 Qed.
 
-Local Lemma update_bottom marked σ v marked' σ' root root' :
+(* This lemma states that [root] is correctly updated when a vertex
+   is entered. *)
+
+Local Lemma update_root_enter marked σ v marked' σ' root root' :
   wf (marked, σ) →
   step (marked, σ) (Enter v) (marked', σ') →
-  (if decide (len σ = 1) then root = n else bottom σ = Some root) →
-  root' = (if decide (root = n) then v else root) →
+  (if decide (len σ = 1) then root = none else bottom σ = Some root) →
+  root' = (if decide (root = none) then v else root) →
   (* len σ' = 1 ∧ *)
   bottom σ' = Some root'.
 Proof.
   intros Hwf Hstep H Hroot'.
-  assert (wf (marked', σ')) by eauto with wf.
-  assert (fact: len σ = 1 ↔ root = n) by eauto using toplevel_test.
-  destructStep.
-  subst root'.
-  destruct (decide (root = n)).
-  { destruction Hwf.
-    + erewrite bottom_two by eauto. reflexivity.
-    + exfalso. wf_nonempty. length in fact. lia. }
-  { wf_nonempty.
-    destruct (decide (len σ = 1)); [ lia |].
-    erewrite bottom_push by eauto.
-    assumption. }
+  assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
+  destructStep. subst root'.
+  destruct (decide (root = none)).
+  (* Case [root = none]. Then [σ] has height 1, so [bottom σ'] is [v].
+     Besides, [root'] is also [v]. *)
+  { destructWf. erewrite bottom_two by eauto with wf. reflexivity. }
+  (* Case [root ≠ none]. Then [bottom σ'] and [root'] are both [root]. *)
+  { wf_nonempty. destruct (decide (len σ = 1)); [ lia |].
+    erewrite bottom_push by eauto with wf. assumption. }
 Qed.
 
-Local Lemma marked_bound marked σ :
-  wf (marked, σ) →
-  marked ⊆ universe.
-Proof.
-  intros Hwf.
-  generalize (wf_reaches Hwf eq_refl); intro Hreaches.
-  generalize closure_start_subset_universe; intro.
-  set_solver.
-Qed.
-
-(* TODO
-Axiom funiverse : listset_nodup.listset_nodup vertex.
-Axiom fequiv_univ : fequiv universe funiverse.
-Axiom size_funiverse: Z.of_nat (base.size funiverse) = n.
-
-Local Lemma length_stack marked σ :
-  wf (marked, σ) →
-  len σ ≤ n + 1.
-Proof using.
-  intros Hwf.
-  generalize (wf_trace_marked Hwf eq_refl); intro Htrace.
-  generalize (length_stack Hwf eq_refl); intros (fvs & Hfequiv & Hsize).
-  cut (Z.of_nat (base.size fvs) ≤ n).
-  { unfold len. lia. }
-  clear Hsize.
-  assert (Huniv: trace σ ⊆ universe).
-  { apply marked_bound in Hwf. set_solver. }
-  clear Htrace.
-  assert (fvs ⊆ funiverse).
-  { admit. }
-  rewrite <- size_funiverse.
-  apply inj_le.
-  apply fin_sets.subseteq_size.
-  assumption.
-Admitted. (* TODO *)
- *)
-Lemma isRootMapStack_domain roots roots' marked σ :
-  wf (marked, σ) →
-  isRootMapStack roots σ →
-  (∀ w, w ∈ marked → roots' w = roots w) →
-  isRootMapStack roots' σ.
-Proof.
-Admitted.
-
-Lemma not_root marked v vs σ marked' σ' root :
-  wf (marked, Frame (Some v) vs :: σ) →
-  bottom σ = Some root →
-  v ≠ root.
-Proof.
-  intros Hwf Hbottom. destruction Hwf.
-  (* We have [v ∉ mmarked], but [root ∈ mmarked], therefore [v ≠ root]. *)
-  assert (root ∈ mmarked).
-  { match goal with h: wf _ |- _ => clear Hwf; rename h into Hwf end.
-    generalize (wf_bottom_marked' Hwf); intro Hmarked.
-    rewrite Hbottom in Hmarked.
-    simpl in Hmarked. set_solver. }
-  set_solver.
-Qed.
-
-Local Hint Rewrite length_store : ulength clength.
-
-Local Hint Resolve
-  isRootMapStack_init
-: marble.
-
-Lemma wp_blocks :
+Lemma wp_group :
   wp plain_group (λ s,
     True
   ).
@@ -1477,7 +1412,7 @@ Proof.
     unfold equiv in Hequiv. hnf in Hequiv. unpack. subst σ'.
     intros _vs ? <-. tauto. }
   (* Initialization. *)
-  { simpl. pack; tc; length; tc. }
+  { simpl. pack; tc; length; eauto using isRootMapStack_init. }
   (* Preservation. *)
   { clear dependent _group.
     intros (marked & σ) (marked' & σ') [_group _root] Hinv Hwf.
@@ -1509,13 +1444,13 @@ Proof.
       { unfold σ'. length. wf_nonempty. lia. }
       destruct (decide (len σ' = 1)); [ lia |].
       assert (bottom σ' = Some root').
-      { eapply update_bottom; eauto. }
+      { eapply update_root_enter; eauto. }
       pack; tc.
       { subst _roots'. length. eauto. }
       { subst  roots'. length. eauto. }
       { (* isRootMapStack *)
         econstructor.
-        { eapply isRootMapStack_domain; eauto.
+        { eapply isRootMapStack_domain'; eauto.
           intros w Hw. case (decide (w = v)).
           + intros ->. exfalso. tauto.
           + intros. unfold roots'. list. eauto. }
@@ -1523,8 +1458,8 @@ Proof.
         { simpl. intros w' Hw'. set_unfold in Hw'.
           assert (w' = v) by tauto. clear Hw'. subst w'.
           unfold roots'. list. eauto. }}
-        { destruct (decide (root = n)); lia. }
-        { destruct (decide (root = n)); lia. }
+        { destruct (decide (root = none)); lia. }
+        { destruct (decide (root = none)); lia. }
     } (* [Enter] *)
     (* Case [Exit]. *)
     {
@@ -1547,7 +1482,7 @@ Proof.
       { eapply isRootMapStack_store; eauto with wf. }
       { destruct (decide (root = v)); lia. }
       { destruct (decide (root = v)); lia. }
-      { rewrite bottom_store.
+      { rewrite bottom_store, length_store.
         destruct (decide (len σ = 1)).
         + (* The new stack has height 1, so [v] must be [root]. *)
           erewrite bottom_two in Hinv6 by eauto.
@@ -1555,7 +1490,7 @@ Proof.
           reflexivity.
         + (* The new stack has height greater than 1. [v] cannot be [root]. *)
           erewrite bottom_push in Hinv6 by eauto.
-          assert (v ≠ root) by eauto using not_root.
+          assert (v ≠ root) by eauto using wf_top_ne_bottom.
           rewrite Hinv6. f_equal. unfold root'.
           destruct (decide (root = v)); [ congruence |].
           reflexivity. }
