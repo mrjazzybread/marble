@@ -1663,49 +1663,49 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* [isRootMap roots vs] means that [roots], a map of vertices to
-   vertices, correctly records the root of every vertex in [vs].
-   That is, every vertex [v] in the forest [vs] is mapped to the
-   root of its tree in [vs]. *)
+(* [isRootMap ρ vs] means that [ρ], a map of vertices to vertices,
+   correctly records the root of every vertex in [vs]. That is, every
+   vertex [v] in the forest [vs] is mapped to the root of its tree in
+   [vs]. *)
 
-Inductive isRootMap (roots : V → V) : forest V → Prop :=
+Inductive isRootMap (ρ : V → V) : forest V → Prop :=
 | IsRootMapEmpty :
-    isRootMap roots Empty
+    isRootMap ρ Empty
 | IsRootMapNonEmpty :
     ∀ w ws vs,
-    (∀ w', w' ∈ {[w]} ∪ support ws → roots w' = w) →
-    isRootMap roots vs →
-    isRootMap roots (NonEmpty w ws vs).
+    (∀ w', w' ∈ {[w]} ∪ support ws → ρ w' = w) →
+    isRootMap ρ vs →
+    isRootMap ρ (NonEmpty w ws vs).
 
-(* [isRootMapStack roots σ] means that [roots] correctly records
-   the root of every vertex in the stack [σ]. *)
+(* [isRootMapStack ρ σ] means that [ρ] correctly records the root of every
+   vertex in the stack [σ]. *)
 
-Inductive isRootMapStack (roots : V → V) : stack → Prop :=
+Inductive isRootMapStack (ρ : V → V) : stack → Prop :=
 | IsRootListOneFrame :
-    (* In the bottom frame, we require [roots] to be a correct
+    (* In the bottom frame, we require [ρ] to be a correct
        root map for the forest [vs]. *)
     ∀ vs,
-    isRootMap roots vs →
-    isRootMapStack roots (Frame None vs :: [])
+    isRootMap ρ vs →
+    isRootMapStack ρ (Frame None vs :: [])
 | IsRootListSeveralFrames :
-    (* In every other frame, we require [w] and [ws] to be mapped
-       to the bottom vertex of the stack, namely [v], as this vertex
-       will become the root of the tree that is being constructed. *)
+    (* In every other frame, we require [w] and [ws] to be mapped to the
+       bottom vertex of the stack, namely [v], as this vertex will become
+       the root of the tree that is being constructed. *)
     (* In this case, [σ] must be nonempty. *)
     ∀ v w ws σ,
-    isRootMapStack roots σ →
+    isRootMapStack ρ σ →
     bottom (Frame (Some w) ws :: σ) = Some v →
-    (∀ w', w' ∈ {[w]} ∪ support ws → roots w' = v) →
-    isRootMapStack roots (Frame (Some w) ws :: σ).
+    (∀ w', w' ∈ {[w]} ∪ support ws → ρ w' = v) →
+    isRootMapStack ρ (Frame (Some w) ws :: σ).
 
 Hint Constructors isRootMap isRootMapStack : isRootMap.
 
 (* A trivial lemma. *)
 
-Lemma isRootMap_concat roots f1 f2 :
-  isRootMap roots f1 →
-  isRootMap roots f2 →
-  isRootMap roots (concat f1 f2).
+Lemma isRootMap_concat ρ f1 f2 :
+  isRootMap ρ f1 →
+  isRootMap ρ f2 →
+  isRootMap ρ (concat f1 f2).
 Proof.
   induction 1; simpl concat; intros; [ eauto |].
   econstructor; eauto.
@@ -1715,18 +1715,18 @@ Hint Resolve isRootMap_concat : isRootMap.
 
 (* [isRootMapStack] holds of an arbitrary roots map and an empty stack. *)
 
-Lemma isRootMapStack_init roots :
-  isRootMapStack roots [Frame None Empty].
+Lemma isRootMapStack_init ρ :
+  isRootMapStack ρ [Frame None Empty].
 Proof.
   econstructor. econstructor.
 Qed.
 
 (* [isRootMapStack] is preserved by [Exit] transitions. *)
 
-Lemma isRootMapStack_store imarked omarked roots w ws σ :
+Lemma isRootMapStack_store imarked omarked ρ w ws σ :
   wf imarked (omarked, Frame (Some w) ws :: σ) →
-  isRootMapStack roots (Frame (Some w) ws :: σ) →
-  isRootMapStack roots (store w ws σ).
+  isRootMapStack ρ (Frame (Some w) ws :: σ) →
+  isRootMapStack ρ (store w ws σ).
 Proof using.
   intros Hwf Hroots.
   dependent destruction Hroots.
@@ -1760,16 +1760,16 @@ Proof using.
 Qed.
 
 (* When it is applied to a well-formed forest, [isRootMap] is
-   insensitive to the value of the function [roots] outside of the set
-   [omarked ∖ imarked]. In other words, the value of [roots w] matters
+   insensitive to the value of the function [ρ] outside of the set
+   [omarked ∖ imarked]. In other words, the value of [ρ w] matters
    only when [w] is marked. *)
 
-Lemma isRootMap_domain roots vs :
-  isRootMap roots vs →
-  ∀ roots' imarked omarked,
+Lemma isRootMap_domain ρ vs :
+  isRootMap ρ vs →
+  ∀ ρ' imarked omarked,
   dfs imarked omarked vs →
-  (∀ w, w ∈ omarked ∖ imarked → roots' w = roots w) →
-  isRootMap roots' vs.
+  (∀ w, w ∈ omarked ∖ imarked → ρ' w = ρ w) →
+  isRootMap ρ' vs.
 Proof.
   induction 1; inversion 1; intros Himpl; subst.
   { econstructor. }
@@ -1782,12 +1782,12 @@ Qed.
 
 (* A similar result about [isRootMapStack]. *)
 
-Lemma isRootMapStack_domain roots σ :
-  isRootMapStack roots σ →
-  ∀ roots' imarked omarked,
+Lemma isRootMapStack_domain ρ σ :
+  isRootMapStack ρ σ →
+  ∀ ρ' imarked omarked,
   wf imarked (omarked, σ) →
-  (∀ w, w ∈ omarked ∖ imarked → roots' w = roots w) →
-  isRootMapStack roots' σ.
+  (∀ w, w ∈ omarked ∖ imarked → ρ' w = ρ w) →
+  isRootMapStack ρ' σ.
 Proof.
   induction 1; inversion 1; intros Himpl; subst.
   { econstructor. eauto using isRootMap_domain. }
@@ -1799,12 +1799,12 @@ Proof.
       eauto. }
 Qed.
 
-Lemma isRootMapStack_domain' roots σ :
-  isRootMapStack roots σ →
-  ∀ roots' imarked omarked,
+Lemma isRootMapStack_domain' ρ σ :
+  isRootMapStack ρ σ →
+  ∀ ρ' imarked omarked,
   wf imarked (omarked, σ) →
-  (∀ w, w ∈ omarked → roots' w = roots w) →
-  isRootMapStack roots' σ.
+  (∀ w, w ∈ omarked → ρ' w = ρ w) →
+  isRootMapStack ρ' σ.
 Proof.
   eauto using isRootMapStack_domain with set_solver.
 Qed.
