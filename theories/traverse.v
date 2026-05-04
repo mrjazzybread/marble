@@ -1256,6 +1256,211 @@ Proof.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
+
+(* WIP *)
+
+Section Blocks.
+
+(* Our state is a tuple (b, _depth, _root). *)
+
+Inductive bstate :=
+| BS : array int → int → int → bstate.
+
+Implicit Type b : array int.
+Implicit Type s : bstate.
+
+Section Code.
+Open Scope uint63.
+
+Definition plain_blocks : bstate :=
+  do b ← make _n 0 ; (* dummy *)
+  let _depth := 1 in
+  let _root := 0 in  (* dummy *)
+  do s ← BS b _depth _root ;
+  let hook _e s :=
+    let '(BS b _depth _root) := s in
+    match _e with
+    | Enter _v =>
+        (* If the depth was 1 then we are entering a new tree,
+           whose root is [v]. *)
+        let _root := if _depth =? 1 then _v else _root in
+        (* Record that [_v] belongs in a tree whose root is [_root]. *)
+        do b ← set b _v _root ;
+        (* Increment the current depth. *)
+        BS b (_depth + 1) _root
+    | Exit _v =>
+        (* Decrement the current depth. *)
+        BS b (_depth - 1) _root
+    end
+  in
+  do (m, s) ← traverse hook s ;
+  s.
+
+End Code.
+
+Local Hint Rewrite length_store : ulength clength.
+
+Local Hint Resolve
+  isRootMapStack_init
+: marble.
+
+Local Lemma update_bottom marked σ v marked' σ' root root' :
+  wf (marked, σ) →
+  step (marked, σ) (Enter v) (marked', σ') →
+  (len σ ≠ 1 → bottom σ = Some root) →
+  root' = (if decide (len σ = 1) then v else root) →
+  bottom σ' = Some root'.
+Proof.
+  intros Hwf Hstep ??.
+  assert (wf (marked', σ')) by eauto with wf.
+  destructStep.
+  subst root'.
+  case (decide (len σ = 1)); intro Hlen.
+  { destruction Hwf.
+    + erewrite bottom_two by eauto. eauto.
+    + exfalso. wf_nonempty. length in Hlen. lia. }
+  { erewrite bottom_push by eauto. eauto. }
+Qed.
+
+Local Lemma marked_bound marked σ :
+  wf (marked, σ) →
+  marked ⊆ universe.
+Proof.
+  intros Hwf.
+  generalize (wf_reaches Hwf eq_refl); intro Hreaches.
+  generalize closure_start_subset_universe; intro.
+  set_solver.
+Qed.
+
+Axiom funiverse : listset_nodup.listset_nodup vertex.
+Axiom fequiv_univ : fequiv universe funiverse.
+Axiom size_funiverse: Z.of_nat (base.size funiverse) = n.
+
+Local Lemma length_stack marked σ :
+  wf (marked, σ) →
+  len σ ≤ n + 1.
+Proof using.
+  intros Hwf.
+  generalize (trace_upper_bound Hwf eq_refl); intro Htrace.
+  generalize (length_stack Hwf eq_refl); intros (fvs & Hfequiv & Hsize).
+  cut (Z.of_nat (base.size fvs) ≤ n).
+  { unfold len. lia. }
+  clear Hsize.
+  assert (Huniv: trace σ ⊆ universe).
+  { apply marked_bound in Hwf. set_solver. }
+  clear Htrace.
+  assert (fvs ⊆ funiverse).
+  { admit. }
+  rewrite <- size_funiverse.
+  apply inj_le.
+  apply fin_sets.subseteq_size.
+  assumption.
+Admitted. (* TODO *)
+
+Lemma isRootMapStack_domain roots roots' marked σ :
+  wf (marked, σ) →
+  isRootMapStack roots σ →
+  (∀ w, w ∈ marked → roots' w = roots w) →
+  isRootMapStack roots' σ.
+Proof.
+Admitted.
+
+Lemma wp_blocks :
+  wp plain_blocks (λ s,
+    True
+  ).
+Proof.
+  unfold plain_blocks.
+  wp_make b.
+  set (s0 := BS b 1 0).
+  wp_bind_eq.
+  wp_op wp_traverse with invariant: (λ γ s,
+    let '(marked, σ) := γ in
+    let '(BS b _depth _root) := s in
+    ∃ _roots roots root,
+    isArray b _roots ∧
+    len _roots = n ∧
+    len roots = n ∧
+    isList _roots roots ∧
+    isRootMapStack (λ v, roots !!! v) σ ∧
+    isInt _depth (len σ) ∧
+    unsigned (len σ) ∧
+    isInt _root root ∧
+    (len σ ≠ 1 → bottom σ = Some root)
+  ).
+  (* Compatibility. *)
+  { intros (marked0 & σ) (marked1 & σ') Hequiv.
+    unfold equiv in Hequiv. hnf in Hequiv. unpack. subst σ'.
+    intros _vs ? <-. tauto. }
+  (* Initialization. *)
+  { simpl. pack; tc; length; tc. }
+  (* Preservation. *)
+  { clear dependent b.
+    intros (marked & σ) (marked' & σ') [b _depth _root] Hinv Hwf.
+    destruct Hinv as (_roots & roots & root & Hinv). unpack in Hinv.
+    intros _e e Hevent Hstep.
+    destructEvent;
+    destructStep.
+    (* Case [Enter]. *)
+    { set (_root' := if (_depth =? 1)%uint63 then _v else _root).
+      set (root' := if decide (len σ = 1) then v else root).
+      assert (isInt _root' root').
+      { unfold _root', root'. rewrite isInt_def in *.
+        case_decide; destruct (_depth =? 1)%uint63 eqn:Heq; lia. }
+      wp_set.
+      set (_roots' := (<[v:=_root']> _roots)).
+      set (roots' := (<[v:=root']> roots)).
+      wp_ret. length.
+      exists _roots', roots', root'.
+      set (σ' := Frame (Some v) Empty :: σ).
+      assert (step (marked, σ) (Enter v) (marked', σ')).
+      { econstructor; eauto. }
+      assert (bottom σ' = Some root').
+      { eauto using update_bottom. }
+      pack; tc.
+      { subst _roots'. length. eauto. }
+      { subst  roots'. length. eauto. }
+      { (* isRootListStack *)
+        econstructor.
+        { eapply isRootMapStack_domain; eauto.
+          intros w Hw. case (decide (w = v)).
+          + intros ->. exfalso. tauto.
+          + intros. unfold roots'. list. eauto. }
+        { eauto. }
+        { simpl. intros w' Hw'. set_unfold in Hw'.
+          assert (w' = v) by tauto. clear Hw'. subst w'.
+          unfold roots'. list. eauto. }}
+      { assert (len σ' ≤ n + 1) by eauto using length_stack with wf.
+        generalize unsigned_twice_max_array_length.
+        assert (len σ' = len σ + 1). { unfold σ'. length. eauto. }
+        lia. }
+    } (* [Enter] *)
+    (* Case [Exit]. *)
+    { destructWf.
+      match goal with foo: stack vertex |- _ => rename foo into σ end.
+      wf_nonempty.
+      length in *.
+      assert (fact: len σ + 1 ≠ 1) by lia.
+      specialize (Hinv8 fact). clear fact.
+      wp_ret.
+      pack; tc.
+      { eapply isRootMapStack_store; eauto with wf. }
+      { replace (len σ) with ((len σ + 1) - 1) by lia. tc. }
+      { rewrite bottom_store.
+        erewrite bottom_push in Hinv8 by eauto with wf.
+        assumption. }
+    }
+  }
+  (* Completion. *)
+  { clear dependent b.
+    intros (m & [b _depth _root]) (marked' & σ' & vs & Hm & Hpost).
+    unpack in Hpost.
+    wp_ret. }
+Qed.
+
+End Blocks.
+
+(* -------------------------------------------------------------------------- *)
 (* -------------------------------------------------------------------------- *)
 
 (* We now define a second copy of our DFS algorithm, this time in CPS style.  *)
