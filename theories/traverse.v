@@ -1261,36 +1261,53 @@ Qed.
 
 Section Blocks.
 
-(* Our state is a tuple (b, _depth, _root). *)
+(* We need to maintain a piece of information that lets us recognize
+   whether we are at the top level, that is, whether the ghost stack
+   has length 1. One way of doing this would be to maintain the length
+   of the ghost stack at runtime. This approach has downsides, though:
+   it adds one word to the state, and it requires bounding the length
+   of the stack, so as to prove that overflow is impossible. A better
+   approach is to maintain the last (optional) root vertex (which we
+   need to maintain, anyway). Upon exiting a vertex, we compare the
+   vertex that is being exited with the last root vertex. If they are
+   equal, then we are back to the top level. In that case the last
+   root vertex must be reset to [none]. *)
+
+(* In order to avoid allocating an option of type [option _vertex],
+   we use the special value [none] as a sentinel. This value has
+   type [_vertex] but is not a valid vertex. *)
+
+(* Our state is a tuple [BS (b, _root)]. *)
 
 Inductive bstate :=
-| BS : array int → int → int → bstate.
+| BS : array int → int → bstate.
 
 Implicit Type b : array int.
 Implicit Type s : bstate.
+
+Local Notation none := _n.
 
 Section Code.
 Open Scope uint63.
 
 Definition plain_blocks : bstate :=
   do b ← make _n 0 ; (* dummy *)
-  let _depth := 1 in
-  let _root := 0 in  (* dummy *)
-  do s ← BS b _depth _root ;
+  let _root := none in
+  do s ← BS b _root ;
   let hook _e s :=
-    let '(BS b _depth _root) := s in
+    let '(BS b _root) := s in
     match _e with
     | Enter _v =>
-        (* If the depth was 1 then we are entering a new tree,
-           whose root is [v]. *)
-        let _root := if _depth =? 1 then _v else _root in
+        (* If there was no current root then we are entering a new tree,
+           whose root is [_v]. *)
+        let _root := if _root =? none then _v else _root in
         (* Record that [_v] belongs in a tree whose root is [_root]. *)
         do b ← set b _v _root ;
-        (* Increment the current depth. *)
-        BS b (_depth + 1) _root
+        BS b _root
     | Exit _v =>
-        (* Decrement the current depth. *)
-        BS b (_depth - 1) _root
+        (* If the current root was [_v] then we are leaving a tree. *)
+        let _root := if _root =? _v then none else _root in
+        BS b _root
     end
   in
   do (m, s) ← traverse hook s ;
@@ -1304,22 +1321,47 @@ Local Hint Resolve
   isRootMapStack_init
 : marble.
 
+Lemma wf_bottom_valid marked σ v :
+  wf (marked, σ) →
+  bottom σ = Some v →
+  0 ≤ v < n.
+Proof.
+Admitted.
+
+Local Lemma key marked σ root :
+  wf (marked, σ) →
+  (if decide (len σ = 1) then root = n else bottom σ = Some root) →
+  (len σ = 1 ↔ root = n).
+Proof.
+  intros Hwf Hkey. split; intro Heq;
+    (destruct (decide (len σ = 1)); try tauto).
+  (* We have [bottom σ = Some root] and [root = n], so the bottom
+     vertex of the stack is invalid. Contradiction. *)
+  assert (0 ≤ root < n) by eauto using wf_bottom_valid.
+  lia.
+Qed.
+
 Local Lemma update_bottom marked σ v marked' σ' root root' :
   wf (marked, σ) →
   step (marked, σ) (Enter v) (marked', σ') →
-  (len σ ≠ 1 → bottom σ = Some root) →
-  root' = (if decide (len σ = 1) then v else root) →
+  (if decide (len σ = 1) then root = n else bottom σ = Some root) →
+  root' = (if decide (root = n) then v else root) →
+  (* len σ' = 1 ∧ *)
   bottom σ' = Some root'.
 Proof.
-  intros Hwf Hstep ??.
+  intros Hwf Hstep H Hroot'.
   assert (wf (marked', σ')) by eauto with wf.
+  assert (fact: len σ = 1 ↔ root = n) by eauto using key.
   destructStep.
   subst root'.
-  case (decide (len σ = 1)); intro Hlen.
+  destruct (decide (root = n)).
   { destruction Hwf.
-    + erewrite bottom_two by eauto. eauto.
-    + exfalso. wf_nonempty. length in Hlen. lia. }
-  { erewrite bottom_push by eauto. eauto. }
+    + erewrite bottom_two by eauto. reflexivity.
+    + exfalso. wf_nonempty. length in fact. lia. }
+  { wf_nonempty.
+    destruct (decide (len σ = 1)); [ lia |].
+    erewrite bottom_push by eauto.
+    assumption. }
 Qed.
 
 Local Lemma marked_bound marked σ :
@@ -1332,6 +1374,7 @@ Proof.
   set_solver.
 Qed.
 
+(* TODO
 Axiom funiverse : listset_nodup.listset_nodup vertex.
 Axiom fequiv_univ : fequiv universe funiverse.
 Axiom size_funiverse: Z.of_nat (base.size funiverse) = n.
@@ -1356,7 +1399,7 @@ Proof using.
   apply fin_sets.subseteq_size.
   assumption.
 Admitted. (* TODO *)
-
+ *)
 Lemma isRootMapStack_domain roots roots' marked σ :
   wf (marked, σ) →
   isRootMapStack roots σ →
@@ -1365,28 +1408,43 @@ Lemma isRootMapStack_domain roots roots' marked σ :
 Proof.
 Admitted.
 
+Lemma not_root marked v vs σ marked' σ' root :
+  wf (marked, Frame (Some v) vs :: σ) →
+  bottom σ = Some root →
+  v ≠ root.
+Proof.
+  intros Hwf Hbottom. destruction Hwf.
+  (* We have [v ∉ mmarked], but [root ∈ mmarked], therefore [v ≠ root]. *)
+  assert (root ∈ mmarked).
+  { match goal with h: wf _ |- _ => clear Hwf; rename h into Hwf end.
+    generalize (wf_bottom_marked Hwf eq_refl); intro Hmarked.
+    rewrite Hbottom in Hmarked.
+    simpl in Hmarked. set_solver. }
+  set_solver.
+Qed.
+
 Lemma wp_blocks :
   wp plain_blocks (λ s,
     True
   ).
 Proof.
+  assert (unsigned n) by (arrays; lia).
   unfold plain_blocks.
   wp_make b.
-  set (s0 := BS b 1 0).
+  set (s0 := BS b none).
   wp_bind_eq.
   wp_op wp_traverse with invariant: (λ γ s,
     let '(marked, σ) := γ in
-    let '(BS b _depth _root) := s in
+    let '(BS b _root) := s in
     ∃ _roots roots root,
     isArray b _roots ∧
     len _roots = n ∧
     len roots = n ∧
     isList _roots roots ∧
     isRootMapStack (λ v, roots !!! v) σ ∧
-    isInt _depth (len σ) ∧
-    unsigned (len σ) ∧
     isInt _root root ∧
-    (len σ ≠ 1 → bottom σ = Some root)
+    unsigned root ∧
+    (if decide (len σ = 1) then root = n else bottom σ = Some root)
   ).
   (* Compatibility. *)
   { intros (marked0 & σ) (marked1 & σ') Hequiv.
@@ -1396,31 +1454,40 @@ Proof.
   { simpl. pack; tc; length; tc. }
   (* Preservation. *)
   { clear dependent b.
-    intros (marked & σ) (marked' & σ') [b _depth _root] Hinv Hwf.
+    intros (marked & σ) (marked' & σ') [b _root] Hinv Hwf.
     destruct Hinv as (_roots & roots & root & Hinv). unpack in Hinv.
     intros _e e Hevent Hstep.
+    assert (fact: len σ = 1 ↔ root = n) by eauto using key.
     destructEvent;
     destructStep.
     (* Case [Enter]. *)
-    { set (_root' := if (_depth =? 1)%uint63 then _v else _root).
-      set (root' := if decide (len σ = 1) then v else root).
+    {
+      (* This is a bit manual / ugly. *)
+      set (_root' := if (_root =? none)%uint63 then _v else _root).
+      set (root' := if decide (root = n) then v else root).
       assert (isInt _root' root').
-      { unfold _root', root'. rewrite isInt_def in *.
-        case_decide; destruct (_depth =? 1)%uint63 eqn:Heq; lia. }
+      { unfold _root', root'.
+        destruct (decide (root = n));
+        destruct (_root =? none)%uint63 eqn:?;
+        eauto; exfalso; rewrite isInt_def in *; lia. }
+      (* Update the root array [b]. *)
       wp_set.
       set (_roots' := (<[v:=_root']> _roots)).
       set (roots' := (<[v:=root']> roots)).
-      wp_ret. length.
+      (* Return. *)
+      wp_ret.
       exists _roots', roots', root'.
       set (σ' := Frame (Some v) Empty :: σ).
-      assert (step (marked, σ) (Enter v) (marked', σ')).
-      { econstructor; eauto. }
+      fold σ' in Hstep.
+      assert (len σ' > 1).
+      { unfold σ'. length. wf_nonempty. lia. }
+      destruct (decide (len σ' = 1)); [ lia |].
       assert (bottom σ' = Some root').
-      { eauto using update_bottom. }
+      { eapply update_bottom; eauto. }
       pack; tc.
       { subst _roots'. length. eauto. }
       { subst  roots'. length. eauto. }
-      { (* isRootListStack *)
+      { (* isRootMapStack *)
         econstructor.
         { eapply isRootMapStack_domain; eauto.
           intros w Hw. case (decide (w = v)).
@@ -1430,30 +1497,47 @@ Proof.
         { simpl. intros w' Hw'. set_unfold in Hw'.
           assert (w' = v) by tauto. clear Hw'. subst w'.
           unfold roots'. list. eauto. }}
-      { assert (len σ' ≤ n + 1) by eauto using length_stack with wf.
-        generalize unsigned_twice_max_array_length.
-        assert (len σ' = len σ + 1). { unfold σ'. length. eauto. }
-        lia. }
+        { destruct (decide (root = n)); lia. }
+        { destruct (decide (root = n)); lia. }
     } (* [Enter] *)
     (* Case [Exit]. *)
-    { destructWf.
+    {
       match goal with foo: stack vertex |- _ => rename foo into σ end.
+      (* This is a bit manual / ugly. *)
+      set (_root' := if (_root =? _v)%uint63 then none else _root).
+      set (root' := if decide (root = v) then n else root).
+      assert (isInt _root' root').
+      { unfold _root', root'.
+        destruct (decide (root = v));
+        destruct (_root =? _v)%uint63 eqn:?;
+        eauto; exfalso; rewrite isInt_def in *; lia. }
+      destructWf.
       wf_nonempty.
       length in *.
-      assert (fact: len σ + 1 ≠ 1) by lia.
-      specialize (Hinv8 fact). clear fact.
+      destruct (decide (len σ + 1 = 1)); [ lia |]. (* simplifies Hinv6 *)
+      assert (root ≠ n) by lia. (* aha! *)
       wp_ret.
       pack; tc.
       { eapply isRootMapStack_store; eauto with wf. }
-      { replace (len σ) with ((len σ + 1) - 1) by lia. tc. }
+      { destruct (decide (root = v)); lia. }
+      { destruct (decide (root = v)); lia. }
       { rewrite bottom_store.
-        erewrite bottom_push in Hinv8 by eauto with wf.
-        assumption. }
+        destruct (decide (len σ = 1)).
+        + (* The new stack has height 1, so [v] must be [root]. *)
+          erewrite bottom_two in Hinv6 by eauto.
+          destruct (decide (root = v)); [| congruence ].
+          reflexivity.
+        + (* The new stack has height greater than 1. [v] cannot be [root]. *)
+          erewrite bottom_push in Hinv6 by eauto.
+          assert (v ≠ root) by eauto using not_root.
+          rewrite Hinv6. f_equal. unfold root'.
+          destruct (decide (root = v)); [ congruence |].
+          reflexivity. }
     }
   }
   (* Completion. *)
   { clear dependent b.
-    intros (m & [b _depth _root]) (marked' & σ' & vs & Hm & Hpost).
+    intros (m & [b _root]) (marked' & σ' & vs & Hm & Hpost).
     unpack in Hpost.
     wp_ret. }
 Qed.
