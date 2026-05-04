@@ -662,7 +662,8 @@ Proof.
   (* Base case. *)
   { eauto with reaches. }
   (* Inductive case. Split into three sub-goals. *)
-  { repeat eapply prove_subset_union_left.
+  { eapply prove_subset_union_left.
+    eapply prove_subset_union_left.
     (* Sub-goal 1. [w] reaches [w]. *)
     + eapply prove_reaches_self. set_solver.
     (* Sub-goal 2. [w] reaches [roots ws] reaches [support ws]. *)
@@ -682,9 +683,10 @@ Lemma reaches_root_support imarked mmarked w ws vs :
   reaches_ {[w]} (support ws).
 Proof.
   intros h. dependent destruction h.
-  (* This repeats sub-goal 2 above, but never mind. *)
-  eauto using reaches_roots_support, reaches_transitive,
-              subset_transitive with reaches.
+  (* This repeats part of sub-goal 2 above, but never mind. *)
+  eapply reaches_transitive with (ys := roots ws).
+  { eauto using subset_transitive with reaches. }
+  { eauto using reaches_roots_support. }
 Qed.
 
 Lemma reaches_root_descendants w ws vs imarked omarked x :
