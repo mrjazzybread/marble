@@ -1060,14 +1060,24 @@ Definition edge ov w :=
   | None   => w ∈ start
   end.
 
-(* The trace of a stack is the set of vertices [v] that appear in the
-   stack frames. In other words, it is the set of vertices that are
-   currently being visited -- the grey vertices. *)
+(* The trace of a stack is the set of vertices that appear directly in the
+   stack frames (ignoring the subforests that hang off of a stack frame).
+   In other words, it is the set of vertices that are currently being
+   visited -- the grey vertices. *)
 
 Fixpoint trace σ : set V :=
   match σ with
   | [] => ∅
   | Frame ov _ :: σ => option_to_set ov ∪ trace σ
+  end.
+
+(* The support of a stack is the set of vertices that appear in a stack
+   frame or in a subforest hanging off of a stack frame. *)
+
+Fixpoint support_stack σ : set V :=
+  match σ with
+  | [] => ∅
+  | Frame ov vs :: σ => option_to_set ov ∪ support vs ∪ support_stack σ
   end.
 
 (* [top σ] is the vertex found in the top frame of the stack [σ]. *)
@@ -1218,6 +1228,29 @@ Ltac wf_monotonic :=
   repeat match goal with
   h: wf _ _ |- _ =>
     generalize (wf_monotonic h eq_refl); revert h
+  end;
+  intros.
+
+(* The vertices found in the support of the stack were not marked
+   initially. *)
+
+Lemma wf_imarked imarked γ :
+  wf imarked γ →
+  ∀ omarked σ,
+  γ = (omarked, σ) →
+  support_stack σ ## imarked.
+Proof.
+  induction 1; intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  [| specialize (IHwf _ _ eq_refl) ];
+  simpl support_stack.
+  { dfs_imarked. set_solver. }
+  { wf_monotonic. dfs_imarked. dfs_omarked. set_solver. }
+Qed.
+
+Ltac wf_imarked :=
+  repeat match goal with h: wf _ _ |- _ =>
+    generalize (wf_imarked h eq_refl); revert h
   end;
   intros.
 
@@ -1609,6 +1642,25 @@ Proof.
   + set_solver.
 Qed.
 
+(* If the stack has at least three frames then the top vertex and the
+   bottom vertex must be distinct. *)
+
+Lemma wf_top_ne_bottom imarked omarked v vs σ w :
+  wf imarked (omarked, Frame (Some v) vs :: σ) →
+  bottom σ = Some w →
+  v ≠ w.
+Proof.
+  intros Hwf Hbottom.
+  destruction Hwf.
+  (* We have [v ∉ mmarked], but [w ∈ mmarked], therefore [v ≠ w]. *)
+  assert (w ∈ mmarked).
+  { match goal with h: wf _ _ |- _ => clear Hwf; rename h into Hwf end.
+    generalize (wf_bottom_marked' Hwf); intro Hmarked.
+    rewrite Hbottom in Hmarked.
+    simpl in Hmarked. set_solver. }
+  set_solver.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [isRootMap roots vs] means that [roots], a map of vertices to
@@ -1707,6 +1759,56 @@ Proof using.
       + eapply Htop. eauto 2 with set_solver. }}
 Qed.
 
+(* When it is applied to a well-formed forest, [isRootMap] is
+   insensitive to the value of the function [roots] outside of the set
+   [omarked ∖ imarked]. In other words, the value of [roots w] matters
+   only when [w] is marked. *)
+
+Lemma isRootMap_domain roots vs :
+  isRootMap roots vs →
+  ∀ roots' imarked omarked,
+  dfs imarked omarked vs →
+  (∀ w, w ∈ omarked ∖ imarked → roots' w = roots w) →
+  isRootMap roots' vs.
+Proof.
+  induction 1; inversion 1; intros Himpl; subst.
+  { econstructor. }
+  { dfs_monotonic.
+    econstructor; intros.
+    + dfs_imarked. dfs_omarked.
+      rewrite Himpl by set_solver. eauto.
+    + eauto with set_solver. }
+Qed.
+
+(* A similar result about [isRootMapStack]. *)
+
+Lemma isRootMapStack_domain roots σ :
+  isRootMapStack roots σ →
+  ∀ roots' imarked omarked,
+  wf imarked (omarked, σ) →
+  (∀ w, w ∈ omarked ∖ imarked → roots' w = roots w) →
+  isRootMapStack roots' σ.
+Proof.
+  induction 1; inversion 1; intros Himpl; subst.
+  { econstructor. eauto using isRootMap_domain. }
+  { dfs_monotonic.
+    econstructor; eauto.
+    + eauto with set_solver.
+    + wf_imarked. dfs_omarked.
+      rewrite Himpl by eauto with set_solver.
+      eauto. }
+Qed.
+
+Lemma isRootMapStack_domain' roots σ :
+  isRootMapStack roots σ →
+  ∀ roots' imarked omarked,
+  wf imarked (omarked, σ) →
+  (∀ w, w ∈ omarked → roots' w = roots w) →
+  isRootMapStack roots' σ.
+Proof.
+  eauto using isRootMapStack_domain with set_solver.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The following lemmas aim to establish an upper bound on the size of
@@ -1783,10 +1885,11 @@ Hint Resolve
 Ltac destructStep :=
   match goal with h: step _ _ _ _ _ |- _ => destruction h end.
 
-Ltac destructWf :=
-  match goal with h: wf _ _ _ _ |- _ => destruction h end.
-
 Ltac wf_nonempty :=
   repeat match goal with
   | h : wf _ _ _ _ |- _ => generalize (wf_nonempty h); revert h
   end; intros.
+
+Ltac destructWf :=
+  match goal with h: wf _ _ _ _ |- _ => destruction h end;
+  try solve [ exfalso; wf_nonempty; length in *; lia ].
