@@ -1257,87 +1257,107 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* WIP *)
+(* The function [group] performs a depth-first traversal and constructs
+   an array that maps each vertex [v] to the root of the tree where the
+   vertex [v] appears in the DFS forest. *)
 
-Section Blocks.
+Section Group.
 
-(* We need to maintain a piece of information that lets us recognize
-   whether we are at the top level, that is, whether the ghost stack
-   has length 1. One way of doing this would be to maintain the length
-   of the ghost stack at runtime. This approach has downsides, though:
-   it adds one word to the state, and it requires bounding the length
-   of the stack, so as to prove that overflow is impossible. A better
-   approach is to maintain the last (optional) root vertex (which we
-   need to maintain, anyway). Upon exiting a vertex, we compare the
-   vertex that is being exited with the last root vertex. If they are
-   equal, then we are back to the top level. In that case the last
-   root vertex must be reset to [none]. *)
+(* The array [_group] maps each vertex to the root of its DFS tree.
+   This array is initialized during the traversal. *)
 
-(* In order to avoid allocating an option of type [option _vertex],
-   we use the special value [none] as a sentinel. This value has
-   type [_vertex] but is not a valid vertex. *)
+(* The optional vertex [_root] is the last encountered root vertex.
+   The special value [none], which has type [_vertex] but is not a
+   valid vertex, is used as a sentinel. When [_root] is [none], we
+   are the top level. When [_root] is a valid vertex, we are not at
+   the top level, and [_root] is the root of the current tree. *)
 
-(* Our state is a tuple [BS (b, _root)]. *)
+(* Another approach would be to maintain the length of the ghost stack
+   at runtime. This approach has downsides, though: it adds one word
+   to the state, and it requires arguing that overflow is impossible,
+   which in turn requires bounding the length of the stack. *)
 
-Inductive bstate :=
-| BS : array int → int → bstate.
+(* Our state is a tuple [G (_group, _root)]. *)
 
-Implicit Type b : array int.
-Implicit Type s : bstate.
+Notation _none := _n.
+Notation none := n.
 
-Local Notation none := _n.
+Inductive gstate :=
+| G : array int → int → gstate.
+
+Implicit Type _group : array int.
+Implicit Type g : gstate.
 
 Section Code.
 Open Scope uint63.
 
-Definition plain_blocks : bstate :=
-  do b ← make _n 0 ; (* dummy *)
-  let _root := none in
-  do s ← BS b _root ;
-  let hook _e s :=
-    let '(BS b _root) := s in
+Definition plain_group : array int :=
+  do _group ← make _n 0 ; (* dummy *)
+  let _root := _none in
+  do g ← G _group _root ;
+  let hook _e g :=
+    let '(G _group _root) := g in
     match _e with
     | Enter _v =>
         (* If there was no current root then we are entering a new tree,
            whose root is [_v]. *)
-        let _root := if _root =? none then _v else _root in
+        let _root := if _root =? _none then _v else _root in
         (* Record that [_v] belongs in a tree whose root is [_root]. *)
-        do b ← set b _v _root ;
-        BS b _root
+        do _group ← set _group _v _root ;
+        G _group _root
     | Exit _v =>
         (* If the current root was [_v] then we are leaving a tree. *)
-        let _root := if _root =? _v then none else _root in
-        BS b _root
+        let _root := if _root =? _v then _none else _root in
+        G _group _root
     end
   in
-  do (m, s) ← traverse hook s ;
-  s.
+  do (m, g) ← traverse hook g ;
+  let '(G _group _) := g in
+  _group.
 
 End Code.
 
-Local Hint Rewrite length_store : ulength clength.
-
-Local Hint Resolve
-  isRootMapStack_init
-: marble.
+(* An auxiliary lemma: during a traversal, if the stack has a bottom
+   vertex (i.e., if the stack currently has height greater than 1)
+   then this vertex is a valid vertex. Therefore it is not [n],
+   which we use to encode "no vertex". *)
 
 Lemma wf_bottom_valid marked σ v :
   wf (marked, σ) →
   bottom σ = Some v →
   0 ≤ v < n.
 Proof.
-Admitted.
+  intros Hwf Hbottom.
+  (* [v] is marked. *)
+  generalize (wf_bottom_marked' Hwf); intro Hbm.
+  rewrite Hbottom in Hbm. simpl in Hbm.
+  (* Every marked vertex is reachable. *)
+  generalize (wf_reaches Hwf eq_refl); intro Hreaches.
+  (* Therefore [v] is reachable. *)
+  assert (v ∈ closure start) by set_solver.
+  (* Therefore [v] is part of the universe. *)
+  assert (v ∈ universe).
+  { eauto using closure_start_subset_universe with set_solver. }
+  (* The result follows by definition of the universe. *)
+  set_solver.
+Qed.
 
-Local Lemma key marked σ root :
+(* As a consequence, while [group] is running, the conditions
+   [len σ = 1] and [root = none] are equivalent. That is, the
+   test [root = none] is a correct way of determining whether
+   we are currently at the top level. *)
+
+Local Lemma toplevel_test marked σ root :
   wf (marked, σ) →
-  (if decide (len σ = 1) then root = n else bottom σ = Some root) →
-  (len σ = 1 ↔ root = n).
+  (if decide (len σ = 1) then root = none else bottom σ = Some root) →
+  (len σ = 1 ↔ root = none).
 Proof.
-  intros Hwf Hkey. split; intro Heq;
+  intros Hwf Hinv. split; intro Heq;
     (destruct (decide (len σ = 1)); try tauto).
-  (* We have [bottom σ = Some root] and [root = n], so the bottom
-     vertex of the stack is invalid. Contradiction. *)
-  assert (0 ≤ root < n) by eauto using wf_bottom_valid.
+  (* The nontrivial subgoal is to prove that [root = none] implies
+     [len σ = 1]. We have [bottom σ = Some root] and [root = none],
+     so the bottom vertex of the stack is invalid. Contradiction. *)
+  assert (0 ≤ root < none) by eauto using wf_bottom_valid.
   lia.
 Qed.
 
@@ -1351,7 +1371,7 @@ Local Lemma update_bottom marked σ v marked' σ' root root' :
 Proof.
   intros Hwf Hstep H Hroot'.
   assert (wf (marked', σ')) by eauto with wf.
-  assert (fact: len σ = 1 ↔ root = n) by eauto using key.
+  assert (fact: len σ = 1 ↔ root = n) by eauto using toplevel_test.
   destructStep.
   subst root'.
   destruct (decide (root = n)).
@@ -1423,21 +1443,27 @@ Proof.
   set_solver.
 Qed.
 
+Local Hint Rewrite length_store : ulength clength.
+
+Local Hint Resolve
+  isRootMapStack_init
+: marble.
+
 Lemma wp_blocks :
-  wp plain_blocks (λ s,
+  wp plain_group (λ s,
     True
   ).
 Proof.
   assert (unsigned n) by (arrays; lia).
-  unfold plain_blocks.
-  wp_make b.
-  set (s0 := BS b none).
+  unfold plain_group.
+  wp_make _group.
+  set (s0 := G _group _none).
   wp_bind_eq.
-  wp_op wp_traverse with invariant: (λ γ s,
+  wp_op wp_traverse with invariant: (λ γ g,
     let '(marked, σ) := γ in
-    let '(BS b _root) := s in
+    let '(G _group _root) := g in
     ∃ _roots roots root,
-    isArray b _roots ∧
+    isArray _group _roots ∧
     len _roots = n ∧
     len roots = n ∧
     isList _roots roots ∧
@@ -1453,24 +1479,24 @@ Proof.
   (* Initialization. *)
   { simpl. pack; tc; length; tc. }
   (* Preservation. *)
-  { clear dependent b.
-    intros (marked & σ) (marked' & σ') [b _root] Hinv Hwf.
+  { clear dependent _group.
+    intros (marked & σ) (marked' & σ') [_group _root] Hinv Hwf.
     destruct Hinv as (_roots & roots & root & Hinv). unpack in Hinv.
     intros _e e Hevent Hstep.
-    assert (fact: len σ = 1 ↔ root = n) by eauto using key.
+    assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
     destructEvent;
     destructStep.
     (* Case [Enter]. *)
     {
       (* This is a bit manual / ugly. *)
-      set (_root' := if (_root =? none)%uint63 then _v else _root).
-      set (root' := if decide (root = n) then v else root).
+      set (_root' := if (_root =? _none)%uint63 then _v else _root).
+      set (root' := if decide (root = none) then v else root).
       assert (isInt _root' root').
       { unfold _root', root'.
-        destruct (decide (root = n));
-        destruct (_root =? none)%uint63 eqn:?;
+        destruct (decide (root = none));
+        destruct (_root =? _none)%uint63 eqn:?;
         eauto; exfalso; rewrite isInt_def in *; lia. }
-      (* Update the root array [b]. *)
+      (* Update the array [_group]. *)
       wp_set.
       set (_roots' := (<[v:=_root']> _roots)).
       set (roots' := (<[v:=root']> roots)).
@@ -1504,8 +1530,8 @@ Proof.
     {
       match goal with foo: stack vertex |- _ => rename foo into σ end.
       (* This is a bit manual / ugly. *)
-      set (_root' := if (_root =? _v)%uint63 then none else _root).
-      set (root' := if decide (root = v) then n else root).
+      set (_root' := if (_root =? _v)%uint63 then _none else _root).
+      set (root' := if decide (root = v) then none else root).
       assert (isInt _root' root').
       { unfold _root', root'.
         destruct (decide (root = v));
@@ -1515,7 +1541,7 @@ Proof.
       wf_nonempty.
       length in *.
       destruct (decide (len σ + 1 = 1)); [ lia |]. (* simplifies Hinv6 *)
-      assert (root ≠ n) by lia. (* aha! *)
+      assert (root ≠ none) by lia. (* aha! *)
       wp_ret.
       pack; tc.
       { eapply isRootMapStack_store; eauto with wf. }
@@ -1536,13 +1562,13 @@ Proof.
     }
   }
   (* Completion. *)
-  { clear dependent b.
-    intros (m & [b _root]) (marked' & σ' & vs & Hm & Hpost).
+  { clear dependent _group.
+    intros (m & [_group _root]) (marked' & σ' & vs & Hm & Hpost).
     unpack in Hpost.
     wp_ret. }
 Qed.
 
-End Blocks.
+End Group.
 
 (* -------------------------------------------------------------------------- *)
 (* -------------------------------------------------------------------------- *)
