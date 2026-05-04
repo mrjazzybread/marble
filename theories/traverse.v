@@ -1384,7 +1384,7 @@ Local Lemma length_stack marked σ :
   len σ ≤ n + 1.
 Proof using.
   intros Hwf.
-  generalize (trace_upper_bound Hwf eq_refl); intro Htrace.
+  generalize (wf_trace_marked Hwf eq_refl); intro Htrace.
   generalize (length_stack Hwf eq_refl); intros (fvs & Hfequiv & Hsize).
   cut (Z.of_nat (base.size fvs) ≤ n).
   { unfold len. lia. }
@@ -1417,7 +1417,7 @@ Proof.
   (* We have [v ∉ mmarked], but [root ∈ mmarked], therefore [v ≠ root]. *)
   assert (root ∈ mmarked).
   { match goal with h: wf _ |- _ => clear Hwf; rename h into Hwf end.
-    generalize (wf_bottom_marked Hwf eq_refl); intro Hmarked.
+    generalize (wf_bottom_marked' Hwf); intro Hmarked.
     rewrite Hbottom in Hmarked.
     simpl in Hmarked. set_solver. }
   set_solver.

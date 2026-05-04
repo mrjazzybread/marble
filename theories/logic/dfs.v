@@ -1060,6 +1060,16 @@ Definition edge ov w :=
   | None   => w ∈ start
   end.
 
+(* The trace of a stack is the set of vertices [v] that appear in the
+   stack frames. In other words, it is the set of vertices that are
+   currently being visited -- the grey vertices. *)
+
+Fixpoint trace σ : set V :=
+  match σ with
+  | [] => ∅
+  | Frame ov _ :: σ => option_to_set ov ∪ trace σ
+  end.
+
 (* [top σ] is the vertex found in the top frame of the stack [σ]. *)
 
 Definition top σ : option V :=
@@ -1258,26 +1268,50 @@ Proof.
   { exfalso. simpl in *. congruence. }
 Qed.
 
-(* Every vertex in the stack is marked. *)
+(* The trace of a well-formed stack is a subset of [omarked ∖ imarked]. *)
 
-(* TODO prove that every vertex in [trace σ] is marked,
-   then prove that [top σ] and [bottom σ] are in the trace.
-   This simplifies wf_top_marked and wf_bottom_marked. *)
+(* In other words, every vertex in the trace is marked. *)
 
-(* In particular, the vertex [top σ] is marked. *)
-
-Lemma wf_top_marked imarked γ :
+Lemma wf_trace_marked imarked γ :
   wf imarked γ →
-  ∀ omarked σ ,
+  ∀ omarked σ,
   γ = (omarked, σ) →
+  trace σ ⊆ omarked ∖ imarked.
+Proof.
+  induction 1; intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  [| specialize (IHwf _ _ eq_refl) ];
+  simpl trace.
+  { set_solver. }
+  { wf_monotonic. dfs_monotonic. set_solver. }
+Qed.
+
+(* The top vertex [top σ] is part of the trace. *)
+
+(* Therefore it is marked. *)
+
+Lemma wf_top_trace σ :
+  option_to_set (top σ) ⊆ trace σ.
+Proof.
+  induction σ as [| [ ? ?] σ ]; simpl; set_solver.
+Qed.
+
+Lemma wf_top_marked imarked omarked σ :
+  wf imarked (omarked, σ) →
+  option_to_set (top σ) ⊆ omarked ∖ imarked.
+Proof.
+  intros Hwf. transitivity (trace σ).
+  + eapply wf_top_trace.
+  + eauto using wf_trace_marked.
+Qed.
+
+Lemma wf_top_marked' imarked omarked σ :
+  wf imarked (omarked, σ) →
   option_to_set (top σ) ⊆ omarked.
 Proof.
-  intros Hwf. dependent induction Hwf;
-  match goal with h: dfs _ _ _ |- _ => rename h into Hdfs end;
-  intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  generalize (dfs_determines_omarked Hdfs);
-  intros; simpl; dfs_monotonic; set_solver.
+  intros. transitivity (omarked ∖ imarked).
+  + eauto using wf_top_marked.
+  + set_solver.
 Qed.
 
 (* If one starts from an empty set of marked vertices, then at any
@@ -1305,7 +1339,7 @@ Proof.
   (* Case [WfDeep]. *)
   { specialize (IHHwf eq_refl mmarked σ eq_refl).
     (* [top σ] is marked, therefore is reachable. *)
-    assert (option_to_set (top σ) ⊆ mmarked) by eauto using wf_top_marked.
+    assert (option_to_set (top σ) ⊆ mmarked) by eauto using wf_top_marked'.
     (* Because [w] is a successor of [top σ], [w] is reachable, too. *)
     assert (reaches E start {[w]}).
     { destruct (top σ) eqn:Heq; unfold edge in *.
@@ -1337,7 +1371,7 @@ Proof.
   intros Hwf Hedge.
   generalize (wf_reaches Hwf eq_refl); intros Homarked.
   eapply prove_subset_union_left; [ exact Homarked |].
-  assert (option_to_set (top σ) ⊆ omarked) by eauto using wf_top_marked.
+  assert (option_to_set (top σ) ⊆ omarked) by eauto using wf_top_marked'.
   destruct (top σ); unfold edge in *; simpl in *.
   + assert (reaches E {[v]} {[w]})
       by eauto using prove_reaches_singleton_singleton.
@@ -1533,27 +1567,49 @@ Proof.
   reflexivity.
 Qed.
 
-(* The bottom stack vertex is marked. *)
+(* The bottom vertex [bottom σ] is part of the trace. *)
 
-Lemma wf_bottom_marked imarked γ :
+(* Therefore it is marked. *)
+
+Lemma wf_bottom_trace imarked γ :
   wf imarked γ →
-  ∀ omarked σ ,
+  ∀ omarked σ,
   γ = (omarked, σ) →
-  option_to_set (bottom σ) ⊆ omarked.
+  option_to_set (bottom σ) ⊆ trace σ.
 Proof.
-  induction 1;
-  intros ?? Heq;
+  induction 1; intros ?? Heq;
   injection Heq; clear Heq; intros <- <-;
   [| specialize (IHwf _ _ eq_refl) ].
-  { simpl. set_solver. }
-  { match goal with h: wf _ _ |- _ => inversion h; subst end.
-    + simpl. dfs_monotonic. set_solver.
-    + erewrite bottom_push.
-      - dfs_monotonic. set_solver.
-      - eauto with wf.
-      - match goal with h: wf _ _ |- _ => apply wf_nonempty in h end.
-        length. lia. }
+  { set_solver. }
+  { match goal with h: wf _ _ |- _ => dependent destruction h end.
+    { set_solver. }
+    match goal with foo: stack |- _ => rename foo into σ end.
+    assert (1 ≤ length σ) by eauto using wf_nonempty.
+    erewrite bottom_push by (length; eauto with wf lia).
+    rewrite IHwf. simpl trace. set_solver. }
 Qed.
+
+(* The bottom stack vertex is marked. *)
+
+Lemma wf_bottom_marked imarked omarked σ :
+  wf imarked (omarked, σ) →
+  option_to_set (bottom σ) ⊆ omarked ∖ imarked.
+Proof.
+  intros Hwf. transitivity (trace σ).
+  + eauto using wf_bottom_trace.
+  + eauto using wf_trace_marked.
+Qed.
+
+Lemma wf_bottom_marked' imarked omarked σ :
+  wf imarked (omarked, σ) →
+  option_to_set (bottom σ) ⊆ omarked.
+Proof.
+  intros Hwf. transitivity (omarked ∖ imarked).
+  + eauto using wf_bottom_marked.
+  + set_solver.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 (* [isRootMap roots vs] means that [roots], a map of vertices to
    vertices, correctly records the root of every vertex in [vs].
@@ -1656,32 +1712,6 @@ Qed.
 (* The following lemmas aim to establish an upper bound on the size of
    a stack. *)
 
-(* The trace of a stack is the set of vertices [v] that appear in the
-   stack frames. In other words, it is the set of vertices that are
-   currently being visited -- the grey vertices. *)
-
-Fixpoint trace σ : set V :=
-  match σ with
-  | [] => ∅
-  | Frame ov _ :: σ => option_to_set ov ∪ trace σ
-  end.
-
-(* The trace of a well-formed stack is a subset of [omarked ∖ imarked]. *)
-
-Lemma trace_upper_bound imarked γ :
-  wf imarked γ →
-  ∀ omarked σ,
-  γ = (omarked, σ) →
-  trace σ ⊆ omarked ∖ imarked.
-Proof.
-  induction 1; intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  [| specialize (IHwf _ _ eq_refl) ];
-  simpl trace.
-  { set_solver. }
-  { wf_monotonic. dfs_monotonic. set_solver. }
-Qed.
-
 (* We must use finite sets, which have a notion of [size]. *)
 
 Section Size.
@@ -1718,7 +1748,7 @@ Proof.
     + lia. }
   { destruct IHwf as (fvs & ? & ?).
     assert (w ∉ trace σ).
-    { eapply trace_upper_bound in H; eauto. set_solver. }
+    { eapply wf_trace_marked in H; eauto. set_solver. }
     exists (fvs ∪ {[w]}). split.
     + unfold fequiv in *. set_solver.
     + rewrite size_union, size_singleton.
