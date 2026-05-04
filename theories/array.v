@@ -1894,3 +1894,102 @@ Proof.
   generalize (wp_init_default _n f); intro Hinit.
   rewrite wp_iff in Hinit. assumption.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Lemmas and hints about [Forall2]. *)
+
+Lemma Forall2_singleton {A B} (R : A → B → Prop) a b :
+  R a b →
+  Forall2 R {[a]} {[b]}.
+Proof.
+  unfold singleton, stdpp_buffer.singleton_list. eauto.
+Qed.
+
+Hint Resolve
+  Forall2_nil
+  Forall2_singleton
+  Forall2_insert
+  Forall2_app
+  Forall2_replicate
+: marble.
+
+(* -------------------------------------------------------------------------- *)
+
+(* This "rich" variant of the predicate [isArray] is parameterized with a
+   relation [R : _A → A → Prop]. *)
+
+(* The proposition [isArray R a xs] means that the elements of the array
+   [a], viewed through the relation [R], form the list [xs]. *)
+
+(* We establish reasoning rules, at this level of abstraction, for the four
+   primitive operations, namely [make], [length], [get], [set]. *)
+
+(* In principle it would be possible to revisit the whole array API at this
+   level, or better, to parameterize [isArray], from the very beginning,
+   with a relation [R], which by default would be equality. Future work. *)
+
+Module rich.
+Section R.
+
+Context `{Inhabited _A}.
+Context `{Inhabited A}.
+Variable R : _A → A → Prop.
+
+Implicit Type a : array _A.
+Implicit Type _xs : list _A.
+Implicit Type xs : list A.
+
+Definition isArray a xs :=
+  ∃ _xs, isArray a _xs ∧ Forall2 R _xs xs.
+
+(* Reasoning rules. *)
+
+Lemma wp_make :
+  ∀Int _n n,
+  0 ≤ n ≤ max_array_length →
+  ∀ _x x,
+  R _x x →
+  wp (make _n _x) (λ a, isArray a (replicate n x)).
+Proof.
+  unfold isArray. intros. wp_make a. tc.
+Qed.
+
+Lemma wp_length a xs :
+  isArray a xs →
+  wp (length a) (λ _n, isInt _n (len xs)).
+Proof.
+  unfold isArray. intros (_xs & ? & ?).
+  wp_length _n.
+  erewrite <- Forall2_same_length' by eauto.
+  assumption.
+Qed.
+
+Lemma wp_get _i i a xs :
+  isInt _i i →
+  isArray a xs →
+  valid i xs →
+  wp a.[_i] (λ _x, ∃ x, R _x x ∧ x = xs !!! i).
+Proof.
+  unfold isArray. intros ? (_xs & ? & ?) ?.
+  assert (len _xs = len xs) by eauto using Forall2_same_length'.
+  wp_get _x.
+  rewrite Forall2_lookup_total in *. unpack.
+  subst. tc.
+Qed.
+
+Lemma wp_set _i i a xs _x x :
+  isInt _i i →
+  isArray a xs →
+  valid i xs →
+  R _x x →
+  wp a.[_i <- _x] (λ a', isArray a' (<[i := x]>xs)).
+Proof.
+  unfold isArray. intros ? (_xs & ? & ?) ? ?.
+  assert (len _xs = len xs) by eauto using Forall2_same_length'.
+  wp_set.
+  tc.
+Qed.
+
+End R.
+End rich.
