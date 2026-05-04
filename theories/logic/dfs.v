@@ -1531,6 +1531,28 @@ Proof.
   reflexivity.
 Qed.
 
+(* The bottom stack vertex is marked. *)
+
+Lemma wf_bottom_marked imarked γ :
+  wf imarked γ →
+  ∀ omarked σ ,
+  γ = (omarked, σ) →
+  option_to_set (bottom σ) ⊆ omarked.
+Proof.
+  induction 1;
+  intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  [| specialize (IHwf _ _ eq_refl) ].
+  { simpl. set_solver. }
+  { match goal with h: wf _ _ |- _ => inversion h; subst end.
+    + simpl. dfs_monotonic. set_solver.
+    + erewrite bottom_push.
+      - dfs_monotonic. set_solver.
+      - eauto with wf.
+      - match goal with h: wf _ _ |- _ => apply wf_nonempty in h end.
+        length. lia. }
+Qed.
+
 (* [isRootMap roots vs] means that [roots], a map of vertices to
    vertices, correctly records the root of every vertex in [vs].
    That is, every vertex [v] in the forest [vs] is mapped to the
