@@ -1260,9 +1260,11 @@ Qed.
 
 (* Every vertex in the stack is marked. *)
 
-(* We do not currently have a function that collects all vertices in
-   the stack, so we just express the fact that the vertex [top σ] is
-   marked. *)
+(* TODO prove that every vertex in [trace σ] is marked,
+   then prove that [top σ] and [bottom σ] are in the trace.
+   This simplifies wf_top_marked and wf_bottom_marked. *)
+
+(* In particular, the vertex [top σ] is marked. *)
 
 Lemma wf_top_marked imarked γ :
   wf imarked γ →
