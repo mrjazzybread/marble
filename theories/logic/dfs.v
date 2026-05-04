@@ -3,6 +3,8 @@
    predicate [dfs], and explores the properties of this predicate. *)
 
 From Stdlib Require Import Program.Equality. (* [dependent destruction] *)
+From stdpp Require Import fin_sets listset_nodup.
+Local Notation fset := listset_nodup.
 From stdpp Require Import sets propset.
 Local Notation set := propset.
 From listz Require Import listz. (* singleton list notation *)
@@ -1624,6 +1626,83 @@ Proof using.
       + eapply Htop. eauto with set_solver.
       + eapply Htop. eauto 2 with set_solver. }}
 Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The following lemmas aim to establish an upper bound on the size of
+   a stack. *)
+
+(* The trace of a stack is the set of vertices [v] that appear in the
+   stack frames. In other words, it is the set of vertices that are
+   currently being visited -- the grey vertices. *)
+
+Fixpoint trace σ : set V :=
+  match σ with
+  | [] => ∅
+  | Frame ov _ :: σ => option_to_set ov ∪ trace σ
+  end.
+
+(* The trace of a well-formed stack is a subset of [omarked ∖ imarked]. *)
+
+Lemma trace_upper_bound imarked γ :
+  wf imarked γ →
+  ∀ omarked σ,
+  γ = (omarked, σ) →
+  trace σ ⊆ omarked ∖ imarked.
+Proof.
+  induction 1; intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  [| specialize (IHwf _ _ eq_refl) ];
+  simpl trace.
+  { set_solver. }
+  { wf_monotonic. dfs_monotonic. set_solver. }
+Qed.
+
+(* We must use finite sets, which have a notion of [size]. *)
+
+Section Size.
+
+Context `{EqDecision V}.
+
+(* We define [vs ≃ fvs] to mean that the set [vs] has the same
+   inhabitants as the finite set [fvs]. This implies that [vs]
+   is finite and that its cardinal is [size fvs]. *)
+
+Definition fequiv (vs : set V) (fvs : fset V) :=
+  ∀ v, v ∈ vs ↔ v ∈ fvs.
+
+Infix "≃" := fequiv (at level 70).
+
+(* The trace of a well-formed stack is a finite set, and the length of
+   the stack is at most the cardinal of its trace, plus 1, as the
+   bottom frame does not contain a vertex. *)
+
+Lemma length_stack imarked γ :
+  wf imarked γ →
+  ∀ omarked σ,
+  γ = (omarked, σ) →
+  ∃ fvs,
+  trace σ ≃ fvs ∧
+  (List.length σ ≤ size fvs + 1)%nat.
+Proof.
+  induction 1; intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  [| specialize (IHwf _ _ eq_refl) ];
+  simpl.
+  { exists ∅. rewrite size_empty. split.
+    + intro v. set_solver.
+    + lia. }
+  { destruct IHwf as (fvs & ? & ?).
+    assert (w ∉ trace σ).
+    { eapply trace_upper_bound in H; eauto. set_solver. }
+    exists (fvs ∪ {[w]}). split.
+    + unfold fequiv in *. set_solver.
+    + rewrite size_union, size_singleton.
+      - lia.
+      - unfold fequiv in *. set_solver. }
+Qed.
+
+End Size.
 
 (* -------------------------------------------------------------------------- *)
 
