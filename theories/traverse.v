@@ -1175,27 +1175,6 @@ Qed.
 
 Local Notation isList := (Forall2 isInt).
 
-Local Lemma isList_nil :
-  isList [] [].
-Proof.
-  econstructor.
-Qed.
-
-Local Lemma isList_singleton _v v :
-  isInt _v v →
-  isList {[_v]} {[v]}.
-Proof.
-  intros. econstructor; [ assumption | econstructor ].
-Qed.
-
-Local Hint Resolve
-  isList_nil
-  isList_singleton
-  Forall2_insert
-  Forall2_app
-  Forall2_replicate
-: marble.
-
 (* -------------------------------------------------------------------------- *)
 
 (* [list_rev_post] traverses the graph and constructs a list of the reachable
