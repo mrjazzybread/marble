@@ -1362,9 +1362,22 @@ Proof.
     erewrite bottom_push by eauto with wf. assumption. }
 Qed.
 
+(* The specification of [group]. *)
+
 Lemma wp_group :
-  wp plain_group (λ s,
-    True
+  wp plain_group (λ _group,
+    (* [group] performs a depth-first traversal, building a (ghost)
+       forest [vs]. *)
+    ∃ marked vs ρ ,
+    dfs marked vs ∧
+    roots vs ⊆ start ∧
+    start ⊆ marked ∧
+    (* Furthermore, [group] returns an array [_group], whose length
+       is [n], mapping every vertex to the root of its tree in the
+       forest [vs]. *)
+    rich.isArray isInt _group ρ ∧
+    len ρ = n ∧
+    isRootMap (λ v, ρ !!! v) vs
   ).
 Proof.
   assert (unsigned n) by (arrays; lia).
@@ -1375,10 +1388,10 @@ Proof.
   wp_op wp_traverse with invariant: (λ γ g,
     let '(marked, σ) := γ in
     let '(G _group _root) := g in
-    ∃ roots root,
-    rich.isArray isInt _group roots ∧
-    len roots = n ∧
-    isRootMapStack (λ v, roots !!! v) σ ∧
+    ∃ ρ root,
+    rich.isArray isInt _group ρ ∧
+    len ρ = n ∧
+    isRootMapStack (λ v, ρ !!! v) σ ∧
     isInt _root root ∧
     unsigned root ∧
     (if decide (len σ = 1) then root = n else bottom σ = Some root)
@@ -1392,7 +1405,7 @@ Proof.
   (* Preservation. *)
   { clear dependent _group.
     intros (marked & σ) (marked' & σ') [_group _root] Hinv Hwf.
-    destruct Hinv as (roots & root & Hinv). unpack in Hinv.
+    destruct Hinv as (ρ & root & Hinv). unpack in Hinv.
     intros _e e Hevent Hstep.
     assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
     destructEvent;
@@ -1409,10 +1422,10 @@ Proof.
         eauto; exfalso; rewrite isInt_def in *; lia. }
       (* Update the array [_group]. *)
       wp_op rich.wp_set shadowing: _group.
-      set (roots' := (<[v:=root']> roots)).
+      set (ρ' := (<[v:=root']> ρ)).
       (* Return. *)
       wp_ret.
-      exists roots', root'.
+      exists ρ', root'.
       set (σ' := Frame (Some v) Empty :: σ).
       fold σ' in Hstep.
       assert (len σ' > 1).
@@ -1421,17 +1434,17 @@ Proof.
       assert (bottom σ' = Some root').
       { eapply update_root_enter; eauto. }
       pack; tc.
-      { subst  roots'. length. eauto. }
+      { subst ρ'. length. eauto. }
       { (* isRootMapStack *)
         econstructor.
         { eapply isRootMapStack_domain'; eauto.
           intros w Hw. case (decide (w = v)).
           + intros ->. exfalso. tauto.
-          + intros. unfold roots'. list. eauto. }
+          + intros. unfold ρ'. list. eauto. }
         { eauto. }
         { simpl. intros w' Hw'. set_unfold in Hw'.
           assert (w' = v) by tauto. clear Hw'. subst w'.
-          unfold roots'. list. eauto. }}
+          unfold ρ'. list. eauto. }}
         { destruct (decide (root = none)); lia. }
         { destruct (decide (root = none)); lia. }
     } (* [Enter] *)
@@ -1451,8 +1464,7 @@ Proof.
       length in *.
       destruct (decide (len σ + 1 = 1)); [ lia |].
       assert (root ≠ none) by lia. (* aha! *)
-      wp_ret.
-      pack; tc.
+      wp_ret. pack; tc.
       { eapply isRootMapStack_store; eauto with wf. }
       { destruct (decide (root = v)); lia. }
       { destruct (decide (root = v)); lia. }
@@ -1474,7 +1486,8 @@ Proof.
   { clear dependent _group.
     intros (m & [_group _root]) (marked' & σ' & vs & Hm & Hpost).
     unpack in Hpost.
-    wp_ret. }
+    subst σ'. inversion Hpost2; subst.
+    wp_ret. pack; tc. }
 Qed.
 
 End Group.
