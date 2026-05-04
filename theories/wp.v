@@ -36,6 +36,20 @@ Set Universe Polymorphism.
 
 (* -------------------------------------------------------------------------- *)
 
+(* [exist x pf] constructs an inhabitant of a subset type. *)
+
+(* Beware: potential confusion with the function [array.exist]. *)
+
+Notation exist x pf :=
+  (Specif.exist _ x pf).
+
+(* The projection [proj1_sig e] is also written just [`e]. However,
+   this notation appears to be fragile; in my experience, it works
+   when [e] is just a variable, but is not accepted by Rocq when [e]
+   is a complex term, even with parentheses. *)
+
+(* -------------------------------------------------------------------------- *)
+
 (* As in OCaml, [@@] is a function application operator. *)
 
 (* [iter ... @@ λ _i s, ...] is a nice way of writing a loop. *)
@@ -110,7 +124,7 @@ Qed.
 Lemma bind_eq_dep_dep {A B} {Q' : A → Prop} {Q : B → Prop}
   (a1 : sig Q') (b1 : sig Q' → sig Q)
   (a2 : A) (b2 : A → B) :
-  (proj1_sig a1 = a2) →
+  (`a1 = a2) →
   (∀ a pf, proj1_sig (b1 (Specif.exist _ a pf)) = b2 a) →
   proj1_sig (bind a1 b1) = bind a2 b2.
 Proof.
@@ -246,6 +260,15 @@ Proof.
   unfold wp. eauto.
 Qed.
 
+(* This rule is occasionally useful. *)
+
+Lemma wp_exist {A} {P : A → Prop} (e : A) (pf : P e) (Q : sig P → Prop) :
+  wp e (λ x, ∀ pf, Q (exist x pf)) →
+  wp (exist e pf) Q.
+Proof.
+  rewrite !wp_iff. eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* When the type of a program is a subset type { a : A | Q a }, writing a
@@ -255,13 +278,13 @@ Qed.
 (* To remove this difficulty, we offer a new judgement, [wpd a Q]. *)
 
 Definition wpd {A} {Q'} (a : sig Q') (Q : A → Prop) :=
-  Q (proj1_sig a).
+  Q (`a).
 
 (* Through rewriting (from left to right), this lemma transforms a [wpd]
    judgement into a [wp] judgement. *)
 
 Lemma wpd_wp {A} {Q'} (a : sig Q') (Q : A → Prop) :
-  wpd a Q ↔ wp a (λ a, Q (proj1_sig a)).
+  wpd a Q ↔ wp a (λ a, Q (`a)).
 Proof.
   tauto.
 Qed.
@@ -271,7 +294,7 @@ Qed.
 
 Lemma wp_wpd {A} {Q' : A → Prop} (a : sig Q') (Q1 : A → Prop) (Q2 : sig Q' → Prop) :
   wpd a Q1 →
-  (∀ a, Q1 (proj1_sig a) → Q2 a) →
+  (∀ a, Q1 (`a) → Q2 a) →
   wp a Q2.
 Proof.
   unfold wp, wpd. eauto.
@@ -280,7 +303,7 @@ Qed.
 (* The return rule. *)
 
 Lemma wpd_ret {A} {Q'} (a : sig Q') (Q : A → Prop) :
-  Q (proj1_sig a) →
+  Q (`a) →
   wpd a Q.
 Proof.
   eauto.
@@ -289,7 +312,7 @@ Qed.
 (* A stronger version of the return rule, where [Q'] can be exploited. *)
 
 Lemma wpd_ret' {A} {Q'} (a : sig Q') (Q : A → Prop) :
-  (Q' (proj1_sig a) → Q (proj1_sig a)) →
+  (Q' (`a) → Q (`a)) →
   wpd a Q.
 Proof.
   intros h. unfold wpd. eapply h.
@@ -311,7 +334,7 @@ Qed.
 Lemma wpd_wpd_bind {A B} {Q1 Q2} (a : sig Q1) (b : sig Q1 → sig Q2)
   (P : A → Prop) (Q : B → Prop) :
   wpd a P →
-  (∀ x pf, P x → wpd (b ((exist _ x pf))) Q) →
+  (∀ x pf, P x → wpd (b ((exist x pf))) Q) →
   wpd (bind a b) Q.
 Proof.
   destruct a. eauto.
@@ -319,7 +342,7 @@ Qed.
 
 Lemma wpd_wpd_bind_unary {A B} {Q1 : A → Prop} {Q2}
   (a : sig Q1) (b : sig Q1 → sig Q2) (Q : B → Prop) :
-  wpd a (λ x, ∀ pf, wpd (b ((exist _ x pf))) Q) →
+  wpd a (λ x, ∀ pf, wpd (b ((exist x pf))) Q) →
   wpd (bind a b) Q.
 Proof.
   destruct a. eauto.

@@ -1438,6 +1438,8 @@ Proof. vm_compute. reflexivity. Qed.
 
 (* [exist]. *)
 
+(* Beware: potential confusion with the notation [wp.exist]. *)
+
 Section Exist.
 Context `{Inhabited A}.
 Implicit Types a : array A.
