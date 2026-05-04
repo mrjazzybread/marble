@@ -259,7 +259,7 @@ Ltac prove_Proper :=
    that is being destructed. (It can even substitute away a section
    variable!) As a workaround, [destruction h] is less aggressive; after
    applying [inversion], it exploits only the equalities introduced by
-   [inversion]. *)
+   [inversion]. Furthermore, it does not destroy the hypothesis [h]. *)
 
 Ltac substRecentEqs :=
   lazymatch goal with
