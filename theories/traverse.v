@@ -1369,17 +1369,15 @@ Lemma wp_group :
 Proof.
   assert (unsigned n) by (arrays; lia).
   unfold plain_group.
-  wp_make _group.
+  wp_op (rich.wp_make isInt) introducing: _group.
   set (s0 := G _group _none).
   wp_bind_eq.
   wp_op wp_traverse with invariant: (λ γ g,
     let '(marked, σ) := γ in
     let '(G _group _root) := g in
-    ∃ _roots roots root,
-    isArray _group _roots ∧
-    len _roots = n ∧
+    ∃ roots root,
+    rich.isArray isInt _group roots ∧
     len roots = n ∧
-    isList _roots roots ∧
     isRootMapStack (λ v, roots !!! v) σ ∧
     isInt _root root ∧
     unsigned root ∧
@@ -1394,7 +1392,7 @@ Proof.
   (* Preservation. *)
   { clear dependent _group.
     intros (marked & σ) (marked' & σ') [_group _root] Hinv Hwf.
-    destruct Hinv as (_roots & roots & root & Hinv). unpack in Hinv.
+    destruct Hinv as (roots & root & Hinv). unpack in Hinv.
     intros _e e Hevent Hstep.
     assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
     destructEvent;
@@ -1410,12 +1408,11 @@ Proof.
         destruct (_root =? _none)%uint63 eqn:?;
         eauto; exfalso; rewrite isInt_def in *; lia. }
       (* Update the array [_group]. *)
-      wp_set.
-      set (_roots' := (<[v:=_root']> _roots)).
+      wp_op rich.wp_set shadowing: _group.
       set (roots' := (<[v:=root']> roots)).
       (* Return. *)
       wp_ret.
-      exists _roots', roots', root'.
+      exists roots', root'.
       set (σ' := Frame (Some v) Empty :: σ).
       fold σ' in Hstep.
       assert (len σ' > 1).
@@ -1424,7 +1421,6 @@ Proof.
       assert (bottom σ' = Some root').
       { eapply update_root_enter; eauto. }
       pack; tc.
-      { subst _roots'. length. eauto. }
       { subst  roots'. length. eauto. }
       { (* isRootMapStack *)
         econstructor.
@@ -1453,7 +1449,7 @@ Proof.
       destructWf.
       wf_nonempty.
       length in *.
-      destruct (decide (len σ + 1 = 1)); [ lia |]. (* simplifies Hinv6 *)
+      destruct (decide (len σ + 1 = 1)); [ lia |].
       assert (root ≠ none) by lia. (* aha! *)
       wp_ret.
       pack; tc.
@@ -1463,14 +1459,14 @@ Proof.
       { rewrite bottom_store, length_store.
         destruct (decide (len σ = 1)).
         + (* The new stack has height 1, so [v] must be [root]. *)
-          erewrite bottom_two in Hinv6 by eauto.
+          erewrite bottom_two in * by eauto.
           destruct (decide (root = v)); [| congruence ].
           reflexivity.
         + (* The new stack has height greater than 1. [v] cannot be [root]. *)
-          erewrite bottom_push in Hinv6 by eauto.
+          erewrite bottom_push in * by eauto.
           assert (v ≠ root) by eauto using wf_top_ne_bottom.
-          rewrite Hinv6. f_equal. unfold root'.
           destruct (decide (root = v)); [ congruence |].
+          cut (root = root'); [ congruence |].
           reflexivity. }
     }
   }
