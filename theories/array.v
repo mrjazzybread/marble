@@ -1899,15 +1899,16 @@ Qed.
 
 (* Lemmas and hints about [Forall2]. *)
 
+Lemma Forall2_nil' {A B} (R : A → B → Prop) :
+  Forall2 R [] [].
+Proof. eauto. Qed.
+
 Lemma Forall2_singleton {A B} (R : A → B → Prop) a b :
-  R a b →
-  Forall2 R {[a]} {[b]}.
-Proof.
-  unfold singleton, stdpp_buffer.singleton_list. eauto.
-Qed.
+  R a b → Forall2 R {[a]} {[b]}.
+Proof. unfold singleton, stdpp_buffer.singleton_list. eauto. Qed.
 
 Hint Resolve
-  Forall2_nil
+  Forall2_nil'
   Forall2_singleton
   Forall2_insert
   Forall2_app
