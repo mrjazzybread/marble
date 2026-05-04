@@ -19,7 +19,6 @@ From Stdlib Require Import Array.PArray.
 From Stdlib Require Export ZifyNat ZifyUint63.
 From marble Require Import tactics bool int iteration loop array wp.
 From marble.logic Require Import sets relations dfs.
-From marble Require Import listz_buffer. (* TODO *)
 Implicit Type _i _j _k _n : int.
 
 Unset Universe Minimization ToSet.

@@ -16,7 +16,6 @@ Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From marble Require Import tactics bool int iteration loop wp logic.
-From marble Require Import listz_buffer. (* TODO *)
 Implicit Types _i _j _k _n : int.
 From Corelib Require Derive.
 
