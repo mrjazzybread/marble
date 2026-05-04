@@ -2,6 +2,10 @@
 
 ## 2026/XX/XX
 
+* New file `darray`, offering a type of arrays whose default value is tracked.
+  This type (and its reasoning rules) can be useful when a proof of termination
+  requires keeping track of the default value of an array.
+
 * In `equations`:
   + New lemma `IFC_if_dep`.
 
@@ -19,7 +23,10 @@
     to be compatible with a notion of equality on producer states.
 
 * In `wp`:
+  + New notation `exist`.
+    Beware of the potential confusion with the function `array.exist`.
   + New lemmas `bind_eq_dep` and `bind_eq_dep_dep`.
+  + New lemma `wp_exist`.
   + New judgement `wpd` together with a set of reasoning rules.
   + New tactic `prove_Proper`.
   + The tactic `wp_loop_precondition_hook` now calls `prove_Proper`
