@@ -17,7 +17,11 @@
   + New instance `isInt_mod`.
 
 * In `iteration`:
-  + New definitions `ITER_SET` and `ITER_SET_UNIQUE`.
+  + New definitions `ITER_SET` and `ITER_SET_UNIQUE`,
+    where the producer state is a set,
+    as well as their variants `ITER_SET'` and `ITER_SET_UNIQUE'`,
+    where the producer state is a list.
+    A proof of equivalence is provided in `misc.v`.
   + Modified definition of `ITER`.
     The definition now includes the requirement for the user invariant `inv`
     to be compatible with a notion of equality on producer states.
