@@ -147,7 +147,7 @@ Qed.
 Lemma closure_start_is_universe :
   universe ⊆ start →
   closure start ≡ universe.
-Proof.
+Proof using start_respects_bound edges_respect_bound.
   intros. eapply subset_antisymmetric.
   + eapply closure_start_subset_universe.
   + transitivity start.
@@ -290,24 +290,24 @@ Section M.
 Open Scope marks_scope.
 
 Local Lemma mle_refl m : m ≤ m.
-Proof. unfold mle. lia. Qed.
+Proof using. unfold mle. lia. Qed.
 
 Local Lemma mle_trans {m1 m2 m3} : m1 ≤ m2 → m2 ≤ m3 → m1 ≤ m3.
-Proof. unfold mle. lia. Qed.
+Proof using. unfold mle. lia. Qed.
 
 Local Lemma mlt_mle_trans {m1 m2 m3} : m1 < m2 → m2 ≤ m3 → m1 < m3.
-Proof. unfold mle, mlt. lia. Qed.
+Proof using. unfold mle, mlt. lia. Qed.
 
 Local Lemma mle_mlt_trans {m1 m2 m3} : m1 ≤ m2 → m2 < m3 → m1 < m3.
-Proof. unfold mle, mlt. lia. Qed.
+Proof using. unfold mle, mlt. lia. Qed.
 
 Local Lemma mlt_mle_incl {m1 m2} : m1 < m2 → m1 ≤ m2.
-Proof. unfold mle, mlt. lia. Qed.
+Proof using. unfold mle, mlt. lia. Qed.
 
 Local Lemma wf_mlt : well_founded mlt.
-Proof.
+Proof using.
   eapply wf_projected with (f := weight); [| eapply Wf_nat.lt_wf ].
-  intros m1 m2. unfold mlt. tauto.
+  intros m1 m2. unfold mlt. intro. assumption.
 Qed.
 
 End M.
@@ -316,7 +316,7 @@ End M.
    divergence when Rocq type-checks the definition of [traverse]. *)
 
 Local Instance inhabited_bool : Inhabited bool.
-Proof. econstructor. exact true. Defined.
+Proof using. econstructor. exact true. Defined.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -345,7 +345,7 @@ Local Lemma isMarks_intro m :
   isArray m (listz.init n (λ _, false)) →
   (0 ≤ n)%Z →
   isMarks m ∅.
-Proof.
+Proof using. clear -n.
   intros. introMarks. intros. list.
   assert (∀ v, 0 ≤ v < n → v ∉ (∅ : vertices)) by set_solver.
   tc.
@@ -431,24 +431,30 @@ Infix "<" := slt (at level 70) : state_scope.
 Open Scope state_scope.
 
 Local Lemma sle_refl s : s ≤ s.
-Proof. unfold sle. destruct s. eapply mle_refl. Qed.
+Proof using. unfold sle. destruct s. eapply mle_refl. Qed.
 
 Local Lemma sle_trans {s1 s2 s3} : s1 ≤ s2 → s2 ≤ s3 → s1 ≤ s3.
-Proof. unfold sle. destruct s1, s2, s3. eauto using mle_trans. Qed.
+Proof using. unfold sle. destruct s1, s2, s3. eauto using mle_trans. Qed.
 
 Local Lemma slt_sle_trans {s1 s2 s3} : s1 < s2 → s2 ≤ s3 → s1 < s3.
-Proof. unfold sle, slt. destruct s1, s2, s3. eauto using mlt_mle_trans. Qed.
+Proof using.
+  unfold sle, slt. destruct s1, s2, s3. eauto using mlt_mle_trans.
+Qed.
 
 Local Lemma sle_slt_trans {s1 s2 s3} : s1 ≤ s2 → s2 < s3 → s1 < s3.
-Proof. unfold sle, slt. destruct s1, s2, s3. eauto using mle_mlt_trans. Qed.
+Proof using.
+  unfold sle, slt. destruct s1, s2, s3. eauto using mle_mlt_trans.
+Qed.
 
 Local Lemma slt_sle_incl {s1 s2} : s1 < s2 → s1 ≤ s2.
-Proof. unfold sle, slt. destruct s1, s2. eauto using mlt_mle_incl. Qed.
+Proof using.
+  unfold sle, slt. destruct s1, s2. eauto using mlt_mle_incl.
+Qed.
 
 Local Lemma wf_slt : well_founded slt.
-Proof.
+Proof using.
   eapply wf_projected with (f := fst); [| eapply wf_mlt ].
-  intros (m1 & u1) (m2 & u2). unfold slt. tauto.
+  intros (m1 & u1) (m2 & u2). unfold slt. intro. assumption.
 Qed.
 
 (* [sbeyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
@@ -1893,3 +1899,5 @@ Proof.
 Qed.
 
 End G.
+
+(* -------------------------------------------------------------------------- *)
