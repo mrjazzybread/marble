@@ -1293,6 +1293,14 @@ Definition plain_group : array int :=
   let '(G _group _) := g in
   _group.
 
+Derive group
+  in (group = plain_group)
+  as group_eq.
+Proof using.
+  intros. unfold plain_group, traverse, visit', visit.
+  unfold group; reflexivity.
+Defined.
+
 End Code.
 
 (* An auxiliary lemma: during a traversal, if the stack has a bottom
@@ -1365,7 +1373,7 @@ Qed.
 (* The specification of [group]. *)
 
 Lemma wp_group :
-  wp plain_group (λ _group,
+  wp group (λ _group,
     (* [group] performs a depth-first traversal, building a (ghost)
        forest [vs]. *)
     ∃ marked vs ρ ,
@@ -1381,7 +1389,7 @@ Lemma wp_group :
   ).
 Proof.
   assert (unsigned n) by (arrays; lia).
-  unfold plain_group.
+  rewrite group_eq. unfold plain_group.
   wp_op (rich.wp_make isInt) introducing: _group.
   set (s0 := G _group _none).
   wp_bind_eq.

@@ -210,6 +210,6 @@ Separate Extraction
   traverse.traverse_pre'
   traverse.traverse_post
   traverse.list_rev_post
-  traverse.plain_group
+  traverse.group
   traverse.traverse_cps
 .
