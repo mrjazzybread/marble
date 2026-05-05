@@ -79,11 +79,13 @@ Definition did_not_break {A} (out : outcome A) :=
 
 Section Loops.
 
-(* We distinguish the producer state and the user state.
+(* We distinguish the producer state and the user (consumer) state.
 
    For example, the state of the producer could be an integer index, a list
    of elements that have been enumerated, or a list of elements that remain
-   to be enumerated.
+   to be enumerated. The producer state serves as an index of the consumer's
+   loop invariant, so it can be viewed as auxiliary state (that is, ghost
+   state) that is exposed to the consumer.
 
    The type of the user state is whatever the user chooses. The user state
    is also known as the accumulator, or the loop-carried state. *)
@@ -380,17 +382,21 @@ Definition ITER_MULTISET {S A}
 
 (* Iteration on a set, in an unspecified order. *)
 
-(* The producer state is the set of elements produced so far. *)
-
 (* The constraint [SemiSet A C] means that [C] is a type of sets of
    elements of type [A], which supports empty set, union, inclusion,
    and equivalence. *)
 
-(* [ITER_SET] allows repetitions: an element can be produced several
-   times. [ITER_SET_UNIQUE] forbids repetitions. *)
+(* The specification [ITER_SET] allows repetitions: an element can be
+   produced several times. The specification [ITER_SET_UNIQUE] forbids
+   repetitions. *)
 
-(* In this case, the user invariant [inv] must be compatible with
-   extensional equality of sets [≡]. *)
+(* Should the producer state be a set, or a list? It can be either. We
+   propose both variants, and prove (in misc.v) that (up to covariance
+   hypotheses on [body] and [loop]) they are equivalent. *)
+
+(* In the first variant, the producer state is the set of elements produced
+   so far. The user invariant [inv] must be compatible with the extensional
+   equality of sets [≡]. *)
 
 Definition ITER_SET {S A} `{SemiSet A C}
   (init xs : C)
@@ -409,6 +415,9 @@ Definition ITER_SET {S A} `{SemiSet A C}
       body x s Q
     )
     loop.
+
+Tactic Notation "set_step" simple_intropattern(x) :=
+  intros x ? ? ?.
 
 Definition ITER_SET_UNIQUE {S A} `{SemiSet A C}
   (init xs : C)
@@ -429,8 +438,47 @@ Definition ITER_SET_UNIQUE {S A} `{SemiSet A C}
     )
     loop.
 
-Tactic Notation "set_step" simple_intropattern(x) :=
-  intros x ? ? ?.
+(* In the second variant, the producer state is the list of elements produced
+   so far. *)
+
+Definition ITER_SET' {S A} `{SemiSet A C}
+  (init : list A) (xs : C)
+  (body : A → S → WP S)
+  (loop : S → WP S)
+: Prop
+:=
+  @ITER (list A) (eq)
+    init
+    ( λ history, xs ≡ list_to_set history)
+    S
+    ( λ history0 history1 s Q,
+      ∀ x,
+      init `prefix_of` history0 →
+      history0 ++ {[x]} = history1 →
+      list_to_set history1 ⊆ xs →
+      body x s Q
+    )
+    loop.
+
+Definition ITER_SET_UNIQUE' {S A} `{SemiSet A C}
+  (init : list A) (xs : C)
+  (body : A → S → WP S)
+  (loop : S → WP S)
+: Prop
+:=
+  @ITER (list A) (eq)
+    init
+    ( λ history, xs ≡ list_to_set history)
+    S
+    ( λ history0 history1 s Q,
+      ∀ x,
+      init `prefix_of` history0 →
+      x ∉ history0 → (* no repetitions *)
+      history0 ++ {[x]} = history1 →
+      list_to_set history1 ⊆ xs →
+      body x s Q
+    )
+    loop.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -673,6 +721,7 @@ Ltac expand_ITER ::=
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET, ITERI_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
+    ITER_SET', ITER_SET_UNIQUE',
     ITER, XITER, UXITER;
     simpl implication.
 
@@ -683,6 +732,7 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET, ITERI_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
+    ITER_SET', ITER_SET_UNIQUE',
     ITER, XITER, UXITER
   in h;
   simpl implication in h.
