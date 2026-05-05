@@ -337,23 +337,6 @@ Inductive ordered : list V → forest → Prop :=
     ordered rs f →
     ordered ({[r]} ++ rs) (NonEmpty r ws f).
 
-(* This (unused) lemma states that if [rs] orders a non-empty forest,
-   then it orders its tail, too (provided the root [w] does not occur
-   twice in the forest). *)
-
-Lemma ordered_tail rs w ws vs :
-  ordered rs (NonEmpty w ws vs) →
-  w ∉ support vs →
-  ordered rs vs.
-Proof.
-  intros h; dependent induction h; intros.
-  (* OrderedSkip. *)
-  { eapply OrderedSkip; [ | eauto ].
-    simpl in *. set_solver. }
-  (* OrderedRoot. *)
-  { eapply OrderedSkip; eauto. }
-Qed.
-
 (* -------------------------------------------------------------------------- *)
 
 (* We fix a set [E] of edges. *)
