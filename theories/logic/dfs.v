@@ -1809,6 +1809,29 @@ Proof.
   eauto using isRootMapStack_domain with set_solver.
 Qed.
 
+(* Updating a partial root map with one vertex [v]. *)
+
+Lemma isRootMapStack_update `{EqDecision V} imarked omarked σ ρ ρ' σ' v root' :
+  isRootMapStack ρ σ →
+  σ' = Frame (Some v) Empty :: σ →
+  wf imarked (omarked, σ') →
+  bottom σ' = Some root' →
+  ρ' v = root' →
+  (∀ v', v' ≠ v → ρ' v' = ρ v') →
+  isRootMapStack ρ' σ'.
+Proof.
+  intros ?? Hwf ???. subst. dependent destruction Hwf.
+  econstructor.
+  { eapply isRootMapStack_domain'; eauto.
+    intros w Hw. case (decide (w = v)).
+    + intros ->. exfalso. tauto. (* [v ∈ mmarked ∧ v ∉ mmarked] *)
+    + intros. eauto. }
+  { eassumption. }
+  { simpl support. intros w' Hw'. set_unfold in Hw'.
+    assert (w' = v) by tauto. clear Hw'. subst w'.
+    reflexivity. }
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The following lemmas aim to establish an upper bound on the size of

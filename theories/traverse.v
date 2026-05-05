@@ -1376,6 +1376,23 @@ Proof.
     erewrite bottom_push by eauto with wf. assumption. }
 Qed.
 
+(* A specialized version of the lemma by the same name in dfs.v. *)
+
+(* The lemma there represents a root map ρ as a function, whereas
+   we represent it here as a list. *)
+
+Lemma isRootMapStack_update marked σ ρ ρ' σ' v root' :
+  isRootMapStack (λ v, ρ !!! v) σ →
+  ρ' = <[v:=root']> ρ →
+  valid v ρ →
+  σ' = Frame (Some v) Empty :: σ →
+  wf (marked, σ') →
+  bottom σ' = Some root' →
+  isRootMapStack (λ v, ρ' !!! v) σ'.
+Proof.
+  intros. subst. eapply isRootMapStack_update; intros; tc; list; tc.
+Qed.
+
 (* The specification of [group]. *)
 
 Lemma wp_group :
@@ -1451,18 +1468,8 @@ Proof.
       destruct (decide (len σ' = 1)); [ lia |].
       assert (bottom σ' = Some root').
       { eapply update_root_enter; eauto. }
-      pack; tc.
-      (* One subgoal remains: [isRootMapStack]. *) (* TODO lemma? *)
-      econstructor.
-      { eapply isRootMapStack_domain'; eauto.
-        intros w Hw. case (decide (w = v)).
-        + intros ->. exfalso. tauto.
-        + intros. unfold ρ'. list. eauto. }
-      { eauto. }
-      { simpl. intros w' Hw'. set_unfold in Hw'.
-        assert (w' = v) by tauto. clear Hw'. subst w'.
-        unfold ρ'. list. eauto. }
-    } (* [Enter] *)
+      pack; eauto using isRootMapStack_update with marble wf.
+    }
     (* Case [Exit]. *)
     {
       match goal with foo: stack vertex |- _ => rename foo into σ end.
