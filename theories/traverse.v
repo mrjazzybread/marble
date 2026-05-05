@@ -913,22 +913,22 @@ End FixedPoint.
    marked; the ghost stack is [σ']; and a DFS forest has been virtually
    constructed. (This forest does not exist at runtime.) *)
 
-Definition traverse_postcondition '(m', u') :=
-  ∃ marked' σ' vs,
-  (* The array [m'] tells which vertices have been marked. *)
-  isMarks m' marked' ∧
+Definition traverse_postcondition '(m, u) :=
+  ∃ marked σ vs,
+  (* The array [m] tells which vertices have been marked. *)
+  isMarks m marked ∧
   (* The user invariant holds. *)
-  inv (marked', σ') u' ∧
+  inv (marked, σ) u ∧
   (* The following four statements express the fact that the state
      [(marked, σ)] is well-formed and final. *)
-  (* The ghost stack [σ'] stores the forest [vs]. *)
-  σ' = Frame None vs :: [] ∧
+  (* The ghost stack [σ] stores the forest [vs]. *)
+  σ = Frame None vs :: [] ∧
   (* [vs] is a DFS forest. *)
-  dfs marked' vs ∧
+  dfs marked vs ∧
   (* The roots of the forest [vs] form a subset of the start vertices. *)
   roots vs ⊆ start ∧
   (* Every start vertex is marked. *)
-  start ⊆ marked'.
+  start ⊆ marked.
 
 (* A specification of [traverse]. *)
 
