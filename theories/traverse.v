@@ -1277,7 +1277,7 @@ Open Scope uint63.
 
 Definition plain_group : array int :=
   do _group ← make _n 0 ; (* dummy *)
-  let _root := _none in
+  do _root ← _none ;
   do g ← G _group _root ;
   let hook _e g :=
     let '(G _group _root) := g in
@@ -1285,13 +1285,13 @@ Definition plain_group : array int :=
     | Enter _v =>
         (* If there was no current root then we are entering a new tree,
            whose root is [_v]. *)
-        let _root := if _root =? _none then _v else _root in
+        do _root ← if _root =? _none then _v else _root ;
         (* Record that [_v] belongs in a tree whose root is [_root]. *)
         do _group ← set _group _v _root ;
         G _group _root
     | Exit _v =>
         (* If the current root was [_v] then we are leaving a tree. *)
-        let _root := if _root =? _v then _none else _root in
+        do _root ← if _root =? _v then _none else _root ;
         G _group _root
     end
   in
@@ -1397,7 +1397,7 @@ Proof.
   assert (unsigned n) by (arrays; lia).
   rewrite group_eq. unfold plain_group.
   wp_op (rich.wp_make isInt) introducing: _group.
-  set (s0 := G _group _none).
+  wp_bind_eq.
   wp_bind_eq.
   wp_op wp_traverse with invariant: (λ γ g,
     let '(marked, σ) := γ in
@@ -1426,17 +1426,21 @@ Proof.
     destructStep.
     (* Case [Enter]. *)
     {
-      (* This is a bit manual / ugly. *)
-      set (_root' := if (_root =? _none)%uint63 then _v else _root).
+      (* The definition of [root']. *)
       set (root' := if decide (root = none) then v else root).
-      assert (isInt _root' root').
-      { unfold _root', root'.
+      simple eapply @wp_bind with (P := λ _root',
+        isInt _root' root' ∧ unsigned root'
+      ).
+      { wp_ret. unfold root'.
         destruct (decide (root = none));
         destruct (_root =? _none)%uint63 eqn:?;
-        eauto; exfalso; rewrite isInt_def in *; lia. }
+        eauto with lia; exfalso; rewrite isInt_def in *; lia. }
+      intros _root' (? & ?).
       (* Update the array [_group]. *)
       wp_op rich.wp_set shadowing: _group.
       set (ρ' := (<[v:=root']> ρ)).
+      assert (len ρ' = n).
+      { subst ρ'. length. eauto. }
       (* Return. *)
       wp_ret.
       exists ρ', root'.
@@ -1448,40 +1452,37 @@ Proof.
       assert (bottom σ' = Some root').
       { eapply update_root_enter; eauto. }
       pack; tc.
-      { subst ρ'. length. eauto. }
-      { (* isRootMapStack *)
-        econstructor.
-        { eapply isRootMapStack_domain'; eauto.
-          intros w Hw. case (decide (w = v)).
-          + intros ->. exfalso. tauto.
-          + intros. unfold ρ'. list. eauto. }
-        { eauto. }
-        { simpl. intros w' Hw'. set_unfold in Hw'.
-          assert (w' = v) by tauto. clear Hw'. subst w'.
-          unfold ρ'. list. eauto. }}
-        { destruct (decide (root = none)); lia. }
-        { destruct (decide (root = none)); lia. }
+      (* One subgoal remains: [isRootMapStack]. *) (* TODO lemma? *)
+      econstructor.
+      { eapply isRootMapStack_domain'; eauto.
+        intros w Hw. case (decide (w = v)).
+        + intros ->. exfalso. tauto.
+        + intros. unfold ρ'. list. eauto. }
+      { eauto. }
+      { simpl. intros w' Hw'. set_unfold in Hw'.
+        assert (w' = v) by tauto. clear Hw'. subst w'.
+        unfold ρ'. list. eauto. }
     } (* [Enter] *)
     (* Case [Exit]. *)
     {
       match goal with foo: stack vertex |- _ => rename foo into σ end.
-      (* This is a bit manual / ugly. *)
-      set (_root' := if (_root =? _v)%uint63 then _none else _root).
+      (* The definition of [root']. *)
       set (root' := if decide (root = v) then none else root).
-      assert (isInt _root' root').
-      { unfold _root', root'.
+      simple eapply @wp_bind with (P := λ _root',
+        isInt _root' root' ∧ unsigned root'
+      ).
+      { wp_ret. unfold root'.
         destruct (decide (root = v));
         destruct (_root =? _v)%uint63 eqn:?;
-        eauto; exfalso; rewrite isInt_def in *; lia. }
-      destructWf.
-      wf_nonempty.
-      length in *.
-      destruct (decide (len σ + 1 = 1)); [ lia |].
+        eauto with lia; exfalso; rewrite isInt_def in *; lia. }
+      intros _root' (? & ?).
+      (* Deductions. *)
+      destructWf. wf_nonempty.
+      length in *. destruct (decide (len σ + 1 = 1)); [ lia |].
       assert (root ≠ none) by lia. (* aha! *)
-      wp_ret. pack; tc.
-      { eapply isRootMapStack_store; eauto with wf. }
-      { destruct (decide (root = v)); lia. }
-      { destruct (decide (root = v)); lia. }
+      (* Return. *)
+      wp_ret. pack; eauto using isRootMapStack_store with marble.
+      (* TODO lemma? *)
       { rewrite bottom_store, length_store.
         destruct (decide (len σ = 1)).
         + (* The new stack has height 1, so [v] must be [root]. *)
