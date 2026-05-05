@@ -327,7 +327,7 @@ Inductive ordered : list V → forest → Prop :=
     (* If the tentative first root [r] does not appear anywhere
        in [f], then it is considered irrelevant. *)
     ∀ r rs f,
-    r ∉ (support f) →
+    r ∉ support f →
     ordered rs f →
     ordered ({[r]} ++ rs) f
 | OrderedRoot:
