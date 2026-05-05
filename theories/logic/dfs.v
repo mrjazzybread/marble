@@ -1832,6 +1832,15 @@ Proof.
     reflexivity. }
 Qed.
 
+(* Once the stack becomes empty, [isRootMapStack] implies [isRootMap]. *)
+
+Lemma isRootMapStack_completion ρ vs :
+  isRootMapStack ρ [Frame None vs] →
+  isRootMap ρ vs.
+Proof.
+  inversion 1. assumption.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The following lemmas aim to establish an upper bound on the size of
