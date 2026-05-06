@@ -1803,6 +1803,27 @@ Proof.
   econstructor; [ econstructor | set_solver ].
 Qed.
 
+(* [ordered_stack] is preserved by an [Enter] step. *)
+
+Lemma ordered_stack_enter rs imarked marked σ w marked' σ' rs' :
+  ordered_stack rs σ →
+  wf imarked (marked, σ) →
+  step (marked, σ) (Enter w) (marked', σ') →
+  rs' = (if decide (length σ = 1) then rs ++ {[w]} else rs) →
+  ordered_stack rs' σ'.
+Proof.
+  intros Hordered Hwf Hstep Hrs'.
+  dependent destruction Hstep.
+  dependent destruction Hwf; length in *.
+  (* Case: [length σ = 1]. *)
+  { case_decide; [| lia ]. subst rs'.
+    econstructor; eauto. }
+  (* Case: [length σ ≠ 1]. *)
+  { wf_nonempty. case_decide; [ lia |]. subst rs'.
+    econstructor; length; eauto.
+    case_decide; [ lia |]. eauto. }
+Qed.
+
 (* [ordered_stack] is preserved by an [Exit] step. *)
 
 Lemma ordered_stack_exit rs imarked marked σ w marked' σ' :
