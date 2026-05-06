@@ -1377,14 +1377,10 @@ Proof.
   unfold correct. intros Hwf Hstep Hcorrect Hroot'.
   assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
   destructStep. subst root'. wf_nonempty.
+  erewrite bottom_eq by eauto with wf.
   destruct (decide (root = none));
   destruct (decide (len σ = 1)); try tauto; length;
-  destruct (decide (len σ + 1 = 1)); try lia.
-  (* Case [root = none]. Then [σ] has height 1, so [bottom σ'] is [v].
-     Besides, [root'] is also [v]. *)
-  { erewrite bottom_two by eauto with wf. reflexivity. }
-  (* Case [root ≠ none]. Then [bottom σ'] and [root'] are both [root]. *)
-  { erewrite bottom_push by eauto with wf. assumption. }
+  destruct (decide (len σ + 1 = 1)); try lia; eauto.
 Qed.
 
 (* If [σ] is nonempty then [correct σ root] implies that [bottom σ]
@@ -1417,14 +1413,13 @@ Proof.
     by eauto using correct_nonempty.
   unfold correct. subst.
   rewrite bottom_store, length_store. length.
+  erewrite bottom_eq in Hbottom by eauto.
   destruct (decide (len σ0 = 1)).
   (* Case: [σ] has height 1. Then [v] must be [root]. *)
-  { erewrite bottom_two in Hbottom by eauto.
-    destruct (decide (root = v)); [| congruence ].
+  { destruct (decide (root = v)); [| congruence ].
     reflexivity. }
   (* Case: [σ] has height greater than 1. Then [v] cannot be [root]. *)
-  { erewrite bottom_push in Hbottom by eauto.
-    assert (v ≠ root) by eauto using wf_top_ne_bottom.
+  { assert (v ≠ root) by eauto using wf_top_ne_bottom.
     destruct (decide (root = v)); [ congruence |].
     assumption. }
 Qed.
