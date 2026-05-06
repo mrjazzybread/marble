@@ -1468,6 +1468,11 @@ Proof.
   + unfold stack in *. lengths. lia.
 Qed.
 
+Ltac wf_nonempty :=
+  repeat match goal with
+  | h : wf _ _ |- _ => generalize (wf_nonempty h); revert h
+  end; intros.
+
 (* Between the moment where a vertex is entered and the moment where this
    vertex is exited, the stack does not change at all, except possibly in
    the top frame, where new trees can be stored. *)
@@ -1610,7 +1615,7 @@ Proof.
   intros Hwf Hlen.
   dependent destruction Hwf; [ eauto |].
   dependent destruction Hwf; [ eauto | exfalso].
-  apply wf_nonempty in Hwf. length in Hlen. lia.
+  wf_nonempty. length in Hlen. lia.
 Qed.
 
 (* If the stack [σ] is well-formed and has at least two frames, then
@@ -1730,7 +1735,7 @@ Lemma top_None imarked omarked σ :
 Proof.
   intros Hwf. destruction Hwf; simpl; length.
   { tauto. }
-  { match goal with h: wf _ _ |- _ => eapply wf_nonempty in h end.
+  { wf_nonempty.
     assert (Some w ≠ None) by congruence.
     assert (length σ0 + 1 ≠ 1) by lia.
     tauto. }
@@ -1752,8 +1757,7 @@ Proof.
   simpl top; length.
   { tauto. }
   { erewrite bottom_eq by eauto with wf.
-    match goal with h: wf _ _ |- _ =>
-      generalize (wf_nonempty h); intro end.
+    wf_nonempty.
     assert (Some w ≠ None) by congruence.
     case (decide (length σ = 1)); intro;
     case (decide (length σ + 1 = 1)); intro;
@@ -1813,7 +1817,7 @@ Proof.
   destruct 1; intros Hwf Hstep; dependent destruction Hstep.
   dependent destruction Hwf.
   match goal with foo: stack |- _ => rename foo into σ end.
-  generalize (wf_nonempty Hwf); intro.
+  wf_nonempty.
   case_decide.
   (* Case: [length σ = 1]. We are pushing a complete tree
      into the bottom stack frame. *)
@@ -1924,7 +1928,7 @@ Proof using.
     assert (w = v) by congruence. subst w.
     unfold store. eauto with isRootMap. }
   { match goal with foo: stack |- _ => rename foo into σ end.
-    assert (1 ≤ length σ) by eauto using wf_nonempty.
+    wf_nonempty.
     erewrite bottom_push in * by (length; eauto with lia).
     dependent destruction Hroots.
     match goal with h1: bottom _ = Some ?v1,
