@@ -1873,6 +1873,19 @@ Proof.
       case_decide; eauto with lia. }}
 Qed.
 
+(* [ordered_stack] at a final stack can be exploited. *)
+
+Lemma ordered_stack_completion rs σ ov vs :
+  ordered_stack rs σ →
+  σ = Frame ov vs :: [] → (* [ov] must be [None] *)
+  ordered rs vs.
+Proof.
+  intros Hordered ->.
+  dependent destruction Hordered.
+  { assumption. }
+  { dependent destruction Hordered. }
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [isRootMap ρ vs] means that [ρ], a map of vertices to vertices,
