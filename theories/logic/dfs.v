@@ -343,6 +343,54 @@ Inductive ordered : list V → forest → Prop :=
     ordered rs f →
     ordered ({[r]} ++ rs) (NonEmpty r ws f).
 
+(* If [f] is ordered by [rs] then the roots of [f] form a subset of
+   the list [rs], viewed as a set. *)
+
+Lemma ordered_subset rs f :
+  ordered rs f →
+  roots f ⊆ list_to_set rs.
+Proof.
+  induction 1; simpl; set_solver.
+Qed.
+
+(* It is possible to prepend extra vertices [rs1] in front of the
+   list [rs2], provided that these vertices do not appear in the
+   forest [f].  *)
+
+(* This generalizes the constructor [OrderedSkip]. *)
+
+Lemma ordered_skip rs2 f rs1 :
+  ordered rs2 f →
+  list_to_set rs1 ## support f →
+  ordered (rs1 ++ rs2) f.
+Proof.
+  induction rs1 as [| r1 rs1 ]; intros.
+  { assumption. }
+  { change (r1 :: rs1) with ({[r1]} ++ rs1). list.
+    eapply OrderedSkip; set_solver. }
+Qed.
+
+(* Provided [rs1] and [f2] have no common vertices, two judgments
+   [ordered rs1 f1] and [ordered rs2 f2] can be concatenated. *)
+
+Lemma ordered_concat rs1 f1 :
+  ordered rs1 f1 →
+  ∀ rs2 f2,
+  list_to_set rs1 ## support f2 →
+  ordered rs2 f2 →
+  ordered (rs1 ++ rs2) (concat f1 f2).
+Proof.
+  (* The proof is easy, but it took some time to realize that
+     this was the correct (and necessary) inductive statement. *)
+  induction 1; intros; simpl concat; list.
+  { assumption. }
+  { eapply OrderedSkip.
+    - rewrite support_concat. set_solver.
+    - eapply IHordered. set_solver. assumption. }
+  { eapply OrderedRoot.
+    eapply IHordered. set_solver. assumption. }
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* We fix a set [E] of edges. *)
