@@ -200,7 +200,7 @@ Local Notation step :=
    stack [σ] are a well-formed state of an ongoing DFS traversal of the
    graph [E]. *)
 
-Local Notation wf := (dfs.wf E start ∅).
+Local Notation wf := (dfs.wf E start).
 Local Notation final := (dfs.final start).
 
 Local Hint Constructors dfs.wf : wf.
@@ -1327,7 +1327,7 @@ Local Lemma wf_bottom_valid marked σ v :
 Proof.
   intros Hwf Hbottom.
   (* [v] is marked. *)
-  generalize (wf_bottom_marked' Hwf); intro Hbm.
+  generalize (wf_bottom_marked Hwf); intro Hbm.
   rewrite Hbottom in Hbm. simpl in Hbm.
   (* Every marked vertex is reachable. *)
   generalize (wf_reaches Hwf eq_refl); intro Hreaches.
