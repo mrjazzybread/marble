@@ -1209,7 +1209,7 @@ Inductive step : state → event → state → Prop :=
 
 Inductive wf : set V → state → Prop :=
 
-| WfBottom:
+| WfNil:
     ∀ imarked omarked vs ,
     (* If [vs] is a well-formed DFS forest *)
     dfs imarked omarked vs →
@@ -1305,7 +1305,7 @@ Lemma wf_init :
   ∀ imarked,
   wf imarked (imarked, Frame None Empty :: []).
 Proof.
-  intros. eapply WfBottom; eauto with dfs set_solver.
+  intros. eapply WfNil; eauto with dfs set_solver.
 Qed.
 
 (* The transition system preserves well-formedness. *)
@@ -1318,15 +1318,15 @@ Lemma wf_step :
   wf imarked γ'.
 Proof.
   induction 1; intros imarked Hwf; dependent destruction Hwf.
-  (* Case: [StepEnter/WfBottom]. *)
+  (* Case: [StepEnter/WfNil]. *)
   { eauto with wf dfs set_solver. }
   (* Case: [StepEnter/WfDeep]. *)
   { eauto with wf dfs set_solver. }
   (* Case: [StepExit/WfDeep]. *)
   { dependent destruction Hwf.
-    (* Subcase: [WfBottom]. [ov] is [None]. *)
-    { eapply WfBottom; eauto with dfs set_solver. }
-    (* Subcase: [WfBottom]. [ov] is [None]. *)
+    (* Subcase: [WfNil]. [ov] is [None]. *)
+    { eapply WfNil; eauto with dfs set_solver. }
+    (* Subcase: [WfNil]. [ov] is [None]. *)
     { eapply WfDeep; eauto with dfs set_solver. }}
 Qed.
 
@@ -1412,7 +1412,7 @@ Proof.
   generalize (dfs_determines_omarked Hdfs);
   generalize (reaches_roots_support Hdfs);
   intros.
-  (* Case [WfBottom]. *)
+  (* Case [WfNil]. *)
   { set_solver. }
   (* Case [WfDeep]. *)
   { specialize (IHHwf eq_refl mmarked σ eq_refl).
