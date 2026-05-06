@@ -315,10 +315,16 @@ Qed.
 (* The predicate [ordered rs f] means that the roots of the forest [f]
    respect the ordering imposed by the list [rs]. *)
 
-(* The predicate is defined in such a way that there can be more
-   vertices in [rs] than in [f]. The roots of the forest [f] must
-   appear in the list [rs], though, and they must appear in the
-   correct order. *)
+(* There may be vertices in [rs] that do not appear in [support f]:
+   they are irrelevant.
+
+   The roots of the forest [f] must appear in the list [rs], and must
+   appear in the correct order.
+
+   A root of the forest [f] can in fact appear several times in [rs];
+   then, only its first occurrence matters. Later occurrences are
+   irrelevant. For this reason, [ordered rs f] does NOT imply
+   [filter (λ v, v ∈ support f) rs = rootsl f]. *)
 
 Inductive ordered : list V → forest → Prop :=
 | OrderedNil:
