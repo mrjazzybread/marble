@@ -1762,6 +1762,94 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* The predicate [ordered rs f], which concerns forests, is extended to
+   stacks. The predicate [ordered_stack rs σ] depends only on the bottom
+   one or two frames. In short, it states that the forest [vs] stored in
+   frame 0 and the bottom vertex [v] stored in frame 1 should be ordered
+   by [rs]. *)
+
+(* One might wonder whether these conditions should be built into the
+   predicate [wf], so that there would be no need for a separate predicate
+   [ordered_stack]. For now, it seems preferable to keep them separate. *)
+
+Inductive ordered_stack : list V → stack → Prop :=
+| OrderedStackNil:
+    (* In the special bottom frame, which stores a forest [vs], we require
+       this forest to be ordered by [rs]. We further require [list_to_set
+       rs ⊆ support vs], which means that all of the root vertices that
+       have been enumerated so far are part of [vs]. This requirement is
+       exploited in the proof of the lemma [ordered_stack_exit]. *)
+    ∀ rs vs,
+    ordered rs vs →
+    list_to_set rs ⊆ support vs →
+    ordered_stack rs (Frame None vs :: [])
+| OrderedStackDeep:
+    (* If [w] is the bottom vertex of the stack then we require [w] to
+       be the last element of [rs]; otherwise we ignore this frame. *)
+    ∀ rs' w ws rs σ,
+    ordered_stack rs' σ →
+    (rs = if decide (length σ = 1) then rs' ++ {[w]} else rs') →
+    ordered_stack rs (Frame (Some w) ws :: σ).
+
+(* [ordered_stack] is true initially. *)
+
+Lemma ordered_stack_init :
+  ordered_stack [] (Frame None Empty :: []).
+Proof.
+  econstructor; [ econstructor | set_solver ].
+Qed.
+
+(* [ordered_stack] is preserved by an [Exit] step. *)
+
+Lemma ordered_stack_exit rs imarked marked σ w marked' σ' :
+  ordered_stack rs σ →
+  wf imarked (marked, σ) →
+  step (marked, σ) (Exit w) (marked', σ') →
+  ordered_stack rs σ'.
+Proof.
+  (* The proof is not difficult in principle, but quite painful
+     in actuality, perhaps because viewing a stack as a list of
+     frames is not a good idea. *)
+  destruct 1; intros Hwf Hstep; dependent destruction Hstep.
+  dependent destruction Hwf.
+  match goal with foo: stack |- _ => rename foo into σ end.
+  generalize (wf_nonempty Hwf); intro.
+  case_decide.
+  (* Case: [length σ = 1]. We are pushing a complete tree
+     into the bottom stack frame. *)
+  { destruct σ as [| [ ov vs ] σ ]; [ length in *; lia |].
+    destruct σ as [|]; [| length in *; lengths; lia ].
+    (* [ov] must be [None]. *)
+    rewrite <- top_None in * by eauto. simpl in *. subst ov.
+    dependent destruction Hwf.
+    match goal with h: ordered_stack _ _ |- _ =>
+      dependent destruction h end.
+    econstructor.
+    + eapply ordered_concat; eauto.
+      - simpl support. dfs_imarked. dfs_omarked. set_solver.
+      - change {[w]} with ({[w]} ++ []).
+        eapply OrderedRoot. econstructor.
+    + rewrite support_concat, list_to_set_app, list_to_set_singleton.
+      set_solver. }
+  (* Case: [length σ ≠ 1]. There are at least two frames. *)
+  { destruct σ as [| [ ? ? ] σ ]; [ length in *; lia |].
+    destruct σ as [| [ ? ? ] σ ]; [ length in *; lengths; lia |].
+    simpl in *.
+    match goal with h: ordered_stack _ _ |- _ =>
+      dependent destruction h end.
+    (* Are there two frames, or more than two? *)
+    case_decide.
+    (* Subcase: there are two. *)
+    { destruct σ; [| length in *; lengths; lia ].
+      econstructor; length; eauto. }
+    (* Subcase: there are more than two. In this case [ordered_stack] is
+       insensitive to the top frame. *)
+    { econstructor; length in *; eauto.
+      case_decide; eauto with lia. }}
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* [isRootMap ρ vs] means that [ρ], a map of vertices to vertices,
    correctly records the root of every vertex in [vs]. That is, every
    vertex [v] in the forest [vs] is mapped to the root of its tree in
