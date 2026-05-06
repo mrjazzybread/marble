@@ -1630,6 +1630,18 @@ Proof.
   eauto.
 Qed.
 
+(* A combination of the previous two lemmas. *)
+
+Lemma bottom_eq imarked omarked ov vs σ :
+  wf imarked (omarked, Frame ov vs :: σ) →
+  bottom (Frame ov vs :: σ) =
+    if decide (length σ = 1) then ov else bottom σ.
+Proof.
+  intros. case (decide (length σ = 1)); intro.
+  + erewrite bottom_two by eauto. reflexivity.
+  + erewrite bottom_push by eauto. reflexivity.
+Qed.
+
 (* Storing a new tree into the top stack frame does not affect [bottom]. *)
 
 Lemma bottom_store v vs σ :
