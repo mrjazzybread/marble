@@ -1718,6 +1718,48 @@ Proof.
   set_solver.
 Qed.
 
+(* If [σ] is well-formed then [top σ = None] is equivalent to
+   [length σ = 1]. *)
+
+(* This condition itself is equivalent to [length σ ≤ 1]. *)
+
+Lemma top_None imarked omarked σ :
+  wf imarked (omarked, σ) →
+  top σ = None ↔
+  length σ = 1.
+Proof.
+  intros Hwf. destruction Hwf; simpl; length.
+  { tauto. }
+  { match goal with h: wf _ _ |- _ => eapply wf_nonempty in h end.
+    assert (Some w ≠ None) by congruence.
+    assert (length σ0 + 1 ≠ 1) by lia.
+    tauto. }
+Qed.
+
+(* If [σ] is well-formed then [bottom σ = None] is equivalent to
+   [length σ = 1]. *)
+
+Lemma bottom_None imarked γ :
+  wf imarked γ →
+  ∀ omarked σ,
+  γ = (omarked, σ) →
+  bottom σ = None ↔
+  length σ = 1.
+Proof.
+  induction 1; intros ?? Heq;
+  injection Heq; clear Heq; intros <- <-;
+  [| specialize (IHwf _ _ eq_refl) ];
+  simpl top; length.
+  { tauto. }
+  { erewrite bottom_eq by eauto with wf.
+    match goal with h: wf _ _ |- _ =>
+      generalize (wf_nonempty h); intro end.
+    assert (Some w ≠ None) by congruence.
+    case (decide (length σ = 1)); intro;
+    case (decide (length σ + 1 = 1)); intro;
+    try lia; try tauto. }
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* [isRootMap ρ vs] means that [ρ], a map of vertices to vertices,
