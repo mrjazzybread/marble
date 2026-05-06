@@ -79,6 +79,17 @@
   possibly a new kind of event (rediscovering a vertex).
   Use the interruptible DFS, so we can stop at the first cycle.
 
+* Prove that if the graph is acyclic then, when a vertex is exited,
+  all of its descendants are marked already. (Topological property.)
+  The user should be allowed to exploit this property.
+  This is true also if there is a cycle detection mechanism
+  (then, no need to assume absence of cycles).
+
+* `group` and Kosaraju: ideally we should be able to prove that each
+  group forms a strongly connected component *on the fly*, not just
+  once the traversal is finished. Also, one might to prove that the
+  components are produced in topological order.
+
 * Test whether depth-first search can be executed inside Rocq.
 
 * Extend the documentation with a section on `wpd`.
