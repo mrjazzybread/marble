@@ -1026,6 +1026,14 @@ Inductive event :=
 (* The forest [vs] represents the descendants of [ov] that have been
    explored already. *)
 
+(* A well-formed stack must have at least one frame; it cannot be empty. In
+   a well-formed stack, the bottom frame must have [ov = None], and only the
+   bottom frame can have [ov = None]. One might wonder whether one should
+   adopt a different representation of stacks, where these properties are
+   built in. However, the current representation lets us inspect the top
+   frame without wondering whether it is or is not also the bottom frame.
+   Things are likely to be slightly painful either way. *)
+
 Inductive frame :=
 | Frame : option V → forest V → frame.
 
