@@ -381,6 +381,15 @@ Proof.
   unfold wpd. eauto.
 Qed.
 
+(* This rule is occasionally useful. *)
+
+Lemma wpd_exist {A} {P : A → Prop} (e : A) (pf : P e) (Q : A → Prop) :
+  wp e Q →
+  wpd (exist e pf) Q.
+Proof.
+  unfold wp, wpd. simpl. eauto.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* We make [wp] opaque, so as to discourage unfolding it. *)
