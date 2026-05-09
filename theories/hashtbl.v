@@ -213,6 +213,24 @@ Notation hmap := (gmap K (list V)).
 
 Definition _add (m : hmap) (k : K) (v : V) := <[k:= v :: m !!! k]> m.
 
+Lemma add_lookup_eq :
+  forall m k v, _add m k v !!! k = v :: m !!! k.
+Proof.
+  intros.
+  unfold _add.
+  by rewrite fin_maps.lookup_total_insert_eq.
+Qed.
+
+Lemma add_lookup_neq :
+  forall m k k' v,
+    k ≠ k' →
+    _add m k v !!! k' = m !!! k'.
+Proof.
+  intros.
+  unfold _add.
+  by rewrite fin_maps.lookup_total_insert_ne.
+Qed.
+
 Definition rm (m : hmap) (k : K) :=
   <[k:=tl (m !!! k)]> m.
 
@@ -278,6 +296,26 @@ Proof.
     + by rewrite lookup_delete_eq.
 Qed.
 
+Lemma cardinality_empty_lists :
+  forall m,
+    (∀ k, m !!! k = []) →
+    cardinality m = 0%Z.
+Proof.
+  intros m Hempty.
+  induction m as [|k v m Hnone Hfirst Ih] using map_first_key_ind.
+  - by rewrite cardinality_empty.
+  - rewrite cardinality_insert with (n:=0%Z).
+    + rewrite lookup_total_alt. rewrite Hnone.
+      list. specialize Hempty with k.
+      rewrite fin_maps.lookup_total_insert_eq in Hempty.
+      subst. by list.
+    + apply Ih. intros k'.
+      specialize Hempty with k'.
+      rewrite fin_maps.lookup_total_insert in Hempty.
+      case_decide; auto.
+      subst. rewrite lookup_total_alt. by rewrite Hnone.
+Qed.
+
 Ltac cinsert n := rewrite cardinality_insert with (n:=n) by auto.
 
 Lemma cardinality_add :
@@ -340,6 +378,43 @@ Proof.
   unfold rm_add.
   rewrite cardinality_add with (n:=cardinality(rm m k)) by auto.
   rewrite cardinality_rm with (n:=cardinality m) by auto. lia.
+Qed.
+
+Lemma cardinality_extensionality :
+  ∀ (m1 : hmap) m2,
+    (∀ k, m1 !!! k = m2 !!! k) →
+    cardinality m1 = cardinality m2.
+Proof.
+  induction m1 as [|k v m1 Hnone Hfirst Ih] using map_first_key_ind; intros m2 HLookup.
+  - rewrite cardinality_empty.
+    rewrite cardinality_empty_lists; auto.
+    intros. specialize HLookup with k.
+    by rewrite lookup_total_empty in HLookup.
+  - rewrite cardinality_insert with (n:=cardinality m1) by auto.
+    destruct v.
+    + list. rewrite lookup_total_alt. rewrite Hnone. list. apply Ih. intro k'. specialize HLookup with k'.
+      rewrite fin_maps.lookup_total_insert in HLookup.
+      case_decide; auto.
+      rewrite <- HLookup. rewrite lookup_total_alt.
+      subst. by rewrite Hnone.
+    + rewrite Ih with (delete k m2).
+      { rewrite cardinality_delete with (n:=cardinality m2); auto.
+        - rewrite lookup_total_alt. rewrite Hnone. by list.
+        - specialize HLookup with k.
+          rewrite fin_maps.lookup_total_insert_eq in HLookup.
+          rewrite lookup_total_alt in HLookup.
+          destruct (m2 !! k).
+          { by f_equal. } { done. }
+    }
+    { intros k'.
+      destruct (decide (k = k')).
+      { subst. rewrite fin_maps.lookup_total_delete_eq.
+        rewrite lookup_total_alt. by rewrite Hnone. }
+      { rewrite fin_maps.lookup_total_delete_ne by auto.
+        specialize HLookup with k'.
+        by rewrite fin_maps.lookup_total_insert_ne in HLookup by auto.
+      }
+    }
 Qed.
 
 (* Relates a list of buckets to a total function from keys to lists of
@@ -825,8 +900,7 @@ Definition ITER_HMAP {S}
         ∀ k v,
           history0 ++ [(k, v)] = history1 →
           permitted xs history1 ->
-          body k v s Q
-      )
+          body k v s Q )
       loop.
 
 Lemma nil_permitted :
@@ -865,8 +939,8 @@ Lemma prefix_map :
     l1 `prefix_of` l2 →
     map f l1 `prefix_of` map f l2.
 Proof.
-  intros A B l1 l2 f [l3 H1].
-  exists (map f l3).
+  intros ????? [??].
+  eexists.
   rewrite <- map_app.
   by f_equal.
 Qed.
@@ -924,8 +998,7 @@ Qed.
 Lemma wp_iter_rev :
   ∀ S (s : S) h f m,
     isHashtbl h m →
-    ITER_HMAP
-    m
+    ITER_HMAP m
     (λ k v (s : S) Q, wp (f k v s) Q)
     (λ s Q, wp (iter_rev h s f) Q).
 Proof.
@@ -999,10 +1072,36 @@ Definition resize (h : hashtbl) : hashtbl :=
   do (p, h) ← h;
   do n ← length h;
   do n ← n * 2;
+  if n <=? max_length then
   do a ← make n [];
   do h' ← (0, a);
   iter_rev (p, h) h'
-    (fun k v h'' => add h'' k v).
+    (fun k v h'' => add h'' k v)
+  else (p, h).
+
+Instance isBool_ltb_proj :
+  ∀Int _i i ,
+  ∀Int _j j ,
+  isBool1 (_i ≤? _j) (proj i ≤ proj j).
+Proof.
+  intros. eapply isBool1_intro. rewrite leb_spec.
+  destructIsInt. lia.
+Qed.
+
+Lemma hashtbl_extensionality :
+  forall h m1 m2,
+    isHashtbl h m1 →
+    (forall k, m1 !!! k = m2 !!! k) →
+    isHashtbl h m2.
+Proof.
+  intros h m1 m2 H Helts.
+  destructIsHashtbl h.
+  introIsHashtbl.
+  + by rewrite cardinality_extensionality with (m2:=m1).
+  + intros i' b k Hindex Hbucket.
+    rewrite <- Helts.
+    rewrite H4; eauto.
+Qed.
 
 Lemma resize_spec :
   forall h m,
@@ -1015,9 +1114,51 @@ Proof.
   wp_bind_eq.
   wp_length n'.
   wp_bind_eq.
+  assert (isInt (n' * 2) (len l * 2)) by tc.
+  wp_if. 2: { introIsHashtbl. }
   wp_make a'.
-  { admit. }
+  { assert (len l * 2 < wB).
+    unfold wB. unfold size.
+    unfold max_array_length in *.
+    unfold max_length in *. lia. lia. }
   wp_bind_eq.
-  wp_op wp_iter_rev
-    with invariant:(λ m' s, isHashtbl s m').
-Admitted.
+  assert (isHashtbl (i, a) m) by introIsHashtbl.
+  set
+    (inv :=
+       (λ (l : list (K * V)) s, ∃ m',
+           isHashtbl s m'
+           ∧ ∀ k, map snd (filter_key k l) = reverse (m' !!! k)
+    )).
+  wp_op wp_iter_rev.
+  Unshelve.
+  5: apply inv.
+  - apply (i, a).
+  - subst inv. simpl.
+    exists ∅. split.
+    + pack; eauto; list; try lia.
+      { by rewrite cardinality_empty. }
+      { intros ???? Helem.
+        do 2 list in *.
+        by apply not_elem_of_nil in Helem. }
+      { intros ?**.
+        list in *. by subst. }
+    + intros. by rewrite fin_maps.lookup_total_empty.
+  - intros l1 l2 **. subst inv. simpl in *. unpack. wp_op wp_add.
+    simpl. intros. eexists. split; eauto. intros.
+    specialize H17 with k0. subst l2.
+    rewrite filter_app.
+    destruct (decide (k = k0)).
+    { subst. rewrite add_lookup_eq. rewrite reverse_cons.
+      rewrite map_app. filter. simpl. by f_equal. }
+    { rewrite add_lookup_neq by auto. filter. by list. }
+  - subst inv.
+    intros h [hist [[m' [Htbl Hinv]] Hcomplete]].
+    apply hashtbl_extensionality with (m1:=m') (m2:=m); auto.
+    intro k. specialize Hcomplete with k.
+    unfold complete in *.
+    rewrite <- reverse_involutive.
+    rewrite <- reverse_involutive with (l:=m' !!! k).
+    f_equal.
+    rewrite <- Hinv.
+    by rewrite Hcomplete.
+Qed.
