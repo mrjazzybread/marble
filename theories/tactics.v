@@ -25,14 +25,17 @@ Set Universe Polymorphism.
 (* [unpack] destructs conjunctions and existential quantifiers in all
    hypotheses. It could be called [unpack in *]. *)
 
-Ltac unpack :=
-  repeat match goal with
+Ltac unpack1 :=
+  match goal with
   | h: _ ∧ _ |- _ =>
       let h' := fresh h in
       destruct h as (h & h')
   | h: ∃ x, _ |- _ =>
       destruct h
   end.
+
+Ltac unpack :=
+  repeat unpack1.
 
 (* [unpack in h] destructs conjunctions and existential quantifiers
    in the hypothesis [h]. This can give rise to multiple hypotheses,
