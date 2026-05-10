@@ -166,8 +166,8 @@ Lemma filter_key_cons :
 Proof.
   intros.
   destruct (decide (k = k')).
-  + subst. do 2 rewrite filter_key_cons_True. by f_equal.
-  + by do 2 rewrite filter_key_cons_False by auto.
+  + subst. filter. by f_equal.
+  + by filter.
 Qed.
 
 Lemma remove_assoc_bucket_ne :
@@ -177,11 +177,11 @@ Lemma remove_assoc_bucket_ne :
     filter_key k' b' = filter_key k' b.
 Proof.
   intros k k' b.
-  induction b as [|[k'' v] t Ih]; simpl; intros b' H1 H2; subst b'.
-  + auto.
-  + case_decide.
-    - subst. by filter.
-    - destruct remove_assoc. simpl. apply filter_key_cons. by apply Ih.
+  induction b as [|[k'' v] t Ih]; simpl; intros b' H1 H2; subst b'; auto.
+  case_decide.
+  - subst. by filter.
+  - destruct remove_assoc. simpl. apply filter_key_cons.
+    by apply Ih.
 Qed.
 
 Fixpoint find_assoc (k : K) (b : bucket) : option V :=
@@ -208,7 +208,7 @@ Notation hmap := (gmap K (list V)).
 (* Some definitions to facilitate working with functions as infinite
    maps.
 
-    Remark: we leverage the fact that the Instance of the in habited
+    Remark: we leverage the fact that the Instance of the inhabited
     type class for lists is the empty list.*)
 
 Definition _add (m : hmap) (k : K) (v : V) := <[k:= v :: m !!! k]> m.
