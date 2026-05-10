@@ -741,16 +741,17 @@ Proof.
   destruct b' as [r b'].
   wp_bind_eq.
   wp_set.
-  (* eapply wp_bind *)
-  (*   with(P:=λ _n, isInt _n (cardinality m)). *)
- wp_if; wp_ret; wp_ret;
-    introIsHashtbl.
-  2, 5: subst n; by apply no_garbage_remove with k b r.
-  2, 4: apply valid_buckets_remove with b r; by subst.
-  - rewrite cardinality_rm with (n:=cardinality m); tc.
-    by apply non_empty_bucket with (tbl:=l) (b:=b) (i:= i')  (n:=n).
-  - rewrite cardinality_rm_empty with (n:=cardinality m); tc.
-    by apply empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=n).
+  eapply wp_bind
+    with(P:=λ _n, isInt _n (cardinality (rm m k))).
+  { wp_if; wp_ret.
+    - rewrite cardinality_rm with (n:=cardinality m); tc.
+      by apply non_empty_bucket with (tbl:=l) (b:=b) (i:= i') (n:=n).
+    - rewrite cardinality_rm_empty with (n:=cardinality m); tc.
+      by apply empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=n).
+  }
+ intros. wp_ret. introIsHashtbl.
+  - subst n; by apply no_garbage_remove with k b r.
+  - apply valid_buckets_remove with b r; by subst.
 Qed.
 
 Definition replace (h : hashtbl) (k : K) (v : V) :=
@@ -769,7 +770,7 @@ Lemma decompose_replace :
     <[i:=x :: b]> tbl =
       <[i:=x :: b]>(<[i:=b]>tbl).
 Proof.
-  intros. subst. by list.
+  intros. by list.
 Qed.
 
 Lemma wp_replace :
@@ -789,17 +790,21 @@ Proof.
   remember (remove_assoc k b) as b' eqn:E.
   destruct b' as [r b'].
   wp_bind_eq.
-  wp_if; wp_ret; wp_bind_eq; wp_set; wp_ret;
-  introIsHashtbl; subst n; simpl.
-  2, 3, 5, 6: rewrite decompose_replace.
-  2, 4: apply no_garbage_insert; (try (by list)).
-  2, 3: apply no_garbage_remove with k b r; subst; by list.
-  2, 3: apply valid_buckets_insert; (try by list); try lia.
-  2, 3: apply valid_buckets_remove with b r; auto.
-  + rewrite cardinality_rm_add with (n:=cardinality m); tc.
-    by apply non_empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=len l).
-  + rewrite cardinality_rm_add_empty with (n:=cardinality m); tc.
-    by apply empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=len l).
+  subst n.
+  eapply wp_bind
+    with (P:=λ _n, isInt _n (cardinality (rm_add m k v))).
+  { wp_if; wp_ret.
+    - rewrite cardinality_rm_add with (n:=cardinality m); tc.
+      by apply non_empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=len l).
+    - rewrite cardinality_rm_add_empty with (n:=cardinality m); tc.
+      by apply empty_bucket with (tbl:=l) (b:=b) (i:=i') (n:=len l). }
+  intros.
+  wp_set. wp_ret.
+  introIsHashtbl; simpl; rewrite decompose_replace.
+  - apply no_garbage_insert; (try (by list)).
+    apply no_garbage_remove with k b r; subst; by list.
+  - apply valid_buckets_insert; (try by list); try lia.
+    apply valid_buckets_remove with b r; auto.
 Qed.
 
 Definition get (h : hashtbl) (k : K) :=
