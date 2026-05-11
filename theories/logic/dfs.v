@@ -513,7 +513,7 @@ Lemma root_is_unmarked w ws vs imarked omarked :
   dfs imarked omarked (NonEmpty w ws vs) →
   w ∉ imarked.
 Proof.
-  intros hdfs. dependent destruction hdfs. assumption.
+  intros hdfs. destruction hdfs. assumption.
 Qed.
 
 (* [dfs] is compatible with set equality. *)
@@ -634,9 +634,9 @@ Lemma dfs_disjoint imarked omarked w ws vs :
   dfs imarked omarked (NonEmpty w ws vs) →
   support vs ## {[w]} ∪ support ws.
 Proof.
-  intros h. dependent destruction h.
+  intros h. destruction h.
   (* The elements of the tree [w/ws] are in [mmarked]. *)
-  generalize (dfs_second_premise_reformulation h1 h2); intro p.
+  forwards p: dfs_second_premise_reformulation; eauto.
   (* The elements of [vs] are not in [mmarked]. *)
   apply dfs_imarked in p.
   (* This is it! *)
@@ -750,7 +750,7 @@ Lemma reaches_root_support imarked mmarked w ws vs :
   dfs imarked mmarked (NonEmpty w ws vs) →
   reaches_ {[w]} (support ws).
 Proof.
-  intros h. dependent destruction h.
+  intros h. destruction h.
   (* This repeats part of sub-goal 2 above, but never mind. *)
   eapply reaches_transitive with (ys := roots ws).
   { eauto using subset_transitive with reaches. }
@@ -819,7 +819,7 @@ Lemma dfs_concat_inversion vs : ∀ imarked omarked ws,
 Proof.
   induction vs; simpl; intros ??? h.
   { eauto with dfs. }
-  { dependent destruction h.
+  { destruction h.
     edestruct IHvs2 as (? & ? & ?). eauto.
     eauto with dfs. }
 Qed.
