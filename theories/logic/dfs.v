@@ -353,6 +353,23 @@ Proof.
   induction 1; simpl; set_solver.
 Qed.
 
+(* Constructor lemmas. *)
+
+Lemma ordered_empty rs :
+  ordered rs Empty.
+Proof.
+  induction rs as [| r rs ].
+  + econstructor.
+  + econstructor. set_solver. assumption.
+Qed.
+
+Lemma ordered_singleton w ws :
+  ordered {[w]} (NonEmpty w ws Empty).
+Proof.
+  change {[w]} with ({[w]} ++ []).
+  eapply OrderedRoot. econstructor.
+Qed.
+
 (* It is possible to prepend extra vertices [rs1] in front of the
    list [rs2], provided that these vertices do not appear in the
    forest [f].  *)
@@ -389,6 +406,18 @@ Proof.
     - eapply IHordered. set_solver. assumption. }
   { eapply OrderedRoot.
     eapply IHordered. set_solver. assumption. }
+Qed.
+
+(* A corollary of [ordered_concat]. *)
+
+Lemma ordered_skip_right rs r vs :
+  ordered rs vs →
+  ordered (rs ++ {[r]}) vs.
+Proof.
+  intros. rewrite <- (concat_empty vs).
+  eapply ordered_concat; eauto.
+  + set_solver.
+  + eapply ordered_empty.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
