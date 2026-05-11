@@ -46,7 +46,8 @@ Local Notation vertices := (propset vertex).
 
 (* Let us first introduce the parameters that describe the graph. *)
 
-(* [foreach_start] and [foreach_successor] are runtime parameters. *)
+(* [_n], [foreach_vertex], [foreach_predecessor], and
+   [foreach_successor] are runtime parameters. *)
 
 (* The remaining parameters are logical. *)
 
@@ -59,27 +60,18 @@ Variable n : Z.
 Variable isInt_n : isInt _n n.
 Variable bound_n : 0 ≤ n ≤ max_array_length.
 
-(* [foreach_start] iterates on the start vertices. *)
+(* [foreach_vertex] iterates on all vertices. *)
 
-Variable foreach_start : ∀ {A}, A → (A → _vertex → A) → A.
+Variable foreach_vertex : ∀ {A}, A → (A → _vertex → A) → A.
 
-(* [start] is the set of vertices where the traversal should begin. *)
-
-Variable start : vertices.
-
-(* The start vertices must lie in the interval [0, n). *)
-
-Hypothesis start_respects_bound :
-  ∀ v, v ∈ start → 0 ≤ v < n.
-
-(* [foreach_start] must enumerate the vertices in the set [start],
+(* [foreach_vertex] must enumerate all vertices,
    in an arbitrary order, possibly with repetitions. *)
 
-Variable wp_foreach_start:
+Variable wp_foreach_vertex:
   ∀ {A} (body : A → _vertex → A),
-  ITER_SET ∅ start
+  ITER_SET ∅ {[ v | 0 ≤ v < n ]}
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_start a body) Q).
+    (λ a Q, wp (foreach_vertex a body) Q).
 
 (* [foreach_predecessor a _w] iterates on the predecessors of the
    vertex [_w]. *)
@@ -98,6 +90,7 @@ Local Notation predecessors v := (image (flip E) {[v]}).
 Local Notation successors v   := (image E {[v]}).
 Local Notation closed vs      := (closed E vs).
 Local Notation closure vs     := (closure E vs).
+Local Notation scc v w        := (scc E v w).
 
 (* No edge can leave the interval [0, n). *)
 
@@ -141,18 +134,39 @@ Variable wp_foreach_predecessor:
    1. Traverse the graph [E] and construct a list [vs] of its vertices
       in reverse postorder.
    2. Using the list [vs] as the list of the start vertices,
-   3. traverse the reverse graph [flip E] and construct a map [ρ] of each
-      vertex to the root of its tree in the DFS forest.
+   3. traverse the reverse graph [flip E] and construct a map [_group]
+      of each vertex to the root of its tree in the DFS forest.
 
-   Then [ρ] actually maps each vertex to a distinguished member of its
-   strongly connected component. *)
+   Then [_group] actually maps each vertex to a distinguished member of
+   its strongly connected component. *)
 
-Definition scc : array _vertex :=
-  do vs ← list_rev_post _n (@foreach_start) (@foreach_successor) ;
+Definition kosaraju : array _vertex :=
+  do vs ← list_rev_post _n (@foreach_vertex) (@foreach_successor) ;
   let foreach_start {S} (s : S) yield := fold_left yield vs s in
-  do ρ ← group _n (@foreach_start) (@foreach_predecessor) ;
-  ρ.
+  do _group ← group _n (@foreach_start) (@foreach_predecessor) ;
+  _group.
+
+(* -------------------------------------------------------------------------- *)
+
+Lemma wp_kosaraju :
+  wp kosaraju (λ _group,
+    ∃ ρ,
+    rich.isArray isInt _group ρ ∧
+    len ρ = n ∧
+    (* The vertices [v] and [ρ v] are members of the same component. *)
+    (∀ v, 0 ≤ v < n → scc v (ρ !!! v)) ∧
+    (* If two vertices [v] and [w] are members of the same component
+       then they have the same image through [ρ]. *)
+    (∀ v w, 0 ≤ v < n → 0 ≤ w < n → ρ !!! v = ρ !!! w)
+  ).
+Proof.
+Abort.
 
 End G.
+
+(* TODO this version of Kosaraju's algorithm is not interactive.
+   Can we define and verify an interactive version, where the
+   components are produced one by one (in topological order)
+   and immediately submitted to a consumer? *)
 
 (* -------------------------------------------------------------------------- *)
