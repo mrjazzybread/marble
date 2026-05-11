@@ -1714,10 +1714,12 @@ Lemma wp_group :
   wp group (λ _group,
     (* [group] performs a depth-first traversal, building a (ghost)
        forest [vs]. *)
-    ∃ marked vs ρ ,
+    ∃ rs marked vs ρ ,
     dfs marked vs ∧
+    ordered rs vs ∧
+    complete rs ∧
     roots vs ⊆ start ∧
-    start ⊆ marked ∧
+    marked ≡ closure start ∧
     (* Furthermore, [group] returns an array [_group], whose length
        is [n], mapping every vertex to the root of its tree in the
        forest [vs]. *)
@@ -1803,7 +1805,7 @@ Proof.
   { clear dependent _group.
     intros (m & [_group _root]) (rs' & marked' & σ' & vs & Hm & Hpost).
     unpack in Hpost. subst σ'.
-    wp_ret. pack; tc. }
+    wp_ret. pack; eauto using omarked_is_closure_start with marble. }
 Qed.
 
 End Group.
