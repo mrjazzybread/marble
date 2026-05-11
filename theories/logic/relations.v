@@ -358,6 +358,14 @@ Proof.
   eauto using subset_transitive, image_increasing with path.
 Qed.
 
+Lemma prove_reaches_self_singleton vs v :
+  v ∈ vs → reaches vs {[v]}.
+Proof.
+  intros.
+  assert ({[v]} ⊆ vs) by set_solver.
+  eauto using prove_reaches_self.
+Qed.
+
 (* The singleton [v] reaches the singleton [w] if and only if there
    is a path of [v] to [w]. This is stated by the following two lemmas. *)
 
