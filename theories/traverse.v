@@ -48,7 +48,7 @@ Local Notation vertices := (propset vertex).
 
 (* Let us first introduce the parameters that describe the graph. *)
 
-(* [foreach_start] and [foreach_successor] are runtime parameters. *)
+(* [_n], [foreach_start], [foreach_successor] are runtime parameters. *)
 
 (* The remaining parameters are logical. *)
 
