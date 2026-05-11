@@ -82,6 +82,7 @@ Hint Rewrite
 Hint Rewrite
   @elem_of_PropSet
   @not_elem_of_PropSet
+  @elem_of_empty
   @elem_of_singleton
   @elem_of_difference
   @elem_of_union

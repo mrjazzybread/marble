@@ -154,6 +154,121 @@ Implicit Type vs : vertices.
 
 Context `{!RelDecision (∈@{vertices})}.
 
+Lemma scc_forest_root_map_1 ρ f :
+  is_scc_forest E f →
+  isRootMap ρ f →
+  ∀ v, v ∈ support f →
+  v ∈ component E (ρ v). (* synonymous with [scc v (ρ v)] *)
+Proof.
+  induction f as [| w ws f ]; inversion 1; inversion 1; subst; simpl.
+  { intro v. elem. tauto. }
+  { intro v. rewrite elem_of_union. intros [ Hv | Hv ].
+    (* Case: [v] lies in this tree, whose root is [w]. *)
+    { assert (ρ v = w) as -> by eauto.
+      match goal with h: component E w ≡ _ |- _ => rewrite h end.
+      assumption. }
+    (* Case: [v] does not lie in this tree. *)
+    { eauto. }}
+Qed.
+
+Lemma root_map_roots_1 ρ f v :
+  isRootMap ρ f →
+  v ∈ support f →
+  ρ v ∈ roots f.
+Proof.
+Admitted.
+
+Lemma root_map_roots_2 ρ f w :
+  isRootMap ρ f →
+  w ∈ roots f →
+  ∃ v, w = ρ v ∧ v ∈ support f.
+Proof.
+Admitted.
+
+Lemma root_map_support ρ f v :
+  isRootMap ρ f →
+  v ∈ support f →
+  ρ v ∈ support f.
+Proof.
+Admitted.
+
+Lemma isRootMap_idempotent ρ f :
+  isRootMap ρ f →
+  ∀ v, v ∈ support f → ρ (ρ v) = ρ v.
+Proof.
+Admitted.
+
+Lemma scc_forest_root_map_2 ρ f :
+  is_scc_forest E f →
+  isRootMap ρ f →
+  ∀ v1, v1 ∈ support f →
+  ∀ v2, v2 ∈ support f →
+  scc v1 v2 →
+  ρ v1 = ρ v2.
+Proof.
+  (* This proof is minimalistic, in the sense that it does not assume
+     that [f] is a DFS forest. So [f] could contain several copies of
+     the same component. All copies must have the same root anyway.
+     This proof does not use the fact that ρ must be idempotent; in
+     fact, it proves that ρ must be idempotent (see the next lemma). *)
+  induction f as [| w ws f ]; simpl; intros Hforest Hroot.
+  { intro v1. elem. tauto. }
+  { intros v1 Hv1 v2 Hv2 Hscc.
+    rewrite elem_of_union in Hv1, Hv2.
+    assert (fact1: v1 ∈ component E (ρ v1))
+      by eauto using scc_forest_root_map_1.
+    assert (fact2: v2 ∈ component E (ρ v2))
+      by eauto using scc_forest_root_map_1.
+    elem in fact1. elem in fact2.
+    assert (v2 ∈ component E (ρ v1)).
+    { elem. eauto with scc. }
+    assert (v1 ∈ component E (ρ v2)).
+    { elem. eauto with scc. }
+    inversion Hforest; inversion Hroot; subst.
+    match goal with h: component E _ ≡ _ |- _ =>
+      rename h into Hcomponent end.
+    destruct Hv1 as [ Hv1 | Hv1 ];
+    destruct Hv2 as [ Hv2 | Hv2 ].
+    { assert (ρ v1 = w) by eauto.
+      assert (ρ v2 = w) by eauto.
+      congruence. }
+    { assert (ρ v1 = w) by eauto.
+      assert (ρ v2 = w) by set_solver. (* cool! *)
+      congruence. }
+    { assert (ρ v2 = w) by eauto.
+      assert (ρ v1 = w) by set_solver. (* cool! *)
+      congruence. }
+    { eauto. }}
+Qed.
+
+Lemma scc_forest_root_map_idempotent ρ f :
+  is_scc_forest E f →
+  isRootMap ρ f →
+  ∀ v, v ∈ support f → ρ (ρ v) = ρ v.
+Proof.
+  intros.
+  assert (v ∈ component E (ρ v)) by eauto using scc_forest_root_map_1.
+  elem in *.
+  eapply scc_forest_root_map_2; eauto using root_map_support.
+Qed.
+
+Lemma scc_forest_root_map ρ f :
+  is_scc_forest E f →
+  isRootMap ρ f →
+  ∀ v1, v1 ∈ support f →
+  ∀ v2, v2 ∈ support f →
+  scc v1 v2 ↔ ρ v1 = ρ v2.
+Proof.
+  split.
+  { eauto using scc_forest_root_map_2. }
+  { assert (fact1: v1 ∈ component E (ρ v1))
+      by eauto using scc_forest_root_map_1.
+    assert (fact2: v2 ∈ component E (ρ v2))
+      by eauto using scc_forest_root_map_1.
+    elem in *.
+    intro Heq. rewrite Heq in fact1. eauto with scc. }
+Qed.
+
 Lemma wp_kosaraju :
   wp kosaraju (λ _group,
     ∃ ρ,
@@ -255,22 +370,22 @@ Proof.
 
   (* 2c. Deconstruct the postcondition of [group]. *)
   match goal with Hpost: _ |- _ => destruct Hpost as
-    (marked & f2 & ρ & Hdfs2 & Hroots & ? & Hgroup & ? & Hmap)
+    (rs & marked & f2 & ρ & Hdfs2 & Hordered & Hcomplete
+        & Hroots & Hmarked & ? & ? & Hmap)
   end. (* TODO make this a tactic *)
 
-  assert (Hmarked: marked ≡ closure start) by admit. (* TODO wp_group could give this *)
   (* Every vertex is marked. *)
   rewrite (closure_start_is_universe n start) in Hmarked by eauto with lia.
   rewrite Hmarked in Hdfs2.
   clear dependent marked.
   clear Hroots. (* unused *)
-
-  assert (ordered vs f2). (* TODO missing in the spec of [group]? *)
-  admit.
-
-  (* 3. Conclude. *)
+  (* The forest [f2] is ordered by the list [vs]. *)
+  unfold complete in Hcomplete. subst rs.
+  (* Therefore [f2] is an SCC forest! *)
   assert (is_scc_forest E f2).
   { eapply scc_soundness. econstructor. eauto. }
+
+  (* 3. Conclude. *)
   wp_ret. eexists; pack; tc.
   (* Postcondition 1: [v] and [ρ !!! v] inhabit the same component. *)
   { admit. }
