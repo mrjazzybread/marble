@@ -18,6 +18,7 @@ From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Export ZifyNat ZifyUint63.
 From marble Require Import tactics bool int iteration loop array wp.
+From marble Require Import listz_buffer. (* TODO *)
 From marble.logic Require Import sets relations dfs.
 Implicit Type _i _j _k _n : int.
 
@@ -225,6 +226,19 @@ Proof using start_respects_bound edges_respect_bound.
   + transitivity start.
     - assumption.
     - eauto using reaches_reflexive.
+Qed.
+
+(* This universe is finite. *)
+
+Lemma finite_universe :
+  ∃ rs, list_to_set rs ≡ universe.
+Proof.
+  exists (listz.init n (λ i, i)).
+  rewrite list_to_set_init.
+  unfold universe.
+  intro v. elem. split.
+  + intros (i & ? & ?). lia.
+  + intros. eauto with lia.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
