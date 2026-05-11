@@ -74,13 +74,85 @@ Variable start : vertices.
 Hypothesis start_respects_bound :
   ∀ v, v ∈ start → 0 ≤ v < n.
 
-(* [foreach_start] must enumerate the vertices in the set [start],
-   in an arbitrary order, possibly with repetitions. *)
+(* [foreach_start] must enumerate the vertices in the set [start].
+
+   How should the specification of [foreach_start] be expressed? This is
+   a subtle question. If [foreach_start] enumerates the vertices in an
+   arbitrary order, then this is fine: we can tolerate that. Yet, if
+   [foreach_start] enumerates the vertices in a predictable order, then
+   we can guarantee that the roots of the DFS forest that we construct
+   respect this order. And, in some applications, such as Kosaraju and
+   Sharir's algorithm, this matters. So, we write the specification of
+   [foreach_start] in a very general form, such that both [ITER_LIST]
+   and [ITER_SET'] are instances of this general form.
+
+   This general form requires the user to provide a predicate [complete]
+   such that 1- a complete list covers the set [start]; and 2- there
+   exists a complete list. For example, the predicate [complete] might
+   be true of every list that covers the set [start]; or of every list
+   that covers the set [start] and does not have repeated elements; or
+   of only of one specific list that covers the set [start].
+
+   For some definitions of [complete], repetition is possible:
+   [foreach_start] may produce a vertex several times. *)
+
+Variable complete : list vertex → Prop.
+
+Variable complete_spec :
+  ∀ rs, complete rs → list_to_set rs ≡ start.
+
+Variable complete_nonempty :
+  ∃ rs, complete rs.
+
+(* We define [permitted rs] to hold if and only if [rs] is a prefix of
+   some complete list. (There is no reason to allow the user to provide
+   their own definition of [permitted]. This definition seems as general
+   as possible.) *)
+
+Definition permitted : list vertex → Prop :=
+  λ rs, ∃ rs', complete (rs ++ rs').
+
+(* Any permitted list forms a subset of [start]. *)
+
+Local Lemma permitted_spec rs : permitted rs → list_to_set rs ⊆ start.
+Proof.
+  intros (rs' & Hcomplete). apply complete_spec in Hcomplete. set_solver.
+Qed.
+
+(* The empty list is permitted. *)
+
+Local Lemma permitted_nil : permitted [].
+Proof.
+  destruct complete_nonempty as (rs & Hcomplete). eauto.
+Qed.
+
+(* The predicate [permitted] is prefix-closed. *)
+
+Local Lemma permitted_prefix rs1 rs2 :
+  permitted (rs1 ++ rs2) → permitted rs1.
+Proof.
+  unfold permitted. intros (rs' & Hcomplete). list in *. eauto.
+Qed.
+
+Local Lemma permitted_prefix_of rs rs' :
+  permitted rs' → rs `prefix_of` rs' → permitted rs.
+Proof.
+  unfold prefix. intros ? (? & ?). subst. eauto using permitted_prefix.
+Qed.
+
+(* [foreach_start] is expected to produce the start vertices in an order
+   that respects the predicates [permitted] and [complete]. *)
 
 Variable wp_foreach_start:
   ∀ {A} (body : A → _vertex → A),
-  ITER_SET ∅ start
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+  @ITER (list vertex) (eq)
+    [] complete A
+    ( λ rs0 rs1 a Q,
+      ∀Int _v v,
+      rs0 ++ {[v]} = rs1 →
+      permitted rs1 →
+      wp (body a _v) Q
+    )
     (λ a Q, wp (foreach_start a body) Q).
 
 (* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
@@ -161,7 +233,9 @@ Qed.
 
 Implicit Types marked imarked omarked : vertices.
 
-Implicit Types examined pushed : vertices.
+Implicit Types examined : vertices.
+
+Implicit Types started : list vertex.
 
 Implicit Type σ : stack vertex.
 
@@ -171,7 +245,7 @@ Implicit Type σ : stack vertex.
    type of producer states as well as the relation that specifies one we
    move from one producer state to the next, while emitting an event. *)
 
-(* A producer state is a pair [(marked, σ)]. *)
+(* A producer state is a tuple [(rs, marked, σ)]. *)
 
 (* We name this type [ghost] to emphasize that it is NOT the type of
    runtime states, [S]. Producer states do not exist at runtime. *)
@@ -181,37 +255,42 @@ Local Notation ghost :=
 
 Implicit Type γ : ghost.
 
-Global Instance equiv_ghost : Equiv ghost :=
-  λ '(marked0, σ0) '(marked1, σ1), marked0 ≡ marked1 ∧ σ0 = σ1.
+(* We write [history γ] for the first component of [γ],
+   namely [rs]. *)
 
-(* We write [γ0] for the initial state, where no vertex is marked
-   and the stack is empty. *)
+Local Notation history γ :=
+  (let '(rs, marked, σ) := γ in rs).
+
+(* [γ0] is the initial (ghost) state. *)
 
 Local Notation γ0 :=
-  (∅, Frame None Empty :: []).
+  (@γ0 vertex).
 
 (* A transition from state [γ] to state [γ'], emitting an event [e], is
    permitted if the relation [step] allows it. *)
 
 Local Notation step :=
-  (dfs.step E start).
+  (dfs.step E).
 
 (* The assertion [wf γ] means that the set of vertices [marked] and the
    stack [σ] are a well-formed state of an ongoing DFS traversal of the
    graph [E]. *)
 
-Local Notation wf := (dfs.wf E start).
-Local Notation final := (dfs.final start).
+Local Notation wf := (dfs.wf E).
 
-Local Hint Constructors dfs.wf : wf.
+(* The assertion [perm γ] means that the list [rs] (a component of [γ])
+   satisfies [permitted rs]. We need to keep track of this property;
+   yet we do not want to build it into the definition of [wf], because
+   this pollutes the theory of [wf]. *)
 
-Local Hint Resolve wf_step : wf.
+Local Notation perm γ :=
+  (permitted (history γ)).
 
 (* The assertion [edge (top σ) v] means that there is an edge of the
    stack's current vertex to [v]. (If the stack has no current vertex,
-   it means that [v] is a member of the set [start].) *)
+   it is true.) *)
 
-Local Notation edge := (dfs.edge E start).
+Local Notation edge := (dfs.edge E).
 
 (* The assertion [dfs marked vs] that [vs] is a DFS forest for the
    graph [E], with initial set of marked vertices ∅, and final set of
@@ -227,16 +306,24 @@ Inductive isEvent : event _vertex → event vertex → Prop :=
 | IsEventEnter:
     ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Enter _v) (Enter v)
 | IsEventExit:
-    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Exit _v) (Exit v).
+    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Exit _v) (Exit v)
+| IsEventRediscover:
+    ∀ _v v, isInt _v v → 0 ≤ v < n → isEvent (Rediscover _v) (Rediscover v).
 
 Local Ltac destructEvent :=
   match goal with h: isEvent _ _ |- _ => destruction h end.
 
 Local Hint Constructors isEvent : marble.
 
-Local Hint Resolve similar_same_edges : marble.
+(* -------------------------------------------------------------------------- *)
 
-Local Hint Extern 1 (_ ≡ _) => reflexivity : marble.
+(* Local lemmas and hints. *)
+
+Local Lemma trivia marked0 marked1 v :
+  marked1 ≡ {[v]} ∪ marked0 →
+  marked0 ∪ {[v]} ≡ marked1.
+Proof using. clear- marked0. set_solver. Qed.
+Local Hint Resolve trivia : marble.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -392,6 +479,42 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Hints and tactics used in the proofs of [visit] and [traverse]. *)
+
+Local Lemma app_nil_r_sym {A} (rs : list A) : rs = rs ++ [].
+Proof. symmetry. apply app_nil_r. Qed.
+Local Hint Resolve app_nil_r app_nil_r_sym : marble.
+
+Local Definition wf_init := (@wf_init _ E).
+Local Hint Resolve wf_init wf_step : marble.
+
+Local Hint Resolve
+  enter_increases_height
+  horizontal_marked_grows
+  horizontal_same_edges
+  horizontal_same_edges0
+  horizontal_same_height
+  horizontal_same_height0
+: marble.
+
+Local Ltac clarify :=
+  case_decide; first [ length in *; lengths; lia | tauto | idtac ].
+
+Local Ltac permitted :=
+  match goal with |- context [len ?σ = 1] =>
+    destruct (decide (len σ = 1)); list; try solve [ lia | assumption ]
+  end.
+
+Local Hint Extern 1 (permitted _) => permitted : marble.
+
+(* Hack: the presence of [complete_nonempty] causes [unpack] to diverge,
+   as it is an existential assertion, and is not cleared by [destruct].
+   To work around this problem, we redefine [unpack] as follows. *)
+Local Ltac unpack ::=
+  clear complete_nonempty; repeat unpack1.
+
+(* -------------------------------------------------------------------------- *)
+
 (* The state of the depth-first search algorithm is a pair [(m, u)] where
    [m] is the marks array and [u] is a user state of arbitrary type [U]. *)
 
@@ -493,13 +616,13 @@ Qed.
 Local Definition transform {s} (f : U → U) : sbeyond s → sbeyond s.
 Proof using.
   intros ((m' & u') & ow).
-  exists (m', f u'). assumption.
+  exists (do u' ← f u' ; (m', u')). assumption.
 Defined.
 
 (* A reasoning rule for [transform]. *)
 
 Local Lemma wpd_transform {s} f (s' : sbeyond s) Q :
-  wpd s' (λ '(m', u'), wp (m', f u') Q) →
+  wpd s' (λ '(m', u'), wp (do u' ← f u' ; (m', u')) Q) →
   wpd (transform f s') Q.
 Proof using.
   unfold transform. destruct s' as ((m' & u') & ?). eauto.
@@ -519,6 +642,10 @@ Proof using.
   unfold slt, mlt.
   eauto using marking_decreases_weight.
 Qed.
+
+Local Opaque transform.
+
+Local Hint Resolve sle_slt_trans : marble.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -544,18 +671,19 @@ Variable inv : ghost → U → Prop.
    this requirement. *)
 
 Variable compatible_inv :
-  Proper ((@equiv _ equiv_ghost) ==> eq ==> iff) inv.
+  Proper ((@equiv _ equiv_state) ==> eq ==> iff) inv.
 
 (* The invariant must hold initially. *)
 
 Variable u0 : U.
 Variable initialization : inv γ0 u0.
 
-(* The specification of the user function [hook] states that [hook]
-   can expect the invariant [inv γ u] to hold, can expect to observe
-   an event [e] such that [step γ e γ'] holds, and must update the
-   user state to a new state [u'] such that [inv γ' u'] holds.
-   The user can also expect [γ] to be well-formed. *)
+(* The specification of the user function [hook] states that [hook] can
+   expect the invariant [inv γ u] to hold; can expect to observe an event
+   [e] such that [step γ e γ'] holds; and must update the user state to a
+   new state [u'] such that [inv γ' u'] holds. Furthermore, the user can
+   expect [wf γ], which implies [wf γ'], and [perm γ'], which implies
+   [perm γ]. *)
 
 Variable wp_hook :
   ∀ γ γ' u,
@@ -564,6 +692,7 @@ Variable wp_hook :
   ∀ _e e,
   isEvent _e e →
   step γ e γ' →
+  perm γ' →
   wp (hook _e u) (λ u', inv γ' u').
 
 (* From the user's point of view, the loop invariant [inv γ u] is a
@@ -600,8 +729,8 @@ Local Fixpoint visit s _v (ACC : Acc slt s) : sbeyond s :=
   IFC (_v <? length m)%uint63 THEN λ Hv,
   (* Test whether this vertex is marked. *)
   IFC get m _v THEN λ _,
-    (* It is marked: do nothing. *)
-    srefl s
+    (* It is marked: invoke [hook] to signal a rediscovery. *)
+    transform (hook (Rediscover _v)) (srefl s)
   ELSE λ Hunmarked,
     (* Mark this vertex. *)
     let m' := set m _v true in
@@ -674,100 +803,172 @@ Definition traverse : S :=
 
 (* The postcondition of [visit]. *)
 
-(* [visit_post γ examined s'] means that, if one starts from the producer
-   state [γ] then [s'] is a correct final runtime state where every vertex
-   in the set [examined] is marked. *)
+(* [visit_post γ started examined s'] means that, starting from the ghost
+   state [γ], the runtime state [s'] is a correct final state and
+   corresponds to some ghost state [γ'] that is horizontally related with
+   the ghost state [γ]. Furthermore, in the move from [γ] to [γ'], the
+   vertices in the list [started] have been added to the component [rs] of
+   the ghost state, and (at least) the vertices in the set [examined] have
+   been added to the component [marked] of the ghost state. *)
 
-Local Definition visit_post γ examined s' :=
-  let (marked, σ) := γ in
-  let (m', u') := s' in
-  ∃ marked' σ',
+(* The order of the conjuncts in [visit_post] matters. When proving a a
+   goal of the form [visit_post ...], the final state [(m', u')] is known;
+   from it, via [inv γ' u'], we deduce how to instantiate [γ'], and via
+   [isMarks m' marked'], how to instantiate [marked']. The rest is
+   checked. *)
+
+Local Definition visit_post γ started examined s' :=
+  let '(rs, marked, σ) := γ in
+  let '(m', u') := s' in
+  ∃ rs' marked' σ' γ',
+  inv γ' u' ∧
+  wf γ' ∧
+  perm γ' ∧
+  horizontal γ γ' ∧
   isMarks m' marked' ∧
-  marked ⊆ marked' ∧
-  inv (marked', σ') u' ∧
-  similar σ σ' ∧
-  wf (marked', σ') ∧
+  γ' = (rs', marked', σ') ∧
+  rs' = rs ++ started ∧
   examined ⊆ marked'.
 
-Local Ltac intro_visit_post :=
-  unfold visit_post; do 2 eexists; pack;
-    [ eauto | set_solver | eauto  |
-      eauto using similar_store with similar wf |
-      eauto with wf | set_solver ].
+(* The following tactics introduce and eliminate [visit_post]. *)
 
-Local Ltac elim_visit_post marked' σ' :=
-  match goal with h: visit_post _ _ _ |- _ =>
-    unfold visit_post in h;
-    destruct h as (marked' & σ' & h);
-    unpack in h
+Local Ltac intro_visit_post :=
+  match goal with |- visit_post ?γ _ _ _  =>
+  (* If there is an equation [γ = (rs, marked, σ)] in the context,
+     rewrite in the goal so as to allow unfolding [visit_post];
+     then unfold and rewrite in the other direction so as to keep
+     the name [γ]. *)
+  try match goal with h: γ = _ |- _ =>
+    rewrite h; unfold visit_post; rewrite <- h
+  end;
+  do 4 eexists; pack; [
+    (* inv      *) eassumption
+  | (* wf       *) eauto 3 with marble
+  | (* perm     *) eauto 3 with marble
+  | (* horiz    *) eauto 3 with horizontal marble
+  | (* isMarks  *) eassumption
+  | (* equality *) eauto 3
+  | (* rs *)       list; eauto 3 with marble
+  | (* subset   *) set_solver
+  ]
   end.
 
-Local Hint Resolve sle_slt_trans : marble.
+Local Ltac elim_visit_post rs' marked' σ' γ' :=
+  (* Again, if we have either [γ = ...] or [γ := ...] in the context,
+     we use [rewrite] or [unfold] to expand γ and allow unfolding,
+     then we undo this action so as to keep the name γ. *)
+  match goal with
+  | hv: visit_post ?γ _ _ _, h: ?γ = _ |- _ =>
+      rewrite h in hv;
+      unfold visit_post in hv;
+      destruct hv as (rs' & marked' & σ' & γ' & hv);
+      list in hv;
+      rewrite <- ?h in hv;
+      unpack in hv
+  | hv: visit_post ?γ _ _ _ |- _ =>
+      unfold γ in hv; (* in case we have [γ := ...] *)
+      unfold visit_post in hv;
+      destruct hv as (rs' & marked' & σ' & γ' & hv);
+      list in hv;
+      fold γ in hv;
+      unpack in hv
+  | hv: visit_post ?γ _ _ _ |- _ =>
+      unfold visit_post in hv;
+      destruct hv as (rs' & marked' & σ' & γ' & hv);
+      list in hv;
+      unpack in hv
+  end.
 
 (* The specification of [visit]. *)
 
 (* Because the result type of [visit] is a subset type,
    instead of [wp], we use the judgement [wpd]. *)
 
+(* [permitted (rs ++ started)] implies [perm γ]. *)
+
 Local Lemma wpd_visit s (ACC : Acc slt s) :
-  ∀ m u _v v marked σ,
+  ∀ m u _v v rs marked σ γ started,
   s = (m, u) →
+  γ = (rs, marked, σ) →
+  inv γ u →
+  wf γ →
   isMarks m marked →
-  inv (marked, σ) u →
-  wf (marked, σ) →
   isInt _v v →
   0 ≤ v < n →
   edge (top σ) v →
-  wpd (visit s _v ACC) (λ s', visit_post (marked, σ) {[v]} s').
+  started = (if decide (len σ = 1) then {[v]} else []) →
+  permitted (rs ++ started) →
+  wpd (visit s _v ACC) (λ s', visit_post γ started {[v]} s').
 Proof.
   clear dependent foreach_start start_respects_bound.
   by dependent induction on s ACC. intros s ? ?.
   intros. subst s. simpl visit.
   destructMarks. arrays.
+  assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
+  assert (perm γ).
+  { subst γ; eauto using permitted_prefix. }
   (* Because we require [v < n], the first branch of this conditional
      construct must be taken. The second branch is dead. *)
   eapply wpd_IFC; [ tc | intros | lia ].
   (* The second conditional construct tests whether [v] is marked. *)
   eapply wpd_IFC; [ tc | intros | intros ].
   (* Case: [v] is marked already. *)
-  { eapply wpd_ret. intro_visit_post. }
-  (* Case: [v] is unmarked. We mark this vertex. *)
+  {
+    (* Emit a [Rediscover] event. *)
+    set (rs' := rs ++ started).
+    set (γ' := (rs', marked, σ)).
+    assert (step γ (Rediscover v) γ').
+    { subst γ γ' started rs'. econstructor; try clarify; tc. }
+    eapply wpd_transform.
+    eapply wpd_exist; eapply wp_ret.
+    (* Invoke [hook]. *)
+    wp_op wp_hook shadowing: u.
+    wp_ret.
+    intro_visit_post.
+  }
+  (* Case: [v] is unmarked. *)
   assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
     by eauto using isMarks_set.
   revert Hm'.
   set (m' := set m _v true).
+  set (rs' := rs ++ started).
   set (marked' := {[v]} ∪ marked).
   set (σ' := Frame (Some v) Empty :: σ).
+  set (γ' := (rs', marked', σ')).
   intro.
-  (* We invoke the user function [hook]. *)
-  assert (step (marked, σ) (Enter v) (marked', σ')).
-  { econstructor; tc. }
-  eapply wpd_bind.
-  { eapply wp_hook; tc. }
-  cbv beta; intros u' ?.
+  (* Emit an [Enter] event. *)
+  assert (step γ (Enter v) γ').
+  { subst γ γ' started rs' marked'.
+    econstructor; try clarify; eauto 2 with marble set_solver. }
+  assert (len σ' = len σ + 1) by tc.
+  (* Invoke [hook]. *)
+  wp_op wp_hook introducing: u'.
   assert ((m', u') < (m, u)).
   { eapply decrease; eauto. }
-  (* The state at this point is described by [marked'], [σ'], [u']. *)
+  (* We have [inv γ' u']. *)
   eapply wpd_wpd_bind_unary.
   (* We reach the loop on the successors of [v]. The goal must be changed
      from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
   rewrite wpd_wp.
   wp_op wp_foreach_successor with invariant: (
     λ examined (s'' : sbeyond (m', u')),
-      visit_post (marked', σ') examined (proj1_sig s'')
+      visit_post γ' [] examined (proj1_sig s'')
   ).
   (* Compatibility. (This is a bit painful.) *)
-  { intros examined1 examined2 ?. intros ((m'' & u'') & ?) ? <-.
-    split; intros; unpack; pack; eauto; set_solver. }
+  { intros examined1 examined2 ?. intros ((m'' & u'') & ?) ? <-. simpl.
+    split; intros; unpack; pack; eauto with set_solver. }
   (* Initialization. *)
-  { simpl. intro_visit_post. }
+  { intro_visit_post. }
   (* Preservation. *)
   { wp_body examined0 examined1 ((m'' & u'') & ow'')
-      introducing: (fun _ => set_step w; intros _w ?).
-    elim_visit_post marked'' σ''.
+      introducing: (fun _ => intros w ??? _w ?).
+    elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
     assert (E v w) by set_solver.
-    (* The state at this point is described by [marked''], [σ''], [u''].
-       The successors of [v] that have been examined already form the
+    assert (edge (top σ') w) by eauto.
+    assert (len σ'' = len σ') by tc.
+    assert (2 ≤ len σ'')%Z by lia.
+    (* We have [inv γ'' u'']. *)
+    (* The successors of [v] that have been examined already form the
        set [examined0], a subset of [marked'']. The vertex [w], also
        a successor of [v], is about to be examined. *)
     (* Change the goal back into [wpd] format. *)
@@ -775,47 +976,55 @@ Proof.
     eapply wpd_strans.
     (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
     eapply wpd_conseq.
-    { eapply IH; try reflexivity; tc. }
+    { eapply IH; tc. }
     (* Justify that this call establishes the loop invariant. *)
     cbv beta. intros (m''' & u''') ?.
-    elim_visit_post marked''' σ'''.
-    intro_visit_post. }
+    clarify. (* [len σ'' ≠ 1] *)
+    elim_visit_post rs''' marked''' σ''' γ'''. subst rs'''.
+    assert (marked'' ⊆ marked''') by tc.
+    assert (horizontal γ' γ''') by eauto 2 using horizontal_transitive.
+    intro_visit_post.
+  }
   clear foreach_successor wp_foreach_successor IH. (* for clarity *)
   (* All successors of [v] have now been examined. *)
   intros ((m'' & u'') & ?). simpl proj1_sig.
   intros (examined & Hpost & Hexamined) ?.
-  elim_visit_post marked'' σ''.
+  elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
   (* The structure of the stack has been preserved. *)
-  unfold σ' in Hpost2.
   assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
-  { inversion Hpost2. eauto. }
+  { eauto using horizontal_populates_top_frame. }
   set (marked''' := marked'').
   set (σ''' := store v vs σ).
+  set (γ''' := (rs', marked''', σ''')).
   (* We invoke the user function [hook] again. *)
-  assert (step (marked'', σ'') (Exit v) (marked''', σ''')).
-  { econstructor; eauto with set_solver. }
+  assert (step γ'' (Exit v) γ''').
+  { subst γ'' γ'''. econstructor; eauto with set_solver. }
   eapply wpd_wpd_bind_unary.
   eapply wpd_transform.
-  eapply wpd_ret. simpl proj1_sig. cbv iota.
-  change (m'', hook (Exit _v) u'')
-    with (do u''' ← hook (Exit _v) u'' ; (m'', u''')).
+  eapply wpd_exist; eapply wp_ret.
   wp_op wp_hook introducing: u'''.
+  assert (marked' ⊆ marked'') by tc.
   (* Return. *)
-  wp_ret. intro. eapply wpd_ret.
+  wp_ret; intro.
+  eapply wpd_exist.
+  wp_ret.
   intro_visit_post.
 Qed.
 
 (* A specification of [visit']. *)
 
 Local Lemma wp_visit' :
-  ∀ m u _v v marked σ,
+  ∀ m u _v v rs marked σ γ started,
+  γ = (rs, marked, σ) →
+  inv γ u →
+  wf γ →
   isMarks m marked →
-  inv (marked, σ) u →
-  wf (marked, σ) →
   isInt _v v →
   0 ≤ v < n →
   edge (top σ) v →
-  wp (visit' (m, u) _v) (λ s', visit_post (marked, σ) {[v]} s').
+  started = (if decide (len σ = 1) then {[v]} else []) →
+  permitted (rs ++ started) →
+  wp (visit' (m, u) _v) (λ s', visit_post γ started {[v]} s').
 Proof.
   intros. unfold visit'. eapply wpd_visit; tc.
 Qed.
@@ -862,7 +1071,8 @@ Local Lemma visit_eq s ACC : ∀ _v,
     if (_v <? length m)%uint63 then
       do b ← get m _v ;
       if b then
-        s
+        do u ← hook (Rediscover _v) u ;
+        (m, u)
       else
         do m' ← set m _v true ;
         do u' ← hook (Enter _v) u ;
@@ -877,8 +1087,8 @@ Proof using foreach_successor_parametric.
   by dependent induction on s ACC. intros s ? ?.
   intros. simpl visit.
   destruct s as (m & u).
-  eapply IFC_if_dep; intro; [| eauto ].
-  eapply IFC_if_dep; intro; [ eauto |].
+  eapply IFC_if_dep; intro; [| solve [eauto] ].
+  eapply IFC_if_dep; intro; [ solve [eauto] |].
   (* Eliminate [do m' ← ...], which appears only on one side. *)
   unfold bind at 4.
   eapply bind_eq_dep; [ eauto | intro u' ].
@@ -909,22 +1119,30 @@ End FixedPoint.
 
 (* The postcondition of [traverse]. *)
 
-(* When [traverse] terminates, a set of vertices [marked'] has been
-   marked; the ghost stack is [σ']; and a DFS forest has been virtually
+(* When [traverse] terminates, all of the start vertices have been
+   visited, in an order determined by the list [rs]; a set of vertices
+   [marked] has been marked; and a DFS forest has been virtually
    constructed. (This forest does not exist at runtime.) *)
 
+(* The description below repeats (in part) the definition of [wf].
+   This is intended; thus, the postcondition of [traverse] can be
+   understood without looking up the definition of [wf]. *)
+
 Definition traverse_postcondition '(m, u) :=
-  ∃ marked σ vs,
+  ∃ rs marked σ vs,
   (* The array [m] tells which vertices have been marked. *)
   isMarks m marked ∧
   (* The user invariant holds. *)
-  inv (marked, σ) u ∧
-  (* The following four statements express the fact that the state
-     [(marked, σ)] is well-formed and final. *)
+  inv (rs, marked, σ) u ∧
   (* The ghost stack [σ] stores the forest [vs]. *)
   σ = Frame None vs :: [] ∧
   (* [vs] is a DFS forest. *)
   dfs marked vs ∧
+  (* [vs] is ordered by [rs]. *)
+  ordered rs vs ∧
+  (* The sequence [rs] has been produced by [foreach_start]. *)
+  (* This implies [list_to_set rs ≡ start]. *)
+  complete rs ∧
   (* The roots of the forest [vs] form a subset of the start vertices. *)
   roots vs ⊆ start ∧
   (* Every start vertex is marked. *)
@@ -939,27 +1157,41 @@ Proof.
   wp_op (wp_init (λ _, false)) introducing: m.
   { intros. wp_ret. }
   assert (isMarks m ∅) by eauto using isMarks_intro with lia.
+  (* In this loop on the start vertices, each vertex is both "started"
+     (i.e., it is a start vertex) and "examined" (i.e., it is a vertex).
+     This is visible in the loop invariant, where the list [started] is
+     used to instantiate two parameters of [visit_post], namely
+     [started] and [examined]. *)
   wp_op wp_foreach_start with invariant:
-    (λ examined s, visit_post γ0 examined s).
-  (* Compatibility. (This is a bit painful.) *)
-  { intros examined1 examined2 ?. intros (m' & u') ? <-.
-    split; intros; unpack; pack; eauto; set_solver. }
+    (λ started s, visit_post γ0 started (list_to_set started) s).
   (* Initialization. *)
   { intro_visit_post. }
   (* Preservation. *)
   { clear dependent m.
-    intros examined0 examined1 (m' & u') ?.
-    intros v ??? _v ?.
-    assert (v ∈ start) by set_solver.
-    elim_visit_post marked' σ'.
+    intros started0 started1 (m' & u') ?.
+    intros _v v ? ? Hpermitted.
+    subst started1.
+    assert (v ∈ start).
+    { apply permitted_spec in Hpermitted. set_solver. }
+    elim_visit_post rs' marked' σ' γ'. subst rs'.
+    assert (len σ' = 1) by tc.
     wp_op wp_visit' introducing: (m'' & u'').
-    elim_visit_post marked'' σ''.
+    elim_visit_post rs'' marked'' σ'' γ''. clarify. subst rs''.
+    assert (marked' ⊆ marked'') by tc.
+    assert (horizontal γ0 γ'') by eauto 2 using horizontal_transitive.
     intro_visit_post. }
   (* Completion. *)
-  { cbv beta. intros (m' & u') (examined & ? & ?).
-    elim_visit_post marked' σ'.
-    edestruct wf_completion' as (vs & ? & ? & ?); tc.
-    exists marked', σ', vs. pack; eauto with set_solver. }
+  { cbv beta. intros (m' & u') (started & ? & Hcomplete).
+    elim_visit_post rs' marked' σ' γ'. subst rs' γ'.
+    match goal with h: horizontal γ0 _ |- _ => destruction h end.
+    simpl concat in *.
+    destructWf.
+    match goal with f: forest vertex |- _ => rename f into vs end.
+    assert (Hfinished: list_to_set started ≡ start)
+      by eauto using complete_spec.
+    assert (roots vs ⊆ start).
+    { rewrite <- Hfinished. eauto using ordered_subset. }
+    do 4 eexists. pack; eauto 2 with marble set_solver. }
 Qed.
 
 End U.
@@ -967,9 +1199,9 @@ End U.
 (* -------------------------------------------------------------------------- *)
 
 (* We now define [traverse_pre], a simplified version of [traverse].
-   Instead of emitting both vertex-entry and vertex-exit events, this
-   function emits just vertex-entry events. Thus its [hook] function
-   expects just a vertex as a parameter, as opposed to an event. *)
+   Instead of emitting several kinds of events, this function emits
+   just vertex-entry events. Thus its [hook] function expects just a
+   vertex as a parameter, as opposed to an event. *)
 
 (* Because [traverse_pre] does not emit vertex-exit events, it is more
    efficient than [traverse]. It performs more tail calls and requires
@@ -980,14 +1212,14 @@ Section TraversePre.
 Context {U : Type}.
 Implicit Type u : U.
 
-(* [hook_pre] passes [Enter] events on to [hook] and ignores [Exit] events. *)
+(* [hook_pre] passes [Enter] events on to [hook] and ignores other events. *)
 
 Variable hook : _vertex → U → U.
 
 Local Definition hook_pre _e u :=
   match _e with
   | Enter _v => hook _v u
-  | Exit  _  => u
+  | _        => u
   end.
 
 (* [plain_traverse_pre] is just [traverse] applied to [hook']. *)
@@ -1065,21 +1297,25 @@ Proof.
   intros.
   rewrite traverse_pre_eq. unfold plain_traverse_pre.
   wp_op wp_traverse with invariant: (λ γ u,
-    let '(marked, σ) := γ in inv marked u
+    let '(rs, marked, σ) := γ in inv marked u
   ).
   (* Compatibility. (This is a bit painful.) *)
-  { intros (marked1 & σ1) (marked2 & σ2) Hequiv.
-    unfold equiv in Hequiv. hnf in Hequiv. simpl in Hequiv.
+  { intros ((rs1 & marked1) & σ1) ((rs2 & marked2) & σ2) Hequiv.
+    unfold equiv in Hequiv. hnf in Hequiv. unpack in Hequiv.
     intros u'' ? <-.
     split; intros; unpack; pack; eauto; set_solver. }
   (* Preservation. *)
-  { intros (marked0 & σ0) (marked1 & σ1) u ? ?.
-    intros _e e Hevent Hstep.
-    destructEvent; destructStep; unfold hook_pre.
-    (* [Enter]. *)
-    { wp_op wp_hook introducing: u'; eauto using wf_reaches'. proveInv. }
-    (* [Exit]. *)
-    { wp_ret. proveInv. }}
+  { intros γ0 γ1 u Hinv Hwf0 _e e Hevent Hstep Hperm.
+    assert (Hwf1: wf γ1) by eauto using wf_step.
+    destruct γ0 as ((rs0 & marked0) & σ0).
+    destruct γ1 as ((rs1 & marked1) & σ1).
+    apply permitted_spec in Hperm.
+    assert (reaches E start marked1).
+    { generalize (wf_reaches Hwf1 eq_refl); intro. set_solver. }
+    destructEvent; destructStep; unfold hook_pre; try solve [ wp_ret ].
+    (* Only the case of an [Enter] event is nontrivial. *)
+    wp_op wp_hook introducing: u'.
+    assumption. }
   (* Completion. *)
   { cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
     pack; eauto using omarked_is_closure_start. }
@@ -1091,9 +1327,9 @@ End TraversePre.
 (* -------------------------------------------------------------------------- *)
 
 (* We now define [traverse_post], a simplified version of [traverse].
-   Instead of emitting both vertex-entry and vertex-exit events, this
-   function emits just vertex-exit events. Thus its [hook] function
-   expects just a vertex as a parameter, as opposed to an event. *)
+   Instead of emitting several kinds of events, this function emits
+   just vertex-exit events. Thus its [hook] function expects just a
+   vertex as a parameter, as opposed to an event. *)
 
 Section TraversePost.
 
@@ -1101,14 +1337,14 @@ Context {U : Type}.
 Implicit Type u : U.
 
 (* [hook_post] passes [Exit] events on to [hook]
-   and ignores [Enter] events. *)
+   and ignores other events. *)
 
 Variable hook : _vertex → U → U.
 
 Local Definition hook_post _e u :=
   match _e with
-  | Enter _  => u
   | Exit  _v => hook _v u
+  | _        => u
   end.
 
 (* [plain_traverse_post] is just [traverse] applied to [hook_post]. *)
@@ -1176,9 +1412,7 @@ Qed.
 
 (* Lists of vertices. *)
 
-(* TODO if [isArray] was parameterized with a relation [_A → A → Prop]
-   then the predicate [isList] would not be needed. *)
-
+(* TODO move elsewhere *)
 Local Notation isList := (Forall2 isInt).
 
 (* -------------------------------------------------------------------------- *)
@@ -1216,12 +1450,14 @@ Proof.
     isList _vs (rev (postorder_stack σ))
   ).
   (* Compatibility. *)
-  { intros (marked0 & σ) (marked1 & σ') Hequiv.
+  { intros ((rs0 & marked0) & σ) ((rs1 & marked1) & σ') Hequiv.
     unfold equiv in Hequiv. hnf in Hequiv. unpack. subst σ'.
     intros _vs ? <-. tauto. }
+  (* Initialization. *)
+  { unfold γ0. simpl. tc. }
   (* Preservation. *)
-  { intros (marked & σ) (marked' & σ') _vs Hinv Hwf.
-    intros _e e Hevent Hstep.
+  { intros ((rs & marked) & σ) ((rs' & marked') & σ') _vs Hinv Hwf.
+    intros _e e Hevent Hstep Hperm.
     destructEvent; destructStep; unfold hook_post; wp_ret.
     (* [Enter]. *)
     { simpl. list. assumption. }
@@ -1234,7 +1470,7 @@ Proof.
   (* Completion. *)
   { intros (m & _vs).
     unfold traverse_postcondition.
-    intros (marked' & σ' & vs & Hpost). unpack.
+    intros (rs' & marked' & σ' & vs & Hpost). unpack.
     subst σ'. simpl in Hpost0.
     wp_ret. pack; eauto using omarked_is_closure_start. }
 Qed.
@@ -1293,6 +1529,8 @@ Definition plain_group : array int :=
         (* If the current root was [_v] then we are leaving a tree. *)
         do _root ← if _root =? _v then _none else _root ;
         G _group _root
+    | Rediscover _ =>
+        g
     end
   in
   do (m, g) ← traverse hook g ;
@@ -1320,17 +1558,19 @@ Local Definition correct σ root :=
    then this vertex is a valid vertex. Therefore it is not [n],
    which we use to encode "no vertex". *)
 
-Local Lemma wf_bottom_valid marked σ v :
-  wf (marked, σ) →
+Local Lemma wf_bottom_valid rs marked σ v :
+  wf (rs, marked, σ) →
+  permitted rs →
   bottom σ = Some v →
   0 ≤ v < n.
 Proof.
-  intros Hwf Hbottom.
+  intros Hwf Hperm Hbottom.
   (* [v] is marked. *)
   generalize (wf_bottom_marked Hwf); intro Hbm.
   rewrite Hbottom in Hbm. simpl in Hbm.
   (* Every marked vertex is reachable. *)
   generalize (wf_reaches Hwf eq_refl); intro Hreaches.
+  apply permitted_spec in Hperm.
   (* Therefore [v] is reachable. *)
   assert (v ∈ closure start) by set_solver.
   (* Therefore [v] is part of the universe. *)
@@ -1345,12 +1585,13 @@ Qed.
    test [root = none] is a correct way of determining whether
    we are currently at the top level. *)
 
-Local Lemma toplevel_test marked σ root :
-  wf (marked, σ) →
+Local Lemma toplevel_test rs marked σ root :
+  wf (rs, marked, σ) →
+  permitted rs →
   correct σ root →
   (len σ = 1 ↔ root = none).
 Proof.
-  unfold correct. intros Hwf Hinv. split; intro Heq;
+  unfold correct. intros Hwf Hperm Hinv. split; intro Heq;
     (destruct (decide (len σ = 1)); try tauto).
   (* The nontrivial subgoal is to prove that [root = none] implies
      [len σ = 1]. We have [bottom σ = Some root] and [root = none],
@@ -1366,18 +1607,19 @@ Proof. unfold correct. reflexivity. Qed.
 
 (* [root] is correctly updated when a vertex is entered. *)
 
-Local Lemma correct_enter marked σ v marked' σ' root root' :
-  wf (marked, σ) →
-  step (marked, σ) (Enter v) (marked', σ') →
+Local Lemma correct_enter rs marked σ v rs' marked' σ' root root' :
+  wf (rs, marked, σ) →
+  permitted rs →
+  step (rs, marked, σ) (Enter v) (rs', marked', σ') →
   correct σ root →
   root' = (if decide (root = none) then v else root) →
   (* len σ' = 1 ∧ *)
   correct σ' root'.
 Proof.
-  unfold correct. intros Hwf Hstep Hcorrect Hroot'.
+  unfold correct. intros Hwf Hperm Hstep Hcorrect Hroot'.
   assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
   destructStep. subst root'. wf_nonempty.
-  erewrite bottom_eq by eauto with wf.
+  erewrite bottom_eq by eauto using wf_step.
   destruct (decide (root = none));
   destruct (decide (len σ = 1)); try tauto; length;
   destruct (decide (len σ + 1 = 1)); try lia; eauto.
@@ -1386,23 +1628,23 @@ Qed.
 (* If [σ] is nonempty then [correct σ root] implies that [bottom σ]
    is [Some root]. *)
 
-Local Lemma correct_nonempty marked σ v ws σ0 root :
+Local Lemma correct_nonempty rs marked σ v ws σ0 root :
   σ = Frame (Some v) ws :: σ0 →
-  wf (marked, σ) →
+  wf (rs, marked, σ) →
   correct σ root →
   bottom σ = Some root.
 Proof.
   unfold correct. intros -> ? Hcorrect. length in Hcorrect.
-  destructWf. wf_nonempty.
+  destructWf.
   destruct (decide (len σ0 + 1 = 1)); try lia.
   assumption.
 Qed.
 
 (* [root] is correctly updated when a vertex is exited. *)
 
-Local Lemma correct_exit marked v ws σ σ0 σ' root root' :
+Local Lemma correct_exit rs marked v ws σ σ0 σ' root root' :
   σ = Frame (Some v) ws :: σ0 →
-  wf (marked, σ) →
+  wf (rs, marked, σ) →
   correct σ root →
   σ' = store v ws σ0 →
   (root' = if decide (root = v) then none else root) →
@@ -1431,12 +1673,12 @@ Local Hint Resolve correct_init correct_enter correct_exit : marble.
 (* The lemma there represents a root map ρ as a function, whereas
    we represent it here as a list. *)
 
-Lemma isRootMapStack_update marked σ ρ ρ' σ' v root' :
+Lemma isRootMapStack_update rs marked σ ρ ρ' σ' v root' :
   isRootMapStack (λ v, ρ !!! v) σ →
   ρ' = <[v:=root']> ρ →
   valid v ρ →
   σ' = Frame (Some v) Empty :: σ →
-  wf (marked, σ') →
+  wf (rs, marked, σ') →
   correct σ' root' →
   isRootMapStack (λ v, ρ' !!! v) σ'.
 Proof.
@@ -1475,7 +1717,7 @@ Proof.
   wp_bind_eq.
   wp_bind_eq.
   wp_op wp_traverse with invariant: (λ γ g,
-    let '(marked, σ) := γ in
+    let '(rs, marked, σ) := γ in
     let '(G _group _root) := g in
     ∃ ρ root,
     rich.isArray isInt _group ρ ∧
@@ -1486,19 +1728,20 @@ Proof.
     correct σ root
   ).
   (* Compatibility. *)
-  { intros (marked0 & σ) (marked1 & σ') Hequiv.
+  { intros ((rs0 & marked0) & σ) ((rs1 & marked1) & σ') Hequiv.
     unfold equiv in Hequiv. hnf in Hequiv. unpack. subst σ'.
     intros _vs ? <-. tauto. }
   (* Initialization. *)
   { simpl. pack; tc; length; tc. }
   (* Preservation. *)
   { clear dependent _group.
-    intros (marked & σ) (marked' & σ') [_group _root] Hinv Hwf.
+    intros ((rs & marked) & σ) ((rs' & marked') & σ').
+    intros (_group & _root) Hinv Hwf.
     destruct Hinv as (ρ & root & Hinv). unpack in Hinv.
-    intros _e e Hevent Hstep.
+    intros _e e Hevent Hstep Hperm.
+    assert (permitted rs) by eauto using step_prefix, permitted_prefix_of.
     assert (fact: len σ = 1 ↔ root = none) by eauto using toplevel_test.
-    destructEvent;
-    destructStep.
+    destructEvent; destructStep.
     (* Case [Enter]. *)
     {
       (* The definition of [root']. *)
@@ -1515,7 +1758,7 @@ Proof.
       wp_op rich.wp_set shadowing: _group.
       assert (len (<[v:=root']> ρ) = n) by (length; eauto).
       (* Return. *)
-      wp_ret. pack; eauto with marble wf.
+      wp_ret. pack; eauto using wf_step with marble. (* TODO slow *)
     }
     (* Case [Exit]. *)
     {
@@ -1531,17 +1774,19 @@ Proof.
         eauto with lia; exfalso; rewrite isInt_def in *; lia. }
       intros _root' (? & ?).
       (* Deductions. *)
-      destructWf. wf_nonempty.
+      destructWf.
       length in *. destruct (decide (len σ + 1 = 1)); [ lia |].
       assert (root ≠ none) by lia. (* aha! *)
       (* Return. *)
       wp_ret.
       pack; eauto with marble.
     }
+    (* Case [Rediscover]. *)
+    { wp_ret. pack; eauto. }
   }
   (* Completion. *)
   { clear dependent _group.
-    intros (m & [_group _root]) (marked' & σ' & vs & Hm & Hpost).
+    intros (m & [_group _root]) (rs' & marked' & σ' & vs & Hm & Hpost).
     unpack in Hpost. subst σ'.
     wp_ret. pack; tc. }
 Qed.
@@ -1568,6 +1813,44 @@ End Group.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Because (as explained above) the successors of each vertex are examined
+   in reverse order, we have to reverse the way in which we use [complete]
+   in our specifications. *)
+
+(* [complete rs] is replaced with [complete (rev rs)]. *)
+
+(* [permitted rs] is replaced with: [rev rs] is a SUFFIX of a complete
+   enumeration of the start vertices. *)
+
+(* This is a bit messy, but, up to these changes, the proofs go through
+   without deep trouble. *)
+
+Definition permitted_rev rs :=
+  ∃ rs', complete (rs' ++ rev rs).
+
+Local Notation perm_rev γ :=
+  (permitted_rev (history γ)).
+
+Local Lemma permitted_rev_nil : permitted_rev [].
+Proof.
+  destruct complete_nonempty as (rs & Hcomplete).
+  unfold permitted_rev. exists rs. list. eauto.
+Qed.
+
+Local Lemma permitted_rev_prefix rs1 rs2 :
+  permitted_rev (rs1 ++ rs2) → permitted_rev rs1.
+Proof.
+  unfold permitted_rev. intros (rs' & ?).
+  rewrite rev_app_distr in *. rewrite app_assoc in *. eauto.
+Qed.
+
+Local Hint Rewrite
+  @rev_app_distr
+  @rev_involutive
+: ulist clist.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Cascades. *)
 
 (* A cascade is a finite sequence of events,
@@ -1589,18 +1872,27 @@ Definition cascade :=
 
 (* [isCascade c γ] and [isHead h γ] mean that the cascade [c] or the head
    [h] represents a path, through the labeled transition system, from the
-   state [γ] to a final state. *)
+   state [γ] to a final state. The transition system is defined by:
+   - the initial state [γ0];
+   - the transition relation [step],
+     which is further constrained by [wf] and by [permitted];
+   - the final state property [horizontal γ0 _],
+     which is further constrained by [wf] and by [complete]. *)
 
 Inductive isHead : head → ghost → Prop :=
 | isHeadEvent :
     ∀ γ _e e γ' c ,
     isEvent _e e →
+    wf γ →
     step γ e γ' →
+    perm_rev γ' →
     wp (c()) (λ h, isHead h γ') → (* [isCascade c γ'] *)
     isHead (Event _e c) γ
 | isHeadDone :
     ∀ γ,
-    final γ →
+    wf γ →
+    horizontal γ0 γ →
+    complete (rev (history γ)) →
     isHead Done γ.
 
 Definition isCascade (c : cascade) (γ : ghost) :=
@@ -1671,6 +1963,7 @@ Defined.
 Local Fixpoint visit_cps m _v (ACC : Acc mlt m) (k : mbeyond m → head) : head :=
   IFC (_v <? length m)%uint63 THEN λ Hv,
   IFC get m _v THEN λ _,
+    Event (Rediscover _v) @@ λ '(),
     k (mrefl m)
   ELSE λ Hunmarked,
     let m' := set m _v true in
@@ -1733,13 +2026,11 @@ Local Lemma technical pushed0 pushed1 marked0 marked1 v w :
   {[w]} ⊆ marked1 →
   successors v ∖ pushed0 ⊆ marked1.
 Proof using RelDecision0. clear- RelDecision0.
-  (* [set_solver] is unable to prove this goal. *)
-  intros.
-  transitivity (successors v ∖ (pushed1 ∖ {[w]})).
-  + eapply difference_mono_l. set_solver.
-  + rewrite difference_difference_r. (* needs [RelDecision ∈]. *)
-    (* Now [set_solver] succeeds. *)
-    set_solver.
+  (* Strangely enough, [set_solver] proves this goal, but, in an earlier
+     version of this file, was unable to prove a similar goal.
+     Furthermore, in the context where this lemma is applied,
+     [set_solver] is unable to solve this goal. *)
+  set_solver.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1748,38 +2039,39 @@ Qed.
    In CPS style, instead, we define [isCont], the precondition of the
    continuation of [visit_cps]. It expresses the same information. *)
 
-(* [isCont k γ examined] means that the continuation [k] can be applied to
-   a marks array [m'] provided [m'] is corresponds to a ghost state [γ']
-   such that [γ] and [γ'] are similar (that is, their stacks are related
-   by [similar], and [γ'] has more marked vertices than [γ]) and such
-   that, in the state [γ'], the vertices in the set [examined] have been
-   marked. *)
+(* [isCont k γ started examined] means that the continuation [k] can be
+   applied to a marks array [m'] provided [m'] corresponds to a ghost
+   state [γ'] such that [γ] and [γ'] are related by [horizontal] and such
+   that, in the state [γ'], the start vertices in the list [started] have
+   been visited, and the vertices in the set [examined] have been marked. *)
 
 (* In [isCont], the argument of the continuation [k], a marks array, has
    type [mbeyond m]. *)
 
-Local Definition isCont {m} (k : mbeyond m → head) γ examined :=
-  let (marked, σ) := γ in
-  ∀ m' pf marked' σ' γ',
-  (marked', σ') = γ' →
-  isMarks m' marked' →
-  marked ⊆ marked' →
-  similar σ σ' →
+Local Definition isCont {m} (k : mbeyond m → head) γ started examined :=
+  let '(rs, marked, σ) := γ in
+  ∀ m' pf rs' marked' σ' γ',
   wf γ' →
+  perm_rev γ' →
+  horizontal γ γ' →
+  isMarks m' marked' →
+  γ' = (rs', marked', σ') →
+  rs' = rs ++ started →
   examined ⊆ marked' →
   wp (k (exist m' pf)) (λ h, isHead h γ').
 
 (* [isCont'] is a variant of [isCont] where the continuation [k] has a
    simple type, that is, the marks array has type [marks]. *)
 
-Local Definition isCont' (k : marks → head) γ examined :=
-  let (marked, σ) := γ in
-  ∀ m' marked' σ' γ',
-  (marked', σ') = γ' →
-  isMarks m' marked' →
-  marked ⊆ marked' →
-  similar σ σ' →
+Local Definition isCont' (k : marks → head) γ started examined :=
+  let '(rs, marked, σ) := γ in
+  ∀ m' rs' marked' σ' γ',
   wf γ' →
+  perm_rev γ' →
+  horizontal γ γ' →
+  isMarks m' marked' →
+  γ' = (rs', marked', σ') →
+  rs' = rs ++ started →
   examined ⊆ marked' →
   wp (k m') (λ h, isHead h γ').
 
@@ -1788,110 +2080,149 @@ Local Hint Resolve mle_mlt_trans : marble.
 (* The specification of [visit_cps]. *)
 
 Local Lemma wp_visit_cps m (ACC : Acc mlt m) :
-  ∀ _v v (k : mbeyond m → head) marked σ γ,
-  (marked, σ) = γ →
-  isMarks m marked →
+  ∀ _v v (k : mbeyond m → head) rs marked σ γ started,
   wf γ →
+  perm_rev γ →
+  isMarks m marked →
+  γ = (rs, marked, σ) →
   isInt _v v →
   0 ≤ v < n →
   edge (top σ) v →
-  isCont k γ {[v]} →
+  started = (if decide (len σ = 1) then {[v]} else []) →
+  permitted_rev (rs ++ started) →
+  isCont k γ started {[v]} →
   wp (visit_cps m _v ACC k) (λ h, isHead h γ).
 Proof.
   clear dependent foreach_start start_respects_bound.
   by dependent induction on m ACC. intros m ? ?.
-  intros. wp_last Hcont. subst γ.
+  intros. wp_last Hcont.
   simpl visit_cps.
   destructMarks. arrays.
+  assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
+  assert (perm_rev γ).
+  { unfold perm_rev; subst γ. eauto using permitted_rev_prefix. }
   wp_if; [| lia].
   wp_if.
   (* Case: [v] is marked already. *)
-  { unfold mrefl. wp_op Hcont; eauto with similar set_solver. }
+  { clear foreach_successor wp_foreach_successor IH.
+    (* Emit a [Rediscover] event. *)
+    set (rs' := rs ++ started).
+    set (γ' := (rs', marked, σ)).
+    assert (step γ (Rediscover v) γ').
+    { subst γ γ' started rs'. econstructor; try clarify; tc. }
+    assert (wf γ') by tc.
+    wp_ret. eapply isHeadEvent; tc.
+    (* Invoke [k]. *)
+    unfold mrefl. subst γ.
+    wp_op Hcont; eauto with horizontal set_solver.
+  }
   (* Case: [v] is unmarked. *)
   assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
     by eauto using isMarks_set.
   revert Hm'.
   set (m' := set m _v true).
+  set (rs' := rs ++ started).
   set (marked' := {[v]} ∪ marked).
   set (σ' := Frame (Some v) Empty :: σ).
+  set (γ' := (rs', marked', σ')).
   intro.
   (* Emit an [Enter] event. *)
-  assert (step (marked, σ) (Enter v) (marked', σ')).
-  { econstructor; tc. }
+  assert (step γ (Enter v) γ').
+  { subst γ γ' started rs' marked'.
+    econstructor; try clarify; eauto 2 with marble set_solver. }
+  assert (len σ' = len σ + 1) by tc.
   wp_ret. eapply isHeadEvent; tc.
+  assert (m' < m).
+  { eapply marking_decreases_weight; eauto. }
   (* We reach the loop on the successors of [v]. *)
   (* The loop invariant requires a little thought. As the loop progresses,
      the set [pushed] grows from ∅ to [successors v]. The current state of
      the loop is a continuation [k]. Initially, [k] is a continuation that
      expects all vertices to have been examined: it satisfies the formula
-     [isCont k γ' (successors v)]. At the end, [k] is a continuation that
-     needs no vertices to have been examined: it satisfies [isCont k γ' ∅].
-     Therefore the loop invariant is [isCont k γ' examined] where [examined]
-     is [successors v ∖ pushed]. *)
+     [isCont k γ' [] (successors v)]. At the end, [k] is a continuation
+     that needs no vertices to have been examined: it satisfies the
+     formula [isCont k γ' [] ∅]. Therefore the loop invariant should be
+     [isCont k γ' [] examined] where [examined] is [successors v ∖ pushed]. *)
   wp_op wp_foreach_successor with invariant: (
     λ pushed (k : mbeyond m' → head),
       let examined := successors v ∖ pushed in
-      isCont k (marked', σ') examined
+      isCont k γ' [] examined
   ).
-  (* Compatibility. *)
-  { do 6 intro. subst. unfold isCont. split; eauto with set_solver. }
+  (* Compatibility. (This is a bit painful.) *)
+  { intros pushed1 pushed2 ?. intros k' ? <-.
+    split; intros; unpack; pack; eauto; set_solver. }
   (* Initialization. *)
   (* In this subgoal, [pushed] is empty, so [examined] is [successors v].
      Therefore we are reasoning about the continuation that is invoked
      AFTER all successors have been examined. This corresponds to the code
      that would FOLLOW the loop in direct style. *)
   { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
-    unfold isCont. intros m'' ? marked'' σ'' ? <-. intros.
+    unfold isCont, γ'. fold γ'.
+    intros m'' ? rs'' marked'' σ'' γ''. intros. subst rs''.
     wp_bind_eq.
     (* The structure of the ghost stack has been preserved. *)
-    match goal with h: similar _ _ |- _ => rename h into Hpost2 end.
-    unfold σ' in Hpost2.
     assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
-    { inversion Hpost2. eauto. }
+    { eauto using horizontal_populates_top_frame. }
     set (marked''' := marked'').
     set (σ''' := store v vs σ).
+    set (γ''' := (rs', marked''', σ''')).
     (* Emit an [Exit] event. *)
-    assert (step (marked'', σ'') (Exit v) (marked''', σ''')).
-    { econstructor; eauto with set_solver. }
+    assert (step γ'' (Exit v) γ''').
+    { subst γ'' γ'''. list. econstructor; eauto with set_solver. }
+    assert (wf γ''') by tc.
+    assert (marked' ⊆ marked'') by tc.
     wp_ret. eapply isHeadEvent; tc.
-    (* Now return, by invoking [k]. *)
-    assert (wf (marked''', σ''')) by eauto with wf.
-    unfold mtrans. wp_op Hcont; unfold σ''';
-      eauto using similar_store with similar set_solver. }
+    (* Invoke [k]. *)
+    unfold mtrans. subst γ.
+    wp_op Hcont; eauto with horizontal set_solver. }
   (* Preservation. *)
   { wp_body pushed0 pushed1 k''
-      introducing: (fun _ => set_step w; intros _w ?).
-    assert (m' < m).
-    { eapply marking_decreases_weight; assumption. }
+      introducing: (fun _ => intros w ???; intros _w ?).
     (* The loop body constructs and returns a new continuation. *)
-    wp_ret. unfold isCont. intros m'' ? marked'' σ'' ? <-. intros.
-    (* We are now looking at a recursive call. *)
-    (* The state at this point is described by [marked''] and [σ''].
-       The vertex [w], a successor of [v], is about to be examined. *)
+    wp_ret. unfold isCont. unfold γ'; fold γ'. list.
+    intros m'' ? rs'' marked'' σ'' γ''. intros. subst rs''.
+    (* We are now looking at a recursive call. The state at this point is
+       described by [γ'']. The vertex [w], a successor of [v], is about to
+       be examined. *)
     assert (E v w) by set_solver.
-    wp_op IH; tc.
+    assert (edge (top σ') w) by eauto.
+    assert (len σ'' = len σ') by tc. (* [len σ'' ≠ 1] *)
+    assert (2 ≤ len σ'')%Z by lia.
+    wp_op IH; tc; destruct (decide (len σ'' = 1)); try lia; list.
+    { eauto using permitted_rev_prefix. }
     clear wp_foreach_successor IH. (* for clarity *)
     (* There remains to argue that [isCont ...] implies [isCont ...]. *)
-    unfold isCont in *. unfold mtrans.
-    eauto using technical with similar set_solver. }
+    (* In other words, we must argue that the recursive call has
+       re-established the loop invariant. *)
+    unfold γ', isCont in Hinv. fold γ' in Hinv.
+    subst γ''. unfold isCont, mtrans.
+    intros m''' ? rs''' marked''' σ''' γ'''. intros. subst rs'''.
+    assert (marked'' ⊆ marked''') by tc.
+    assert (horizontal γ' γ''') by eauto 2 using horizontal_transitive.
+    eapply Hinv; eauto using technical. }
   (* Completion. *)
   (* [pushed] is [successors v], so [examined] is empty. *)
   { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
     cbv beta zeta. intros k' (pushed & Hk' & Hpushed).
     (* There remains to argue that [isCont ...] implies [isCont ...]. *)
-    eauto with similar wf set_solver. }
+    assert (wf γ') by tc.
+    assert (horizontal γ' γ') by eauto with horizontal.
+    eapply Hk'; eauto using app_nil_r_sym with set_solver. }
 Qed.
 
 (* The specification of [visit_cps']. *)
 
-Local Lemma wp_visit_cps' m _v v (k : marks → head) marked σ γ :
-  (marked, σ) = γ →
-  isMarks m marked →
+Local Lemma wp_visit_cps' m _v v (k : marks → head) rs marked σ γ started :
   wf γ →
+  perm_rev γ →
+  isMarks m marked →
+  γ = (rs, marked, σ) →
   isInt _v v →
   0 ≤ v < n →
   edge (top σ) v →
-  isCont' k γ {[v]} →
+  started = (if decide (len σ = 1) then {[v]} else []) →
+  permitted_rev (rs ++ started) →
+  isCont' k γ started {[v]} →
   wp (visit_cps' m _v k) (λ h, isHead h γ).
 Proof.
   intros. subst γ. unfold visit_cps'.
@@ -1903,9 +2234,10 @@ Qed.
 
 (* The specification of [traverse_cps]. *)
 
-(* The postcondition is simple: [traverse_cps] returns a cascade
-   of events that obeys the labeled transition system defined by the
-   initial state [γ0], the relation [step], and the predicate [final]. *)
+(* The postcondition is simple: [traverse_cps] returns a cascade of events
+   that obeys the labeled transition system defined by the initial state
+   [γ0], the relation [step], and the predicate [horizontal γ0], which
+   identifies the final states. *)
 
 Lemma wp_traverse_cps :
   wp traverse_cps (λ c, isCascade c γ0).
@@ -1915,29 +2247,69 @@ Proof.
   { intros. wp_ret. }
   assert (isMarks m ∅) by eauto using isMarks_intro with lia.
   (* Build the final continuation. *)
-  eapply wp_bind with (P := λ k, isCont' k γ0 start).
-  { wp_ret. unfold isCont'. simpl. intros. subst.
-    wp_ret. eapply isHeadDone. eauto using wf_similar_final. }
+  eapply wp_bind with (P := λ k,
+    ∀ started, complete (rev started) →
+    isCont' k γ0 started start
+  ).
+  { wp_ret. intros started Hstarted.
+    unfold isCont'. unfold γ0; fold γ0. simpl. intros. subst.
+    wp_ret. eapply isHeadDone; assumption. }
   intros k Hk.
   (* Push the start vertices onto the continuation. *)
-  wp_op wp_foreach_start with invariant:
-    (λ pushed k, isCont' k γ0 (start ∖ pushed)).
-  (* Compatibility. *)
-  { do 6 intro. subst. unfold isCont'. split; eauto with set_solver. }
+  (* The loop invariant, specialized with [pushed := ∅], matches the
+     specification of the final continuation that we have given above.
+     This loop invariant is a bit subtle. We do not know, ahead of time,
+     in what order the start vertices will be produced by [foreach_start].
+     At a given point in time, we do have access to the list of start
+     vertices already produced; it is the list [pushed]. We quantify over
+     all possible orders in which the remaining start vertices might be
+     produced: this is the list [started]. This quantification is subject
+     to the constraint that [pushed ++ rev started] is a complete
+     enumeration of the start vertices. *)
+  wp_op wp_foreach_start with invariant: (λ pushed k,
+    ∀ started,
+    complete (pushed ++ rev started) →
+    isCont' k γ0 started (start ∖ list_to_set pushed)
+  ).
   (* Initialization. *)
-  { unfold isCont' in *. eauto with set_solver. }
+  { unfold γ0, isCont' in *. intros. list in *.
+    eapply Hk; eauto with set_solver. }
   (* Preservation. *)
   { wp_body pushed0 pushed1 k''
-      introducing: (fun _ => set_step w; intros _w ?).
+      introducing: (fun _ => intros _v v ?? Hpermitted).
+    subst pushed1.
+    assert (v ∈ start).
+    { apply permitted_spec in Hpermitted. set_solver. }
     (* The loop body constructs and returns a new continuation. *)
-    wp_ret. unfold isCont'. intros m'' marked'' σ'' ? <-. intros.
-    assert (edge (top [Frame None Empty]) w) by set_solver.
-    wp_op wp_visit_cps'; eauto with similar set_solver.
+    wp_ret. intros started Hstarted. list in Hstarted.
+    unfold isCont'. unfold γ0; fold γ0.
+    intros m' rs' marked' σ' γ'. simpl. intros. subst rs'.
+    assert (len σ' = 1) by tc.
+    wp_op wp_visit_cps'; eauto.
+    { clarify. list.
+      (* To prove that [started ++ {[v]}] is reverse permitted,
+         we use the fact that [{[v]} ++ rev started] is a suffix
+         of a complete list. *)
+      unfold permitted_rev. list. eauto. }
     (* There remains to argue that [isCont' ...] implies [isCont' ...]. *)
-    unfold isCont' in *. eauto 3 with similar wf set_solver. }
+    unfold isCont' in *.
+    unfold γ0 in Hinv; fold γ0 in Hinv.
+    match goal with h: γ' = _ |- _ => rewrite h; rewrite <- h end.
+    clarify. list.
+    intros m'' rs'' marked'' σ'' γ''. intros. subst rs''.
+    assert (horizontal γ0 γ'') by eauto 2 using horizontal_transitive.
+    assert (marked' ⊆ marked'') by tc.
+    assert (complete (pushed0 ++ rev (started ++ {[v]}))).
+    { list. assumption. }
+    eapply Hinv; eauto with set_solver. }
   (* Completion. *)
-  { intros k' (pushed & Hk' & Hpushed).
-    wp_ret. unfold isCascade. eauto with similar wf set_solver. }
+  { intros k' (pushed & Hk' & Hcomplete).
+    wp_ret. unfold isCascade.
+    assert (perm_rev γ0).
+    { unfold perm_rev, γ0. eapply permitted_rev_nil. }
+    assert (complete (pushed ++ rev [])).
+    { list. assumption. }
+    eapply Hk'; eauto using wf_init with horizontal set_solver. }
 Qed.
 
 End G.

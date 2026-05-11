@@ -1079,17 +1079,19 @@ Variable V : Type.
 Variable E : V → V → Prop.
 Local Notation dfs := (@dfs V E).
 
-(* We work with two kinds of observable events. [Enter v] means that the
-   vertex [v] has just been discovered and entered; we are about to
-   explore its successors. [Exit v] means that all of the descendants of
-   [v] have been explored; we about to come back up out of [v]. The
-   sequence of all [Enter] events is a "pre-order" enumeration of the
-   vertices; the sequence of all [Exit] events is a "post-order"
-   enumeration of the vertices. *)
+(* We work with three kinds of (possibly) observable events. [Enter v]
+   means that the vertex [v] has just been discovered and entered; we are
+   about to explore its successors. [Exit v] means that all of the
+   descendants of [v] have been explored; we about to come back up out of
+   [v]. [Rediscover v] means that the vertex [v] is being considered
+   again, but is already marked. The sequence of all [Enter] events is a
+   "pre-order" enumeration of the vertices; the sequence of all [Exit]
+   events is a "post-order" enumeration of the vertices. *)
 
 Inductive event :=
-| Enter : V → event
-| Exit  : V → event.
+| Enter      : V → event
+| Exit       : V → event
+| Rediscover : V → event.
 
 (* A stack is a (nonempty) list of stack frames. *)
 
@@ -1120,18 +1122,18 @@ Definition stack :=
 Implicit Type ov : option V.
 Implicit Type σ : stack.
 
-(* The start vertices of the traversal. *)
-
-Variable start : set V.
-
 (* [edge ov w] means that there is an edge from [ov] to [w] in the graph
-   [E], extended with an edge of the entry vertex [None] to every start
-   vertex. *)
+   [E]. When [ov] is [None], [w] is allowed to be an arbitrary vertex. One
+   might think that in this case we should require [w ∈ start]. There is
+   no need for this constraint; in this case [w] will be recorded in the
+   list [rs], and the user can keep track of the fact that every vertex
+   [rs] is a start vertex. This approach removes the need to mention the
+   set [start] here. *)
 
 Definition edge ov w :=
   match ov with
   | Some v => E v w
-  | None   => w ∈ start
+  | None   => True
   end.
 
 (* The trace of a stack is the set of vertices that appear directly in the
@@ -1183,20 +1185,38 @@ Qed.
    state, and the corresponding observable events, as the depth-first
    search traversal progresses. *)
 
-(* A state [γ] is a pair of a set of vertices [marked] and a stack [σ]. *)
+(* A state [γ] is a tuple of
+   - a list of root vertices [rs],
+   - a set of vertices [marked],
+   - a stack [σ]. *)
+
+(* [rs] is the list of the start vertices that have been enumerated
+   so far; their order matters. [marked] is the set of the vertices
+   that have been visited so far (therefore marked). [σ] is the
+   current stack. *)
 
 Definition state : Type :=
-  (set V * stack).
+  (list V * set V * stack).
 
 Implicit Type γ : state.
 
-(* [step γ e γ'] means that the system can evolve from [γ] to [γ']] while
+Global Instance equiv_state : Equiv state :=
+  λ '(rs0, marked0, σ0) '(rs1, marked1, σ1),
+  rs0 = rs1 ∧ marked0 ≡ marked1 ∧ σ0 = σ1.
+
+(* We write [γ0] for the initial state, where no root vertex has been
+   visited, no vertex is marked, and the stack is empty. *)
+
+Definition γ0 : state :=
+  ([], ∅, Frame None Empty :: []).
+
+(* [step γ e γ'] means that the system can evolve from [γ] to [γ'] while
    emitting the observable event [e]. *)
 
 Inductive step : state → event → state → Prop :=
 
 | StepEnter:
-    ∀ marked σ marked' σ' w,
+    ∀ rs marked σ rs' marked' σ' w,
     (* If [w] is an unmarked child of the top stack vertex, *)
     edge (top σ) w →
     w ∉ marked →
@@ -1205,14 +1225,17 @@ Inductive step : state → event → state → Prop :=
     (* and a new frame, carrying [w] together with an empty forest,
        can be pushed onto the stack. *)
     σ' = Frame (Some w) Empty :: σ →
+    (* If the stack currently has height 1 (its minimal height),
+       then [w] is a root vertex and is recorded in [rs]. *)
+    rs' = (if decide (length σ = 1) then rs ++ {[w]} else rs) →
     (* This transition corresponds to the event [Enter w]. *)
     step
-      (marked, σ)
+      (rs, marked, σ)
       (Enter w)
-      (marked', σ')
+      (rs', marked', σ')
 
 | StepExit:
-    ∀ marked σ w ws σ0 marked' σ',
+    ∀ rs marked σ w ws σ0 σ',
     (* Suppose the top stack frame contains [w] and its children [ws]. *)
     σ = Frame (Some w) ws :: σ0 →
     (* If all children of [w] are marked *)
@@ -1220,127 +1243,229 @@ Inductive step : state → event → state → Prop :=
     (* then the top stack frame can be popped, and the tree [w/ws] can be
        stored in the previous frame. *)
     σ' = store w ws σ0 →
-    (* The set of marked vertices is unchanged. *)
-    marked' ≡ marked →
     (* This transition corresponds to the event [Exit w]. *)
     step
-      (marked, σ)
+      (rs, marked, σ)
       (Exit w)
-      (marked', σ').
+      (rs, marked, σ')
 
-(* Not every stack is well-formed. A stack is well-formed only if it
-   corresponds to the beginning of a well-formed DFS forest. *)
+| StepRediscover:
+    ∀ rs marked σ w rs',
+    (* If [w] is a marked child of the top stack vertex, *)
+    edge (top σ) w →
+    w ∈ marked →
+    (* then [w] can be rediscovered. *)
+    (* If the stack currently has height 1 (its minimal height),
+       then [w] is a new root vertex and is recorded in [rs]. *)
+    rs' = (if decide (length σ = 1) then rs ++ {[w]} else rs) →
+    step
+      (rs, marked, σ)
+      (Rediscover w)
+      (rs', marked, σ).
 
-(* [wf (marked, σ)] means that the state [(marked, σ)] is well-formed:
-   starting with an empty set of marked vertices, one may reach a state
-   where the set of marked vertices is [marked] and the stack is [σ]. *)
+(* -------------------------------------------------------------------------- *)
+
+(* [wf γ] means that the state [γ] is well-formed. *)
+
+(* Our definition of [wf] combines the predicates [dfs] and [ordered],
+   which concern forests, and extends them to states, which contain a
+   partial forest (in the process of being constructed). *)
+
+(* [wf] records all of the information that is needed in order to
+   guarantee that, eventually, the depth-first search algorithm produces a
+   complete forest that satisfies the desired properties. It can be viewed
+   as the loop invariant of the depth-first search algorithm. *)
+
+(* The conditions that we require in the base case, [WfNil], concern
+   a complete forest. *)
+
+(* We do not require [list_to_set rs ⊆ start], which means that every
+   vertex in [rs] is a start vertex, or more generally, [permitted rs],
+   which keeps track of a certain property of the list [rs]. We let the
+   user keep track of this property. *)
 
 Inductive wf : state → Prop :=
 
 | WfNil:
-    ∀ marked vs ,
-    (* If [vs] is a well-formed DFS forest *)
+    ∀ rs marked vs ,
+    (* [vs] must be a well-formed DFS forest. *)
+    (* This implies [marked ≡ support vs]. *)
     dfs ∅ marked vs →
-    (* and if every root of [vs] is a start vertex *)
-    roots vs ⊆ start →
-    (* then a stack that consists of just one frame, containing the entry
-       vertex [None] and the forest [vs], is well-formed. *)
-    wf (marked, Frame None vs :: [])
+    (* [vs] must be ordered by [rs]. *)
+    (* This implies [roots vs ⊆ list_to_set rs]. *)
+    ordered rs vs →
+    (* Every vertex in [rs] must be marked. *)
+    list_to_set rs ⊆ marked →
+    (* The stack consists of just one frame, containing the entry
+       vertex [None] and the forest [vs]. *)
+    wf (rs, marked, Frame None vs :: [])
 
 | WfDeep:
-    ∀ mmarked σ omarked w ws ,
-    (* If the stack [σ] is well-formed, *)
-    wf (mmarked, σ) →
-    (* If [w] is an unmarked child of the top stack vertex, *)
+    ∀ mrs mmarked σ omarked w ws ors ,
+    (* The stack [σ] must be well-formed. *)
+    wf (mrs, mmarked, σ) →
+    (* The previous condition implies that [σ] is nonempty.
+       We make this requirement explicit anyway, for convenience. *)
+    1 ≤ length σ →
+    (* [w] must be an unmarked child of the top stack vertex. *)
     edge (top σ) w →
     w ∉ mmarked →
-    (* If, after marking [w], a forest [ws] of children of [w] has
-       been traversed, *)
+    (* After marking [w], a forest [ws] of children of [w] must have
+       been traversed. *)
     dfs ({[w]} ∪ mmarked) omarked ws →
     outof E {[w]} (roots ws) →
-    (* Then the stack [σ], extended with one frame that contains [w]
-       and [ws], is well-formed. *)
-    wf (omarked, Frame (Some w) ws :: σ).
+    (* If [σ] has height 1 then [w] will become the root of a new
+       tree; this must be recorded in the history of root vertices. *)
+    (ors = if decide (length σ = 1) then mrs ++ {[w]} else mrs) →
+    (* The stack is [σ], extended with one frame that contains
+       the vertex [w] and the subforest [ws]. *)
+    wf (ors, omarked, Frame (Some w) ws :: σ).
 
 Local Hint Constructors wf : wf.
 
-(* A state [(marked, σ)] is final if every start vertex is marked and
-   [σ] consists of a single frame. If this state is well-formed, then
-   the fact that there is a single frame can be expressed by writing
-   [top σ = None]. *)
+(* A state is final if [σ] consists of a single frame. In a well-formed
+   state, the fact that there is a single frame can be expressed by
+   writing [top σ = None] or [length σ = 1]. *)
 
-Inductive final : state → Prop :=
-| Final :
-    ∀ marked σ,
-    start ⊆ marked →
-    top σ = None →
-    final (marked, σ).
+(* We do not require [start ⊆ marked], although we could. The user can
+   keep track of the fact that they have enumerated all start vertices,
+   [start ⊆ list_to_set rs], and deduce [start ⊆ marked]. *)
 
-(* Hints for the proofs that follow. *)
+(* A state [γ] is final if and only if [horizontal γ0 γ] holds.
+   We use this as an (implicit) definition, and do not explicitly
+   define a predicate [final γ].  *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Hints and tactics for the proofs that follow. *)
+
+Hint Constructors ordered : ordered.
+
+Hint Resolve
+  ordered_empty
+  ordered_singleton
+  ordered_concat
+  ordered_skip_right
+: ordered.
 
 Local Hint Resolve dfs_concat : dfs.
+
+Local Hint Rewrite
+  @list_to_set_nil
+  @list_to_set_singleton
+  @list_to_set_app
+  using tc
+: sets.
+
+Local Ltac sets :=
+  autorewrite with sets.
 
 Local Hint Extern 1 (roots (concat _ _) ⊆ _) =>
   rewrite roots_concat
 : set_solver.
 
-(* A stack that contains just one empty frame is well-formed. *)
+Local Hint Extern 1 (_ ## _) =>
+  set_solver
+: set_solver.
 
-Lemma wf_init :
-  wf (∅, Frame None Empty :: []).
+Local Hint Extern 1 (list_to_set _ ⊆ _) =>
+  sets
+: set_solver.
+
+(* [clarify] looks for a subterm of the form [(decide _)] in the goal
+   or in a hypothesis, and performs a case analysis. It tries to kill
+   the branches by finding a contradiction. *)
+
+Local Ltac kill :=
+  try solve [ length in *; lengths; lia | congruence | tauto ].
+
+Local Ltac clarify :=
+  case_decide; kill.
+
+(* [destructWf] destructs a hypothesis of the form [wf _] and attempts
+   to kill the branches. *)
+
+(* We use [destruction], which uses [inversion], because [dependent
+   destruction] sometimes produces unexpected results. *)
+
+Ltac destructWf :=
+  match goal with h: wf _ |- _ => destruction h; kill end;
+  repeat match goal with Heq: Frame _ _ :: _ = Frame _ _ :: _ |- _ =>
+    injection Heq; clear Heq; intros; subst
+  end.
+
+(* [inductionWf] performs induction on a goal of the form
+   [∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) → ...]. *)
+
+Local Ltac inductionWf :=
+  induction 1; intros ??? Heq;
+  injection Heq; clear Heq; intros <- <- <-;
+  try match goal with IH: ∀ rs marked σ, _ = _ → _ |- _ =>
+    specialize (IH _ _ _ eq_refl)
+  end.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Consequences of [step]. *)
+
+Lemma step_prefix rs marked σ e rs' marked' σ' :
+  step (rs, marked, σ) e (rs', marked', σ') →
+  rs `prefix_of` rs'.
 Proof.
-  intros. eapply WfNil; eauto with dfs set_solver.
+  inversion 1; subst; repeat clarify; eauto using prefix_app_r.
 Qed.
 
-(* The transition system preserves well-formedness. *)
+(* -------------------------------------------------------------------------- *)
 
-Lemma wf_step :
-  ∀ γ e γ',
-  step γ e γ' →
-  wf γ →
-  wf γ'.
+(* Consequences of well-formedness. *)
+
+(* A well-formed stack has length at least 1. *)
+
+(* This lemma seems now unused, because this remark has been built
+   into the constructor [WfBottom]. *)
+
+Lemma wf_nonempty :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  1 ≤ length σ.
 Proof.
-  induction 1; intros Hwf.
-  (* Case: [StepEnter]. *)
-  { dependent destruction Hwf; eauto with wf dfs set_solver. }
-  (* Case: [StepExit]. *)
-  { dependent destruction Hwf.
-    dependent destruction Hwf;
-    econstructor; eauto with dfs set_solver. }
+  inductionWf; length; lia.
 Qed.
 
-(* If the stack has just one frame then this frame holds a DFS forest [vs]
-   whose roots form a subset of [start]. *)
+(* [top σ = None] is equivalent to [length σ = 1]. *)
 
-Lemma wf_completion marked σ :
-  wf (marked, σ) →
-  top σ = None →
-  ∃ vs,
-  σ = Frame None vs :: [] ∧
-  dfs ∅ marked vs ∧
-  roots vs ⊆ start.
+(* This condition itself is equivalent to [length σ ≤ 1]. *)
+
+Lemma top_None :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  top σ = None ↔ length σ = 1.
 Proof.
-  intros Hwf ?. dependent destruction Hwf.
-  { eauto. }
-  { exfalso. simpl in *. congruence. }
+  inductionWf; simpl top; length.
+  { tauto. }
+  { assert (Some w ≠ None) by congruence.
+    assert (length σ + 1 ≠ 1) by lia.
+    tauto. }
+Qed.
+
+(* Every vertex in [rs] is marked. *)
+
+Lemma wf_rs_marked :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  list_to_set rs ⊆ marked.
+Proof.
+  inductionWf.
+  { assumption. }
+  { dfs_monotonic. subst ors. case_decide; sets; set_solver. }
 Qed.
 
 (* The trace of a well-formed stack is a subset of [marked]. *)
 
 (* In other words, every vertex in the trace is marked. *)
 
-Lemma wf_trace_marked γ :
-  wf γ →
-  ∀ marked σ,
-  γ = (marked, σ) →
+Lemma wf_trace_marked :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
   trace σ ⊆ marked.
 Proof.
-  induction 1; intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  [| specialize (IHwf _ _ eq_refl) ];
-  simpl trace.
-  { set_solver. }
-  { dfs_monotonic. set_solver. }
+  inductionWf; simpl trace; dfs_monotonic; set_solver.
 Qed.
 
 (* The top vertex [top σ] is part of the trace. *)
@@ -1353,8 +1478,8 @@ Proof.
   induction σ as [| [ ? ?] σ ]; simpl; set_solver.
 Qed.
 
-Lemma wf_top_marked marked σ :
-  wf (marked, σ) →
+Lemma wf_top_marked rs marked σ :
+  wf (rs, marked, σ) →
   option_to_set (top σ) ⊆ marked.
 Proof.
   intros Hwf. transitivity (trace σ).
@@ -1362,181 +1487,285 @@ Proof.
   + eauto using wf_trace_marked.
 Qed.
 
-(* If one starts from an empty set of marked vertices, then at any
-   time, the marked vertices are reachable from the start vertices,
-   and so is the vertex [top σ]. (In fact, every vertex) *)
+(* The marked vertices are reachable from [rs]. *)
 
-Lemma wf_reaches γ :
-  wf γ →
-  ∀ marked σ ,
-  γ = (marked, σ) →
-  reaches E start marked. (* [marked ⊆ closure E start] *)
+Lemma wf_reaches :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  reaches E (list_to_set rs) marked.
+  (* [marked ⊆ closure E (list_to_set rs)] *)
 Proof.
-  (* This proof feels abnormally difficult. Maybe we are missing some
+  (* This proof feels abnormally difficult. Maybe I am missing some
      lemmas, or maybe they exist but I did not find them. *)
-  intros Hwf. dependent induction Hwf;
-  match goal with h: dfs _ _ _ |- _ => rename h into Hdfs end;
-  intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  dfs_monotonic;
-  generalize (dfs_determines_omarked Hdfs);
-  generalize (reaches_roots_support Hdfs);
-  intros.
-  (* Case [WfNil]. *)
-  { set_solver. }
-  (* Case [WfDeep]. *)
-  { specialize (IHHwf _ _ eq_refl).
+  inductionWf; dfs_monotonic;
+  match goal with hdfs: dfs _ _ _ |- _ =>
+    generalize (dfs_omarked_choice hdfs);
+    generalize (reaches_roots_support hdfs);
+    intros
+  end.
+  (* Case: [WfNil]. *)
+  {  match goal with h: ordered _ _ |- _ =>
+      generalize (ordered_subset h); intro end.
+    set_solver. }
+  { eapply subset_transitive; [ eassumption |].
     (* [top σ] is marked, therefore is reachable. *)
     assert (option_to_set (top σ) ⊆ mmarked) by eauto using wf_top_marked.
     (* Because [w] is a successor of [top σ], [w] is reachable, too. *)
-    assert (reaches E start {[w]}).
+    assert (reaches E (list_to_set ors) {[w]}).
     { destruct (top σ) eqn:Heq; unfold edge in *.
       + assert (reaches E {[v]} {[w]})
           by eauto using prove_reaches_singleton_singleton.
+        assert (length σ ≠ 1).
+        { rewrite <- top_None by eauto. congruence. }
+        subst ors. clarify.
         eauto using reaches_transitive, subset_transitive.
-      + eauto using prove_reaches_self with set_solver. }
+      + rewrite top_None in * by eauto. clarify. subst ors. sets.
+        eauto using prove_reaches_self with set_solver. }
     (* [w] reaches its successors. *)
     assert (image E {[w]} ⊆ closure E {[w]}).
     { eauto using prove_image_subset_closure. }
     (* Therefore [w] reaches [roots ws]. *)
     assert (reaches E {[w]} (roots ws)).
     { set_solver. }
-    (* [start] reaches [w] reaches [roots ws] reaches [support ws]. *)
-    assert (reaches E start (support ws))
+    (* [ors] reaches [w] reaches [roots ws] reaches [support ws]. *)
+    assert (reaches E (list_to_set ors) (support ws))
       by eauto using reaches_transitive.
+    (* [ors] contains [mrs] which reaches [mmarked]. *)
+    assert (list_to_set mrs ⊆ (list_to_set ors : set V)).
+    { subst ors. clarify; sets; set_solver. }
     (* The result follows. *)
     set_solver. }
 Qed.
 
-(* A corollary. *)
+(* -------------------------------------------------------------------------- *)
 
-Lemma wf_reaches' marked σ w :
-  wf (marked, σ) →
-  edge (top σ) w →
-  reaches E start (marked ∪ {[w]}).
+(* Construction and preservation and well-formedness. *)
+
+(* The initial state is well-formed. *)
+
+Lemma wf_init :
+  wf ([], ∅, Frame None Empty :: []).
 Proof.
-  (* Also abnormally difficult. *)
-  intros Hwf Hedge.
-  generalize (wf_reaches Hwf eq_refl); intros Homarked.
-  eapply prove_subset_union_left; [ exact Homarked |].
-  assert (option_to_set (top σ) ⊆ marked) by eauto using wf_top_marked.
-  destruct (top σ); unfold edge in *; simpl in *.
-  + assert (reaches E {[v]} {[w]})
-      by eauto using prove_reaches_singleton_singleton.
-    eauto using reaches_transitive, subset_transitive.
-  + eauto using prove_reaches_self with set_solver.
+  intros. eapply WfNil; eauto with dfs ordered set_solver.
 Qed.
 
-(* A well-formed stack has length at least 1. *)
+(* The transition system preserves well-formedness. *)
 
-Lemma wf_nonempty marked σ :
-  wf (marked, σ) →
-  1 ≤ length σ.
+Lemma wf_step γ e γ' :
+  step γ e γ' →
+  wf γ → wf γ'.
 Proof.
-  intros Hwf. dependent destruction Hwf; subst; length.
-  + lia.
-  + unfold stack in *. lengths. lia.
+  induction 1; intros Hwf.
+  (* Case: [StepEnter]. *)
+  { clarify; subst.
+    (* Subcase: [length σ = 1]. *)
+    { destructWf. econstructor; length; eauto with lia dfs set_solver. }
+    (* Subcase: [length σ ≠ 1]. *)
+    { econstructor; try clarify;
+        eauto using wf_nonempty with dfs set_solver. }}
+  (* Case: [StepExit]. *)
+  { destructWf. dfs_imarked. dfs_omarked. dfs_monotonic.
+    clarify; destructWf.
+    (* Subcase: [length σ0 = 1]. *)
+    { econstructor; eauto with dfs ordered set_solver. }
+    (* Subcase: [length σ0 ≠ 1]. *)
+    { clarify; econstructor;
+        repeat clarify; eauto with dfs ordered set_solver. }}
+  (* Case: [StepRediscover]. *)
+  { clarify; subst. destructWf.
+    econstructor; eauto with ordered set_solver. }
 Qed.
 
-Ltac wf_nonempty :=
-  repeat match goal with
-  | h : wf _ |- _ => generalize (wf_nonempty h); revert h
-  end; intros.
+(* -------------------------------------------------------------------------- *)
 
 (* Between the moment where a vertex is entered and the moment where this
    vertex is exited, the stack does not change at all, except possibly in
    the top frame, where new trees can be stored. *)
 
-(* The proposition [similar σ σ'] describes this evolution. *)
+(* [horizontal γ γ'] describes this well-bracketed evolution. *)
 
-Inductive similar : stack → stack → Prop :=
-| Sim :
-    ∀ ov vs1 vs2 vs σ,
+(* Furthermore, [rs] and [marked] can only grow. *)
+
+(* Furthermore, if the height of the stack is greater than 1 then [rs]
+   cannot change at all. TODO encode this, if needed *)
+
+Inductive horizontal : state → state → Prop :=
+| Horiz :
+    ∀ rs rs' marked marked' ov vs1 vs2 vs σ,
+    rs `prefix_of` rs' →
+    marked ⊆ marked' →
     concat vs1 vs2 = vs →
-    similar (Frame ov vs1 :: σ) (Frame ov vs :: σ).
+    horizontal
+      (rs, marked, Frame ov vs1 :: σ)
+      (rs', marked', Frame ov vs :: σ).
 
-(* [similar] is reflexive, except in the special case of an empty stack,
-   which is not well-formed. *)
+(* [horizontal] is reflexive (in a lax sense). That is, the stack [σ]
+   can remain unchanged, while the other two components evolve. *)
 
-Lemma similar_reflexive marked σ :
-  wf (marked, σ) →
-  similar σ σ.
+Lemma horizontal_reflexive rs rs' marked marked' σ γ γ' :
+  wf (rs, marked, σ) →
+  rs `prefix_of` rs' →
+  marked ⊆ marked' →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ) →
+  horizontal γ γ'.
 Proof.
-  inversion 1; subst;
-  eapply Sim with (vs2 := Empty);
-  eapply concat_empty.
+  intros Hwf ?? -> ->.
+  (* [σ] must be nonempty. *)
+  destruct σ as [| [ ov vs ] σ ]; [ destructWf |].
+  eapply Horiz with (vs2 := Empty); eauto using concat_empty.
 Qed.
 
-(* [similar] is transitive. *)
+(* [horizontal] is transitive. *)
 
-Lemma similar_transitive σ1 σ2 σ3 :
-  similar σ1 σ2 →
-  similar σ2 σ3 →
-  similar σ1 σ3.
+Lemma horizontal_transitive γ1 γ2 γ3 :
+  horizontal γ1 γ2 →
+  horizontal γ2 γ3 →
+  horizontal γ1 γ3.
 Proof.
   inversion 1; inversion 1; subst. econstructor.
-  rewrite concat_associative. eauto.
+  + etransitivity; eauto.
+  + set_solver.
+  + rewrite concat_associative. eauto.
 Qed.
 
-(* Two similar stacks have the same top vertex. *)
+(* Going up, horizontally, then down, amounts to going horizontally. *)
 
-Lemma similar_same_top σ σ' :
-  similar σ σ' →
+Lemma enter_exit_horizontal γ v γ' γ'' γ''' :
+  wf γ →
+  step γ (Enter v) γ' →
+  horizontal γ' γ'' →
+  step γ'' (Exit v) γ''' →
+  horizontal γ γ'''.
+Proof.
+  intros Hwf Henter Hhoriz Hexit.
+  dependent destruction Henter.
+  dependent destruction Hhoriz.
+  dependent destruction Hexit.
+  generalize (wf_nonempty Hwf eq_refl); intro.
+  match goal with σ: stack |- _ => destruct σ as [| [ ov vs ] σ ] end;
+    length in *; try lia.
+  clarify; econstructor; eauto using prefix_app_l with set_solver.
+Qed.
+
+(* An [Enter] step increases the stack height. *)
+
+Lemma enter_increases_height rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Enter v) γ' →
+  wf γ →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  length σ' = length σ + 1.
+Proof using.
+  intros Hstep Hwf -> ->.
+  inversion Hwf; inversion Hstep; subst; length; eauto.
+Qed.
+
+(* A [Rediscover] event is horizontal. *)
+
+Lemma rediscover_horizontal γ v γ' :
+  wf γ →
+  step γ (Rediscover v) γ' →
+  horizontal γ γ'.
+Proof.
+  inversion 1; inversion 1; subst; repeat clarify;
+  eapply Horiz with (vs2 := empty);
+  eauto 3 using prefix_app_r, concat_empty.
+Qed.
+
+(* Two related stacks have the same top vertex. *)
+
+Lemma horizontal_same_top rs rs' marked marked' σ σ' γ γ' :
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  horizontal γ γ' →
   top σ = top σ'.
 Proof.
-  inversion 1. simpl. eauto.
+  intros -> -> Hhoriz. inversion Hhoriz. simpl. eauto.
 Qed.
 
-(* Two similar stacks have the same edges exiting the top vertex. *)
+(* Two related stacks have the same edges exiting the top vertex. *)
 
-Lemma similar_same_edges σ σ' w :
-  similar σ σ' → edge (top σ) w → edge (top σ') w.
+Lemma horizontal_same_edges rs rs' marked marked' σ σ' w γ γ' :
+  edge (top σ) w →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  horizontal γ γ' →
+  edge (top σ') w.
 Proof.
-  intros.
-  assert (top σ = top σ') by eauto using similar_same_top.
-   congruence.
+  intros Hedge -> -> Hhoriz. inversion Hhoriz; subst.
+  erewrite horizontal_same_top in Hedge by eauto. eauto.
 Qed.
 
-(* Storing a tree [w/ws] into a stack [σ] is permitted by [similar]. *)
+(* In particular, if a state [(rs, marked, σ)] is horizontally related
+   with the initial state [γ0] then [edge (top σ) v] is trivially true. *)
 
-Lemma similar_store marked w ws σ :
-  wf (marked, σ) →
-  similar σ (store w ws σ).
+Lemma horizontal_same_edges0 rs' marked' σ' w γ' :
+  γ' = (rs', marked', σ') →
+  horizontal γ0 γ' →
+  edge (top σ') w.
 Proof.
-  inversion 1; subst; simpl; econstructor; eauto.
+  unfold γ0. intros -> Hhoriz. inversion Hhoriz; subst.
+  simpl. tauto.
 Qed.
 
-(* A corollary of [wf_completion]. *)
+(* Two related stacks have the same height. *)
 
-Lemma wf_completion' marked σ σ' :
-  wf (marked, σ') →
-  similar σ σ' →
-  σ = Frame None Empty :: [] →
-  ∃ vs,
-  σ' = Frame None vs :: [] ∧
-  dfs ∅ marked vs ∧
-  roots vs ⊆ start.
+Lemma horizontal_same_height rs rs' marked marked' σ σ' γ γ' :
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  horizontal γ γ' →
+  length σ' = length σ.
 Proof.
-  intros Hwf Hsimilar ?. subst.
-  assert (top σ' = None).
-  { dependent destruction Hsimilar. eauto. }
-  eauto using wf_completion.
+  intros -> -> Hhoriz. inversion Hhoriz. subst. eauto.
 Qed.
 
-(* If [(marked', σ')] is well-formed, similar to the initial state,
-   and has marked all of the start vertices, then it is a final state. *)
+(* In particular, if a state is horizontally related with the initial
+   state [γ0] then its stack height is 1. The reverse implication holds
+   as well: a state is final if and only if its stack height is 1. *)
 
-Lemma wf_similar_final marked' σ' :
-  wf (marked', σ') →
-  similar [Frame None Empty] σ' →
-  start ⊆ marked' →
-  final (marked', σ').
+Lemma horizontal_same_height0 rs' marked' σ' γ' :
+  γ' = (rs', marked', σ') →
+  horizontal γ0 γ' →
+  length σ' = 1.
 Proof.
-  intros Hwf Hsimilar ?.
-  dependent destruction Hsimilar.
-  dependent destruction Hwf.
-  econstructor; eauto.
+  unfold γ0. intros -> Hhoriz. inversion Hhoriz; subst. eauto.
 Qed.
+
+Lemma prove_final rs' marked' σ' γ' :
+  wf γ' →
+  γ' = (rs', marked', σ') →
+  length σ' = 1 →
+  horizontal γ0 γ'.
+Proof.
+  unfold γ0. intros Hwf -> ?. destruction Hwf; [| length in *; lia ].
+  econstructor; eauto using prefix_nil with set_solver.
+Qed.
+
+(* The set of marked vertices grows along [horizontal]. *)
+
+Lemma horizontal_marked_grows rs rs' marked marked' σ σ' γ γ' :
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  horizontal γ γ' →
+  marked ⊆ marked'.
+Proof.
+  intros -> -> Hhoriz. inversion Hhoriz. subst. eauto.
+Qed.
+
+(* The evolution of the stack along [horizontal] is as follows. *)
+
+Lemma horizontal_populates_top_frame rs marked σ γ rs' marked' σ' γ' ov σ0 :
+  γ = (rs, marked, σ) →
+  σ = Frame ov Empty :: σ0 →
+  γ' = (rs', marked', σ') →
+  horizontal γ γ' →
+  ∃ vs ,
+  σ' = Frame ov vs :: σ0.
+Proof.
+  intros -> -> -> Hhoriz. inversion Hhoriz; subst. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 (* The postorder enumeration of the vertices in a stack. *)
 
@@ -1551,12 +1780,12 @@ Fixpoint postorder_stack (σ : stack) :=
       postorder_stack σ ++ postorder vs
   end.
 
-Lemma postorder_stack_store marked v ws σ :
-  wf (marked, σ) →
+Lemma postorder_stack_store rs marked v ws σ :
+  wf (rs, marked, σ) →
   postorder_stack (store v ws σ) =
   postorder_stack σ ++ postorder ws ++ {[v]}.
 Proof.
-  intros Hwf. dependent destruction Hwf; unfold store; simpl;
+  intros Hwf. destructWf; unfold store; simpl;
   rewrite postorder_concat; simpl; list; eauto.
 Qed.
 
@@ -1565,6 +1794,8 @@ Qed.
 (* [bottom σ] is the vertex found in the second frame of the stack [σ],
    starting from the bottom. (The bottommost frame does not contain a
    vertex.) *)
+
+(* Yes, this is messy. *)
 
 Fixpoint bottom σ : option V :=
   match σ with
@@ -1577,42 +1808,37 @@ Fixpoint bottom σ : option V :=
 (* If the stack [σ] is well-formed and has exactly two frames, then
    its bottom vertex is found in its top frame. *)
 
-Lemma bottom_two marked ov vs σ :
-  wf (marked, Frame ov vs :: σ) →
+Lemma bottom_two rs marked ov vs σ :
+  wf (rs, marked, Frame ov vs :: σ) →
   length σ = 1 →
   bottom (Frame ov vs :: σ) = ov.
 Proof.
   intros Hwf Hlen.
-  dependent destruction Hwf; [ eauto |].
-  dependent destruction Hwf; [ eauto | exfalso].
-  wf_nonempty. length in Hlen. lia.
+  destructWf. clarify.
+  destructWf.
 Qed.
 
 (* If the stack [σ] is well-formed and has at least two frames, then
    pushing a new frame onto it does not change its bottom vertex. *)
 
-Lemma bottom_push marked ov vs σ :
-  wf (marked, Frame ov vs :: σ) →
+Lemma bottom_push rs marked ov vs σ :
+  wf (rs, marked, Frame ov vs :: σ) →
   length σ ≠ 1 →
   bottom (Frame ov vs :: σ) = bottom σ.
 Proof.
-  (* I had difficulty finding this proof. *)
-  intros Hwf Hlen.
-  dependent destruction Hwf; [ eauto |].
-  dependent destruction Hwf; [ length in Hlen; lia |].
-  destruct σ0 as [| [ ? ? ] ? ].
-  { exfalso. dependent destruction Hwf. }
-  eauto.
+  (* I had difficulty finding this proof. Yet, with suitable tactics,
+     it becomes quite simple! *)
+  intros. destructWf. clarify. destructWf. destruct σ0; kill.
 Qed.
 
 (* A combination of the previous two lemmas. *)
 
-Lemma bottom_eq marked ov vs σ :
-  wf (marked, Frame ov vs :: σ) →
+Lemma bottom_eq rs marked ov vs σ :
+  wf (rs, marked, Frame ov vs :: σ) →
   bottom (Frame ov vs :: σ) =
     if decide (length σ = 1) then ov else bottom σ.
 Proof.
-  intros. case (decide (length σ = 1)); intro.
+  intros. clarify.
   + erewrite bottom_two by eauto. reflexivity.
   + erewrite bottom_push by eauto. reflexivity.
 Qed.
@@ -1636,28 +1862,20 @@ Qed.
 
 (* Therefore it is marked. *)
 
-Lemma wf_bottom_trace γ :
-  wf γ →
-  ∀ marked σ,
-  γ = (marked, σ) →
+Lemma wf_bottom_trace :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
   option_to_set (bottom σ) ⊆ trace σ.
 Proof.
-  induction 1; intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  [| specialize (IHwf _ _ eq_refl) ].
+  inductionWf.
   { set_solver. }
-  { match goal with h: wf _ |- _ => dependent destruction h end.
+  { destructWf.
     { set_solver. }
-    match goal with foo: stack |- _ => rename foo into σ end.
-    assert (1 ≤ length σ) by eauto using wf_nonempty.
     erewrite bottom_push by (length; eauto with wf lia).
     rewrite IHwf. simpl trace. set_solver. }
 Qed.
 
-(* The bottom stack vertex is marked. *)
-
-Lemma wf_bottom_marked marked σ :
-  wf (marked, σ) →
+Lemma wf_bottom_marked rs marked σ :
+  wf (rs, marked, σ) →
   option_to_set (bottom σ) ⊆ marked.
 Proof.
   intros Hwf. transitivity (trace σ).
@@ -1668,8 +1886,8 @@ Qed.
 (* If the stack has at least three frames then the top vertex and the
    bottom vertex must be distinct. *)
 
-Lemma wf_top_ne_bottom marked v vs σ w :
-  wf (marked, Frame (Some v) vs :: σ) →
+Lemma wf_top_ne_bottom rs marked v vs σ w :
+  wf (rs, marked, Frame (Some v) vs :: σ) →
   bottom σ = Some w →
   v ≠ w.
 Proof.
@@ -1684,167 +1902,20 @@ Proof.
   set_solver.
 Qed.
 
-(* If [σ] is well-formed then [top σ = None] is equivalent to
-   [length σ = 1]. *)
+(* [bottom σ = None] is equivalent to [length σ = 1]. *)
 
-(* This condition itself is equivalent to [length σ ≤ 1]. *)
+(* It is also equivalent to [top σ = None]. *)
 
-Lemma top_None marked σ :
-  wf (marked, σ) →
-  top σ = None ↔
-  length σ = 1.
+Lemma bottom_None :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  bottom σ = None ↔ length σ = 1.
 Proof.
-  intros Hwf. destruction Hwf; simpl; length.
-  { tauto. }
-  { wf_nonempty.
-    assert (Some w ≠ None) by congruence.
-    assert (length σ0 + 1 ≠ 1) by lia.
-    tauto. }
-Qed.
-
-(* If [σ] is well-formed then [bottom σ = None] is equivalent to
-   [length σ = 1]. *)
-
-Lemma bottom_None γ :
-  wf γ →
-  ∀ marked σ,
-  γ = (marked, σ) →
-  bottom σ = None ↔
-  length σ = 1.
-Proof.
-  induction 1; intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  [| specialize (IHwf _ _ eq_refl) ];
-  simpl top; length.
+  inductionWf; simpl top; length.
   { tauto. }
   { erewrite bottom_eq by eauto with wf.
-    wf_nonempty.
     assert (Some w ≠ None) by congruence.
-    case (decide (length σ = 1)); intro;
-    case (decide (length σ + 1 = 1)); intro;
+    case_decide; case (decide (length σ + 1 = 1));
     try lia; try tauto. }
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-(* The predicate [ordered rs f], which concerns forests, is extended to
-   stacks. The predicate [ordered_stack rs σ] depends only on the bottom
-   one or two frames. In short, it states that the forest [vs] stored in
-   frame 0 and the bottom vertex [v] stored in frame 1 should be ordered
-   by [rs]. *)
-
-(* One might wonder whether these conditions should be built into the
-   predicate [wf], so that there would be no need for a separate predicate
-   [ordered_stack]. For now, it seems preferable to keep them separate. *)
-
-Inductive ordered_stack : list V → stack → Prop :=
-| OrderedStackNil:
-    (* In the special bottom frame, which stores a forest [vs], we require
-       this forest to be ordered by [rs]. We further require [list_to_set
-       rs ⊆ support vs], which means that all of the root vertices that
-       have been enumerated so far are part of [vs]. This requirement is
-       exploited in the proof of the lemma [ordered_stack_exit]. *)
-    ∀ rs vs,
-    ordered rs vs →
-    list_to_set rs ⊆ support vs →
-    ordered_stack rs (Frame None vs :: [])
-| OrderedStackDeep:
-    (* If [w] is the bottom vertex of the stack then we require [w] to
-       be the last element of [rs]; otherwise we ignore this frame. *)
-    ∀ rs' w ws rs σ,
-    ordered_stack rs' σ →
-    (rs = if decide (length σ = 1) then rs' ++ {[w]} else rs') →
-    ordered_stack rs (Frame (Some w) ws :: σ).
-
-(* [ordered_stack] is true initially. *)
-
-Lemma ordered_stack_init :
-  ordered_stack [] (Frame None Empty :: []).
-Proof.
-  econstructor; [ econstructor | set_solver ].
-Qed.
-
-(* [ordered_stack] is preserved by an [Enter] step. *)
-
-Lemma ordered_stack_enter rs marked σ w marked' σ' rs' :
-  ordered_stack rs σ →
-  wf (marked, σ) →
-  step (marked, σ) (Enter w) (marked', σ') →
-  rs' = (if decide (length σ = 1) then rs ++ {[w]} else rs) →
-  ordered_stack rs' σ'.
-Proof.
-  intros Hordered Hwf Hstep Hrs'.
-  dependent destruction Hstep.
-  dependent destruction Hwf; length in *.
-  (* Case: [length σ = 1]. *)
-  { case_decide; [| lia ]. subst rs'.
-    econstructor; eauto. }
-  (* Case: [length σ ≠ 1]. *)
-  { wf_nonempty. case_decide; [ lia |]. subst rs'.
-    econstructor; length; eauto.
-    case_decide; [ lia |]. eauto. }
-Qed.
-
-(* [ordered_stack] is preserved by an [Exit] step. *)
-
-Lemma ordered_stack_exit rs marked σ w marked' σ' :
-  ordered_stack rs σ →
-  wf (marked, σ) →
-  step (marked, σ) (Exit w) (marked', σ') →
-  ordered_stack rs σ'.
-Proof.
-  (* The proof is not difficult in principle, but quite painful
-     in actuality, perhaps because viewing a stack as a list of
-     frames is not a good idea. *)
-  destruct 1; intros Hwf Hstep; dependent destruction Hstep.
-  dependent destruction Hwf.
-  match goal with foo: stack |- _ => rename foo into σ end.
-  wf_nonempty.
-  case_decide.
-  (* Case: [length σ = 1]. We are pushing a complete tree
-     into the bottom stack frame. *)
-  { destruct σ as [| [ ov vs ] σ ]; [ length in *; lia |].
-    destruct σ as [|]; [| length in *; lengths; lia ].
-    (* [ov] must be [None]. *)
-    rewrite <- top_None in * by eauto. simpl in *. subst ov.
-    dependent destruction Hwf.
-    match goal with h: ordered_stack _ _ |- _ =>
-      dependent destruction h end.
-    econstructor.
-    + eapply ordered_concat; eauto.
-      - simpl support. dfs_imarked. dfs_omarked. set_solver.
-      - change {[w]} with ({[w]} ++ []).
-        eapply OrderedRoot. econstructor.
-    + rewrite support_concat, list_to_set_app, list_to_set_singleton.
-      set_solver. }
-  (* Case: [length σ ≠ 1]. There are at least two frames. *)
-  { destruct σ as [| [ ? ? ] σ ]; [ length in *; lia |].
-    destruct σ as [| [ ? ? ] σ ]; [ length in *; lengths; lia |].
-    simpl in *.
-    match goal with h: ordered_stack _ _ |- _ =>
-      dependent destruction h end.
-    (* Are there two frames, or more than two? *)
-    case_decide.
-    (* Subcase: there are two. *)
-    { destruct σ; [| length in *; lengths; lia ].
-      econstructor; length; eauto. }
-    (* Subcase: there are more than two. In this case [ordered_stack] is
-       insensitive to the top frame. *)
-    { econstructor; length in *; eauto.
-      case_decide; eauto with lia. }}
-Qed.
-
-(* [ordered_stack] at a final stack can be exploited. *)
-
-Lemma ordered_stack_completion rs σ ov vs :
-  ordered_stack rs σ →
-  σ = Frame ov vs :: [] → (* [ov] must be [None] *)
-  ordered rs vs.
-Proof.
-  intros Hordered ->.
-  dependent destruction Hordered.
-  { assumption. }
-  { dependent destruction Hordered. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1909,22 +1980,20 @@ Qed.
 
 (* [isRootMapStack] is preserved by [Exit] transitions. *)
 
-Lemma isRootMapStack_store marked ρ w ws σ :
-  wf (marked, Frame (Some w) ws :: σ) →
+Lemma isRootMapStack_store rs marked ρ w ws σ :
+  wf (rs, marked, Frame (Some w) ws :: σ) →
   isRootMapStack ρ (Frame (Some w) ws :: σ) →
   isRootMapStack ρ (store w ws σ).
 Proof using.
   intros Hwf Hroots.
   dependent destruction Hroots.
   generalize Hwf; intro Hcopy.
-  dependent destruction Hwf.
-  dependent destruction Hwf.
+  destructWf.
+  destructWf.
   { dependent destruction Hroots. simpl in *.
     assert (w = v) by congruence. subst w.
     unfold store. eauto with isRootMap. }
-  { match goal with foo: stack |- _ => rename foo into σ end.
-    wf_nonempty.
-    erewrite bottom_push in * by (length; eauto with lia).
+  { erewrite bottom_push in * by (length; eauto with lia).
     dependent destruction Hroots.
     match goal with h1: bottom _ = Some ?v1,
                     h2: bottom _ = Some ?v2 |- _ =>
@@ -1970,8 +2039,8 @@ Qed.
 
 Lemma isRootMapStack_domain ρ σ :
   isRootMapStack ρ σ →
-  ∀ ρ' marked,
-  wf (marked, σ) →
+  ∀ ρ' rs marked,
+  wf (rs, marked, σ) →
   (∀ w, w ∈ marked → ρ' w = ρ w) →
   isRootMapStack ρ' σ.
 Proof.
@@ -1987,16 +2056,16 @@ Qed.
 
 (* Updating a partial root map with one vertex [v]. *)
 
-Lemma isRootMapStack_update `{EqDecision V} marked σ ρ ρ' σ' v root' :
+Lemma isRootMapStack_update `{EqDecision V} rs marked σ ρ ρ' σ' v root' :
   isRootMapStack ρ σ →
   σ' = Frame (Some v) Empty :: σ →
-  wf (marked, σ') →
+  wf (rs, marked, σ') →
   bottom σ' = Some root' →
   ρ' v = root' →
   (∀ v', v' ≠ v → ρ' v' = ρ v') →
   isRootMapStack ρ' σ'.
 Proof.
-  intros ?? Hwf ???. subst. dependent destruction Hwf.
+  intros. subst. destructWf.
   econstructor.
   { eapply isRootMapStack_domain; eauto.
     intros w Hw. case (decide (w = v)).
@@ -2041,18 +2110,13 @@ Infix "≃" := fequiv (at level 70).
    the stack is at most the cardinal of its trace, plus 1, as the
    bottom frame does not contain a vertex. *)
 
-Lemma length_stack γ :
-  wf γ →
-  ∀ marked σ,
-  γ = (marked, σ) →
+Lemma length_stack :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
   ∃ fvs,
   trace σ ≃ fvs ∧
   (List.length σ ≤ size fvs + 1)%nat.
 Proof.
-  induction 1; intros ?? Heq;
-  injection Heq; clear Heq; intros <- <-;
-  [| specialize (IHwf _ _ eq_refl) ];
-  simpl.
+  inductionWf; simpl.
   { exists ∅. rewrite size_empty. split.
     + intro v. set_solver.
     + lia. }
@@ -2076,28 +2140,22 @@ End Interactive.
 
 (* Hints and tactics. *)
 
-Hint Constructors wf : wf.
-
 Hint Resolve
-  wf_init
-  wf_step
-: wf.
-
-Hint Constructors similar : similar.
-
-Hint Resolve
-  similar_reflexive
-  similar_transitive
-: similar.
+  horizontal_reflexive
+  enter_exit_horizontal
+  rediscover_horizontal
+: horizontal.
 
 Ltac destructStep :=
-  match goal with h: step _ _ _ _ _ |- _ => destruction h end.
-
-Ltac wf_nonempty :=
-  repeat match goal with
-  | h : wf _ _ _ |- _ => generalize (wf_nonempty h); revert h
-  end; intros.
+  match goal with h: step _ _ _ _ |- _ => destruction h end.
 
 Ltac destructWf :=
-  match goal with h: wf _ _ _ |- _ => destruction h end;
-  try solve [ exfalso; wf_nonempty; length in *; lia ].
+  match goal with h: wf _ _ |- _ => destruction h end.
+
+Ltac wf_nonempty :=
+  match goal with h: wf _ _ |- _ =>
+    generalize (wf_nonempty h eq_refl); intro
+  end.
+
+Arguments γ0 {V}.
+Arguments equiv_state {V}.
