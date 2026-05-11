@@ -1427,7 +1427,7 @@ Qed.
 (* Lists of vertices. *)
 
 (* TODO move elsewhere *)
-Local Notation isList := (Forall2 isInt).
+Local Notation isListIntU := (Forall2 (λ _v v, isIntU _v v)).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1449,19 +1449,20 @@ Defined.
 
 (* The specification of [list_rev_post]. *)
 
-Lemma wp_list_post :
+Lemma wp_list_rev_post :
   wp list_rev_post (λ _vs, ∃ marked vs,
     dfs marked vs ∧
     roots vs ⊆ start ∧
     marked ≡ closure start ∧
-    isList _vs (rev (postorder vs))
+    isListIntU _vs (rev (postorder vs))
   ).
 Proof.
   rewrite list_rev_post_eq. unfold plain_list_rev_post.
   rewrite traverse_post_eq. unfold plain_traverse_post.
+  generalize unsigned_max_array_length; intro.
   wp_op wp_traverse with invariant: (λ γ _vs,
     let (marked, σ) := γ in
-    isList _vs (rev (postorder_stack σ))
+    isListIntU _vs (rev (postorder_stack σ))
   ).
   (* Compatibility. *)
   { intros ((rs0 & marked0) & σ) ((rs1 & marked1) & σ') Hequiv.
