@@ -171,33 +171,6 @@ Proof.
     { eauto. }}
 Qed.
 
-Lemma root_map_roots_1 ρ f v :
-  isRootMap ρ f →
-  v ∈ support f →
-  ρ v ∈ roots f.
-Proof.
-Admitted.
-
-Lemma root_map_roots_2 ρ f w :
-  isRootMap ρ f →
-  w ∈ roots f →
-  ∃ v, w = ρ v ∧ v ∈ support f.
-Proof.
-Admitted.
-
-Lemma root_map_support ρ f v :
-  isRootMap ρ f →
-  v ∈ support f →
-  ρ v ∈ support f.
-Proof.
-Admitted.
-
-Lemma isRootMap_idempotent ρ f :
-  isRootMap ρ f →
-  ∀ v, v ∈ support f → ρ (ρ v) = ρ v.
-Proof.
-Admitted.
-
 Lemma scc_forest_root_map_2 ρ f :
   is_scc_forest E f →
   isRootMap ρ f →
@@ -249,7 +222,7 @@ Proof.
   intros.
   assert (v ∈ component E (ρ v)) by eauto using scc_forest_root_map_1.
   elem in *.
-  eapply scc_forest_root_map_2; eauto using root_map_support.
+  eapply scc_forest_root_map_2; eauto using isRootMap_support.
 Qed.
 
 Lemma scc_forest_root_map ρ f :
@@ -331,9 +304,7 @@ Proof.
   }
 
   (* 1c. Deconstruct the postcondition of [list_rev_post]. *)
-  match goal with Hpost: _ |- _ =>
-    destruct Hpost as (marked & f1 & Hdfs1 & Hroots & Hmarked & Hvs)
-  end. (* TODO tactic *)
+  wp_destruct_post (marked & f1 & Hdfs1 & Hroots & Hmarked & Hvs).
   (* Every vertex is marked. *)
   rewrite (closure_start_is_universe n start) in Hmarked by eauto with lia.
   rewrite Hmarked in Hdfs1.
@@ -369,10 +340,9 @@ Proof.
   { admit. } (* TODO create a file list.v *)
 
   (* 2c. Deconstruct the postcondition of [group]. *)
-  match goal with Hpost: _ |- _ => destruct Hpost as
+  wp_destruct_post
     (rs & marked & f2 & ρ & Hdfs2 & Hordered & Hcomplete
-        & Hroots & Hmarked & ? & ? & Hmap)
-  end. (* TODO make this a tactic *)
+        & Hroots & Hmarked & ? & ? & Hmap).
 
   (* Every vertex is marked. *)
   rewrite (closure_start_is_universe n start) in Hmarked by eauto with lia.
