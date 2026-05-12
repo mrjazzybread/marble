@@ -2086,6 +2086,58 @@ Proof.
   inversion 1. assumption.
 Qed.
 
+(* Consequences of [isRootMap]. *)
+
+(* [ρ] maps [support f] into [roots f]. *)
+
+Lemma isRootMap_roots_1 ρ f v :
+  isRootMap ρ f →
+  v ∈ support f →
+  ρ v ∈ roots f.
+Proof.
+  induction 1; simpl; set_solver.
+Qed.
+
+(* All of [roots f] is reached by [ρ]. Therefore [roots f] is the
+   image through [ρ] of [support f]. This lemma is trivial: in
+   fact [w ∈ roots f] implies [w = ρ w], which is stronger. *)
+
+Lemma isRootMap_roots_2 ρ f w :
+  isRootMap ρ f →
+  w ∈ roots f →
+  ∃ v, w = ρ v ∧ v ∈ support f.
+Proof.
+  induction 1; simpl; set_solver.
+Qed.
+
+(* [ρ] maps [support f] into itself. *)
+
+(* This is a weakened form of [isRootMap_roots_1]. *)
+
+Lemma isRootMap_support ρ f v :
+  isRootMap ρ f →
+  v ∈ support f →
+  ρ v ∈ support f.
+Proof.
+  induction 1; simpl; set_solver.
+Qed.
+
+(* [ρ] is idempotent: every root is mapped to itself. *)
+
+Lemma isRootMap_idempotent ρ f v :
+  isRootMap ρ f →
+  v ∈ support f →
+  ρ (ρ v) = ρ v.
+Proof.
+  induction 1; simpl; intros Hv.
+  { set_solver. }
+  { rewrite elem_of_union in Hv. destruct Hv as [ Hv | Hv ].
+    + assert (ρ v = w) by eauto.
+      assert (ρ w = w) by eauto with set_solver.
+      congruence.
+    + eauto. }
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* The following lemmas aim to establish an upper bound on the size of
