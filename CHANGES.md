@@ -27,6 +27,7 @@
     to be compatible with a notion of equality on producer states.
 
 * In `wp`:
+  + New tactic `wp_destruct_post`.
   + New notation `exist`.
     Beware of the potential confusion with the function `array.exist`.
   + New lemmas `bind_eq_dep` and `bind_eq_dep_dep`.
