@@ -617,3 +617,11 @@ Ltac wp_last H :=
   match goal with h: _ |- _ =>
     rename h into H
   end.
+
+(* [wp_destruct_post p] destructs the most recently introduced
+   hypothesis using the pattern [p]. *)
+
+Tactic Notation "wp_destruct_post" simple_intropattern(p) :=
+  match goal with h: _ |- _ =>
+    destruct h as p
+  end.
