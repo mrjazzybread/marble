@@ -873,7 +873,7 @@ Definition get (h : hashtbl) (k : K) :=
   do b ← get h i;
   find_assoc k b.
 
-Lemma get_wp :
+Lemma wp_get :
   forall h m k,
     isHashtbl h m ->
     wp (get h k) (λ v, head (m !!! k) = v).
@@ -894,7 +894,7 @@ Qed.
 Definition population (h : hashtbl) : int :=
   fst h.
 
-Lemma population_spec :
+Lemma wp_population :
   forall h m,
     isHashtbl h m ->
     wp (population h) (λ n, isInt n (cardinality m)).
