@@ -1046,6 +1046,50 @@ Proof.
     - intros ?. by subst. }
 Qed.
 
+Definition inv_array {S} n m :=
+  λ h (i : Z) (s : S),
+         (forall k,
+             indexZ k n < i → complete k m h).
+
+Definition inv_array_unreached {S} n (m : hmap) :=
+  λ (h : list (K * V)) (i : Z) (s : S),
+    (forall k v,
+        indexZ k n >= i → (k, v) ∉ h).
+
+Definition inv_bucket {S} m h inv :=
+  λ b (s : S), ∀ h',
+      h' = h ++ b →
+      inv h' s ∧ permitted m h'.
+
+Lemma inv_array_preserve :
+  ∀ {S} tbl n m h j j' b (s' : S) (s'' : S),
+    j' = (j + 1)%Z ->
+    valid j tbl ->
+    no_garbage n tbl ->
+    valid_buckets n tbl m ->
+    inv_array n m h j s' ->
+    inv_array_unreached n m h j s' ->
+    b = tbl !!! j ->
+    inv_array n m (h ++ reverse b) j' s''.
+Proof.
+  unfold inv_array, inv_array_unreached.
+  intros S tbl n m h j j' b s' s''
+    ?? NG Hvalid Hcomplete Hunreached **.
+  unfold complete.
+  rewrite filter_app.
+  set (i':=indexZ k n).
+  destruct (decide (i' = j)); subst.
+  { rewrite filter_key_nin. 2: auto with lia.
+    simpl. rewrite filter_reverse.
+    rewrite <- reverse_map. f_equal.
+    rewrite Hvalid; auto. }
+  { rewrite filter_key_nin with (b:=reverse _).
+    - list. apply Hcomplete. lia.
+    - intros v. rewrite elem_of_reverse.
+      intro Hnin. apply NG in Hnin; lia.
+  }
+Qed.
+
 Lemma wp_iter_rev :
   ∀ S h f m,
     isHashtbl h m →
@@ -1053,44 +1097,33 @@ Lemma wp_iter_rev :
     (λ k v (s : S) Q, wp (f k v s) Q)
     (λ s Q, wp (iter_rev h s f) Q).
 Proof.
-  unfold iter_rev.
-  intros.
-  destructIsHashtbl h.
-  ITER.
-  simpl.
-  set (inv1 :=
-         λ h (i : Z) (s : S),
-         (forall k,
-             indexZ k n < i → complete k m h)).
-  set (inv2 :=
-         λ (h : list (K * V)) (i : Z) (s : S),
-         (forall k v,
-             indexZ k n >= i → (k, v) ∉ h)).
+  unfold iter_rev. intros.
+  destructIsHashtbl h. ITER. simpl.
   wp_op wp_iteri with invariant:
       (λ (i: Z) (s : S),
-        ∃ h, inv h s ∧ inv1 h i s ∧ inv2 h i s);
-    unfold inv1, inv2.
-  { exists []. pack; auto with lia.
+        ∃ h, inv h s ∧
+               inv_array n m h i s ∧
+               inv_array_unreached n m h i s).
+  { unfold inv_array, inv_array_unreached.
+    exists []. pack; auto with lia.
     apply not_elem_of_nil. }
   { intros j j' s' [h (Hinv & Hcomplete & Hunreached)]
       ???? b Hbucket.
-    set (inv3 :=
-          λ b (s : S), ∀ h',
-           h' = h ++ b →
-           inv h' s ∧ permitted m h').
-      wp_op wp_bucket_iter_right with invariant:inv3; unfold inv3.
+      wp_op wp_bucket_iter_right
+        with invariant:(inv_bucket m h inv);
+        unfold inv_bucket.
     - intros. subst h'. list. split. auto.
-      apply permitted_start_next with (n:=n) (j:=j); auto.
+      apply permitted_start_next with (n:=n) (j:=j);
+        auto.
     - intros h' h'' s'' Hpermitted_inner **.
       specialize Hpermitted_inner with (h ++ h').
       destruct Hpermitted_inner. auto.
       wp_op Hbody; subst x.
-      + list.
-        eapply permitted_add_next; eauto.
+      + list. eapply permitted_add_next; eauto.
         intros. apply filter_key_nin.
         auto with lia.
-      + intros s''' Hinv' h'''. list in *; split.
-        by subst.
+      + intros s''' Hinv' h'''.
+        list in *; split. by subst.
         subst h'''. rewrite <- H11.
         eapply permitted_add_next; eauto.
         intros. apply filter_key_nin. auto with lia.
@@ -1099,24 +1132,13 @@ Proof.
       specialize Hinv3 with (h ++ h') as
         [Hinv3 Hpermitted']; auto.
       subst h'. pack. auto.
-      + set (i':=indexZ k n). unfold complete.
-        rewrite filter_app.
-        destruct (decide (i' = j)); subst.
-        { rewrite filter_key_nin.
-          - simpl. rewrite filter_reverse.
-            rewrite <- reverse_map. f_equal.
-            rewrite H4; eauto.
-          - auto with lia. }
-        { rewrite filter_key_nin with (b:=reverse _).
-          - rewrite app_nil_r. apply Hcomplete. lia.
-          - intros v. rewrite elem_of_reverse.
-            intro Hnin.
-            apply H3 in Hnin; lia. }
-      + rewrite not_elem_of_app. split;
+      + eapply inv_array_preserve; eauto.
+      + unfold inv_array_unreached. intros.
+        rewrite not_elem_of_app. split;
         eauto with lia. list. intro Hnin.
         subst. apply H3 in Hnin; lia. }
-  intros. unpack.
-  subst. eexists. split; eauto with lia.
+  simpl. intros. unpack. subst. eexists.
+  split; eauto with lia.
 Qed.
 
 Check wp_iter_rev.
@@ -1167,6 +1189,56 @@ Proof.
   by f_equal.
 Qed.
 
+Definition resize_inv :=
+  λ (l : list (K * V)) s, ∃ m',
+      isHashtbl s m' ∧
+        ∀ k, map snd (filter_key k l) = reverse (m' !!! k).
+
+Definition resize_inv_init :
+  ∀ A a (l : list A),
+    0 < len l ->
+    isArray a (replicate (len l * 2) []) ->
+    resize_inv [] (0, a).
+Proof.
+  intros. unfold resize_inv.
+  simpl. exists ∅.
+  pack; eauto; list; try lia.
+  { by rewrite cardinality_empty. }
+  { intros ???? Helem.
+    do 2 list in *.
+    by apply not_elem_of_nil in Helem. }
+  { intros ?**. list in *. by subst. }
+Qed.
+
+Lemma resize_inv_step :
+  forall k v k' l b x,
+    (∀ k, map snd (filter_key k b) = reverse (x !!! k)) ->
+    l = (filter_key k' (b ++ [(k, v)])) ->
+    map snd l = reverse (_add x k v !!! k').
+Proof.
+  intros k v k' l **.
+  subst l.
+  rewrite filter_app.
+  destruct (decide (k = k')).
+  { subst. rewrite add_lookup_eq.
+    rewrite reverse_cons.
+    rewrite map_app. filter. simpl. by f_equal. }
+  { rewrite add_lookup_neq by auto. filter. by list. }
+Qed.
+
+Lemma reverse_inv_complete :
+  forall h m m' hist,
+    isHashtbl h m ->
+    (∀ k, map snd (filter_key k hist) = reverse (m' !!! k)) ->
+    (∀ k, complete k m hist) ->
+    isHashtbl h m'.
+Proof.
+  unfold complete. intros h m m' hist Htbl Hinv Hcomplete.
+  apply hashtbl_extensionality with (m1:=m); auto.
+  intro k.
+  apply reverse_injective.
+  by rewrite <- Hinv.
+Qed.
 
 Lemma resize_spec :
   forall h m,
@@ -1182,39 +1254,15 @@ Proof.
   assert (isInt (n' * 2) (len l * 2)) by tc.
   wp_if. 2: { introIsHashtbl. }
   wp_make a'.
-  { generalize unsigned_twice_max_array_length.
-    lia. }
+  { generalize unsigned_twice_max_array_length. lia. }
   wp_bind_eq.
   assert (isHashtbl (i, a) m) by introIsHashtbl.
-  set
-    (inv :=
-       (λ (l : list (K * V)) s, ∃ m',
-           isHashtbl s m'
-           ∧ ∀ k, map snd (filter_key k l) = reverse (m' !!! k)
-    )).
-  wp_op wp_iter_rev with invariant:inv.
-  - subst inv. simpl. exists ∅. split. 2: by hmap.
-    pack; eauto; list; try lia.
-    { by rewrite cardinality_empty. }
-    { intros ???? Helem.
-      do 2 list in *.
-      by apply not_elem_of_nil in Helem. }
-    { intros ?**. list in *. by subst. }
-  - intros l1 l2 **. subst inv. simpl in *.
-    unpack. wp_op wp_add.
+  wp_op wp_iter_rev with invariant:resize_inv.
+  - eapply resize_inv_init; subst; eauto with lia.
+  - intros l1 l2 **. unfold resize_inv in *.
+    simpl in *. unpack. wp_op wp_add.
     simpl. intros. eexists. split; eauto. intros.
-    specialize H17 with k0. subst l2.
-    rewrite filter_app.
-    destruct (decide (k = k0)).
-    { subst. rewrite add_lookup_eq.
-      rewrite reverse_cons.
-      rewrite map_app. filter. simpl. by f_equal. }
-    { rewrite add_lookup_neq by auto. filter. by list. }
-  - subst inv.
-    intros h [hist [[m' [Htbl Hinv]] Hcomplete]].
-    eapply hashtbl_extensionality with (m1:=m'); auto.
-    intro k. specialize Hcomplete with k.
-    unfold complete in *.
-    apply reverse_injective.
-    by rewrite <- Hinv.
+    eapply resize_inv_step; subst; eauto.
+  - unfold resize_inv in *. intros. unpack.
+    eapply reverse_inv_complete; eauto.
 Qed.
