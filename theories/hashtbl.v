@@ -97,6 +97,19 @@ Hint Rewrite
 
 Ltac filter := autorewrite with cfilter.
 
+Lemma filter_key_cons :
+  forall k k' v b1 b2,
+    filter_key k b1 = filter_key k b2 ->
+    filter_key k ((k', v)::b1) = filter_key k ((k', v) :: b2).
+Proof.
+  intros.
+  destruct (decide (k = k')).
+  + subst. filter. by f_equal.
+  + by filter.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Association lists *)
 
 Fixpoint remove_assoc (k : K) (b : bucket) :=
@@ -160,17 +173,6 @@ Proof.
     filter. auto.
 Qed.
 
-Lemma filter_key_cons :
-  forall k k' v b1 b2,
-    filter_key k b1 = filter_key k b2 ->
-    filter_key k ((k', v)::b1) = filter_key k ((k', v) :: b2).
-Proof.
-  intros.
-  destruct (decide (k = k')).
-  + subst. filter. by f_equal.
-  + by filter.
-Qed.
-
 Lemma remove_assoc_bucket_ne :
   forall k k' b b',
     b' = snd (remove_assoc k b) ->
@@ -194,15 +196,16 @@ Fixpoint find_assoc (k : K) (b : bucket) : option V :=
      else find_assoc k t
   end.
 
-Hint Rewrite
-  remove_assoc_bucket_ne
-  remove_assoc_bucket_eq
-  remove_assoc_in : cassoc.
+Lemma filter_key_assoc :
+  forall k l,
+    head (map snd (filter_key k l)) = find_assoc k l.
+Proof.
+  intros k l.
+  induction l as [|[k' v] t Ih]. auto.
+  simpl. case_decide; subst; by filter.
+Qed.
 
-Ltac assoc := autorewrite with cassoc.
-
-Tactic Notation "assoc" "in" "*" :=
-  autorewrite with cassoc in *.
+(* -------------------------------------------------------------------------- *)
 
 Notation hmap := (gmap K (list V)).
 
@@ -220,7 +223,7 @@ Proof.
   by rewrite H.
 Qed.
 
-Lemma lookup_total_non_empty_list:
+Lemma lookup_total_non_empty_list :
   forall (m : hmap) k x t,
     m !!! k = x :: t ->
     m !! k = Some(x :: t).
@@ -472,6 +475,8 @@ Proof.
        by hmap in HLookup. }
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 (* Relates a list of buckets to a total function from keys to lists of
    values, where [n] is the length of the [tbl].  For every key [k],
    [m] returns the list of values mapped to [k] in [tbl].  If [k] is
@@ -537,6 +542,8 @@ Local Ltac index_intro k _n n :=
 
 (* Hash table operations and their respective specifications. *)
 
+(* -------------------------------------------------------------------------- *)
+
 Definition create (n : int) : hashtbl :=
   do a ← make n [] ; (0, a).
 
@@ -553,6 +560,8 @@ Proof.
     by apply not_elem_of_nil in H3. }
   { intros ?**. list in *. by subst. }
 Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 Definition add (h : hashtbl) k v :=
   do (popu, h) ← h;
@@ -668,6 +677,8 @@ Proof.
   - subst. apply no_garbage_insert; auto.
   - apply valid_buckets_insert; by subst.
 Qed.
+
+(* -------------------------------------------------------------------------- *)
 
 Definition remove (h : hashtbl) (k : K) :=
   do (n, h) ← h;
@@ -798,6 +809,8 @@ Proof.
   - eapply valid_buckets_remove; by subst.
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 Definition replace (h : hashtbl) (k : K) (v : V) :=
   do (n, h) ← h;
   do l ← length h;
@@ -851,21 +864,14 @@ Proof.
     apply valid_buckets_remove with b r; auto.
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 Definition get (h : hashtbl) (k : K) :=
   do (_, h) ← h;
   do n ← length h;
   do i ← index k n;
   do b ← get h i;
   find_assoc k b.
-
-Lemma filter_key_assoc :
-  forall k l,
-    head (map snd (filter_key k l)) = find_assoc k l.
-Proof.
-  intros k l.
-  induction l as [|[k' v] t Ih]. auto.
-  simpl. case_decide; subst; by filter.
-Qed.
 
 Lemma get_wp :
   forall h m k,
@@ -1090,6 +1096,8 @@ Proof.
   }
 Qed.
 
+(* -------------------------------------------------------------------------- *)
+
 Lemma wp_iter_rev :
   ∀ S h f m,
     isHashtbl h m →
@@ -1142,6 +1150,8 @@ Proof.
 Qed.
 
 Check wp_iter_rev.
+
+(* -------------------------------------------------------------------------- *)
 
 Definition resize (h : hashtbl) : hashtbl :=
   do (p, h) ← h;
