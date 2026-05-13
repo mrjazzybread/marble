@@ -1276,3 +1276,241 @@ Proof.
   - unfold resize_inv in *. intros. unpack.
     eapply reverse_inv_complete; eauto.
 Qed.
+
+Definition lmap := gmap K V.
+
+Definition lean (m : hmap) (lm : lmap) :=
+  ∀ k, (m !!! k = [] ∨ ∃ v, m !!! k = [v]) ∧
+  lm !! k = head (m !!! k).
+
+Definition isLeanHashtbl (h : hashtbl) (lm : lmap) :=
+  ∃ m, isHashtbl h m ∧ lean m lm.
+
+Ltac destructIsLeanHashtbl h :=
+  destruct h;
+  match goal with h: isLeanHashtbl ?v _ |- _ =>
+    unfold isLeanHashtbl in h;
+    let m := fresh "m" in
+    destruct h as (m&?);
+    unpack
+  end.
+
+Ltac destructLean k :=
+  match goal with H: lean _ _ |- _ =>
+    unfold lean in H;
+    specialize H with k;
+    unpack
+  end.
+
+Ltac introLean :=
+  unfold isLeanHashtbl;
+  simpl; intros;
+  eexists; split; eauto;
+  intros k'; split.
+
+Ltac simplHmap :=
+  unfold rm_add, _add, rm; hmap.
+
+Lemma lean_rm_add_lookup_eq :
+  ∀ m lm k v,
+  lean m lm ->
+  rm_add m k v !!! k = [v].
+Proof.
+  intros m lm k v Hlean.
+  simplHmap.
+  unfold lean in Hlean.
+  specialize Hlean with k as [[H|[??H]]?];
+    by rewrite H.
+Qed.
+
+Lemma lean_rm_lookup_eq :
+  ∀ m lm k,
+    lean m lm ->
+    rm m k !!! k = [].
+Proof.
+  intros m lm k Hlean.
+  simplHmap.
+  unfold lean in Hlean.
+  specialize Hlean with k as [[H|[??H]]?];
+    by rewrite H.
+Qed.
+
+Lemma wp_replace_lean :
+  forall h k v lm,
+    isLeanHashtbl h lm ->
+    wp (replace h k v)
+      (λ h, isLeanHashtbl h (<[k:=v]> lm)).
+Proof.
+  intros.
+  destructIsLeanHashtbl h.
+  wp_op wp_replace.
+  introLean;
+  destruct (decide (k' = k)).
+  { right. subst. eexists.
+    erewrite lean_rm_add_lookup_eq; eauto. }
+  { simplHmap.
+    by destructLean k'. }
+  { subst. rewrite lookup_insert_eq with (m:=lm).
+    unfold rm_add, _add, rm. by hmap. }
+  { simplHmap.
+    rewrite lookup_insert_ne with (m:=lm) by auto.
+    by destructLean k'. }
+Qed.
+
+Lemma wp_remove_lean :
+  forall k h lm,
+    isLeanHashtbl h lm ->
+    wp (remove h k) (λ h, isLeanHashtbl h (delete k lm)).
+Proof.
+  intros.
+  destructIsLeanHashtbl h.
+  wp_op wp_remove.
+  simpl. intros h' H2.
+  introLean; destruct (decide (k' = k)).
+  + left. subst. eapply lean_rm_lookup_eq; eauto.
+  + destructLean k'. by simplHmap.
+  + subst. erewrite lean_rm_lookup_eq by eauto.
+    simpl. apply lookup_delete_eq with (m:=lm).
+  + destructLean k'. simplHmap.
+    by rewrite lookup_delete_ne with (m:=lm).
+Qed.
+
+Lemma wp_get_lean :
+  forall k h lm,
+    isLeanHashtbl h lm ->
+    wp (get h k) (λ v, lm !! k = v).
+Proof.
+  intros.
+  destructIsLeanHashtbl h.
+  wp_op wp_get.
+  simpl. intros ? H1.
+  destructLean k.
+  by rewrite <- H1.
+Qed.
+
+Lemma lean_delete :
+  forall m lm k v,
+  lm !! k = None ->
+  lean m (<[k:=v]> lm) ->
+  lean (delete k m) lm.
+Proof.
+  intros m lm k v Hnone Hlean.
+  intros k'; split; destruct (decide (k = k')).
+  + left. subst. by rewrite lookup_total_delete_eq.
+  + destruct Hlean with k'.
+    rewrite lookup_total_delete_ne; auto.
+  + subst. by rewrite lookup_total_delete_eq.
+  + rewrite lookup_total_delete_ne by auto.
+    destruct Hlean with k' as [? Hlean'].
+    by rewrite lookup_insert_ne with (m:=lm) in Hlean'.
+Qed.
+
+Lemma lean_hmap_empty :
+  ∀ m, lean m ∅ -> cardinality m = 0%Z.
+Proof.
+  intros m Hlean.
+  induction m as [|k v m Hnone Hfirst Ih]
+                   using map_first_key_ind.
+  - by rewrite cardinality_empty.
+  - erewrite cardinality_insert_fresh; eauto.
+    destruct Hlean with k as [Hlist HLookup].
+    destruct Hlist as [Hlist | [v' Hlist]].
+    { hmap in Hlist. subst. list. rewrite Ih; auto.
+      intros k'; split; destruct (decide (k = k')).
+      + subst. left. by hmap.
+      + destruct Hlean with k' as [H1 _].
+        by rewrite fin_maps.lookup_total_insert_ne in H1.
+      + subst. by hmap.
+      + destruct Hlean with k' as [_ H1].
+        rewrite H1. by hmap. }
+    { rewrite Hlist in HLookup.
+      simpl in HLookup.
+      by apply lookup_empty_Some in HLookup. }
+Qed.
+
+Lemma cardinality_lean_size :
+  forall lm m,
+    lean m lm ->
+    cardinality m = Z.of_nat (base.size lm).
+Proof.
+  induction lm as
+    [|k v lm Hnone Hfirst Ih] using map_first_key_ind.
+  - intros. rewrite lean_hmap_empty; auto.
+  - intros m Hlean.
+    rewrite map_size_insert_None with (m:=lm) by auto.
+    rewrite <- cardinality_delete_present with
+      (n:=cardinality m) (k:=k) (m:=m) (l:=[v]).
+    { length. rewrite Ih; auto.
+      eapply lean_delete; eauto. }
+    { auto. }
+    { destruct Hlean with k as [HNone HSome].
+      rewrite fin_maps.lookup_insert_eq
+        with (m:=lm) in HSome.
+      destruct HNone as [HNone | [v' HNone]].
+      - destruct (m !!! k); done.
+      - rewrite HNone in HSome.
+        simpl in *. injection HSome.
+        intros. subst v'.
+        by apply lookup_total_non_empty_list.
+    }
+Qed.
+
+Lemma wp_population_lean :
+  forall h lm,
+    isLeanHashtbl h lm ->
+    wp (population h) (λ n, isInt n (Z.of_nat (base.size lm))).
+Proof.
+  intros.
+  destructIsLeanHashtbl h.
+  wp_op wp_population.
+  simpl. intros.
+  erewrite <- cardinality_lean_size; eauto.
+Qed.
+
+Definition complete_lean (k : K) (xs : lmap) history :=
+  find_assoc k history = xs !! k.
+
+Definition permitted_lean (xs : lmap) (history : bucket) :=
+    ∀ k v, (k, v) ∈ history -> xs !! k = Some v.
+
+Definition ITER_LMAP {S}
+  (xs : lmap)
+  (body : K → V → S → WP S)
+  (loop : S → WP S)
+    : Prop
+    :=
+    ITER
+      []
+      ( λ h, ∀ k, complete_lean k xs h)
+      ( λ history0 history1 s Q,
+        ∀ k v,
+          (k, v) ∉ history0 ->
+          history0 ++ [(k, v)] = history1 ->
+          permitted_lean xs history1 ->
+          body k v s Q )
+      loop.
+
+Definition inv_array_lean {S} n m :=
+  λ h (i : Z) (s : S),
+         (forall k,
+             indexZ k n < i → complete_lean k m h).
+
+Definition inv_bucket_lean {S} m h inv :=
+  λ b (s : S), ∀ h',
+      h' = h ++ b →
+      inv h' s ∧ permitted_lean m h'.
+
+Lemma wp_iter_rev_lean :
+  forall {S} h f lm,
+  isLeanHashtbl h lm ->
+  ITER_LMAP lm
+    (λ k v (s : S) Q, wp (f k v s) Q)
+    (λ s Q, wp (iter_rev h s f) Q).
+Proof.
+  intros. ITER.
+  destructIsLeanHashtbl h.
+  wp_op wp_iter_rev.
+  - intros.
+    wp_op Hbody.
+    +
+Admitted.
