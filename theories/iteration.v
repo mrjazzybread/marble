@@ -327,8 +327,6 @@ Definition ITER_LIST {S A}
     ( λ x i s Q, body x s Q )
     loop.
 
-(* TODO define [XITER_LIST] and [UXITER_LIST] *)
-
 (* -------------------------------------------------------------------------- *)
 
 (* Iteration on a list, in an unspecified (unpredictable) order. *)
