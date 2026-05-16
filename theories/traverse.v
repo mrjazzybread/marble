@@ -77,22 +77,23 @@ Hypothesis start_respects_bound :
 
 (* [foreach_start] must enumerate the vertices in the set [start].
 
-   How should the specification of [foreach_start] be expressed? This is
-   a subtle question. If [foreach_start] enumerates the vertices in an
+   How should the specification of [foreach_start] be expressed? This is a
+   subtle question. If [foreach_start] enumerates the vertices in an
    arbitrary order, then this is fine: we can tolerate that. Yet, if
-   [foreach_start] enumerates the vertices in a predictable order, then
-   we can guarantee that the roots of the DFS forest that we construct
+   [foreach_start] enumerates the vertices in a predictable order, then we
+   can guarantee that the roots of the DFS forest that we construct
    respect this order. And, in some applications, such as Kosaraju and
    Sharir's algorithm, this matters. So, we write the specification of
-   [foreach_start] in a very general form, such that both [ITER_LIST]
-   and [ITER_SET'] are instances of this general form.
+   [foreach_start] in a very general form, such that both iterating in a
+   specified order and iterating in an unspecified order are instances of
+   this general form.
 
    This general form requires the user to provide a predicate [complete]
    such that 1- a complete list covers the set [start]; and 2- there
-   exists a complete list. For example, the predicate [complete] might
-   be true of every list that covers the set [start]; or of every list
-   that covers the set [start] and does not have repeated elements; or
-   of only of one specific list that covers the set [start].
+   exists a complete list. For example, the predicate [complete] might be
+   true of every list that covers the set [start]; or of every list that
+   covers the set [start] and does not have repeated elements; or of only
+   of one specific list that covers the set [start].
 
    For some definitions of [complete], repetition is possible:
    [foreach_start] may produce a vertex several times. *)
@@ -105,13 +106,10 @@ Variable complete_spec :
 Variable complete_nonempty :
   ∃ rs, complete rs.
 
-(* We define [permitted rs] to hold if and only if [rs] is a prefix of
-   some complete list. (There is no reason to allow the user to provide
-   their own definition of [permitted]. This definition seems as general
-   as possible.) *)
+(* [permitted rs] holds iff [rs] is a prefix of some complete list. *)
 
-Definition permitted : list vertex → Prop :=
-  λ rs, ∃ rs', complete (rs ++ rs').
+Local Notation permitted :=
+  (permitted complete).
 
 (* Any permitted list forms a subset of [start]. *)
 
@@ -125,20 +123,6 @@ Qed.
 Local Lemma permitted_nil : permitted [].
 Proof.
   destruct complete_nonempty as (rs & Hcomplete). eauto.
-Qed.
-
-(* The predicate [permitted] is prefix-closed. *)
-
-Local Lemma permitted_prefix rs1 rs2 :
-  permitted (rs1 ++ rs2) → permitted rs1.
-Proof.
-  unfold permitted. intros (rs' & Hcomplete). list in *. eauto.
-Qed.
-
-Local Lemma permitted_prefix_of rs rs' :
-  permitted rs' → rs `prefix_of` rs' → permitted rs.
-Proof.
-  unfold prefix. intros ? (? & ?). subst. eauto using permitted_prefix.
 Qed.
 
 (* [foreach_start] is expected to produce the start vertices in an order
