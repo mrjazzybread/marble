@@ -10,13 +10,17 @@
 (*                                                                            *)
 (******************************************************************************)
 
-From stdpp Require Import list sets.
+From stdpp Require Import list sets fin_sets.
 From listz Require Import listz.
+From marble Require Import stdpp_buffer. (* TODO *)
 From marble Require Import tactics wp.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
 Set Universe Polymorphism.
+
+Local Infix "≃" := (Permutation)
+  (at level 70, no associativity).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -258,28 +262,250 @@ End Loops.
 
 (* -------------------------------------------------------------------------- *)
 
+(* A specialization of [ITER] where the producer state is a history (a list). *)
+
+Section L.
+
+Context {A : Type}.
+
+(* A producer state is a history: a list of elements produced so far. *)
+Implicit Type history future : list A.
+
+(* [init] is the initial state. *)
+Variable init : list A.
+
+(* A list that satisfies the predicate [complete] is a final state. *)
+Variable complete : list A → Prop.
+
+(* Each step extends the history with one element [x]. Not every step is
+   permitted, though: extending [history] with [x] is permitted only if
+   the extended history [history ++ {[x]}] is a prefix of some complete
+   list. *)
+Definition permitted : list A → Prop :=
+  λ history, ∃ future, complete (history ++ future).
+
+(* If [complete] is nonempty, then the empty history is permitted. *)
+
+Lemma permitted_nil : (∃ history, complete history) → permitted [].
+Proof. intros (history & ?). unfold permitted. eauto. Qed.
+
+(* A partial history is permitted if and only if it is a prefix of a
+   complete history. *)
+
+Lemma permitted_iff history :
+  permitted history ↔
+  ∃ history', history `prefix_of` history' ∧ complete history'.
+Proof.
+  unfold permitted, prefix. split.
+  + intros (future & ?). eauto.
+  + intros (history' & (future & ?) & ?). subst. eauto.
+Qed.
+
+(* The predicate [permitted] is prefix-closed. *)
+
+Lemma permitted_prefix history1 history2 :
+  permitted (history1 ++ history2) → permitted history1.
+Proof.
+  unfold permitted. intros (future' & ?). list in *. eauto.
+Qed.
+
+Lemma permitted_prefix_of history history' :
+  permitted history' → history `prefix_of` history' → permitted history.
+Proof.
+  unfold prefix. intros ? (future & ?). subst.
+  eauto using permitted_prefix.
+Qed.
+
+(* The definition of [≡] on lists in stdpp is extensional equality of the
+   underlying sets. This is NOT what we want: equality of histories should
+   be equality of lists, up to equivalence of the list elements. Therefore
+   we use a local instance of [≡] here. *)
+
+(* At this time, we cut corners and use just Leibniz equality, because it
+   is suitable for our current use cases. *)
+
+(* In [HITERI], the body is parameterized with the current element [x] and
+   with its index [i] in the history. *)
+
+Definition HITERI {S}
+  (body : A → Z → S → WP S)
+  (loop : S → WP S)
+: Prop :=
+  @ITER (list A) (eq)
+    init complete S
+    ( λ history0 history1 s Q,
+      ∀ x i,
+      init `prefix_of` history0 →
+      history0 ++ {[x]} = history1 →
+      permitted history1 →
+      i = length history0 →
+      body x i s Q
+    )
+    loop.
+
+(* In [HITER], the body is parameterized with the current element [x]. *)
+
+Definition HITER {S}
+  (body : A → S → WP S)
+  (loop : S → WP S)
+: Prop :=
+  HITERI
+    (λ x i s Q, body x s Q)
+    loop.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A collection of common definitions of [complete]. *)
+
+(* Iteration on a sequence, in order. *)
+
+Definition complete_sequence (xs : list A) :=
+  λ history, history = xs.
+
+(* Iteration on a sequence, in an unspecified order. *)
+
+(* This can also be understood as iteration on a multiset. *)
+
+Definition complete_multiset (xs : list A) :=
+  λ history, history ≃ xs.
+
+(* The constraint [SemiSet A C] means that [C] is a type of sets of
+   elements of type [A], which supports empty set, union, inclusion,
+   and equivalence. *)
+
+Context `{SemiSet A C}.
+
+(* Iteration on a set, in an unspecified order. *)
+
+(* [complete_set] allows repetitions: an element can be produced several
+   times. [complete_set_unique] forbids repetitions. *)
+
+Definition complete_set (xs : C) :=
+  λ history, list_to_set history ≡ xs.
+
+Definition complete_set_unique (xs : C) :=
+  λ history, list_to_set history ≡ xs ∧ NoDup history.
+
+End L.
+
+(* A characterization of [permitted (complete_sequence xs)]. *)
+
+(* When iterating on a sequence [xs], a history is permitted
+   if and only if it is a prefix of [xs]. *)
+
+Lemma permitted_sequence {A} (history xs : list A) :
+  permitted (complete_sequence xs) history ↔
+  history `prefix_of` xs.
+Proof.
+  rewrite permitted_iff. unfold complete_sequence. split.
+  + intros (? & ? & ->). eauto.
+  + eauto.
+Qed.
+
+(* A characterization of [permitted (complete_multiset xs)]. *)
+
+(* When iterating on a multiset [xs], a history is permitted
+   if and only if it is a submultiset of [xs]. *)
+
+(* The relation [⊆+] is defined in stdpp/list_relations.v.
+   Its full name is [submseteq]. *)
+
+Lemma submseteq_insert_r {A} (history future : list A) :
+  history ⊆+ history ++ future.
+Proof.
+  apply submseteq_inserts_r. eauto.
+Qed.
+
+Lemma permitted_multiset {A} (history xs : list A) :
+  permitted (complete_multiset xs) history ↔
+  history ⊆+ xs.
+Proof.
+  rewrite permitted_iff. unfold complete_multiset. split.
+  + intros (? & (future & ->) & Hcomplete).
+    apply Permutation_submseteq in Hcomplete.
+    transitivity (history ++ future); [| exact Hcomplete ].
+    apply submseteq_insert_r.
+  + intros (future & ?)%submseteq_Permutation.
+    exists (history ++ future). split.
+    - eauto using prefix_app_l.
+    - symmetry. eauto.
+Qed.
+
+Section F.
+
+(* The constraint [FinSet A C] means that [C] is a type of finite sets of
+   elements of type [A]. It requires the existence of a function
+   [elements : C → list A] such that the list [elements xs] has no
+   duplicate elements and membership in [xs] is equivalent to membership
+   in [elements xs]. *)
+
+Context `{FinSet A C}.
+
+(* This instance exists in [stdpp/fin_sets.v] but is declared Local,
+   so we have to copy it here. *)
+
+Local Instance elem_of_dec_slow : RelDecision (∈@{C}).
+Proof.
+  refine (λ x X, cast_if (decide_rel (∈) x (elements X)));
+    by rewrite <-(elem_of_elements _).
+Qed.
+
+(* A characterization of [permitted (complete_set xs)]. *)
+
+(* When iterating on a finite set [xs], a history is permitted
+   if and only if it is a subset of [xs]. *)
+
+Lemma permitted_set (history : list A) (xs : C) :
+  permitted (complete_set xs) history ↔
+  list_to_set history ⊆ xs.
+Proof.
+  rewrite permitted_iff. unfold complete_set. split.
+  + intros (? & (future & ->) & Hcomplete). set_solver.
+  + intro.
+    exists (history ++ elements xs). split.
+    - eauto using prefix_app_l.
+    - rewrite list_to_set_app, list_to_set_elements. set_solver.
+Qed.
+
+(* A characterization of [permitted (complete_set_unique xs)]. *)
+
+(* When iterating without repetition on a finite set [xs],
+   a history is permitted if and only if it is a subset of [xs]
+   and it has no duplicate elements. *)
+
+Lemma permitted_set_unique (history : list A) (xs : C) :
+  permitted (complete_set_unique xs) history ↔
+  list_to_set history ⊆ xs ∧ NoDup history.
+Proof.
+  rewrite permitted_iff. unfold complete_set_unique. split.
+  + intros (? & (future & ->) & (? & ?)). split.
+    - set_solver.
+    - rewrite NoDup_app in *. tauto.
+  + intros (? & ?).
+    exists (history ++ elements (xs ∖ list_to_set history)). split.
+    - eauto using prefix_app_l.
+    - rewrite list_to_set_app, list_to_set_elements. split.
+      { symmetry. apply union_difference. assumption. }
+      { rewrite NoDup_app. split; eauto. split.
+        + set_solver.
+        + apply NoDup_elements. }
+Qed.
+
+Lemma NoDup_snoc (history : list A) (x : A) :
+  NoDup (history ++ {[x]}) ↔
+  NoDup history ∧ x ∉ history.
+Proof.
+  apply NoDup_snoc.
+Qed.
+
+End F.
+
+(* -------------------------------------------------------------------------- *)
+
 (* Iteration on a list. *)
 
-(* The producer state is the history, that is, the list of elements
-   produced so far. Each step extends the history with one element [x].
-   The list [init] is the initial producer state; the list [xs] is the
-   final producer state. *)
-
-(* We first define a variant where the loop body is parameterized with
-   the current element [x] and its index [i] in the history. *)
-
-(* Then, as a degenerate case, we obtain a variant where the loop body
-   is parameterized with just [x]. *)
-
-(* One could also define a more general variant where the loop body is
-   parameterized with the full history. *)
-
-(* The definition of [≡] on lists in stdpp is extensional equality of
-   the underlying sets. This is NOT what we want; we want equality of
-   ordered lists, up to equivalence of the list elements. Therefore
-   we use a local instance of [≡] here. In fact, at this time, we cut
-   corners and use just Leibniz equality, because it is suitable for
-   our current use cases. *)
+(* In [ITERI_LIST], the loop body is parameterized with the current
+   element [x] and its index [i] in the history. *)
 
 Definition ITERI_LIST {S A}
   (init xs : list A)
@@ -315,6 +541,8 @@ Hint Resolve prefix_nil : marble.
 
 Tactic Notation "list_step" simple_intropattern(x) simple_intropattern(i) :=
   intros x i ? <- ? ?.
+
+(* In [ITER_LIST], the loop body is parameterized with just [x]. *)
 
 Definition ITER_LIST {S A}
   (init xs : list A)
