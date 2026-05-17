@@ -498,12 +498,12 @@ Local Hint Resolve
 Local Ltac clarify :=
   case_decide; first [ length in *; lengths; lia | tauto | idtac ].
 
-Local Ltac permitted :=
+Local Ltac local_permitted :=
   match goal with |- context [len ?σ = 1] =>
     destruct (decide (len σ = 1)); list; try solve [ lia | assumption ]
   end.
 
-Local Hint Extern 1 (permitted _) => permitted : marble.
+Local Hint Extern 1 (permitted _) => local_permitted : marble.
 
 (* Hack: the presence of [complete_nonempty] causes [unpack] to diverge,
    as it is an existential assertion, and is not cleared by [destruct].
