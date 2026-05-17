@@ -309,6 +309,22 @@ Proof.
   rewrite map_fold_insert; tc.
 Qed.
 
+Lemma add_ge :
+  ∀ n m, n >= 0 -> m >= 0 -> n + m >= 0.
+Proof.
+  lia.
+Qed.
+
+Lemma cardinality_nonneg :
+  ∀ m, cardinality m >= 0.
+Proof.
+  intros.
+  induction m as [|k l] using map_first_key_ind.
+  - by rewrite cardinality_empty.
+  - erewrite cardinality_insert_fresh; eauto.
+    generalize (@length_nonneg V l). lia.
+Qed.
+
 Lemma cardinality_delete_present :
   forall m k l n,
     cardinality m = n ->
@@ -496,29 +512,58 @@ Definition no_garbage (n : Z) (tbl : list bucket) : Prop :=
     (k, v) ∈ (tbl !!! i) ->
     indexZ k n = i.
 
+Definition isHashtblArray
+  (arr : array bucket) (n : Z) (m : hmap) : Prop :=
+  ∃ l, isArray arr l ∧ n = len l ∧ (0 < n)%Z ∧
+         no_garbage n l ∧ valid_buckets n l m.
+
 (* Correlates a hash table with a total function that maps keys to a
    list of values.  Here we combine the previous two definitions as
    well as stating that a hash table has the same properties as a
    non-empty array.  The condition that the table must be non-empty is
    necessary for array accesses to be valid since the array is not
    resizable for now. *)
+Definition isHashtblResize
+  (arr : array bucket) (n : Z) (pop : int) (m : hmap) :=
+    isHashtblArray arr n m ∧
+      isInt pop (cardinality m).
+
+Definition max_cardinality (n : Z) (c : Z) :=
+  n * 2 ≤ max_array_length -> c * 2 ≤ n.
+
 Definition isHashtbl (h : hashtbl) (m : hmap) :=
   let (popu, arr) := h in
-  ∃ l n, isArray arr l ∧ n = len l ∧
-           isInt popu (cardinality m) ∧ (0 < n)%Z ∧
-           no_garbage n l ∧ valid_buckets n l m.
+    ∃ n, isHashtblResize arr n popu m ∧
+           max_cardinality n (cardinality m).
 
-(* Destructs a isHashtbl hypothesis. *)
-Local Ltac destructIsHashtbl h :=
-  destruct h;
-  match goal with h: isHashtbl ?v _ |- _ =>
-    unfold isHashtbl in h;
-    let c := fresh "l" in
-    let n := fresh "n" in
-    destruct h as (c&?);
-    destruct h as (n&?);
+Local Ltac destructIsHashtblArray :=
+  match goal with h: isHashtblArray _ _ _ |- _ =>
+    unfold isHashtblArray in h;
+    let l := fresh "l" in
+    destruct h as (l&?);
     unpack;
     arrays
+  end.
+
+Local Ltac destructIsHashtblResize :=
+  match goal with h: isHashtblResize _ _ _ _ |- _ =>
+    unfold isHashtblResize in h;
+    unpack;
+    destructIsHashtblArray
+  end.
+
+(* Destructs a isHashtbl hypothesis. *)
+Local Ltac destructIsHashtbl :=
+  match goal with h: isHashtbl ?v _ |- _ =>
+    destruct v;
+    unfold isHashtbl in h;
+    unfold max_cardinality in h;
+    let n := fresh "n" in
+    let c := fresh "c" in
+    destruct h as (n&?);
+    destruct h as (c&?);
+    unpack;
+    destructIsHashtblResize
   end.
 
 (* Introduces the goals needed to prove [isHashtbl _]. [lia] is
@@ -526,8 +571,17 @@ Local Ltac destructIsHashtbl h :=
    is automatically dispatched.  *)
 Local Ltac introIsHashtbl :=
   unfold isHashtbl;
-  eexists; pack;
-  eauto; list; try lia.
+  unfold isHashtblResize;
+  unfold isHashtblArray;
+  unfold max_cardinality;
+  eexists; pack; eauto; list; try lia.
+
+Local Ltac introIsHashtbl_alt :=
+  unfold isHashtbl;
+  unfold isHashtblResize;
+  unfold isHashtblArray;
+  unfold max_cardinality;
+  pack; list; try lia.
 
 (* [index_intro k _n n] Introduces an index and its logical
    representation computed from [k].  This tactic is not strictly
@@ -554,356 +608,14 @@ Lemma wp_create :
 Proof.
   intros _n n H1 H2. unfold create. wp_make a.
   wp_ret. introIsHashtbl.
-  { by rewrite cardinality_empty. }
   { unfold no_garbage. intros ???? H3.
     do 2 list in *.
     by apply not_elem_of_nil in H3. }
   { intros ?**. list in *. by subst. }
+  { by rewrite cardinality_empty. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
-
-Definition add (h : hashtbl) k v :=
-  do (popu, h) ← h;
-  do _n ← PArray.length h;
-  do i ← index k _n;
-  do b ← get h i;
-  do h' ← set h i ((k, v) :: b);
-  (popu + 1,h').
-
-(* If the list representation of a hash table does not contain keys in
-   incorrect indexes and a new key is added in the correct index, the
-   table remains valid. *)
-
-Hint Rewrite
-  @listz.list_elem_of_singleton
-  @elem_of_app : clist.
-
-Lemma no_garbage_insert :
-  forall n k v i tbl b,
-  len tbl = n ->
-  no_garbage n tbl ->
-  i = indexZ k n ->
-  b = tbl !!! i ->
-  no_garbage n (<[i:=(k, v) :: b]> tbl).
-Proof.
-  unfold no_garbage.
-  intros n k v i tbl b H1 H2 H3 H4.
-  intros i' k' v' H5 H6.
-  list in H5.
-  destruct (decide (i = i')).
-  { subst i. list in H6.
-    destruct H6 as [H6 | H6].
-    - injection H6. intros. by subst.
-    - subst. eauto. }
-  { list in H6. eauto. }
-Qed.
-
-Lemma valid_insert_bucket_eq :
-  forall k v l m n b b',
-    n = len l ->
-    valid_buckets n l m ->
-    b = l !!! indexZ k n ->
-    b' = filter_key k ((k, v) :: b) ->
-    v :: (m !!! k) = map snd b'.
-Proof.
-  intros. subst. filter. simpl. f_equal.
-  eauto with subst.
-Qed.
-
-Lemma valid_insert_bucket_ne :
-  forall k k' i v l n m b b',
-    n = len l ->
-    valid_buckets n l m ->
-    indexZ k n = i ->
-    indexZ k' n = i ->
-    b = l !!! indexZ k n ->
-    b' = filter_key k' ((k, v) :: b) ->
-    k ≠ k' ->
-    m !!! k' = map snd b'.
-Proof.
-  intros. subst. filter.
-  eauto with subst.
-Qed.
-
-(* Creates a case analysis for if [i] corresponds to the index of the
-   bucket for key [k] in a hash table whose array is of size [n]. *)
-
-Ltac case_bucket k n i :=
-  destruct (decide (indexZ k n = i)).
-
-Lemma valid_buckets_insert :
-  forall i n tbl k v b m,
-    n = len tbl ->
-    0 < n ->
-    i = indexZ k n ->
-    b = tbl !!! i ->
-    valid_buckets n tbl m ->
-    valid_buckets n (<[i:=(k, v) :: b]> tbl)
-      (_add m k v).
-Proof.
-  intros i n tbl k v b m ???? H5.
-  intros i' b' k' ? ?.
-  (* The updated map as described in the postcondition
-     accurately models the updated hash table. *)
-  unfold _add. destruct (decide (k = k')).
-  + (* When we apply the updated map with the key we pass as
-         argument. *)
-    subst k'. hmap.
-    eapply valid_insert_bucket_eq;
-      subst; by list.
-  + hmap. case_bucket k n i'; subst;
-      list; simpl; filter; eauto.
-Qed.
-
-Lemma wp_add :
-  forall h m k v,
-    isHashtbl h m ->
-    wp (add h k v)
-      (λ h, isHashtbl h (_add m k v)).
-Proof.
-  intros h m k v H.
-  unfold add.
-  destructIsHashtbl h.
-  wp_bind_eq.
-  wp_length _n.
-  index_intro k _n n.
-  wp_bind_eq.
-  wp_get b.
-  wp_set.
-  wp_ret.
-  introIsHashtbl.
-  - erewrite cardinality_add by auto. tc.
-  - subst. apply no_garbage_insert; auto.
-  - apply valid_buckets_insert; by subst.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-Definition remove (h : hashtbl) (k : K) :=
-  do (n, h) ← h;
-  do l ← length h;
-  do i ← index k l;
-  do b ← get h i;
-  do (r, b') ← remove_assoc k b;
-  do h' ← set h i b';
-  do n' ← if r then n - 1 else n;
-  (n', h').
-
-Hint Rewrite <- tl_map : clist.
-
-Lemma no_garbage_remove :
-  forall n tbl k i b b' r,
-    no_garbage n tbl ->
-    i = indexZ k n ->
-    n = len tbl ->
-    (r, b') = remove_assoc k b ->
-    b = tbl !!! i ->
-    no_garbage n (<[i:=b']> tbl).
-Proof.
-  intros ??????? NG ** i'? v??.
-  list in *.
-  apply NG with v. auto.
-  destruct (decide (i = i')); subst; list in *. 2: auto.
-  apply remove_assoc_in with k.
-  destruct remove_assoc.
-  simpl. injection H1. simpl. intros. subst. auto.
-Qed.
-
-Lemma get_snd :
-  forall A B (p1 : A * B) (p2 : A * B),
-    p1 = p2 -> snd p1 = snd p2.
-Proof.
-  intros. by subst.
-Qed.
-
-Lemma valid_buckets_remove :
-  forall n i k b b' r tbl m,
-    0 < n ->
-    n = len tbl ->
-    i = indexZ k n ->
-    b = tbl !!! i ->
-    (r, b') = remove_assoc k b ->
-    valid_buckets n tbl m ->
-    valid_buckets n (<[i:=b']> tbl) (rm m k)
-  .
-Proof.
-  intros n i k b b' r tbl m H1 H2 H3 H4 H5 H6 i' b'' k' H7 H8.
-  unfold rm.
-  apply get_snd in H5. simpl in H5.
-  destruct (decide (k = k')).
-  { subst b'' k i'. list.
-    erewrite remove_assoc_bucket_eq by eauto.
-    hmap. list. f_equal. subst b.
-    eapply H6; by subst. }
-  { hmap. case_bucket k' n i.
-    + subst b'' i'. list.
-      erewrite remove_assoc_bucket_ne by eauto.
-      apply H6 with i; by subst.
-    + subst b''. list. apply H6 with i'; by subst. }
-Qed.
-
-Lemma non_empty_bucket :
-  forall n tbl i m b k,
-  valid_buckets n tbl m ->
-  i = indexZ k n ->
-  b = tbl !!! i ->
-  (∃ v : V, (k, v) ∈ b) ->
-  m !!! k ≠ [].
-Proof.
-  intros n tbl i m b k H1 H2 H3 [v H4].
-  rewrite H1 with (i:=i) (b:=filter_key k b) by auto with subst.
-  intros H5.
-  apply map_eq_nil in H5.
-  Search filter nil.
-  by apply filter_nil_not_elem_of with (l:=b) (x:=(k, v)) in H5.
-Qed.
-
-Lemma map_nil_elim :
-  forall A B l (f : A -> B), l = [] -> map f l = [].
-Proof.
-  intros. by subst.
-Qed.
-
-Lemma empty_bucket :
-  forall n tbl i m b k,
-  valid_buckets n tbl m ->
-  i = indexZ k n ->
-  b = tbl !!! i ->
-  (forall v : V, (k, v) ∉ b) ->
-  m !!! k = [].
-Proof.
-  intros n tbl i m b k HValid ???.
-  erewrite HValid by auto with subst.
-  apply map_nil_elim. subst.
-  by rewrite filter_key_nin.
-Qed.
-
-Lemma wp_remove :
-  forall h m k,
-    isHashtbl h m ->
-    wp (remove h k)
-       (λ h', isHashtbl h' (rm m k)).
-Proof.
-  intros h m k H.
-  destructIsHashtbl h.
-  unfold remove.
-  wp_bind_eq.
-  wp_length _n.
-  index_intro k _n n.
-  wp_bind_eq.
-  wp_get b.
-  remember (remove_assoc k b) as b' eqn:E.
-  destruct b' as [r b'].
-  wp_bind_eq.
-  wp_set.
-  eapply wp_bind
-    with(P:=λ _n, isInt _n (cardinality (rm m k))).
-  { wp_if; wp_ret.
-    - erewrite cardinality_rm; tc.
-      by eapply non_empty_bucket.
-    - erewrite cardinality_rm_empty; tc.
-      by eapply empty_bucket. }
- intros. wp_ret. introIsHashtbl.
-  - subst n. by eapply no_garbage_remove.
-  - eapply valid_buckets_remove; by subst.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-Definition replace (h : hashtbl) (k : K) (v : V) :=
-  do (n, h) ← h;
-  do l ← length h;
-  do i ← index k l;
-  do b ← get h i;
-  do (r, b') ← remove_assoc k b;
-  do b' ← (k, v) :: b';
-  do n' ← if r then n else n + 1;
-  do h' ← set h i b';
-  (n', h').
-
-Lemma decompose_replace :
-  forall (i : Z) x b (tbl : list bucket),
-    <[i:=x :: b]> tbl =
-      <[i:=x :: b]>(<[i:=b]>tbl).
-Proof.
-  intros. by list.
-Qed.
-
-Lemma wp_replace :
-  forall h m k v,
-    isHashtbl h m ->
-    wp (replace h k v) (λ h, isHashtbl h (rm_add m k v)).
-Proof.
-  intros h m k v H.
-  unfold replace.
-  destructIsHashtbl h.
-  wp_bind_eq.
-  wp_length _n.
-  index_intro k _n n.
-  wp_bind_eq.
-  wp_get b.
-  wp_bind_eq.
-  remember (remove_assoc k b) as b' eqn:E.
-  destruct b' as [r b'].
-  wp_bind_eq.
-  subst n.
-  eapply wp_bind
-    with (P:=λ _n, isInt _n (cardinality (rm_add m k v))).
-  { wp_if; wp_ret.
-    - erewrite cardinality_rm_add; tc.
-      by eapply non_empty_bucket.
-    - erewrite cardinality_rm_add_empty; tc.
-      by eapply empty_bucket. }
-  intros.
-  wp_set. wp_ret.
-  introIsHashtbl; simpl; rewrite decompose_replace.
-  - apply no_garbage_insert; (try (by list)).
-    eapply no_garbage_remove; subst; by list.
-  - apply valid_buckets_insert; (try by list); try lia.
-    apply valid_buckets_remove with b r; auto.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-Definition get (h : hashtbl) (k : K) :=
-  do (_, h) ← h;
-  do n ← length h;
-  do i ← index k n;
-  do b ← get h i;
-  find_assoc k b.
-
-Lemma wp_get :
-  forall h m k,
-    isHashtbl h m ->
-    wp (get h k) (λ v, head (m !!! k) = v).
-Proof.
-  intros h m k H.
-  unfold get.
-  destructIsHashtbl h.
-  wp_bind_eq.
-  wp_length _n.
-  index_intro k _n n.
-  wp_bind_eq.
-  wp_get b.
-  wp_ret.
-  rewrite H4 with (i:=i') (b:=filter_key k b); subst; auto.
-  apply filter_key_assoc.
-Qed.
-
-Definition population (h : hashtbl) : int :=
-  fst h.
-
-Lemma wp_population :
-  forall h m,
-    isHashtbl h m ->
-    wp (population h) (λ n, isInt n (cardinality m)).
-Proof.
-  intros.
-  unfold population.
-  wp_ret.
-  by destructIsHashtbl h.
-Qed.
 
 Fixpoint bucket_iter_right {S} (b : bucket) (s : S) f : S:=
   match b with
@@ -1098,15 +810,15 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-Lemma wp_iter_rev :
-  ∀ S h f m,
-    isHashtbl h m →
+Lemma wp_iter_rev_aux :
+  ∀ S arr f n m pop,
+    isHashtblArray arr n m →
     ITER_HMAP m
     (λ k v (s : S) Q, wp (f k v s) Q)
-    (λ s Q, wp (iter_rev h s f) Q).
+    (λ s Q, wp (iter_rev (pop, arr) s f) Q).
 Proof.
   unfold iter_rev. intros.
-  destructIsHashtbl h. ITER. simpl.
+  destructIsHashtblArray. ITER. simpl.
   wp_op wp_iteri with invariant:
       (λ (i: Z) (s : S),
         ∃ h, inv h s ∧
@@ -1132,7 +844,7 @@ Proof.
         auto with lia.
       + intros s''' Hinv' h'''.
         list in *; split. by subst.
-        subst h'''. rewrite <- H11.
+        subst h'''. rewrite <- H10.
         eapply permitted_add_next; eauto.
         intros. apply filter_key_nin. auto with lia.
     - intros s'' [h' [Hinv3?]].
@@ -1144,34 +856,143 @@ Proof.
       + unfold inv_array_unreached. intros.
         rewrite not_elem_of_app. split;
         eauto with lia. list. intro Hnin.
-        subst. apply H3 in Hnin; lia. }
+        subst. apply H2 in Hnin; lia. }
   simpl. intros. unpack. subst. eexists.
   split; eauto with lia.
 Qed.
 
-Check wp_iter_rev.
+Definition wp_iter_rev :
+ ∀ S f h m,
+   isHashtbl h m →
+   ITER_HMAP m
+     (λ k v (s : S) Q, wp (f k v s) Q)
+     (λ s Q, wp (iter_rev h s f) Q).
+Proof.
+  intros.
+  destructIsHashtbl.
+  eapply wp_iter_rev_aux.
+  unfold isHashtblArray.
+  by pack.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+Definition add' (k : K) (v : V) (arr : array bucket) :=
+  do _n ← PArray.length arr;
+  do i ← index k _n;
+  do b ← get arr i;
+  do h' ← set arr i ((k, v) :: b);
+  h'.
+
+Hint Rewrite
+  @listz.list_elem_of_singleton
+  @elem_of_app : clist.
+
+Lemma no_garbage_insert :
+  forall n k v i tbl b,
+  len tbl = n ->
+  no_garbage n tbl ->
+  i = indexZ k n ->
+  b = tbl !!! i ->
+  no_garbage n (<[i:=(k, v) :: b]> tbl).
+Proof.
+  unfold no_garbage.
+  intros n k v i tbl b H1 H2 H3 H4.
+  intros i' k' v' H5 H6.
+  list in H5.
+  destruct (decide (i = i')).
+  { subst i. list in H6.
+    destruct H6 as [H6 | H6].
+    - injection H6. intros. by subst.
+    - subst. eauto. }
+  { list in H6. eauto. }
+Qed.
+
+Lemma valid_insert_bucket_eq :
+  forall k v l m n b b',
+    n = len l ->
+    valid_buckets n l m ->
+    b = l !!! indexZ k n ->
+    b' = filter_key k ((k, v) :: b) ->
+    v :: (m !!! k) = map snd b'.
+Proof.
+  intros. subst. filter. simpl. f_equal.
+  eauto with subst.
+Qed.
+
+Lemma valid_insert_bucket_ne :
+  forall k k' i v l n m b b',
+    n = len l ->
+    valid_buckets n l m ->
+    indexZ k n = i ->
+    indexZ k' n = i ->
+    b = l !!! indexZ k n ->
+    b' = filter_key k' ((k, v) :: b) ->
+    k ≠ k' ->
+    m !!! k' = map snd b'.
+Proof.
+  intros. subst. filter.
+  eauto with subst.
+Qed.
+
+(* Creates a case analysis for if [i] corresponds to the index of the
+   bucket for key [k] in a hash table whose array is of size [n]. *)
+
+Ltac case_bucket k n i :=
+  destruct (decide (indexZ k n = i)).
+
+Lemma valid_buckets_insert :
+  forall i n tbl k v b m,
+    n = len tbl ->
+    0 < n ->
+    i = indexZ k n ->
+    b = tbl !!! i ->
+    valid_buckets n tbl m ->
+    valid_buckets n (<[i:=(k, v) :: b]> tbl)
+      (_add m k v).
+Proof.
+  intros i n tbl k v b m ???? H5.
+  intros i' b' k' ? ?.
+  (* The updated map as described in the postcondition
+     accurately models the updated hash table. *)
+  unfold _add. destruct (decide (k = k')).
+  + (* When we apply the updated map with the key we pass as
+         argument. *)
+    subst k'. hmap.
+    eapply valid_insert_bucket_eq;
+      subst; by list.
+  + hmap. case_bucket k n i'; subst;
+      list; simpl; filter; eauto.
+Qed.
+
+Lemma wp_add' :
+  ∀ arr n m k v,
+    isHashtblArray arr n m ->
+    wp (add' k v arr)
+      (λ h, isHashtblArray h n (<[k:=v :: m !!! k]> m)).
+Proof.
+  intros.
+  unfold add'.
+  destructIsHashtblArray.
+  wp_length _n.
+  wp_bind_eq.
+  index_intro k _n n.
+  wp_get b.
+  wp_set.
+  wp_ret.
+  introIsHashtbl.
+  - subst. apply no_garbage_insert; auto.
+  - apply valid_buckets_insert; by subst.
+Qed.
+
 Definition resize (h : hashtbl) : hashtbl :=
-  do (p, h) ← h;
-  do n ← length h;
+  do n ← length h.2;
   do n ← n * 2;
   if n <=? max_length then
   do a ← make n [];
-  do h' ← (0, a);
-  iter_rev (p, h) h'
-    (fun k v h'' => add h'' k v)
-  else (p, h).
-
-Instance isBool_ltb_proj :
-  ∀Int _i i ,
-  ∀Int _j j ,
-  isBool1 (_i ≤? _j) (proj i ≤ proj j).
-Proof.
-  intros. eapply isBool1_intro. rewrite leb_spec.
-  destructIsInt. lia.
-Qed.
+  do a ← iter_rev h a add';
+  (h.1, a)
+  else h.
 
 Lemma hashtbl_extensionality :
   forall h m1 m2,
@@ -1180,12 +1001,13 @@ Lemma hashtbl_extensionality :
     isHashtbl h m2.
 Proof.
   intros h m1 m2 H Helts.
-  destructIsHashtbl h.
+  destructIsHashtbl.
   introIsHashtbl.
-  + by erewrite cardinality_extensionality.
   + intros i' b k Hindex Hbucket.
     rewrite <- Helts.
-    eapply H4; eauto.
+    eauto.
+  + by erewrite cardinality_extensionality.
+  + erewrite <- cardinality_extensionality; eauto.
 Qed.
 
 Lemma reverse_injective :
@@ -1199,21 +1021,20 @@ Proof.
   by f_equal.
 Qed.
 
-Definition resize_inv :=
-  λ (l : list (K * V)) s, ∃ m',
-      isHashtbl s m' ∧
+Definition resize_inv n :=
+  λ (l : list (K * V)) arr, ∃ m',
+      isHashtblArray arr n m' ∧
         ∀ k, map snd (filter_key k l) = reverse (m' !!! k).
 
 Definition resize_inv_init :
-  ∀ A a (l : list A),
-    0 < len l ->
+  ∀ A a (l : list A) n,
+    n = len l ->
+    0 < n ->
     isArray a (replicate (len l * 2) []) ->
-    resize_inv [] (0, a).
+    resize_inv (n * 2) [] a.
 Proof.
   intros. unfold resize_inv.
-  simpl. exists ∅.
-  pack; eauto; list; try lia.
-  { by rewrite cardinality_empty. }
+  simpl. subst n. exists ∅. introIsHashtbl.
   { intros ???? Helem.
     do 2 list in *.
     by apply not_elem_of_nil in Helem. }
@@ -1237,44 +1058,375 @@ Proof.
 Qed.
 
 Lemma reverse_inv_complete :
-  forall h m m' hist,
-    isHashtbl h m ->
+  forall h pop n m m' hist,
+    isHashtblArray h n m ->
     (∀ k, map snd (filter_key k hist) = reverse (m' !!! k)) ->
     (∀ k, complete k m hist) ->
-    isHashtbl h m'.
+    (isInt pop (cardinality m')) ->
+    cardinality m' * 2 ≤ n ->
+    isHashtbl (pop, h) m'.
 Proof.
-  unfold complete. intros h m m' hist Htbl Hinv Hcomplete.
-  apply hashtbl_extensionality with (m1:=m); auto.
-  intro k.
-  apply reverse_injective.
-  by rewrite <- Hinv.
+  unfold complete.
+  intros h pop n m m' hist Htbl Hinv Hcomplete Hcard Hsize.
+  destructIsHashtblArray.
+  assert (A : ∀ k : K, m !!! k = m' !!! k).
+  { intro k. apply reverse_injective.
+    by rewrite <- Hcomplete. }
+  eapply hashtbl_extensionality with (m2:=m'); auto.
+  introIsHashtbl;
+  erewrite cardinality_extensionality;
+  subst; eauto.
 Qed.
 
-Lemma resize_spec :
-  forall h m,
-    isHashtbl h m ->
-    wp (resize h) (λ h, isHashtbl h m).
+Instance isBool_leb_proj :
+  ∀Int _i i ,
+  ∀Int _j j ,
+  isBool1 (_i ≤? _j) (proj i ≤ proj j).
+Proof.
+  intros. eapply isBool1_intro. rewrite leb_spec.
+  destructIsInt. lia.
+Qed.
+
+Instance isBool_ltb_proj :
+  ∀Int _i i ,
+  ∀Int _j j ,
+  isBool (_i <? _j)
+    (proj i < proj j) (proj i >= proj j)%Z.
+Proof.
+  intros. eapply isBool_intro.
+  + rewrite ltb_spec. destructIsInt. lia.
+  + lia.
+Qed.
+
+Lemma wp_resize :
+  forall arr n c pop m,
+    c = (cardinality m - 1)%Z ->
+    isHashtblResize arr n pop m ->
+    (n * 2 ≤ max_array_length -> c * 2 ≤ n) ->
+    wp (resize (pop, arr)) (λ h, isHashtbl h m).
 Proof.
   unfold resize.
   intros.
-  destructIsHashtbl h.
+  simpl.
+  destructIsHashtblResize.
+  arrays.
+  wp_length _n.
   wp_bind_eq.
-  wp_length n'.
-  wp_bind_eq.
-  assert (isInt (n' * 2) (len l * 2)) by tc.
-  wp_if. 2: { introIsHashtbl. }
+  assert (isInt (_n * 2) (len l * 2)) by tc.
+  wp_if.
+  2: { subst. introIsHashtbl. }
+  generalize unsigned_twice_max_array_length.
+  intros.
   wp_make a'.
-  { generalize unsigned_twice_max_array_length. lia. }
-  wp_bind_eq.
-  assert (isHashtbl (i, a) m) by introIsHashtbl.
-  wp_op wp_iter_rev with invariant:resize_inv.
+  assert (isHashtblArray arr n m) by introIsHashtbl.
+  wp_op wp_iter_rev_aux with invariant:(resize_inv (n * 2)).
   - eapply resize_inv_init; subst; eauto with lia.
   - intros l1 l2 **. unfold resize_inv in *.
-    simpl in *. unpack. wp_op wp_add.
+    unpack. wp_op wp_add'.
     simpl. intros. eexists. split; eauto. intros.
     eapply resize_inv_step; subst; eauto.
   - unfold resize_inv in *. intros. unpack.
-    eapply reverse_inv_complete; eauto.
+    eapply reverse_inv_complete; subst; eauto.
+    lia.
+Qed.
+
+Definition inc_pop h :=
+  do (pop, h) ← h;
+  do len ← PArray.length h;
+  do pop' ← pop + 1;
+  do h' ← (pop', h);
+  if len <? pop' * 2
+  then resize h'
+  else h'.
+
+Lemma wp_inc_pop :
+  ∀ arr n m pop c,
+    c = cardinality m ->
+    isHashtblArray arr n m ->
+    isInt (pop + 1) c ->
+    max_cardinality n (c - 1) ->
+    wp (inc_pop (pop, arr))
+      (λ h, isHashtbl h m).
+Proof.
+  unfold max_cardinality. intros.
+  unfold inc_pop.
+  destructIsHashtblArray.
+  wp_bind_eq.
+  wp_length _n.
+  do 2 wp_bind_eq.
+  wp_if.
+  - subst c. wp_op wp_resize. by introIsHashtbl. auto.
+  - wp_ret. introIsHashtbl. tc.
+Qed.
+
+Definition add (h : hashtbl) k v :=
+  do (pop, h) ← h;
+  do len ← PArray.length h;
+  do i ← index k len;
+  do b ← get h i;
+  do h' ← set h i ((k, v) :: b);
+  inc_pop (pop, h').
+
+(* If the list representation of a hash table does not contain keys in
+   incorrect indexes and a new key is added in the correct index, the
+   table remains valid. *)
+
+Lemma wp_add :
+  forall h m k v,
+    isHashtbl h m ->
+    wp (add h k v)
+      (λ h, isHashtbl h (_add m k v)).
+Proof.
+  intros h m k v H.
+  unfold add.
+  destructIsHashtbl.
+  wp_bind_eq.
+  wp_length _n.
+  index_intro k _n n.
+  wp_bind_eq.
+  wp_get b.
+  wp_set.
+  subst.
+  wp_op wp_inc_pop.
+  - introIsHashtbl.
+    + apply no_garbage_insert; auto.
+    + apply valid_buckets_insert; by subst.
+  - erewrite cardinality_add by auto. tc.
+  - erewrite cardinality_add by auto. by list.
+  - auto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+Definition remove (h : hashtbl) (k : K) :=
+  do (n, h) ← h;
+  do l ← length h;
+  do i ← index k l;
+  do b ← get h i;
+  do (r, b') ← remove_assoc k b;
+  do h' ← set h i b';
+  do n' ← if r then n - 1 else n;
+  (n', h').
+
+Hint Rewrite <- tl_map : clist.
+
+Lemma no_garbage_remove :
+  forall n tbl k i b b' r,
+    no_garbage n tbl ->
+    i = indexZ k n ->
+    n = len tbl ->
+    (r, b') = remove_assoc k b ->
+    b = tbl !!! i ->
+    no_garbage n (<[i:=b']> tbl).
+Proof.
+  intros ??????? NG ** i'? v??.
+  list in *.
+  apply NG with v. auto.
+  destruct (decide (i = i')); subst; list in *. 2: auto.
+  apply remove_assoc_in with k.
+  destruct remove_assoc.
+  simpl. injection H1. simpl. intros. subst. auto.
+Qed.
+
+Lemma get_snd :
+  forall A B (p1 : A * B) (p2 : A * B),
+    p1 = p2 -> snd p1 = snd p2.
+Proof.
+  intros. by subst.
+Qed.
+
+Lemma valid_buckets_remove :
+  forall n i k b b' r tbl m,
+    0 < n ->
+    n = len tbl ->
+    i = indexZ k n ->
+    b = tbl !!! i ->
+    (r, b') = remove_assoc k b ->
+    valid_buckets n tbl m ->
+    valid_buckets n (<[i:=b']> tbl) (rm m k)
+  .
+Proof.
+  intros n i k b b' r tbl m H1 H2 H3 H4 H5 H6 i' b'' k' H7 H8.
+  unfold rm.
+  apply get_snd in H5. simpl in H5.
+  destruct (decide (k = k')).
+  { subst b'' k i'. list.
+    erewrite remove_assoc_bucket_eq by eauto.
+    hmap. list. f_equal. subst b.
+    eapply H6; by subst. }
+  { hmap. case_bucket k' n i.
+    + subst b'' i'. list.
+      erewrite remove_assoc_bucket_ne by eauto.
+      apply H6 with i; by subst.
+    + subst b''. list. apply H6 with i'; by subst. }
+Qed.
+
+Lemma non_empty_bucket :
+  forall n tbl i m b k,
+  valid_buckets n tbl m ->
+  i = indexZ k n ->
+  b = tbl !!! i ->
+  (∃ v : V, (k, v) ∈ b) ->
+  m !!! k ≠ [].
+Proof.
+  intros n tbl i m b k H1 H2 H3 [v H4].
+  rewrite H1 with (i:=i) (b:=filter_key k b) by auto with subst.
+  intros H5.
+  apply map_eq_nil in H5.
+  Search filter nil.
+  by apply filter_nil_not_elem_of with (l:=b) (x:=(k, v)) in H5.
+Qed.
+
+Lemma map_nil_elim :
+  forall A B l (f : A -> B), l = [] -> map f l = [].
+Proof.
+  intros. by subst.
+Qed.
+
+Lemma empty_bucket :
+  forall n tbl i m b k,
+  valid_buckets n tbl m ->
+  i = indexZ k n ->
+  b = tbl !!! i ->
+  (forall v : V, (k, v) ∉ b) ->
+  m !!! k = [].
+Proof.
+  intros n tbl i m b k HValid ???.
+  erewrite HValid by auto with subst.
+  apply map_nil_elim. subst.
+  by rewrite filter_key_nin.
+Qed.
+
+Lemma wp_remove :
+  forall h m k,
+    isHashtbl h m ->
+    wp (remove h k)
+       (λ h', isHashtbl h' (rm m k)).
+Proof.
+  intros h m k H.
+  destructIsHashtbl.
+  unfold remove.
+  wp_bind_eq.
+  wp_length _n.
+  index_intro k _n n.
+  wp_bind_eq.
+  wp_get b.
+  remember (remove_assoc k b) as b' eqn:E.
+  destruct b' as [r b'].
+  wp_bind_eq.
+  wp_set.
+  eapply wp_bind
+    with(P:=λ _n, isInt _n (cardinality (rm m k))).
+  { wp_if; wp_ret.
+    - erewrite cardinality_rm; tc.
+      by eapply non_empty_bucket.
+    - erewrite cardinality_rm_empty; tc.
+      by eapply empty_bucket. }
+ intros. wp_ret. introIsHashtbl.
+  - subst n. by eapply no_garbage_remove.
+  - eapply valid_buckets_remove; by subst.
+  - list in *. subst. destruct (decide (m !!! k = [])).
+    { erewrite cardinality_rm_empty; eauto with lia. }
+    { erewrite cardinality_rm; eauto. lia. }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+Definition replace (h : hashtbl) (k : K) (v : V) :=
+  do (n, h) ← h;
+  do l ← length h;
+  do i ← index k l;
+  do b ← get h i;
+  do (r, b') ← remove_assoc k b;
+  do b' ← (k, v) :: b';
+  do h' ← set h i b';
+  if r then (n, h') else inc_pop (n, h').
+
+
+Lemma decompose_replace :
+  forall (i : Z) x b (tbl : list bucket),
+    <[i:=x :: b]> tbl =
+      <[i:=x :: b]>(<[i:=b]>tbl).
+Proof.
+  intros. by list.
+Qed.
+
+Lemma wp_replace :
+  forall h m k v,
+    isHashtbl h m ->
+    wp (replace h k v) (λ h, isHashtbl h (rm_add m k v)).
+Proof.
+  intros h m k v H.
+  unfold replace.
+  destructIsHashtbl.
+  wp_bind_eq.
+  wp_length _n.
+  index_intro k _n n.
+  wp_bind_eq.
+  wp_get b.
+  wp_bind_eq.
+  remember (remove_assoc k b) as b' eqn:E.
+  destruct b' as [r b'].
+  wp_bind_eq.
+  wp_set.
+  assert (isHashtblArray a n (rm_add m k v)).
+  { introIsHashtbl; simpl; rewrite decompose_replace.
+    - apply no_garbage_insert; (try (by list)).
+      eapply no_garbage_remove; subst; by list.
+    - apply valid_buckets_insert; (try by list); try lia.
+      apply valid_buckets_remove with b r; auto.
+  }
+  destructIsHashtblArray.
+  wp_if.
+  - wp_ret. introIsHashtbl;
+      erewrite cardinality_rm_add; tc;
+      by eapply non_empty_bucket.
+  - wp_op wp_inc_pop. introIsHashtbl. 3:auto.
+    all:
+      unfold max_cardinality;
+      erewrite cardinality_rm_add_empty;
+      tc; try lia; by eapply empty_bucket.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+Definition get (h : hashtbl) (k : K) :=
+  do (_, h) ← h;
+  do n ← length h;
+  do i ← index k n;
+  do b ← get h i;
+  find_assoc k b.
+
+Lemma wp_get :
+  forall h m k,
+    isHashtbl h m ->
+    wp (get h k) (λ v, head (m !!! k) = v).
+Proof.
+  intros h m k H.
+  unfold get.
+  destructIsHashtbl.
+  wp_bind_eq.
+  wp_length _n.
+  index_intro k _n n.
+  wp_bind_eq.
+  wp_get b.
+  wp_ret.
+  erewrite H4 with (i:=i') (b:=filter_key k b); subst; auto.
+  apply filter_key_assoc.
+Qed.
+
+Definition population (h : hashtbl) : int :=
+  fst h.
+
+Lemma wp_population :
+  forall h m,
+    isHashtbl h m ->
+    wp (population h) (λ n, isInt n (cardinality m)).
+Proof.
+  intros.
+  unfold population.
+  wp_ret.
+  by destructIsHashtbl.
 Qed.
 
 Definition lmap := gmap K V.
