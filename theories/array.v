@@ -866,7 +866,8 @@ Proof.
     isArray a (history ++ replicate (len xs - len history) inhabitant)
   ); last wp_shadow a.
   (* Preservation. *)
-  { clear dependent _n a. wp_list_iteri_body a _i i x history.
+  { clear dependent _n a.
+    wp_list_iteri_body a _i i x history.
     lengths. ulength in *.
     wp_set.
     isArray. }
