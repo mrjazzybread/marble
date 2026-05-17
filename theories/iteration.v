@@ -500,47 +500,89 @@ Qed.
 
 End F.
 
+Hint Rewrite
+  @permitted_sequence
+  @permitted_multiset
+  @permitted_set
+  @permitted_set_unique
+  using eauto with typeclass_instances
+: permitted.
+
+Tactic Notation "permitted" :=
+  autorewrite with permitted.
+
+Tactic Notation "permitted" "in" hyp(h) :=
+  autorewrite with permitted in h.
+
+Tactic Notation "permitted" "in" "*" :=
+  autorewrite with permitted in *.
+
+Tactic Notation "complete" :=
+  unfold
+    complete_sequence, complete_multiset,
+    complete_set, complete_set_unique.
+
+Tactic Notation "complete" "in" hyp(h) :=
+  unfold
+    complete_sequence, complete_multiset,
+    complete_set, complete_set_unique
+  in h.
+
+Tactic Notation "complete" "in" "*" :=
+  unfold
+    complete_sequence, complete_multiset,
+    complete_set, complete_set_unique
+  in *.
+
+(* The tactic [hiteri_step x i] is meant to be used after [wp_body ...].
+   Then the goal is [∀ x i,
+                     init `prefix_of` history0 →
+                     history0 ++ {[x]} = history1 →
+                     permitted history1 →
+                     i = length history0 → ...].
+   The tactic introduces these hypotheses
+   and uses the equation to substitute away [history1]. *)
+
+Tactic Notation "hiteri_step" simple_intropattern(x) simple_intropattern(i) :=
+  let Hpermitted := fresh "Hpermitted" in
+  intros x i ? <- Hpermitted ?;
+  permitted in Hpermitted.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Hints. *)
+
+Lemma prefix_refl {A} (xs : list A) : xs `prefix_of` xs.
+Proof. eauto. Qed.
+
+Hint Resolve
+  prefix_nil
+  prefix_refl
+  prefix_app_l
+: marble.
+
+(* When the goal is [permitted _ _], use the tactic [permitted] to
+   simplify the goal, then conclude using [tc]. *)
+
+Hint Extern 1 (permitted _ _) => (progress permitted; tc) : marble.
+
+(* At the end of a loop, the last subgoal should have the form
+   [∀ s, (∃ k, inv k s ∧ complete k) → ...]. The tactic
+   [wp_loop_postcondition_hook] is applied to this subgoal. *)
+
+Ltac wp_loop_postcondition_hook ::=
+  complete.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Iteration on a list. *)
-
-(* In [ITERI_LIST], the loop body is parameterized with the current
-   element [x] and its index [i] in the history. *)
 
 Definition ITERI_LIST {S A}
   (init xs : list A)
   (body : A → Z → S → WP S)
   (loop : S → WP S)
-: Prop
-:=
-  @ITER (list A) (eq)
-    init
-    ( λ history, history = xs )
-    S
-    ( λ history0 history1 s Q,
-      ∀ x i,
-      init `prefix_of` history0 →
-      history0 ++ {[x]} = history1 →
-      history1 `prefix_of` xs →
-      i = length history0 →
-      body x i s Q
-    )
-    loop.
-
-Hint Resolve prefix_nil : marble.
-
-(* The tactic [list_step x i] is meant to be used after [wp_body ...],
-   while iterating on a list.
-   Then the goal is [∀ x i,
-                     init `prefix_of` history0 →
-                     history0 ++ {[x]} = history1 →
-                     history1 `prefix_of` xs →
-                     i = length history0 → ...].
-   The tactic introduces these hypotheses
-   and uses the equation to substitute away [history1]. *)
-
-Tactic Notation "list_step" simple_intropattern(x) simple_intropattern(i) :=
-  intros x i ? <- ? ?.
+: Prop :=
+  HITERI init (complete_sequence xs) body loop.
 
 (* In [ITER_LIST], the loop body is parameterized with just [x]. *)
 
@@ -550,10 +592,7 @@ Definition ITER_LIST {S A}
   (loop : S → WP S)
 : Prop
 :=
-  ITERI_LIST
-    init xs
-    ( λ x i s Q, body x s Q )
-    loop.
+  HITER init (complete_sequence xs) body loop.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -948,8 +987,10 @@ Ltac expand_ITER ::=
     ITER_MULTISET, ITERI_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
     ITER_SET', ITER_SET_UNIQUE',
-    ITER, XITER, UXITER;
-    simpl implication.
+    HITER, HITERI,
+    ITER, XITER, UXITER
+  ;
+  simpl implication.
 
 Tactic Notation "expand_ITER" "in" hyp(h) :=
   unfold
@@ -959,6 +1000,7 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER_MULTISET, ITERI_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
     ITER_SET', ITER_SET_UNIQUE',
+    HITER, HITERI,
     ITER, XITER, UXITER
   in h;
   simpl implication in h.
@@ -967,15 +1009,18 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
 
 Ltac ITER :=
   expand_ITER;
-  intros ? ? Hcompatible Hinit Hbody.
+  intros ? ? Hcompatible Hinit Hbody;
+  complete.
 
 Ltac XITER :=
   expand_ITER;
-  intros ? ? Hcompatible Hinit Hbody.
+  intros ? ? Hcompatible Hinit Hbody;
+  complete.
 
 Ltac UXITER :=
   expand_ITER;
-  intros ? Hcompatible Hinit Hbody.
+  intros ? Hcompatible Hinit Hbody;
+  complete.
 
 (* The tactics [wp_continue] and [wp_break] help reason about invocations
    of [continue] and [break]. They recognize a suitable hypothesis and
@@ -1027,7 +1072,7 @@ Ltac wp_break :=
    to introduce all of the variables before calling [wp_body_hook]. *)
 
 (* After using [wp_body ...], one should typically use [z_step] or
-   [list_step] or a similar tactic to introduce the hypotheses that
+   [hiteri_step] or a similar tactic to introduce the hypotheses that
    express the fact that one step has been made. *)
 
 Ltac wp_body_hook Hinv :=

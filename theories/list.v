@@ -30,10 +30,6 @@ Section Fold.
 Variable S : Type.
 Variable body : S → A → S.
 
-Local Lemma prefix_refl xs : xs `prefix_of` xs.
-Proof. eauto. Qed.
-Local Hint Resolve prefix_refl prefix_app_l : marble.
-
 Lemma wp_fold_left_aux xs :
   ∀ future history,
   xs = history ++ future →

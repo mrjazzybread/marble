@@ -712,7 +712,7 @@ Tactic Notation "wp_list_iteri_body"
   simple_intropattern(x)
   simple_intropattern(history)
 :=
-  wp_body history ? s introducing: (fun _ => list_step x i; intros _i ?).
+  wp_body history ? s introducing: (fun _ => hiteri_step x i; intros _i ?).
 
 (* In the following section, we play with two alternate specifications
    of [list_iteri]. Insteead of using [ITER_LIST], where the producer
