@@ -532,6 +532,13 @@ Ltac wp_loop_precondition_hook :=
   try solve [ prove_Proper ];
   expand_ITER.
 
+(* The tactic [wp_loop_postcondition_hook] is invoked by [wp_apply ...
+   with invariant: ...] in the last subgoal, where one reasons about
+   the situation at the end of the loop. *)
+
+Ltac wp_loop_postcondition_hook :=
+  idtac. (* to be redefined in iteration.v *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* [wp_apply lemma] applies the lemma [lemma], which is typically a
@@ -591,7 +598,7 @@ Tactic Notation "wp_op" uconstr(lemma) :=
 
 Tactic Notation "wp_op" uconstr(lemma) "with" "invariant:" constr(I) :=
   first [ simple eapply wp_bind | simple eapply wp_conseq ];
-    [ wp_apply lemma with invariant: I | ].
+    [ wp_apply lemma with invariant: I | wp_loop_postcondition_hook ].
 
 (* In the last subgoal of [wp_op], one should typically use [wp_intro x] or
    [wp_shadow x]. The following tactics are abbreviations for these common
