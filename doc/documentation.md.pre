@@ -382,9 +382,8 @@ We instantiate these general specifications for several common situations:
   The producer's state is a history of the elements produced so far:
   it forms a prefix of the list `xs`.
 
-+ [`ITERI_MULTISET`](iteration.v:Definition ITERI_MULTISET) and
-  [`ITER_MULTISET`](iteration.v:Definition ITER_MULTISET) are
-  specialized versions of `ITER`
++ [`ITER_MULTISET`](iteration.v:Definition ITER_MULTISET) is
+  a specialized version of `ITER`
   where the producer iterates, *in an arbitrary order*,
   over a multiset `xs`.
   The producer's state is a history of the elements produced so far:

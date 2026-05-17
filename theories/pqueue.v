@@ -1117,7 +1117,7 @@ Proof.
   (* Preservation. *)
   { clear s. wp_iteri_body _j j x s. subst x.
     wp_op Hbody shadowing: s.
-    { join_segments. eauto using submseteq_seg''. }
+    { permitted. join_segments. eauto using submseteq_seg''. }
     join_segments in *.
     assumption. }
   (* Conclusion. *)

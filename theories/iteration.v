@@ -575,7 +575,7 @@ Ltac wp_loop_postcondition_hook ::=
 
 (* -------------------------------------------------------------------------- *)
 
-(* Iteration on a list. *)
+(* Iteration on a list, in order. *)
 
 Definition ITERI_LIST {S A}
   (init xs : list A)
@@ -583,8 +583,6 @@ Definition ITERI_LIST {S A}
   (loop : S → WP S)
 : Prop :=
   HITERI init (complete_sequence xs) body loop.
-
-(* In [ITER_LIST], the loop body is parameterized with just [x]. *)
 
 Definition ITER_LIST {S A}
   (init xs : list A)
@@ -596,52 +594,14 @@ Definition ITER_LIST {S A}
 
 (* -------------------------------------------------------------------------- *)
 
-(* Iteration on a list, in an unspecified (unpredictable) order. *)
-
-(* This can be understood as iteration on a multiset. *)
-
-(* The producer state is the history, that is, the list of elements
-   produced so far. Each step extends the history with one element [x].
-   The list [init] is the initial producer state; a history that is a
-   submultiset of the list [xs] is a valid history; a history that is
-   equal (as a multiset) to the list [xs] is final. *)
-
-(* The relation [⊆+] is defined in stdpp/list_relations.v.
-   Its full name is [submseteq]. *)
-
-Local Infix "≃" := (Permutation)
-  (at level 70, no associativity).
-
-Definition ITERI_MULTISET {S A}
-  (init xs : list A)
-  (body : A → Z → S → WP S)
-  (loop : S → WP S)
-: Prop
-:=
-  @ITER (list A) (eq)
-    init
-    ( λ history, history ≃ xs )
-    S
-    ( λ history0 history1 s Q,
-      ∀ x i,
-      init `prefix_of` history0 →
-      history0 ++ {[x]} = history1 →
-      history1 ⊆+ xs →
-      i = length history0 →
-      body x i s Q
-    )
-    loop.
+(* Iteration on a list, in an unspecified order. *)
 
 Definition ITER_MULTISET {S A}
   (init xs : list A)
   (body : A → S → WP S)
   (loop : S → WP S)
-: Prop
-:=
-  ITERI_MULTISET
-    init xs
-    ( λ x i s Q, body x s Q )
-    loop.
+: Prop :=
+  HITER init (complete_multiset xs) body loop.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -984,7 +944,7 @@ Ltac expand_ITER ::=
     ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
-    ITER_MULTISET, ITERI_MULTISET,
+    ITER_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
     ITER_SET', ITER_SET_UNIQUE',
     HITER, HITERI,
@@ -997,7 +957,7 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
     ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
     ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
-    ITER_MULTISET, ITERI_MULTISET,
+    ITER_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
     ITER_SET', ITER_SET_UNIQUE',
     HITER, HITERI,
