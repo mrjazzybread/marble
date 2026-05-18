@@ -17,7 +17,7 @@ Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Export ZifyNat ZifyUint63.
-From marble Require Import tactics bool int iteration loop array wp.
+From marble Require Import tactics bool int list iteration loop array wp.
 From marble Require Import listz_buffer. (* TODO *)
 From marble.logic Require Import sets relations dfs.
 Implicit Type _i _j _k _n : int.
@@ -77,75 +77,65 @@ Hypothesis start_respects_bound :
 
 (* [foreach_start] must enumerate the vertices in the set [start].
 
-   How should the specification of [foreach_start] be expressed? This is a
-   subtle question. If [foreach_start] enumerates the vertices in an
-   arbitrary order, then this is fine: we can tolerate that. Yet, if
-   [foreach_start] enumerates the vertices in a predictable order, then we
-   can guarantee that the roots of the DFS forest that we construct
-   respect this order. And, in some applications, such as Kosaraju and
-   Sharir's algorithm, this matters. So, we write the specification of
-   [foreach_start] in a very general form, such that both iterating in a
-   specified order and iterating in an unspecified order are instances of
-   this general form.
+   How should the specification of [foreach_start] be expressed? This
+   is a subtle question. If [foreach_start] enumerates the vertices in
+   an arbitrary order, then this is fine: we can tolerate that. Yet,
+   if [foreach_start] enumerates the vertices in a predictable order,
+   then we can guarantee that the roots of the DFS forest that we
+   construct respect this order. And, in some applications, such as
+   Kosaraju and Sharir's algorithm, this matters. So, we write the
+   specification of [foreach_start] in a very general form, such that
+   both iterating in a specified order and iterating in an unspecified
+   order are instances of this general form.
 
-   This general form requires the user to provide a predicate [complete]
-   such that 1- a complete list covers the set [start]; and 2- there
-   exists a complete list. For example, the predicate [complete] might be
-   true of every list that covers the set [start]; or of every list that
-   covers the set [start] and does not have repeated elements; or of only
-   of one specific list that covers the set [start].
+   This general form requires the user to provide two predicates
+   [permitted] and [complete]. For example, the predicate [complete]
+   might be true of every list that covers the set [start]; or of
+   every list that covers the set [start] and does not have repeated
+   elements; or of only of one specific list that covers the set
+   [start].
 
    For some definitions of [complete], repetition is possible:
    [foreach_start] may produce a vertex several times. *)
 
+Variable permitted : list vertex → Prop.
+
 Variable complete : list vertex → Prop.
+
+Variable permitted_spec :
+  ∀ rs, permitted rs → list_to_set rs ⊆ start.
 
 Variable complete_spec :
   ∀ rs, complete rs → list_to_set rs ≡ start.
 
-Variable complete_nonempty :
-  ∃ rs, complete rs.
+Variable permitted_nil :
+  permitted [].
 
-(* [permitted rs] holds iff [rs] is a prefix of some complete list. *)
+Variable permitted_prefix :
+  ∀ rs1 rs2, permitted (rs1 ++ rs2) → permitted rs1.
 
-Local Notation permitted :=
-  (permitted complete).
-
-(* Any permitted list forms a subset of [start]. *)
-
-Local Lemma permitted_spec rs : permitted rs → list_to_set rs ⊆ start.
+Local Lemma permitted_prefix_of rs1 rs2 :
+  permitted rs2 → rs1 `prefix_of` rs2 → permitted rs1.
 Proof.
-  intros (rs' & Hcomplete). apply complete_spec in Hcomplete. set_solver.
-Qed.
-
-(* The empty list is permitted. *)
-
-Local Lemma permitted_nil : permitted [].
-Proof.
-  destruct complete_nonempty as (rs & Hcomplete). eauto.
+  unfold prefix. intros ? (? & ->). eauto using permitted_prefix.
 Qed.
 
 (* [foreach_start] is expected to produce the start vertices in an order
    that respects the predicates [permitted] and [complete]. *)
 
 Variable wp_foreach_start:
-  ∀ {A} (body : A → _vertex → A),
-  @ITER (list vertex) (eq)
-    [] complete A
-    ( λ rs0 rs1 a Q,
-      ∀Int _v v,
-      rs0 ++ {[v]} = rs1 →
-      permitted rs1 →
-      wp (body a _v) Q
-    )
-    (λ a Q, wp (foreach_start a body) Q).
+  ∀ {S} (body : S → _vertex → S),
+  HITER
+    [] permitted complete
+    (λ v s Q, ∀ _v, isInt _v v → wp (body s _v) Q)
+    (λ s Q, wp (foreach_start s body) Q).
 
 (* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
 
 (* Fortunately, no properties of this function are needed in the proof of
    termination of [visit]. *)
 
-Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
+Variable foreach_successor : ∀ {S}, S → _vertex → (S → _vertex → S) → S.
 
 (* The vertices form a directed graph. *)
 
@@ -166,10 +156,10 @@ Hypothesis edges_respect_bound :
    times. *)
 
 Variable wp_foreach_successor:
-  ∀ {A} (body : A → _vertex → A),
+  ∀ {S} (body : S → _vertex → S),
   ∀Int _v v,
   0 ≤ v < n →
-  ITER_SET ∅ (successors v)
+  ITER_SET [] (successors v)
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_successor a _v body) Q).
 
@@ -504,12 +494,6 @@ Local Ltac local_permitted :=
   end.
 
 Local Hint Extern 1 (permitted _) => local_permitted : marble.
-
-(* Hack: the presence of [complete_nonempty] causes [unpack] to diverge,
-   as it is an existential assertion, and is not cleared by [destruct].
-   To work around this problem, we redefine [unpack] as follows. *)
-Local Ltac unpack ::=
-  clear complete_nonempty; repeat unpack1.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -949,17 +933,15 @@ Proof.
      from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
   rewrite wpd_wp.
   wp_op wp_foreach_successor with invariant: (
-    λ examined (s'' : sbeyond (m', u')),
+    λ history (s'' : sbeyond (m', u')),
+      let examined := list_to_set history in
       visit_post γ' [] examined (proj1_sig s'')
   ).
-  (* Compatibility. (This is a bit painful.) *)
-  { intros examined1 examined2 ?. intros ((m'' & u'') & ?) ? <-. simpl.
-    split; intros; unpack; pack; eauto with set_solver. }
   (* Initialization. *)
   { intro_visit_post. }
   (* Preservation. *)
-  { wp_body examined0 examined1 ((m'' & u'') & ow'')
-      introducing: (fun _ => intros w ??? _w ?).
+  { wp_body history0 history1 ((m'' & u'') & ow'')
+      introducing: (fun _ => hiter_step w; intros _w ?).
     elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
     assert (E v w) by set_solver.
     assert (edge (top σ') w) by eauto.
@@ -1166,9 +1148,9 @@ Proof.
   { intro_visit_post. }
   (* Preservation. *)
   { clear dependent m.
-    intros started0 started1 (m' & u') ?.
-    intros _v v ? ? Hpermitted.
-    subst started1.
+    (* TODO turn this into a standard tactic: *)
+    wp_body started ? (m' & u')
+      introducing: (fun _ => hiter_step v; intros _v ?).
     assert (v ∈ start).
     { apply permitted_spec in Hpermitted. set_solver. }
     elim_visit_post rs' marked' σ' γ'. subst rs'.
@@ -1254,40 +1236,43 @@ Defined.
    produced in DFS pre-order. It guarantees that all reachable vertices
    are enumerated, without repetition, in an unspecified order. *)
 
-(* As the producer state, we use a set of vertices. It is the set of
-   vertices that have been examined so far. *)
+(* As the producer state, we use a list of vertices. It is the list of
+   vertices that have been examined so far. (We could use a set of
+   vertices, but our usual convention, in the specification of an
+   iteration function, is to use a list. Using a list lets us prove
+   the lemma [wp_traverse_pre'], which uses [ITER_SET_UNIQUE].) *)
 
 Section SimplifiedSpec.
 
-Variable inv : vertices → U → Prop.
-
-Variable compatible_inv : Proper (equiv ==> eq ==> iff) inv.
+Variable inv : list vertex → U → Prop.
 
 Variable u0 : U.
-Variable initialization : inv ∅ u0.
+Variable initialization : inv [] u0.
 
 Variable wp_hook :
-  ∀ examined0 examined1 u,
-  inv examined0 u →
-  ∀ _v v,
-  isInt _v v →
-  0 ≤ v < n →
-  v ∉ examined0 →
-  examined0 ∪ {[v]} ≡ examined1 →
-  examined1 ⊆ closure start →
-  wp (hook _v u) (λ u', inv examined1 u').
+  ∀ history0 history1 u,
+  inv history0 u →
+  ∀ v,
+  [] `prefix_of` history0 →
+  history0 ++ {[v]} = history1 →
+  permitted_set_unique (closure start) history1 →
+  ∀ _v, isInt _v v →
+  0 ≤ v < n → (* redundant *)
+  wp (hook _v u) (λ u', inv history1 u').
 
 Local Ltac proveInv :=
   match goal with h: inv ?marked ?u |- inv ?marked' ?u =>
-    assert (marked' ≡ marked) as -> by set_solver;
+    assert (marked' = marked) as -> by eauto;
     exact h
-  end.
+  end. (* TODO unused? *)
 
 Lemma wp_traverse_pre_simplified :
   wp (traverse_pre u0) (λ '(m', u'),
-    ∃ marked',
+    ∃ history marked',
     isMarks m' marked' ∧
-    inv marked' u' ∧
+    inv history u' ∧
+    list_to_set history ≡ marked' ∧
+    NoDup history ∧
     (* The marked vertices are exactly the reachable vertices. *)
     marked' ≡ closure start
   ).
@@ -1295,27 +1280,40 @@ Proof.
   intros.
   rewrite traverse_pre_eq. unfold plain_traverse_pre.
   wp_op wp_traverse with invariant: (λ γ u,
-    let '(rs, marked, σ) := γ in inv marked u
+    let '(rs, marked, σ) := γ in
+    ∃ history, inv history u ∧ list_to_set history ≡ marked ∧ NoDup history
   ).
   (* Compatibility. (This is a bit painful.) *)
   { intros ((rs1 & marked1) & σ1) ((rs2 & marked2) & σ2) Hequiv.
     unfold equiv in Hequiv. hnf in Hequiv. unpack in Hequiv.
     intros u'' ? <-.
     split; intros; unpack; pack; eauto; set_solver. }
+  (* Initialization. *)
+  { simpl. eauto using NoDup_nil' with set_solver. }
   (* Preservation. *)
   { intros γ0 γ1 u Hinv Hwf0 _e e Hevent Hstep Hperm.
     assert (Hwf1: wf γ1) by eauto using wf_step.
     destruct γ0 as ((rs0 & marked0) & σ0).
     destruct γ1 as ((rs1 & marked1) & σ1).
+    destruct Hinv as (history & Hinv). unpack in Hinv.
     apply permitted_spec in Hperm.
     assert (reaches E start marked1).
-    { generalize (wf_reaches Hwf1 eq_refl); intro. set_solver. }
-    destructEvent; destructStep; unfold hook_pre; try solve [ wp_ret ].
+    { generalize (wf_reaches Hwf1 eq_refl); intro. set_solver. (* slow *) }
+    destructEvent; destructStep; unfold hook_pre;
+      try solve [ wp_ret; eauto ].
     (* Only the case of an [Enter] event is nontrivial. *)
+    assert (NoDup (history ++ {[v]})).
+    { apply NoDup_snoc. eauto with set_solver. (* UGLY slow *) }
+    assert (fact: list_to_set (history ++ {[v]}) ≡ marked1).
+    { set_solver. (* UGLY slow *) }
+    assert (reaches E start (list_to_set (history ++ {[v]}))).
+    { rewrite fact. assumption. }
     wp_op wp_hook introducing: u'.
-    assumption. }
+    { list. permitted. eauto. }
+    { rewrite app_nil_r in *. eauto. }
+  }
   (* Completion. *)
-  { cbv beta. intros (m' & u') (marked' & σ' & vs & ?). unpack.
+  { intros (m' & u') (rs' & marked' & σ' & vs & ?). unpack.
     pack; eauto using omarked_is_closure_start. }
 Qed.
 
@@ -1390,20 +1388,24 @@ Definition traverse_pre' {U} hook (u : U) : U :=
 Lemma wp_traverse_pre' :
   ∀ {U} (hook : _vertex → U → U),
   ITER_SET_UNIQUE
-    ∅ (closure start)
+    [] (closure start)
     (λ v u Q, ∀ _v, isInt _v v → 0 ≤ v < n → wp (hook _v u) Q)
     (λ u Q, wp (traverse_pre' hook u) Q).
 Proof.
   intros. ITER. unfold traverse_pre'.
   wp_op wp_traverse_pre_simplified with invariant: inv.
   (* Preservation. *)
-  { intros. wp_op Hbody.
-    + set_solver.
-    + cbv beta. eauto. }
+  { wp_body history0 history1 u
+      introducing: (fun _ => hiter_step v; intros _v ??).
+    unpack.
+    wp_op Hbody.
+    { permitted. list. assumption. }
+    cbv beta. list. eauto. }
   (* Completion. *)
   { clear dependent s.
-    cbv beta. intros (m & u) (marked' & ?). unpack.
-    wp_ret. }
+    cbv beta. intros (m & u) (history & marked' & ?). unpack.
+    wp_ret.
+    pack; eauto. set_solver. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1826,21 +1828,39 @@ End Group.
 (* This is a bit messy, but, up to these changes, the proofs go through
    without deep trouble. *)
 
+(* As a result of these changes, the user-provided predicate [permitted]
+   becomes unused; we effectively defined our own predicate [permitted]
+   based on the user-provided predicate [complete]. Furthermore, we must
+   require [complete_nonempty], a proof that there exists a complete
+   enumeration of the start vertices, that is, a proof that the set [start]
+   is finite. We could have adopted this approach in our direct-style DFS
+   algorithm, thereby removing the need for the user to supply [permitted].
+   We have tried both approaches and settle on this for now. *)
+
 Definition permitted_rev rs :=
   ∃ rs', complete (rs' ++ rev rs).
 
 Local Notation perm_rev γ :=
   (permitted_rev (history γ)).
 
+Variable complete_nonempty :
+  ∃ rs, complete rs.
+
+(* Hack: the presence of [complete_nonempty] causes [unpack] to diverge,
+   as it is an existential assertion, and is not cleared by [destruct].
+   To work around this problem, we redefine [unpack] as follows. *)
+Local Ltac unpack ::=
+  clear complete_nonempty; repeat unpack1.
+
 Local Lemma permitted_rev_nil : permitted_rev [].
-Proof.
+Proof using complete_nonempty.
   destruct complete_nonempty as (rs & Hcomplete).
   unfold permitted_rev. exists rs. list. eauto.
 Qed.
 
 Local Lemma permitted_rev_prefix rs1 rs2 :
   permitted_rev (rs1 ++ rs2) → permitted_rev rs1.
-Proof.
+Proof using.
   unfold permitted_rev. intros (rs' & ?).
   rewrite rev_app_distr in *. rewrite app_assoc in *. eauto.
 Qed.
@@ -2020,8 +2040,10 @@ Definition traverse_cps : cascade :=
 
 Context `{!RelDecision (∈@{vertices})}.
 
-Local Lemma technical pushed0 pushed1 marked0 marked1 v w :
-  pushed0 ∪ {[w]} ≡ pushed1 →
+Local Lemma technical history0 history1 pushed0 pushed1 marked0 marked1 v w :
+  pushed0 = list_to_set history0 →
+  pushed1 = list_to_set history1 →
+  history0 ++ {[w]} ≡ history1 →
   successors v ∖ pushed1 ⊆ marked0 →
   marked0 ⊆ marked1 →
   {[w]} ⊆ marked1 →
@@ -2145,13 +2167,11 @@ Proof.
      formula [isCont k γ' [] ∅]. Therefore the loop invariant should be
      [isCont k γ' [] examined] where [examined] is [successors v ∖ pushed]. *)
   wp_op wp_foreach_successor with invariant: (
-    λ pushed (k : mbeyond m' → head),
+    λ history (k : mbeyond m' → head),
+      let pushed := list_to_set history in
       let examined := successors v ∖ pushed in
       isCont k γ' [] examined
   ).
-  (* Compatibility. (This is a bit painful.) *)
-  { intros pushed1 pushed2 ?. intros k' ? <-.
-    split; intros; unpack; pack; eauto; set_solver. }
   (* Initialization. *)
   (* In this subgoal, [pushed] is empty, so [examined] is [successors v].
      Therefore we are reasoning about the continuation that is invoked
@@ -2177,8 +2197,8 @@ Proof.
     unfold mtrans. subst γ.
     wp_op Hcont; eauto with horizontal set_solver. }
   (* Preservation. *)
-  { wp_body pushed0 pushed1 k''
-      introducing: (fun _ => intros w ???; intros _w ?).
+  { wp_body history0 history1 k''
+      introducing: (fun _ => hiter_step w; intros _w ?).
     (* The loop body constructs and returns a new continuation. *)
     wp_ret. unfold isCont. unfold γ'; fold γ'. list.
     intros m'' ? rs'' marked'' σ'' γ''. intros. subst rs''.
@@ -2204,7 +2224,7 @@ Proof.
   (* Completion. *)
   (* [pushed] is [successors v], so [examined] is empty. *)
   { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
-    cbv beta zeta. intros k' (pushed & Hk' & Hpushed).
+    cbv beta zeta. intros k' (history & Hk' & Hpushed).
     (* There remains to argue that [isCont ...] implies [isCont ...]. *)
     assert (wf γ') by tc.
     assert (horizontal γ' γ') by eauto with horizontal.
@@ -2257,7 +2277,7 @@ Proof.
     wp_ret. eapply isHeadDone; assumption. }
   intros k Hk.
   (* Push the start vertices onto the continuation. *)
-  (* The loop invariant, specialized with [pushed := ∅], matches the
+  (* The loop invariant, specialized with [pushed := []], matches the
      specification of the final continuation that we have given above.
      This loop invariant is a bit subtle. We do not know, ahead of time,
      in what order the start vertices will be produced by [foreach_start].
@@ -2277,8 +2297,7 @@ Proof.
     eapply Hk; eauto with set_solver. }
   (* Preservation. *)
   { wp_body pushed0 pushed1 k''
-      introducing: (fun _ => intros _v v ?? Hpermitted).
-    subst pushed1.
+      introducing: (fun _ => hiter_step v; intros _v ?). (* TODO tactic *)
     assert (v ∈ start).
     { apply permitted_spec in Hpermitted. set_solver. }
     (* The loop body constructs and returns a new continuation. *)
