@@ -17,7 +17,7 @@ Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
 From Stdlib Require Export ZifyNat ZifyUint63.
-From marble Require Import tactics bool int iteration loop array wp.
+From marble Require Import tactics bool int list iteration loop array wp.
 From marble.logic Require Import sets relations dfs scc.
 From marble Require Import traverse.
 
@@ -64,25 +64,25 @@ Variable bound_n : 0 ≤ n ≤ max_array_length.
 
 (* [foreach_vertex] iterates on all vertices. *)
 
-Variable foreach_vertex : ∀ {A}, A → (A → _vertex → A) → A.
+Variable foreach_vertex : ∀ {S}, S → (S → _vertex → S) → S.
 
 (* [foreach_vertex] must enumerate all vertices,
    in an arbitrary order, possibly with repetitions. *)
 
 Variable wp_foreach_vertex:
-  ∀ {A} (body : A → _vertex → A),
-  ITER_SET ∅ {[ v | 0 ≤ v < n ]}
+  ∀ {S} (body : S → _vertex → S),
+  ITER_SET [] {[ v | 0 ≤ v < n ]}
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_vertex a body) Q).
 
 (* [foreach_predecessor a _w] iterates on the predecessors of the
    vertex [_w]. *)
 
-Variable foreach_predecessor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
+Variable foreach_predecessor : ∀ {S}, S → _vertex → (S → _vertex → S) → S.
 
 (* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
 
-Variable foreach_successor : ∀ {A}, A → _vertex → (A → _vertex → A) → A.
+Variable foreach_successor : ∀ {S}, S → _vertex → (S → _vertex → S) → S.
 
 (* The vertices form a directed graph. *)
 
@@ -107,10 +107,10 @@ Hypothesis reverse_edges_respect_bound :
    times. *)
 
 Variable wp_foreach_successor:
-  ∀ {A} (body : A → _vertex → A),
+  ∀ {S} (body : S → _vertex → S),
   ∀Int _v v,
   0 ≤ v < n →
-  ITER_SET ∅ (successors v)
+  ITER_SET [] (successors v)
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_successor a _v body) Q).
 
@@ -120,10 +120,10 @@ Variable wp_foreach_successor:
    times. *)
 
 Variable wp_foreach_predecessor:
-  ∀ {A} (body : A → _vertex → A),
+  ∀ {S} (body : S → _vertex → S),
   ∀Int _w w,
   0 ≤ w < n →
-  ITER_SET ∅ (predecessors w)
+  ITER_SET [] (predecessors w)
     (λ v a Q, ∀ _v, isInt _v v → wp (body a _v) Q)
     (λ a Q, wp (foreach_predecessor a _w body) Q).
 
@@ -169,6 +169,17 @@ Proof.
       assumption. }
     (* Case: [v] does not lie in this tree. *)
     { eauto. }}
+Qed.
+
+Lemma scc_forest_root_map_1' ρ f :
+  is_scc_forest E f →
+  isRootMap ρ f →
+  ∀ v, v ∈ support f →
+  scc v (ρ v).
+Proof.
+  intros.
+  forwards fact: scc_forest_root_map_1; eauto.
+  set_unfold in fact. eauto with scc.
 Qed.
 
 Lemma scc_forest_root_map_2 ρ f :
@@ -242,6 +253,13 @@ Proof.
     intro Heq. rewrite Heq in fact1. eauto with scc. }
 Qed.
 
+Local Lemma prefix_list_to_set `{SemiSet A C} (xs ys : list A) :
+  xs `prefix_of` ys →
+  list_to_set xs ⊆ (list_to_set ys : C).
+Proof.
+  unfold prefix. intros (xs' & ->). set_solver.
+Qed.
+
 Lemma wp_kosaraju :
   wp kosaraju (λ _group,
     ∃ ρ,
@@ -258,50 +276,19 @@ Proof.
 
   (* 1a. Definitions. *)
   set (start := universe n).
-  set (complete := λ rs, list_to_set rs ≡ start).
+  set (permitted := permitted_set start).
+  set (complete := complete_set start).
 
   (* 1b. Invoke [list_rev_post]. *)
-  specialize (wp_list_rev_post) with
-    (start := start)
-    (complete := complete)
+  specialize wp_list_rev_post with
+    (start := start) (permitted := permitted) (complete := complete)
   ; intro wp_list_rev_post.
-  wp_op wp_list_rev_post introducing: _vs; clear wp_list_rev_post.
-  (* Precondition 1: the predicate [complete] is inhabited. *)
-  { apply finite_universe. }
-  (* Precondition 2: *)
-  (* We must prove that the specification of [foreach_vertex], which
-     is formulated using [ITER_SET], implies a formulation that is
-     formulated directly in terms of [ITER] and [complete]. This is
-     essentially the same proof as the lemma [misc.direction1]. *)
-  (* TODO make this a separate lemma *)
-  { clear -wp_foreach_vertex.
-    intros. ITER.
-    wp_op wp_foreach_vertex with invariant: (
-      λ vs s, ∃ rs, inv rs s ∧ list_to_set rs ≡ vs
-    ).
-    (* Compatibility. *)
-    { clear dependent s.
-      intros vs1 vs2 Hequiv. intros s ? <-.
-      split; intros; unpack; pack; eauto; set_solver. }
-    (* Initialization. *)
-    { pack; eauto. }
-    (* Preservation. *)
-    { clear dependent s.
-      intros vs0 vs1 s (rs & ? & ?).
-      intros v _ ? ? _v ?.
-      wp_op Hbody shadowing: s.
-      { unfold permitted, complete.
-        (* We must argue that the set [universe n ∖ vs1] is finite. *)
-        destruct (finite_universe n) as (rs' & Hcover).
-        exists rs'. set_solver. }
-      eexists. split. eauto. set_solver.
-    }
-    (* Completion. *)
-    { clear dependent s.
-      intros s (vs & (rs & ? & ?) & ?).
-      unfold complete, universe.
-      eexists. split. eauto. set_solver. }
-  }
+  wp_op wp_list_rev_post introducing: _vs;
+  clear wp_list_rev_post.
+  (* Precondition: [permitted] holds of the empty list. *)
+  { unfold permitted, permitted_set. set_solver. }
+  (* Precondition: [permitted] is prefix-closed. *)
+  { unfold permitted, permitted_set. set_solver. }
 
   (* 1c. Deconstruct the postcondition of [list_rev_post]. *)
   wp_destruct_post (marked & f1 & Hdfs1 & Hroots & Hmarked & Hvs).
@@ -313,56 +300,68 @@ Proof.
   set (vs := rev (postorder f1)). fold vs in Hvs.
   clear dependent marked.
   clear Hroots. (* unused *)
+  (* The list [vs] covers the set [start]. *)
+  assert (Hstart: list_to_set vs ≡ start).
+  { subst vs. rewrite list_to_set_rev, list_to_set_postorder.
+    dfs_omarked. apply dfs_omarked_choice in Hdfs1. set_solver. }
   (* The universe is reverse closed. *)
   assert (closed (flip E) (universe n)) by set_solver.
 
   (* 2a. More definitions. *)
   (* This time, the predicate [complete] is deterministic: it is important
      that the root vertices be enumerated in the order of the list [vs]. *)
+  clear dependent permitted.
   clear complete.
-  set (complete := λ rs, rs = vs).
+  set (permitted := permitted_sequence vs).
+  set (complete := complete_sequence vs).
 
   (* 2b. Invoke [group]. *)
   specialize (wp_group _n n isInt_n bound_n) with
-    (start := start)
-    (complete := complete)
-    (E := flip E)
-    (wp_foreach_successor := @wp_foreach_predecessor)
+    (start := start) (permitted := permitted) (complete := complete)
+    (E := flip E)  (wp_foreach_successor := @wp_foreach_predecessor)
   ; intro wp_group.
   wp_op wp_group introducing: _group; clear wp_group.
-  (* Precondition 1: the list [vs] covers the set [start]. *)
-  { unfold complete. intros ? ->.
-    subst vs. rewrite list_to_set_rev, list_to_set_postorder.
-    dfs_omarked. apply dfs_omarked_choice in Hdfs1. set_solver. }
-  (* Precondition 2: the predicate [complete] is inhabited. *)
-  { unfold complete. eauto. }
-  (* Precondition 3: [fold_left _ _vs _] enumerates the list [vs]. *)
-  { admit. } (* TODO create a file list.v *)
+  (* Precondition: [permitted] respects the set [start]. *)
+  { unfold permitted, permitted_sequence.
+    intros. rewrite <- Hstart. eapply prefix_list_to_set. eauto. }
+  (* Precondition: [complete] respects the set [start]. *)
+  { unfold complete, complete_sequence. set_solver. }
+  (* Precondition: [permitted] holds of the empty list. *)
+  { unfold permitted, permitted_sequence. tc. }
+  (* Precondition: [permitted] is prefix-closed. *)
+  { unfold permitted, permitted_sequence. tc. }
+  (* Precondition: [fold_left _ _vs _] enumerates the list [vs]. *)
+  { unfold permitted, complete. intros. eapply wp_fold_left'.
+    eapply Forall2_impl; eauto. tauto. }
 
   (* 2c. Deconstruct the postcondition of [group]. *)
   wp_destruct_post
     (rs & marked & f2 & ρ & Hdfs2 & Hordered & Hcomplete
         & Hroots & Hmarked & ? & ? & Hmap).
-
   (* Every vertex is marked. *)
   rewrite (closure_start_is_universe n start) in Hmarked by eauto with lia.
   rewrite Hmarked in Hdfs2.
   clear dependent marked.
   clear Hroots. (* unused *)
   (* The forest [f2] is ordered by the list [vs]. *)
-  unfold complete in Hcomplete. subst rs.
+  unfold complete, complete_sequence in Hcomplete. subst rs.
   (* Therefore [f2] is an SCC forest! *)
   assert (is_scc_forest E f2).
   { eapply scc_soundness. econstructor. eauto. }
+  (* The support of [f2] covers every vertex. *)
+  assert (∀ v, 0 ≤ v < n → v ∈ support f2).
+  { apply dfs_omarked_choice in Hdfs2.
+    unfold universe in Hdfs2.
+    intros v Hv. specialize (Hdfs2 v). set_unfold in Hdfs2. tauto. }
 
   (* 3. Conclude. *)
   wp_ret. eexists; pack; tc.
   (* Postcondition 1: [v] and [ρ !!! v] inhabit the same component. *)
-  { admit. }
+  { eapply scc_forest_root_map_1' with (ρ := λ v, ρ !!! v); eauto. }
   (* Postcondition 2: if [v] and [w] inhabit the same component then
      [ρ !!! v] and [ρ !!! w] are equal. *)
-  { admit. }
-Abort.
+  { eapply scc_forest_root_map_2 with (ρ := λ v, ρ !!! v); eauto. }
+Qed.
 
 End G.
 
