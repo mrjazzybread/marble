@@ -15,7 +15,7 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics bool int iteration loop wp logic.
+From marble Require Import tactics bool list int iteration loop wp logic.
 Implicit Types _i _j _k _n : int.
 From Corelib Require Derive.
 
@@ -1895,26 +1895,6 @@ Proof.
   generalize (wp_init_default _n f); intro Hinit.
   rewrite wp_iff in Hinit. assumption.
 Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-(* Lemmas and hints about [Forall2]. *)
-
-Lemma Forall2_nil' {A B} (R : A → B → Prop) :
-  Forall2 R [] [].
-Proof. eauto. Qed.
-
-Lemma Forall2_singleton {A B} (R : A → B → Prop) a b :
-  R a b → Forall2 R {[a]} {[b]}.
-Proof. unfold singleton, stdpp_buffer.singleton_list. eauto. Qed.
-
-Hint Resolve
-  Forall2_nil'
-  Forall2_singleton
-  Forall2_insert
-  Forall2_app
-  Forall2_replicate
-: marble.
 
 (* -------------------------------------------------------------------------- *)
 
