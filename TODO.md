@@ -4,6 +4,7 @@
 
 * Mention the new file `olt.v`.
 * Mention the new file `traverse.v`.
+* Mention the new file `list.v`.
 
 ## Documentation
 
