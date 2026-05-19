@@ -27,6 +27,9 @@ Set Universe Polymorphism.
 
 Local Ltac wp_intro_hook Hx ::= idtac.
 
+(* This file implements Kosaraju and Sharir's algorithm, which computes
+   the strongly connected components of a directed graph in linear time. *)
+
 (* -------------------------------------------------------------------------- *)
 
 (* We assume that the vertices of the graph are numbered from 0 to [n-1].
@@ -34,15 +37,16 @@ Local Ltac wp_intro_hook Hx ::= idtac.
    Boolean marks. This is simple and efficient. *)
 
 Local Notation _vertex := int.
-Local Notation marks  := (array bool).
 
 Implicit Type _v _w : _vertex.
 Implicit Type _vs _ws : list _vertex.
-Implicit Type m : marks.
 
 Local Notation vertex := Z.
 Implicit Type v w : vertex.
 Local Notation vertices := (propset vertex).
+
+Implicit Type rs : list vertex.
+Implicit Type vs : vertices.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -108,8 +112,7 @@ Hypothesis reverse_edges_respect_bound :
 
 Variable wp_foreach_successor:
   ∀ {S} (body : S → _vertex → S),
-  ∀Int _v v,
-  0 ≤ v < n →
+  ∀Int _v v, 0 ≤ v < n →
   ITER_SET [] (successors v)
     (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
     (λ a Q, wp (foreach_successor a _v body) Q).
@@ -121,8 +124,7 @@ Variable wp_foreach_successor:
 
 Variable wp_foreach_predecessor:
   ∀ {S} (body : S → _vertex → S),
-  ∀Int _w w,
-  0 ≤ w < n →
+  ∀Int _w w, 0 ≤ w < n →
   ITER_SET [] (predecessors w)
     (λ v a Q, ∀ _v, isInt _v v → wp (body a _v) Q)
     (λ a Q, wp (foreach_predecessor a _w body) Q).
@@ -138,7 +140,7 @@ Variable wp_foreach_predecessor:
    3. traverse the reverse graph [flip E] and construct a map [_group]
       of each vertex to the root of its tree in the DFS forest.
 
-   Then [_group] actually maps each vertex to a distinguished member of
+   Then [_group] maps each vertex to a distinguished member of
    its strongly connected component. *)
 
 Definition kosaraju : array _vertex :=
@@ -149,10 +151,8 @@ Definition kosaraju : array _vertex :=
 
 (* -------------------------------------------------------------------------- *)
 
-Implicit Type rs : list vertex.
-Implicit Type vs : vertices.
-
-Context `{!RelDecision (∈@{vertices})}.
+(* Some simple yet important lemmas about the conjunction of the predicates
+   [is_scc_forest] (defined in scc.v) and [isRootMap] (defined in dfs.v). *)
 
 Lemma scc_forest_root_map_1 ρ f :
   is_scc_forest E f →
