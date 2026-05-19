@@ -64,6 +64,14 @@ Variable V : Type.
 
 Variable masked : set V.
 
+(* Membership in [masked] must be decidable, as we need to reason by cases
+   on [x ∈ masked]. *)
+
+Context {decision : ∀ x, Decision (x ∈ masked)}.
+
+  (* UGLY: the presence of [decision] slows down
+     the tactic [set_solver]. *)
+
 (* The predicate [equpto rs1 rs2] means that the lists [rs1] and [rs2] are
    equal provided one is allowed to ignore the masked elements of [rs1]. *)
 
@@ -259,13 +267,14 @@ Proof. unfold E'. tauto. Qed.
 (* A path from [x] to [z] is preserved unless there is a masked
    vertex [y] on this path. *)
 
-Lemma path_preservation `{!RelDecision (∈@{set V})} x :
+Lemma path_preservation x :
   ∀ z,
   path E x z →
   path E' x z ∨
   ∃ y, y ∈ masked ∧ path E x y ∧ path E y z.
 Proof.
   (* First, deal with the case where [x] is masked, which is trivial. *)
+  (* [decision] is needed here. *)
   case (decide (x ∈ masked)); intro.
   { right. eauto with path. }
   (* Now, re-introduce [x], and perform an induction. *)
@@ -416,15 +425,15 @@ Variable hm : masked ≡ component E r.
 (* Let us spell out the obvious consequences of this hypothesis. *)
 
 Lemma scc_masked w : w ∈ masked → scc E r w.
-Proof. set_solver. Qed.
+Proof. rewrite hm. unfold component. set_unfold. Qed.
 
 Lemma masked_scc w : scc E r w → w ∈ masked.
-Proof. set_solver. Qed.
+Proof. rewrite hm. unfold component. set_unfold. Qed.
 
 (* If [w] is unmasked, then its component in [E'] is the same as its
    component in [E]. *)
 
-Lemma scc_preservation `{!RelDecision (∈@{set V})} w :
+Lemma scc_preservation w :
   w ∉ masked →
   component E w ≡ component E' w.
 Proof.
@@ -454,14 +463,15 @@ Qed.
 
 (* Thus, an SCC forest for [E'] is an SCC forest for [E]. *)
 
-Lemma is_scc_forest_inclusion `{!RelDecision (∈@{set V})} f :
+Lemma is_scc_forest_inclusion f :
   is_scc_forest E' f →
   support f ## masked →
   is_scc_forest E f.
 Proof.
-  induction 1 as [| ? ? ? heq h IH ]; simpl; constructor.
-  + rewrite <- heq. eapply scc_preservation. set_solver.
-  + eapply IH. set_solver.
+  induction 1 as [| w ? ? heq h IH ]; simpl; constructor.
+  + rewrite <- heq. eapply scc_preservation.
+    clear decision; set_solver.
+  + eapply IH. clear decision; set_solver.
 Qed.
 
 (* If the vertex [r] reaches the (roots of the) forest [vs], then the
@@ -469,7 +479,7 @@ Qed.
    [vs]. Thus, there exists a forest [ws] obtained by filtering away
    this component. *)
 
-Lemma filter_scc `{!RelDecision (∈@{set V})} imarked omarked vs :
+Lemma filter_scc imarked omarked vs :
   dfs E imarked omarked vs →
   reaches E {[r]} (support vs) →
   ∃ ws,
@@ -480,13 +490,18 @@ Proof.
   (* Empty. *)
   { eauto with filter. }
   (* NonEmpty. *)
-  edestruct IHdfs2 as (vs' & ?). eauto with set_solver. clear IHdfs2.
+  edestruct IHdfs2 as (vs' & ?).
+  { clear decision; set_solver. }
+  clear IHdfs2.
+  (* [decision] is used here again. *)
   case (decide (w ∈ masked)); intro.
   (* Case: [w] is masked. *)
-  { edestruct IHdfs1 as (ws' & ?). eauto with set_solver. clear IHdfs1.
+  { edestruct IHdfs1 as (ws' & ?).
+    { clear decision; set_solver. }
+    clear IHdfs1.
     eauto with filter. }
   (* Case: [w] is not masked. *)
-  clear IHdfs1.
+  clear IHdfs1. clear decision.
   eexists.
   eapply FilterVisible; [ eauto | | eauto ].
   (* Here comes the key argument. If [w] is not part of [scc E r],
@@ -510,7 +525,7 @@ Qed.
 (* In the particular case where the distinguished vertex [r] is the last
    root of the forest, the same can be said. *)
 
-Lemma filter_last_scc `{!RelDecision (∈@{set V})} imarked omarked ws vs :
+Lemma filter_last_scc imarked omarked ws vs :
   dfs E imarked omarked (concat vs (NonEmpty r ws Empty)) →
   closed E imarked →
   closed (flip E) omarked →
@@ -535,7 +550,7 @@ Proof.
   { eauto using dfs_closed with closed. }
   { assumption. }
   eapply dfs_disjoint_concat in Hdfs. simpl in Hdfs.
-  set_solver.
+  clear decision; set_solver.
 Qed.
 
 End Masked.
@@ -563,7 +578,7 @@ Qed.
 
 (* Here is the main lemma in the proof of soundness of the algorithm. *)
 
-Lemma scc_soundness_main_lemma {V} `{!RelDecision (∈@{set V})} :
+Lemma scc_soundness_main_lemma `{EqDecision V} :
   ∀ f2,
   ∀ E : V → V → Prop,
   ∀ top : set V,
@@ -624,9 +639,19 @@ Proof.
   (* Furthermore, this component forms a prefix of the last tree of [f1],
      that is, of the tree [root2/sons1]. In fact, it forms a prefix of
      the forest [f1] as a whole. *)
-  edestruct filter_last_scc as (f1' & ?).
-  { reflexivity. }
-  { tc. }
+  set (masked' := component E root2).
+  fold masked' in fact1.
+  assert (fact: masked' ≡ {[root2]} ∪ support sons2).
+  { by rewrite fact1, fact2. }
+  clear fact1 fact2.
+  assert (decision: ∀ v, Decision (v ∈ masked')).
+  { intro v.
+    eapply Decision_membership_in_finite_set
+      with (xs := {[root2]} ++ supportl sons2).
+    rewrite fact. rewrite <- list_to_set_supportl. set_solver. }
+  edestruct (@filter_last_scc V masked') as (f1' & ?).
+  { exact decision. }
+  { unfold masked'. reflexivity. }
   { eexact hdfs1. }
   { eauto with closed. }
   { assumption. }
@@ -639,46 +664,43 @@ Proof.
   { eassumption. }
   (* We have met part of the goal. There remains to use the induction
      hypothesis in order to prove that [tail2] is an SCC forest. *)
-  assert (fact: component E root2 ≡ {[root2]} ∪ support sons2).
-  { by rewrite fact1, fact2. }
-  set (masked' := component E root2).
-  assert (factm: masked' ≡ {[root2]} ∪ support sons2).
-  { exact fact. }
   constructor.
-  { exact fact. }
+  { fold masked'. exact fact. }
   eapply is_scc_forest_inclusion with (masked := masked'); [
-    unfold masked'; reflexivity
-  | tc
+    exact decision
+  | unfold masked'; reflexivity
    | (* open *)
-   | unfold masked'; rewrite fact1, fact2; assumption
+   | rewrite fact; assumption
   ].
   (* Let us now apply the induction hypothesis to a smaller graph. We wish
      to exclude the vertices in [scc root2]. *)
   eapply IHtail2 with (top := top) (masked := union masked masked').
   (* Premise 1. [top] is still closed. *)
-  { unfold E'. intros w (v & ?). unpack. set_solver. }
+  { unfold E'. intros w (v & ?). unpack. clear decision; set_solver. }
   (* Premise 2. The new set of masked vertices is still closed. *)
-  { unfold E'. intros w (v & ?). unpack. set_solver. }
+  { unfold E'. intros w (v & ?). unpack. clear decision; set_solver. }
   (* Premise 3. The new set of masked vertices is still reverse closed. *)
-  { unfold E', flip. intros v (w & ?). unpack. set_solver. }
+  { unfold E', flip. intros v (w & ?). unpack. clear decision; set_solver. }
   (* Premise 4. *)
   { dfs2. eexact hdfs1'.
     assert (root2 ∈ top).
-    { dfs_monotonic. set_solver. }
+    { dfs_monotonic. clear decision; set_solver. }
     assert (support sons2 ⊆ top).
-    { apply dfs_omarked in hdfs2_1. dfs_monotonic. set_solver. }
-    set_solver. }
+    { apply dfs_omarked in hdfs2_1. dfs_monotonic.
+      clear decision; set_solver. }
+    clear decision; set_solver. }
   (* Premise 6. We have a valid DFS over [tail2]. *)
   { rewrite reverse_masked_equiv.
-    eapply dfs_filter_remainder; [| set_solver ].
-    rewrite factm, union_assoc.
+    eapply dfs_filter_remainder; [| clear decision; set_solver ].
+    rewrite fact, union_assoc.
     eauto using dfs_second_premise_reformulation. }
   (* Premise 7. Requires reasoning about [ordered]. *)
   { eapply ordered_equpto.
-    + eapply OrderedSkip with (r := root2). set_solver. eauto.
+    + eapply OrderedSkip with (r := root2).
+      clear decision; set_solver. eauto.
     + match goal with h: {[_]} ++ _ = _ |- _ => rewrite h end.
       eauto using equpto_rev, filter_equpto.
-    + rewrite fact1, fact2. assumption. }
+    + rewrite fact. assumption. }
   (* Phew... *)
 Qed.
 
@@ -686,7 +708,7 @@ Qed.
    Kosaraju and Sharir's algorithm then it is an SCC forest. In other
    words, this algorithm is correct. *)
 
-Lemma scc_soundness {V} `{!RelDecision (∈@{set V})} (E : V → V → Prop) f2 :
+Lemma scc_soundness `{EqDecision V} (E : V → V → Prop) f2 :
   scc_description E f2 →
   is_scc_forest E f2.
 Proof.
