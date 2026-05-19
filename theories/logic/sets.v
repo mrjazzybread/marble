@@ -36,6 +36,16 @@ Proof.
   { set_solver. }
 Qed.
 
+(* If the list [xs] is a prefix of the list [ys]
+   then [xs] forms a subset of [ys]. *)
+
+Lemma prefix_list_to_set `{SemiSet A C} (xs ys : list A) :
+  xs `prefix_of` ys →
+  list_to_set xs ⊆ (list_to_set ys : C).
+Proof.
+  unfold prefix. intros (xs' & ->). set_solver.
+Qed.
+
 (* -------------------------------------------------------------------------- *)
 
 (* We could parameterize the following lemmas with suitable type classes:

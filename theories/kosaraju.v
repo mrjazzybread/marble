@@ -154,11 +154,18 @@ Definition kosaraju : array _vertex :=
 (* Some simple yet important lemmas about the conjunction of the predicates
    [is_scc_forest] (defined in scc.v) and [isRootMap] (defined in dfs.v). *)
 
+(* If [f] is an SCC forest then a root map for [f] is also an SCC map:
+   that is, every vertex [v] is mapped to a distinguished element of
+   its component. This is stated by two lemmas: 1- [v] and [ρ v]
+   inhabit the same component; 2- within one component, all vertices
+   are mapped by [ρ] to the same vertex. *)
+
 Lemma scc_forest_root_map_1 ρ f :
   is_scc_forest E f →
   isRootMap ρ f →
   ∀ v, v ∈ support f →
-  v ∈ component E (ρ v). (* synonymous with [scc v (ρ v)] *)
+  v ∈ component E (ρ v).
+    (* synonymous with [scc v (ρ v)]; see next lemma *)
 Proof.
   induction f as [| w ws f ]; inversion 1; inversion 1; subst; simpl.
   { intro v. elem. tauto. }
@@ -225,6 +232,10 @@ Proof.
     { eauto. }}
 Qed.
 
+(* The previous results imply that [ρ] is idempotent. This result is
+   unused. Furthermore, [isRootMap ρ f] alone implies that [ρ] is
+   idempotent; see the lemma [isRootMap_idempotent]. *)
+
 Lemma scc_forest_root_map_idempotent ρ f :
   is_scc_forest E f →
   isRootMap ρ f →
@@ -235,6 +246,9 @@ Proof.
   elem in *.
   eapply scc_forest_root_map_2; eauto using isRootMap_support.
 Qed.
+
+(* Thus, two vertices inhabit the same component if and only if they
+   have the same image through [ρ]. *)
 
 Lemma scc_forest_root_map ρ f :
   is_scc_forest E f →
@@ -253,23 +267,25 @@ Proof.
     intro Heq. rewrite Heq in fact1. eauto with scc. }
 Qed.
 
-Local Lemma prefix_list_to_set `{SemiSet A C} (xs ys : list A) :
-  xs `prefix_of` ys →
-  list_to_set xs ⊆ (list_to_set ys : C).
-Proof.
-  unfold prefix. intros (xs' & ->). set_solver.
-Qed.
+(* -------------------------------------------------------------------------- *)
+
+(* Specification and proof of Kosaraju and Sharir's algorithm. *)
 
 Lemma wp_kosaraju :
   wp kosaraju (λ _group,
     ∃ ρ,
     rich.isArray isInt _group ρ ∧
     len ρ = n ∧
+    (* [ρ] is idempotent. *)
+    (∀ v, 0 ≤ v < n → ρ !!! (ρ !!! v) = ρ !!! v) ∧
     (* The vertices [v] and [ρ v] are members of the same component. *)
     (∀ v, 0 ≤ v < n → scc v (ρ !!! v)) ∧
     (* If two vertices [v] and [w] are members of the same component
        then they have the same image through [ρ]. *)
-    (∀ v w, 0 ≤ v < n → 0 ≤ w < n → scc v w → ρ !!! v = ρ !!! w)
+    (∀ v w, 0 ≤ v < n → 0 ≤ w < n → scc v w → ρ !!! v = ρ !!! w) ∧
+    (* In other words, two vertices inhabit the same component if and
+       only if they have the same image through [ρ]. *)
+    (∀ v w, 0 ≤ v < n → 0 ≤ w < n → scc v w ↔ ρ !!! v = ρ !!! w)
   ).
 Proof.
   unfold kosaraju.
@@ -356,18 +372,19 @@ Proof.
 
   (* 3. Conclude. *)
   wp_ret. eexists; pack; tc.
-  (* Postcondition 1: [v] and [ρ !!! v] inhabit the same component. *)
+  (* Postcondition 1: [ρ] is idempotent. *)
+  { eapply isRootMap_idempotent with (ρ := λ v, ρ !!! v); eauto. }
+  (* Postcondition 2: [v] and [ρ !!! v] inhabit the same component. *)
   { eapply scc_forest_root_map_1' with (ρ := λ v, ρ !!! v); eauto. }
-  (* Postcondition 2: if [v] and [w] inhabit the same component then
+  (* Postcondition 3: if [v] and [w] inhabit the same component then
      [ρ !!! v] and [ρ !!! w] are equal. *)
   { eapply scc_forest_root_map_2 with (ρ := λ v, ρ !!! v); eauto. }
+  (* Postcondition 4: two vertices inhabit the same component if and
+     only if they have the same image through [ρ]. *)
+  { eapply scc_forest_root_map with (ρ := λ v, ρ !!! v); eauto. }
+
 Qed.
 
 End G.
-
-(* TODO this version of Kosaraju's algorithm is not interactive.
-   Can we define and verify an interactive version, where the
-   components are produced one by one (in topological order)
-   and immediately submitted to a consumer? *)
 
 (* -------------------------------------------------------------------------- *)
