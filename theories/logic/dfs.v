@@ -62,7 +62,13 @@ Fixpoint rootsl (f : forest) : list V :=
       {[w]} ++ rootsl vs
   end.
 
-(* All vertices of a forest can be viewed as a set of vertices. *)
+Lemma list_to_set_rootsl f :
+  list_to_set (rootsl f) ≡ roots f.
+Proof.
+  induction f; simpl; set_solver.
+Qed.
+
+(* The vertices of a forest can be viewed as a set of vertices. *)
 
 Fixpoint support (f : forest) : set V :=
   match f with
@@ -71,6 +77,22 @@ Fixpoint support (f : forest) : set V :=
   | NonEmpty w ws vs =>
       {[w]} ∪ support ws ∪ support vs
   end.
+
+(* The vertices of a forest can be viewed as a list of vertices. *)
+
+Fixpoint supportl (f : forest) : list V :=
+  match f with
+  | Empty =>
+      []
+  | NonEmpty w ws vs =>
+      {[w]} ++ supportl ws ++ supportl vs
+  end.
+
+Lemma list_to_set_supportl f :
+  list_to_set (supportl f) ≡ support f.
+Proof.
+  induction f; simpl; set_solver.
+Qed.
 
 (* The roots of a forest form a subset of its support. *)
 
