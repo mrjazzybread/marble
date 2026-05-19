@@ -3,17 +3,46 @@
 (* We do not need much, because [stdpp] offers most of what we need, and its
    [set_solver] tactic is excellent. *)
 
-(* We could parameterize these lemmas with suitable type classes: [SemiSet],
-   [Set_], [TopSet], so that they work with several kinds of sets. However,
-   the lemmas would then have more premises and would require the use of
-   [eauto with typeclass_instances], which I find painful. For the moment,
-   I prefer to stick with one concrete kind of sets. *)
-
 From stdpp Require Import sets propset.
 Local Notation set := propset.
 From marble.logic Require Import lists.
 
 (* -------------------------------------------------------------------------- *)
+
+(* A few generic lemmas. *)
+
+(* If there is a decision procedure for [P]
+   and if [P] is equivalent to [Q]
+   then there is a decision procedure for [Q]. *)
+
+Lemma Decision_consequence P Q :
+  Decision P → (P ↔ Q) → Decision Q.
+Proof.
+  unfold Decision. tauto.
+Qed.
+
+(* Provided equality of elements is decidable,
+   membership in a finite set is decidable. *)
+
+Lemma Decision_membership_in_finite_set
+  `{SemiSet A C, EqDecision A}
+  (xs : list A) (c : C) :
+  list_to_set xs ≡ c →
+  ∀ x, Decision (x ∈ c).
+Proof.
+  intros Heq x.
+  eapply Decision_consequence with (P := x ∈ xs).
+  { eauto with typeclass_instances. }
+  { set_solver. }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* We could parameterize the following lemmas with suitable type classes:
+   [SemiSet], [Set_], [TopSet], so that they work with several kinds of
+   sets. However, the lemmas would then have more premises and would require
+   the use of [eauto with typeclass_instances], which I find painful. For
+   the moment, I prefer to stick with one concrete kind of sets. *)
 
 (* Basic lemmas. *)
 
