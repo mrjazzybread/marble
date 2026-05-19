@@ -76,8 +76,9 @@
 
 * Define a function that detects the existence of a cycle.
   This requires more physical state (another array to keep
-  track of grey vertices? or a three-color scheme?) and
-  possibly a new kind of event (rediscovering a vertex).
+  track of grey vertices? or a three-color scheme?).
+  This probably requires proving that every edge is examined
+  and causes either an `Enter` event or a `Rediscover` event.
   Use the interruptible DFS, so we can stop at the first cycle.
 
 * Prove that if the graph is acyclic then, when a vertex is exited,
@@ -90,6 +91,10 @@
   group forms a strongly connected component *on the fly*, not just
   once the traversal is finished. Also, one might to prove that the
   components are produced in topological order.
+
+* Kosaraju: currently the algorithm is not interactive. Can we define and
+  verify an interactive version, where the components are produced one by one
+  (in topological order) and immediately submitted to a consumer?
 
 * Test whether depth-first search can be executed inside Rocq.
 
