@@ -154,7 +154,11 @@
 * B-Trees.
 * Chunked sequences.
 * Doubly-linked list (permutation) inside an array or vector.
+* Sparse sets in the style of [Briggs and Torczon](https://dl.acm.org/doi/pdf/10.1145/176454.176484).
+  See also Cristiá and Dubois, JFLA 2024.
+  Inside an array OR vector.
 * Union-find inside an array or vector.
+* First-order unification.
 * Depth-first search, SCCs, Dijkstra, and other graph algorithms.
   Number vertices from `0` to `n-1` and use arrays everywhere.
 * Algorithms from `fix`.
