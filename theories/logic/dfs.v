@@ -1085,6 +1085,12 @@ Ltac dfs_omarked :=
   end;
   intros.
 
+Ltac dfs_omarked_choice :=
+  repeat match goal with h: dfs _ _ _ _ |- _ =>
+    generalize (dfs_omarked_choice h); revert h
+  end;
+  intros.
+
 Arguments Empty {V}.
 
 (* -------------------------------------------------------------------------- *)
@@ -1178,6 +1184,12 @@ Fixpoint support_stack σ : set V :=
   | Frame ov vs :: σ => option_to_set ov ∪ support vs ∪ support_stack σ
   end.
 
+Lemma trace_subset_support σ :
+  trace σ ⊆ support_stack σ.
+Proof.
+  induction σ as [| [ v vs] σ]; set_solver.
+Qed.
+
 (* [top σ] is the vertex found in the top frame of the stack [σ]. *)
 
 Definition top σ : option V :=
@@ -1201,6 +1213,21 @@ Lemma length_store σ w ws :
   length (store w ws σ) = length σ.
 Proof.
   destruct σ as [| [ov vs]]; simpl store; length; eauto.
+Qed.
+
+Lemma trace_store σ w ws :
+  trace (store w ws σ) = trace σ.
+Proof.
+  destruct σ as [| [ov vs]]; simpl store; eauto.
+Qed.
+
+Lemma support_store σ w ws :
+  σ ≠ [] →
+  support_stack (store w ws σ) ≡ support_stack (Frame (Some w) ws :: σ).
+Proof.
+  destruct σ as [| [ov vs]]; intros; simpl.
+  { tauto. }
+  { rewrite support_concat. set_solver. }
 Qed.
 
 (* The labeled transition system [step] describes the evolution of the
@@ -1468,7 +1495,31 @@ Proof.
     tauto. }
 Qed.
 
+(* Every vertex in the support of the stack is marked. *)
+
+Lemma wf_support_marked :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  support_stack σ ⊆ marked.
+Proof.
+  inductionWf; simpl support_stack; dfs_omarked; dfs_monotonic; set_solver.
+Qed.
+
+(* Every vertex in [rs] is in the support of the stack. *)
+
+Lemma wf_rs_support :
+  ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
+  list_to_set rs ⊆ support_stack σ.
+Proof.
+  inductionWf; simpl support_stack.
+  { dfs_omarked_choice. set_solver. }
+  { clarify; subst ors;
+    rewrite ?list_to_set_app, ?list_to_set_singleton;
+    set_solver. }
+Qed.
+
 (* Every vertex in [rs] is marked. *)
+
+(* This follows from the previous two lemmas; we give a direct proof. *)
 
 Lemma wf_rs_marked :
   ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
@@ -1482,6 +1533,9 @@ Qed.
 (* The trace of a well-formed stack is a subset of [marked]. *)
 
 (* In other words, every vertex in the trace is marked. *)
+
+(* This follows from the fact that the trace is a subset of the support;
+   we give a direct proof. *)
 
 Lemma wf_trace_marked :
   ∀ γ, wf γ → ∀ rs marked σ, γ = (rs, marked, σ) →
@@ -1507,6 +1561,29 @@ Proof.
   intros Hwf. transitivity (trace σ).
   + eapply wf_top_trace.
   + eauto using wf_trace_marked.
+Qed.
+
+(* The top vertex does not appear in an earlier stack frame. *)
+
+Lemma wf_top_disjoint_support rs marked σ :
+  wf (rs, marked, σ) →
+  ∀ v vs σ0, σ = Frame (Some v) vs :: σ0 →
+  v ∉ support_stack σ0.
+Proof.
+  intros Hwf. intros. subst. destruction Hwf.
+  assert (support_stack σ0 ⊆ mmarked) by eauto using wf_support_marked.
+  set_solver.
+Qed.
+
+Lemma wf_top_disjoint_trace rs marked σ :
+  wf (rs, marked, σ) →
+  ∀ v vs σ0, σ = Frame (Some v) vs :: σ0 →
+  v ∉ trace σ0.
+Proof.
+  intros.
+  assert (v ∉ support_stack σ0) by eauto using wf_top_disjoint_support.
+  assert (trace σ0 ⊆ support_stack σ0) by eauto using trace_subset_support.
+  set_solver.
 Qed.
 
 (* The marked vertices are reachable from [rs]. *)
@@ -2158,6 +2235,77 @@ Proof.
       assert (ρ w = w) by eauto with set_solver.
       congruence.
     + eauto. }
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* The next three lemmas describe the evolution of [trace σ]
+   though enter, rediscovery, and exit events. *)
+
+Lemma trace_enter rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Enter v) γ' →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  trace σ' = {[v]} ∪ trace σ.
+Proof.
+  intros Hstep ??. subst. destruction Hstep. eauto.
+Qed.
+
+Lemma trace_rediscover rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Rediscover v) γ' →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  trace σ' = trace σ.
+Proof.
+  intros Hstep ??. subst. destruction Hstep. eauto.
+Qed.
+
+Lemma trace_exit rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Exit v) γ' →
+  wf γ →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  trace σ' ≡ trace σ ∖ {[v]}.
+Proof.
+  intros Hstep Hwf ??. subst.
+  destruction Hstep. rewrite trace_store. simpl trace.
+  assert (v ∉ trace σ1) by eauto using wf_top_disjoint_trace.
+  set_solver.
+Qed.
+
+(* The next three lemmas describe the evolution of [support_stack σ]
+   though enter, rediscovery, and exit events. *)
+
+Lemma support_enter rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Enter v) γ' →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  support_stack σ' ≡ {[v]} ∪ support_stack σ.
+Proof.
+  intros Hstep ??. subst. destruction Hstep. set_solver.
+Qed.
+
+Lemma support_rediscover rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Rediscover v) γ' →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  support_stack σ' = support_stack σ.
+Proof.
+  intros Hstep ??. subst. destruction Hstep. eauto.
+Qed.
+
+Lemma support_exit rs marked σ γ v rs' marked' σ' γ' :
+  step γ (Exit v) γ' →
+  wf γ →
+  γ = (rs, marked, σ) →
+  γ' = (rs', marked', σ') →
+  support_stack σ' ≡ support_stack σ.
+Proof.
+  intros Hstep Hwf ??. subst. destruction Hstep.
+  match type of Hwf with wf (_, _, _ :: ?σ1) =>
+    assert (σ1 ≠ []) end.
+  { destruction Hwf. intro. subst. length in *. lia. }
+  eauto using support_store.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
