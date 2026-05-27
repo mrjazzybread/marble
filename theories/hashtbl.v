@@ -342,7 +342,7 @@ Lemma cardinality_delete_present_alt :
     cardinality (delete k m) = (n - len l)%Z.
 Proof.
   intros. subst. unfold cardinality.
-  rewrite map_fold_delete with (m:=m); tc. lia.
+  rewrite map_fold_delete with (m:=m) (R:=eq); tc. lia.
 Qed.
 
 Lemma cardinality_insert :
@@ -636,7 +636,7 @@ Proof.
     intros; ITER; list in *. wp_ret.
   wp_op Ih shadowing:s.
   - intros. wp_op Hbody; auto. by apply prefix_app_r.
-  - wp_op Hbody.
+  - wp_op Hbody; permitted in *; complete in *.
     + subst. by list.
     + intros. exists (reverse b ++ [(k, v)]).
     split; auto. by subst.
