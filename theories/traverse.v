@@ -202,17 +202,19 @@ Proof using start_respects_bound edges_respect_bound.
     - eauto using reaches_reflexive.
 Qed.
 
-(* This universe is finite. *)
+(* This universe is finite and has cardinal [n]. *)
 
-Lemma finite_universe :
-  ∃ rs, list_to_set rs ≡ universe.
+Lemma cardinal_universe :
+  cardinal universe n.
 Proof.
   exists (listz.init n (λ i, i)).
-  rewrite list_to_set_init.
   unfold universe.
-  intro v. elem. split.
-  + intros (i & ? & ?). lia.
-  + intros. eauto with lia.
+  split.
+  { cut (len (listz.init n (λ i, i)) ≤ n).
+    { unfold listz.init. case_decide; [ exfalso; lia |].
+      unfold len. lia. }
+    length. lia. }
+  { intro v. elem. rewrite list_elem_of_init. eauto. }
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -312,80 +314,6 @@ Local Lemma trivia marked0 marked1 v :
   marked0 ∪ {[v]} ≡ marked1.
 Proof using. clear- marked0. set_solver. Qed.
 Local Hint Resolve trivia : marble.
-
-(* -------------------------------------------------------------------------- *)
-
-(* The weight of an array [m] is defined as the number of unmarked
-   vertices in this array. It is a natural number. This number is
-   used to establish the termination of the algorithm. *)
-
-Local Definition unmarked (b : bool) : nat :=
-  if b then 0 else 1.
-
-Local Definition weight m : nat :=
-  sum_with unmarked m.
-
-(* Marking an unmarked vertex decreases the weight of the array. *)
-
-Local Lemma marking_decreases_weight m _v :
-  (_v <? length m)%uint63 = true →
-  get m _v = false →
-  (weight (set m _v true) < weight m)%nat.
-Proof using.
-  unfold weight. intros Hv Hget.
-  (* This is a bit ugly. *)
-  set (v := (φ _v)%uint63).
-  assert (unsigned v). { unfold v. lia. }
-  assert (isInt _v v).  { eapply introIsInt. reflexivity. }
-  assert (Hvalid: valid v (to_list m))
-    by eauto using ltb_length_spec with typeclass_instances.
-  rewrite !sum_with_spec.
-  erewrite set_spec by eauto.
-  generalize (sum_list_with_insert unmarked v (to_list m) true Hvalid).
-  erewrite <- get_spec by eauto.
-  rewrite Hget.
-  simpl unmarked.
-  lia. (* ouf *)
-Qed.
-
-(* The marks array evolves along the following relation. *)
-
-Local Definition mlt m1 m2 :=
-  (weight m1 < weight m2)%nat.
-
-Local Definition mle m1 m2 :=
-  (weight m1 ≤ weight m2)%nat.
-
-Declare Scope marks_scope.
-Delimit Scope marks_scope with marks.
-Infix "≤" := mle (at level 70) : marks_scope.
-Infix "<" := mlt (at level 70) : marks_scope.
-
-Section M.
-Open Scope marks_scope.
-
-Local Lemma mle_refl m : m ≤ m.
-Proof using. unfold mle. lia. Qed.
-
-Local Lemma mle_trans {m1 m2 m3} : m1 ≤ m2 → m2 ≤ m3 → m1 ≤ m3.
-Proof using. unfold mle. lia. Qed.
-
-Local Lemma mlt_mle_trans {m1 m2 m3} : m1 < m2 → m2 ≤ m3 → m1 < m3.
-Proof using. unfold mle, mlt. lia. Qed.
-
-Local Lemma mle_mlt_trans {m1 m2 m3} : m1 ≤ m2 → m2 < m3 → m1 < m3.
-Proof using. unfold mle, mlt. lia. Qed.
-
-Local Lemma mlt_mle_incl {m1 m2} : m1 < m2 → m1 ≤ m2.
-Proof using. unfold mle, mlt. lia. Qed.
-
-Local Lemma wf_mlt : well_founded mlt.
-Proof using.
-  eapply wf_projected with (f := weight); [| eapply Wf_nat.lt_wf ].
-  intros m1 m2. unfold mlt. intro. assumption.
-Qed.
-
-End M.
 
 (* Rocq 9.1: explicitly instantiating [init] may be necessary to avoid
    divergence when Rocq type-checks the definition of [traverse]. *)
@@ -517,120 +445,6 @@ Implicit Type s : S.
 
 (* -------------------------------------------------------------------------- *)
 
-(* We now make a series of definitions that play a role in the proof
-   of termination of the recursive function [visit]. *)
-
-(* The ordering is extended to states. *)
-
-Local Definition slt s1 s2 :=
-  let (m1, _) := s1 in let (m2, _) := s2 in (m1 < m2)%marks.
-
-Local Definition sle s1 s2 :=
-  let (m1, _) := s1 in let (m2, _) := s2 in (m1 ≤ m2)%marks.
-
-Declare Scope state_scope.
-Delimit Scope state_scope with state.
-Infix "≤" := sle (at level 70) : state_scope.
-Infix "<" := slt (at level 70) : state_scope.
-
-Open Scope state_scope.
-
-Local Lemma sle_refl s : s ≤ s.
-Proof using. unfold sle. destruct s. eapply mle_refl. Qed.
-
-Local Lemma sle_trans {s1 s2 s3} : s1 ≤ s2 → s2 ≤ s3 → s1 ≤ s3.
-Proof using. unfold sle. destruct s1, s2, s3. eauto using mle_trans. Qed.
-
-Local Lemma slt_sle_trans {s1 s2 s3} : s1 < s2 → s2 ≤ s3 → s1 < s3.
-Proof using.
-  unfold sle, slt. destruct s1, s2, s3. eauto using mlt_mle_trans.
-Qed.
-
-Local Lemma sle_slt_trans {s1 s2 s3} : s1 ≤ s2 → s2 < s3 → s1 < s3.
-Proof using.
-  unfold sle, slt. destruct s1, s2, s3. eauto using mle_mlt_trans.
-Qed.
-
-Local Lemma slt_sle_incl {s1 s2} : s1 < s2 → s1 ≤ s2.
-Proof using.
-  unfold sle, slt. destruct s1, s2. eauto using mlt_mle_incl.
-Qed.
-
-Local Lemma wf_slt : well_founded slt.
-Proof using.
-  eapply wf_projected with (f := fst); [| eapply wf_mlt ].
-  intros (m1 & u1) (m2 & u2). unfold slt. intro. assumption.
-Qed.
-
-(* [sbeyond s] is the type of a state [s'] such that [s' ≤ s] holds. *)
-
-Local Definition sbeyond s :=
-  { s' | s' ≤ s }.
-
-(* [srefl s] is the state [s] at type [beyond s]. *)
-
-Local Definition srefl s : sbeyond s.
-Proof using.
-  unfold sbeyond. exists s. eapply sle_refl.
-Defined.
-
-(* [strans], an identity function on states, proves that if [s1 ≤ s2] holds,
-   and a state [s0] is beyond [s1], then [s0] is also beyond [s2]. *)
-
-Local Definition strans {s1 s2} : s1 ≤ s2 → sbeyond s1 → sbeyond s2.
-Proof using.
-  intros ow12 (s0 & ow01). exists s0. eauto using sle_trans.
-Defined.
-
-(* [strans] is an identity functions, so, while reasoning via [wpd]
-   judgements, it has no effect. *)
-
-Local Lemma wpd_strans {s1 s2} (a : sbeyond s1) (pf : s1 ≤ s2) Q :
-  wpd a Q →
-  wpd (strans pf a) Q.
-Proof using.
-  unfold strans, wpd. destruct a. simpl. eauto.
-Qed.
-
-(* [transform] applies a transformation [f] to the component [u] in
-   a composite state of the form [((m', u'), ow)]. *)
-
-Local Definition transform {s} (f : U → U) : sbeyond s → sbeyond s.
-Proof using.
-  intros ((m' & u') & ow).
-  exists (do u' ← f u' ; (m', u')). assumption.
-Defined.
-
-(* A reasoning rule for [transform]. *)
-
-Local Lemma wpd_transform {s} f (s' : sbeyond s) Q :
-  wpd s' (λ '(m', u'), wp (do u' ← f u' ; (m', u')) Q) →
-  wpd (transform f s') Q.
-Proof using.
-  unfold transform. destruct s' as ((m' & u') & ?). eauto.
-Qed.
-
-(* [decrease] constructs a strict ordering witness, expressing the idea
-   that if the vertex [_v] is unmarked in the state [s], which is the pair
-   [(m, u)], then marking [_v] produces a new state of smaller weight. *)
-
-Local Lemma decrease s m _v u u' :
-  s = (m, u) →
-  (_v <? length m)%uint63 = true →
-  get m _v = false →
-  (set m _v true, u') < s.
-Proof using.
-  intros -> Hv Hget.
-  unfold slt, mlt.
-  eauto using marking_decreases_weight.
-Qed.
-
-Local Opaque transform.
-
-Local Hint Resolve sle_slt_trans : marble.
-
-(* -------------------------------------------------------------------------- *)
-
 (* The user function [hook _e u] is invoked when an event is observed,
    that is, when a vertex is entered or exited. It receives an event [_e]
    and a user state [u] and returns an updated user state. *)
@@ -691,79 +505,58 @@ Variable wp_hook :
 
 (* The main recursive function: [visit].  *)
 
-(* [visit] expects a state [s], a vertex [_v], and a proof that [s] is
-   accessible. It is defined by structural recursion on [ACC]. *)
+(* [visit] expects a state [s], a vertex [_v], and a machine integer [_fuel]. *)
 
-(* [visit s _v ACC] produces a result of type [sbeyond s], that is, a new
-   state [s'] such that [s' ≤ s] holds. This information is required,
-   while iterating on the successors of a state, to prove that every call
-   to [visit] in this sequence is permitted. *)
+(* Using fuel lets us perform a trivial proof of termination at function
+   definition time. The true proof of termination is transformed into an
+   obligation to prove that the fuel is never exhausted; this can be
+   proved a posteriori. In an earlier version of this code, we proved
+   termination a priori. However, this required using rather complex
+   dependent types: one must express the fact that the weight of the marks
+   array decreases over time and keep track of the fact that every vertex
+   is valid (i.e., within the bounds of the marks array). *)
 
-(* To iterate on the successors, we use a simply-typed iteration function.
-   This requires us to package [visit] as a function whose argument state
-   and result state have the same type, and which does not require [ACC].
-   Fortunately, this is possible! *)
+Section Visit.
+Open Scope uint63.
 
-Local Fixpoint visit s _v (ACC : Acc slt s) : sbeyond s :=
-  (* Destruct [s] as a pair [m, u] while keeping track of the equation. *)
-  match s as b return s = b → _ with (m, u) => λ Hsmu,
-  (* Test whether this vertex is valid. *)
-  IFC (_v <? length m)%uint63 THEN λ Hv,
+Local Fixpoint visit s _v _fuel (ACC : Acc ilt _fuel) : S :=
+  let (m, u) := s in
   (* Test whether this vertex is marked. *)
-  IFC get m _v THEN λ _,
-    (* It is marked: invoke [hook] to signal a rediscovery. *)
-    transform (hook (Rediscover _v)) (srefl s)
-  ELSE λ Hunmarked,
+  if get m _v then
+    (* Signal that we have rediscovered this vertex. *)
+    do u ← hook (Rediscover _v) u ;
+    let s := (m, u) in
+    s
+  else
     (* Mark this vertex. *)
-    let m' := set m _v true in
-    (* Invoke [hook] to signal that we are entering [_v]. *)
-    do u' ← hook (Enter _v) u ;
-    (* Construct an updated state. *)
-    let s' := (m', u') in
-    (* Construct a witness of the assertion [s' < s]. *)
-    let ow : s' < s := decrease s m _v u u' Hsmu Hv Hunmarked in
+    do m ← set m _v true ;
+    (* Signal that we are entering this vertex. *)
+    do u ← hook (Enter _v) u ;
+    let s := (m, u) in
+    (* Decrement [_fuel]. *)
+    IFC _fuel =? 0 THEN λ _, s ELSE λ Hfuel,
+    let _fuel := _fuel - 1 in
     (* Visit the successors of [v]. *)
-    (* The loop body is a function of type [sbeyond s' → vertex → sbeyond s'],
-       which can be passed to [foreach_successor]. Because [ACC] is at
-       hand, any call to [visit] on a state that is smaller than [s] is
-       permitted. Thus the loop body does not need an accessibility
-       witness as an argument. Its free variables are [visit] and [ACC]. *)
-    do sow'' ← foreach_successor (srefl s') _v (
-      λ (sow'' : sbeyond s') _w ,
-        let (s'', ow'') := sow'' in
-        strans ow'' (visit s'' _w (Acc_inv ACC (sle_slt_trans ow'' ow)))
-    ) ;
-    (* Invoke [hook] to signal that we are exiting [_v]. *)
-    do sow'' ← transform (hook (Exit _v)) sow'' ;
-    strans (slt_sle_incl ow) sow''
-  ELSE λ _,
-     (* This vertex is out-of-bounds. Ignore it. This lets us prove
-        termination without imposing any conditions on the vertices
-        that we receive. *)
-    srefl s
-  end eq_refl.
+    do s ←
+      foreach_successor s _v (λ s _w,
+        visit s _w _fuel
+          (Acc_inv ACC (ilt_n_minus_1 _ Hfuel))
+      ) ;
+    (* Signal that we are exiting [_v]. *)
+    let (m, u) := s in
+    do u ← hook (Exit _v) u ;
+    let s := (m, u) in
+    s.
 
-(* In an earlier version of this code, we did not test whether [v] is
-   valid. Instead, we relied on the hypothesis [default m = true], which
-   implies that if [v] is out-of-bounds then it is considered marked
-   already. This would force us to establish and keep track of the
-   invariant [default m = true]. It was a bit cumbersome and inelegant,
-   as we usually never access the default element of an array and never
-   need to keep track of its value. Furthermore, this approach led us to
-   a situation where Rocq's type-checker would not terminate. Therefore
-   we have abandoned it. *)
+End Visit.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Once the termination of [visit] has been established, one can define a
-   simplified version of it, which does not need an accessibility witness,
-   and whose result type is just [S]. *)
+(* A simplified version of [visit], without fuel. *)
 
 Local Definition visit' s _v : S :=
-  do sow ← visit s _v (wf_slt s) ;
-  proj1_sig sow.
-  (* TODO would like to use [Acc_intro_generator] here, but this
-          causes divergence at Qed in the lemma [wp_visit']. *)
+  let _fuel := _n in
+  visit s _v _fuel (ilt_wf _fuel).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -863,13 +656,10 @@ Local Ltac elim_visit_post rs' marked' σ' γ' :=
 
 (* The specification of [visit]. *)
 
-(* Because the result type of [visit] is a subset type,
-   instead of [wp], we use the judgement [wpd]. *)
-
 (* [permitted (rs ++ started)] implies [perm γ]. *)
 
-Local Lemma wpd_visit s (ACC : Acc slt s) :
-  ∀ m u _v v rs marked σ γ started,
+Local Lemma wp_visit _fuel (ACC : Acc ilt _fuel) :
+  ∀ s m u _v v rs marked σ γ started fuel,
   s = (m, u) →
   γ = (rs, marked, σ) →
   inv γ u →
@@ -880,20 +670,19 @@ Local Lemma wpd_visit s (ACC : Acc slt s) :
   edge (top σ) v →
   started = (if decide (len σ = 1) then {[v]} else []) →
   permitted (rs ++ started) →
-  wpd (visit s _v ACC) (λ s', visit_post γ started {[v]} s').
+  isInt _fuel fuel →
+  unsigned fuel →
+  cardinal {[ v | v ∈ universe ∧ v ∉ marked ]} fuel →
+  wp (visit s _v _fuel ACC) (λ s', visit_post γ started {[v]} s').
 Proof.
   clear dependent foreach_start start_respects_bound.
-  by dependent induction on s ACC. intros s ? ?.
+  by dependent induction on _fuel ACC. intros _fuel ? ?.
   intros. subst s. simpl visit.
   destructMarks. arrays.
   assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
   assert (perm γ).
   { subst γ; eauto using permitted_prefix. }
-  (* Because we require [v < n], the first branch of this conditional
-     construct must be taken. The second branch is dead. *)
-  eapply wpd_IFC; [ tc | intros | lia ].
-  (* The second conditional construct tests whether [v] is marked. *)
-  eapply wpd_IFC; [ tc | intros | intros ].
+  wp_if.
   (* Case: [v] is marked already. *)
   {
     (* Emit a [Rediscover] event. *)
@@ -901,14 +690,13 @@ Proof.
     set (γ' := (rs', marked, σ)).
     assert (step γ (Rediscover v) γ').
     { subst γ γ' started rs'. econstructor; try clarify; tc. }
-    eapply wpd_transform.
-    eapply wpd_exist; eapply wp_ret.
     (* Invoke [hook]. *)
     wp_op wp_hook shadowing: u.
     wp_ret.
     intro_visit_post.
   }
   (* Case: [v] is unmarked. *)
+  (* TODO clean up *)
   assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
     by eauto using isMarks_set.
   revert Hm'.
@@ -918,6 +706,7 @@ Proof.
   set (σ' := Frame (Some v) Empty :: σ).
   set (γ' := (rs', marked', σ')).
   intro.
+  wp_bind_eq.
   (* Emit an [Enter] event. *)
   assert (step γ (Enter v) γ').
   { subst γ γ' started rs' marked'.
@@ -925,40 +714,46 @@ Proof.
   assert (len σ' = len σ + 1) by tc.
   (* Invoke [hook]. *)
   wp_op wp_hook introducing: u'.
-  assert ((m', u') < (m, u)).
-  { eapply decrease; eauto. }
+  (* Argue that the fuel cannot be exhausted. *)
+  wp_if.
+  { exfalso. subst fuel.
+    (* [v] is unmarked, so the set of unmarked vertices is nonempty;
+       this contradicts the fact that the cardinal of this set is at
+       most [fuel]. *)
+    eapply cardinal_empty_contradiction with (v := v). eauto. set_solver. }
+  (* The number of unmarked vertices has decreased. *)
+  assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked' ]} (fuel - 1)).
+  { unfold marked'.
+    eapply cardinal_mono_1_strict with (w := v);
+    eauto with set_solver. }
   (* We have [inv γ' u']. *)
-  eapply wpd_wpd_bind_unary.
-  (* We reach the loop on the successors of [v]. The goal must be changed
-     from [wpd] to [wp], so that [wp_foreach_successor] can be used. *)
-  rewrite wpd_wp.
+  eapply wp_bind_unary.
+  (* We reach the loop on the successors of [v]. *)
   wp_op wp_foreach_successor with invariant: (
-    λ history (s'' : sbeyond (m', u')),
+    λ history s,
       let examined := list_to_set history in
-      visit_post γ' [] examined (proj1_sig s'')
+      visit_post γ' [] examined s
   ).
   (* Initialization. *)
   { intro_visit_post. }
   (* Preservation. *)
-  { wp_body history0 history1 ((m'' & u'') & ow'')
+  { wp_body history0 history1 (m'' & u'')
       introducing: (fun _ => hiter_step w; intros _w ?).
     elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
     assert (E v w) by set_solver.
     assert (edge (top σ') w) by eauto.
     assert (len σ'' = len σ') by tc.
     assert (2 ≤ len σ'')%Z by lia.
+    assert (marked' ⊆ marked'') by tc.
+    assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked'' ]} (fuel - 1)).
+    { eauto using cardinal_mono_1 with set_solver. }
     (* We have [inv γ'' u'']. *)
     (* The successors of [v] that have been examined already form the
        set [examined0], a subset of [marked'']. The vertex [w], also
        a successor of [v], is about to be examined. *)
-    (* Change the goal back into [wpd] format. *)
-    eapply wp_wpd; [| eauto ].
-    eapply wpd_strans.
     (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
-    eapply wpd_conseq.
-    { eapply IH; tc. }
+    wp_op IH introducing: (m''' & u''').
     (* Justify that this call establishes the loop invariant. *)
-    cbv beta. intros (m''' & u''') ?.
     clarify. (* [len σ'' ≠ 1] *)
     elim_visit_post rs''' marked''' σ''' γ'''. subst rs'''.
     assert (marked'' ⊆ marked''') by tc.
@@ -967,8 +762,8 @@ Proof.
   }
   clear foreach_successor wp_foreach_successor IH. (* for clarity *)
   (* All successors of [v] have now been examined. *)
-  intros ((m'' & u'') & ?). simpl proj1_sig.
-  intros (examined & Hpost & Hexamined) ?.
+  intros (m'' & u'').
+  intros (examined & Hpost & Hexamined).
   elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
   (* The structure of the stack has been preserved. *)
   assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
@@ -979,14 +774,9 @@ Proof.
   (* We invoke the user function [hook] again. *)
   assert (step γ'' (Exit v) γ''').
   { subst γ'' γ'''. econstructor; eauto with set_solver. }
-  eapply wpd_wpd_bind_unary.
-  eapply wpd_transform.
-  eapply wpd_exist; eapply wp_ret.
   wp_op wp_hook introducing: u'''.
   assert (marked' ⊆ marked'') by tc.
   (* Return. *)
-  wp_ret; intro.
-  eapply wpd_exist.
   wp_ret.
   intro_visit_post.
 Qed.
@@ -1006,94 +796,10 @@ Local Lemma wp_visit' :
   permitted (rs ++ started) →
   wp (visit' (m, u) _v) (λ s', visit_post γ started {[v]} s').
 Proof.
-  intros. unfold visit'. eapply wpd_visit; tc.
+  intros. unfold visit'. arrays. eapply wp_visit; tc.
+  (* Argue that the universe has cardinal [n]. *)
+  { eauto using cardinal_mono_1, cardinal_universe with set_solver. }
 Qed.
-  (* This [Qed] diverges if [Acc_intro_generator] is used
-     in the definition of [visit']. *)
-
-(* -------------------------------------------------------------------------- *)
-
-(* As an exercise, we prove that [visit'] satisfies the desired fixed
-   point equation. Most likely, we will NOT need this property. I am
-   showing this proof for pedagogical purposes; it is super difficult
-   if one does not approach it in exactly the right way. *)
-
-(* Under [proj1_sig], the coercion [strans] vanishes. *)
-
-Section FixedPoint.
-
-Local Lemma proj1_sig_strans {s1 s2} (pf : s1 ≤ s2) (s0 : sbeyond s1) :
-  proj1_sig (strans pf s0) = proj1_sig s0.
-Proof using.
-  destruct s0. eauto.
-Qed.
-
-(* Because [foreach_successor] is an unknown function, we must assume
-   that it is parametric: that is, when applied to related arguments,
-   it produces related results. *)
-
-Hypothesis foreach_successor_parametric:
-  ∀ {A1 A2} (A : A1 → A2 → Prop),
-  ∀ (body1 : A1 → _vertex → A1) (body2 : A2 → _vertex → A2),
-  ( ∀ a1 a2, A a1 a2 →
-    ∀ _w,
-    A (body1 a1 _w) (body2 a2 _w)
-  ) →
-  ∀ a1 a2, A a1 a2 →
-  ∀ _v,
-  A (foreach_successor a1 _v body1) (foreach_successor a2 _v body2).
-
-(* [visit'] satisfies the desired fixed point equation: *)
-
-Local Lemma visit_eq s ACC : ∀ _v,
-  proj1_sig (visit s _v ACC) =
-    let (m, u) := s in
-    if (_v <? length m)%uint63 then
-      do b ← get m _v ;
-      if b then
-        do u ← hook (Rediscover _v) u ;
-        (m, u)
-      else
-        do m' ← set m _v true ;
-        do u' ← hook (Enter _v) u ;
-        let s' := (m', u') in
-        do s' ← foreach_successor s' _v visit' ;
-        let (m', u') := s' in
-        do u' ← hook (Exit _v) u' ;
-        (m', u')
-    else
-      s.
-Proof using foreach_successor_parametric.
-  by dependent induction on s ACC. intros s ? ?.
-  intros. simpl visit.
-  destruct s as (m & u).
-  eapply IFC_if_dep; intro; [| solve [eauto] ].
-  eapply IFC_if_dep; intro; [ solve [eauto] |].
-  (* Eliminate [do m' ← ...], which appears only on one side. *)
-  unfold bind at 4.
-  eapply bind_eq_dep; [ eauto | intro u' ].
-  eapply bind_eq_dep_dep.
-  (* The loop. *)
-  { eapply foreach_successor_parametric with (A :=
-      λ (s1 : sbeyond (set m _v true, u')) (s2 : S),
-          proj1_sig s1 = s2
-    ); [| eauto ].
-    intros (s'' & ow'') ?. simpl. intros <- _w.
-    rewrite proj1_sig_strans.
-    unfold visit'.
-    unfold bind.
-    set (ow := decrease (m, u) m _v u u' eq_refl pf1 pf2).
-    (* The goal boils down to proving that the parameter [ACC] is
-       computationally irrelevant; that is, it does not influence
-       the first projection of the result of [visit]. *)
-    unfold bind.
-    do 2 rewrite IH by tc.
-    reflexivity. }
-  (* The code that follows the loop. *)
-  intros (m'' & u'') ?. reflexivity.
-Qed.
-
-End FixedPoint.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1225,7 +931,7 @@ Defined.
    using the lemma [wp_traverse]. *)
 
 (* Thus, the user invariant must be as required by [wp_traverse].
-   Bceause [Exit] events are not observable, the invariant must be
+   Because [Exit] events are not observable, the invariant must be
    preserved by [Exit] events. *)
 
 (* -------------------------------------------------------------------------- *)
@@ -1921,43 +1627,18 @@ Definition isCascade (c : cascade) (γ : ghost) :=
 
 (* -------------------------------------------------------------------------- *)
 
-(* In the CPS-style algorithm, there is no user state [u : U] and no user
-   invariant [inv]. They are not needed, since the user is in control and
-   can write loops (if desired) outside of our view. *)
+(* The code of the CPS-style DFS algorithm. *)
+
+(* There is no user state [u : U] and no user invariant [inv]. They are
+   not needed, as the user is in control and can write loops (if desired)
+   outside of our view. *)
 
 (* Therefore, a runtime state of the algorithm need not be a pair [(m, u)].
    It is just an array [m] of Boolean marks. *)
 
-(* The following definitions are used to justify termination. They are
-   similar to those given earlier, but concern [m] instead of [(m, u)]. *)
-
-Open Scope marks_scope.
-
-Local Definition mbeyond m :=
-  { m' | m' ≤ m }.
-
-(* [mrefl m] is [m] at type [mbeyond m]. *)
-
-Local Definition mrefl m : mbeyond m.
-Proof using.
-  unfold mbeyond. exists m. eapply mle_refl.
-Defined.
-
-(* [mtrans], an identity function, proves that if [m1 ≤ m2] holds,
-   and [m0] is beyond [m1], then [m0] is also beyond [m2]. *)
-
-Local Definition mtrans {m1 m2} : m1 ≤ m2 → mbeyond m1 → mbeyond m2.
-Proof using.
-  intros ow12 (m0 & ow01). exists m0. eauto using mle_trans.
-Defined.
-
-(* -------------------------------------------------------------------------- *)
-
-(* The code of the CPS-style DFS algorithm. *)
-
 (* The answer type is [head]. Thus, instead of returning a result of type
-   [mbeyond m], the recursive function [visit_cps] expects a continuation
-   of type [mbeyond m → head] and returns an answer of type [head]. *)
+   [marks], the recursive function [visit_cps] expects a continuation
+   of type [marks → head] and returns an answer of type [head]. *)
 
 (* There is no user function [hook]. Instead, to emit an event [_e], we
    return [Event (_e, k)], where [k] is the current continuation. Thus,
@@ -1974,50 +1655,49 @@ Defined.
 
 (* In the code in direct style, the loop on the successors of [v] would
    EXAMINE each successor [w] in turn. (The state of that loop was the
-   marks array, of type [below s].) Here, in contrast, the loop PUSHES
+   marks array, of type [marks].) Here, in contrast, the loop PUSHES
    each successor [w] in turn onto the continuation. (The state of this
-   loop is the continuation, of type [mbelow m → head].) Therefore, here,
+   loop is the continuation, of type [marks → head].) Therefore, here,
    the successors are examined in reverse order. This is still a valid DFS
    traversal; but [visit] and [visit_cps] do not construct the same DFS
    forest. *)
 
-Local Fixpoint visit_cps m _v (ACC : Acc mlt m) (k : mbeyond m → head) : head :=
-  IFC (_v <? length m)%uint63 THEN λ Hv,
-  IFC get m _v THEN λ _,
+Implicit Type k : marks → head.
+
+Section VisitCPS.
+Open Scope uint63.
+
+Local Fixpoint visit_cps m _v _fuel (ACC : Acc ilt _fuel) k : head :=
+  if get m _v then
     Event (Rediscover _v) @@ λ '(),
-    k (mrefl m)
-  ELSE λ Hunmarked,
-    let m' := set m _v true in
+    k m
+  else
+    do m ← set m _v true ;
     (* Emit an [Enter] event. *)
     Event (Enter _v) @@ λ '(),
-    let ow : m' < m := marking_decreases_weight m _v Hv Hunmarked in
+    (* Decrement [_fuel]. *)
+    IFC _fuel =? 0 THEN λ _, Done ELSE λ Hfuel,
+    let _fuel := _fuel - 1 in
     (* Construct a continuation that emits an [Exit] event
        and returns by invoking [k]. Name it [k], too. *)
-    let k (mow'' : mbeyond m') :=
-      do mow'' ← mow'' ;
-      Event (Exit _v) @@ λ '(),
-      k (mtrans (mlt_mle_incl ow) mow'')
-    in
+    let k m := Event (Exit _v) @@ λ '(), k m in
     (* [push k _w] pushes the vertex [w] onto [k]. *)
-    let push (k : mbeyond m' → head) _w : mbeyond m' → head :=
-      λ mow'',
-        let (m'', ow'') := mow'' in
-        visit_cps m'' _w (Acc_inv ACC (mle_mlt_trans ow'' ow)) @@ λ mow'',
-        k (mtrans ow'' mow'')
+    let push (k : marks → head) _w : marks → head :=
+      λ m,
+        visit_cps m _w _fuel
+          (Acc_inv ACC (ilt_n_minus_1 _ Hfuel))
+          k
     in
     (* Push every successor [w] of [v] onto the continuation. *)
     do k ← foreach_successor k _v push ;
     (* Then, run (return to) this continuation. *)
-    k (mrefl m')
-  ELSE λ _,
-    k (mrefl m).
+    k m.
 
-(* [visit_cps'] is a simply-typed wrapper for [visit_cps]. *)
+(* [visit_cps'] is [visit_cps] without fuel. *)
 
-Local Definition visit_cps' m _v (k : marks → head) : head :=
-  visit_cps m _v
-    (Acc_intro_generator 64 wf_mlt m)
-    (λ mow, k (proj1_sig mow)).
+Local Definition visit_cps' m _v k :=
+  let _fuel := _n in
+  visit_cps m _v _fuel (ilt_wf _fuel) k.
 
 (* [traverse_cps] is the entry point of the traversal. *)
 
@@ -2030,6 +1710,8 @@ Definition traverse_cps : cascade :=
   do k ← foreach_start k (λ k _v, λ m, visit_cps' m _v k) ;
   (* Wrap this continuation as a cascade, hiding [m]. *)
   λ '(), k m.
+
+End VisitCPS.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -2068,25 +1750,7 @@ Qed.
    that, in the state [γ'], the start vertices in the list [started] have
    been visited, and the vertices in the set [examined] have been marked. *)
 
-(* In [isCont], the argument of the continuation [k], a marks array, has
-   type [mbeyond m]. *)
-
-Local Definition isCont {m} (k : mbeyond m → head) γ started examined :=
-  let '(rs, marked, σ) := γ in
-  ∀ m' pf rs' marked' σ' γ',
-  wf γ' →
-  perm_rev γ' →
-  horizontal γ γ' →
-  isMarks m' marked' →
-  γ' = (rs', marked', σ') →
-  rs' = rs ++ started →
-  examined ⊆ marked' →
-  wp (k (exist m' pf)) (λ h, isHead h γ').
-
-(* [isCont'] is a variant of [isCont] where the continuation [k] has a
-   simple type, that is, the marks array has type [marks]. *)
-
-Local Definition isCont' (k : marks → head) γ started examined :=
+Local Definition isCont k γ started examined :=
   let '(rs, marked, σ) := γ in
   ∀ m' rs' marked' σ' γ',
   wf γ' →
@@ -2098,12 +1762,10 @@ Local Definition isCont' (k : marks → head) γ started examined :=
   examined ⊆ marked' →
   wp (k m') (λ h, isHead h γ').
 
-Local Hint Resolve mle_mlt_trans : marble.
-
 (* The specification of [visit_cps]. *)
 
-Local Lemma wp_visit_cps m (ACC : Acc mlt m) :
-  ∀ _v v (k : mbeyond m → head) rs marked σ γ started,
+Local Lemma wp_visit_cps _fuel ACC :
+  ∀ m _v v k rs marked σ γ started fuel,
   wf γ →
   perm_rev γ →
   isMarks m marked →
@@ -2113,18 +1775,20 @@ Local Lemma wp_visit_cps m (ACC : Acc mlt m) :
   edge (top σ) v →
   started = (if decide (len σ = 1) then {[v]} else []) →
   permitted_rev (rs ++ started) →
+  isInt _fuel fuel →
+  unsigned fuel →
+  cardinal {[ v | v ∈ universe ∧ v ∉ marked ]} fuel →
   isCont k γ started {[v]} →
-  wp (visit_cps m _v ACC k) (λ h, isHead h γ).
+  wp (visit_cps m _v _fuel ACC k) (λ h, isHead h γ).
 Proof.
   clear dependent foreach_start start_respects_bound.
-  by dependent induction on m ACC. intros m ? ?.
+  by dependent induction on _fuel ACC. intros _fuel ? ?.
   intros. wp_last Hcont.
   simpl visit_cps.
   destructMarks. arrays.
   assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
   assert (perm_rev γ).
   { unfold perm_rev; subst γ. eauto using permitted_rev_prefix. }
-  wp_if; [| lia].
   wp_if.
   (* Case: [v] is marked already. *)
   { clear foreach_successor wp_foreach_successor IH.
@@ -2136,7 +1800,7 @@ Proof.
     assert (wf γ') by tc.
     wp_ret. eapply isHeadEvent; tc.
     (* Invoke [k]. *)
-    unfold mrefl. subst γ.
+    subst γ.
     wp_op Hcont; eauto with horizontal set_solver.
   }
   (* Case: [v] is unmarked. *)
@@ -2155,8 +1819,15 @@ Proof.
     econstructor; try clarify; eauto 2 with marble set_solver. }
   assert (len σ' = len σ + 1) by tc.
   wp_ret. eapply isHeadEvent; tc.
-  assert (m' < m).
-  { eapply marking_decreases_weight; eauto. }
+  (* Argue that the fuel cannot be exhausted. *)
+  wp_if.
+  { exfalso. subst fuel.
+    eapply cardinal_empty_contradiction with (v := v). eauto. set_solver. }
+  (* The number of unmarked vertices has decreased. *)
+  assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked' ]} (fuel - 1)).
+  { unfold marked'.
+    eapply cardinal_mono_1_strict with (w := v);
+    eauto with set_solver. }
   (* We reach the loop on the successors of [v]. *)
   (* The loop invariant requires a little thought. As the loop progresses,
      the set [pushed] grows from ∅ to [successors v]. The current state of
@@ -2167,7 +1838,7 @@ Proof.
      formula [isCont k γ' [] ∅]. Therefore the loop invariant should be
      [isCont k γ' [] examined] where [examined] is [successors v ∖ pushed]. *)
   wp_op wp_foreach_successor with invariant: (
-    λ history (k : mbeyond m' → head),
+    λ history k,
       let pushed := list_to_set history in
       let examined := successors v ∖ pushed in
       isCont k γ' [] examined
@@ -2179,8 +1850,7 @@ Proof.
      that would FOLLOW the loop in direct style. *)
   { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
     unfold isCont, γ'. fold γ'.
-    intros m'' ? rs'' marked'' σ'' γ''. intros. subst rs''.
-    wp_bind_eq.
+    intros m'' rs'' marked'' σ'' γ''. intros. subst rs''.
     (* The structure of the ghost stack has been preserved. *)
     assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
     { eauto using horizontal_populates_top_frame. }
@@ -2194,14 +1864,14 @@ Proof.
     assert (marked' ⊆ marked'') by tc.
     wp_ret. eapply isHeadEvent; tc.
     (* Invoke [k]. *)
-    unfold mtrans. subst γ.
+    subst γ.
     wp_op Hcont; eauto with horizontal set_solver. }
   (* Preservation. *)
   { wp_body history0 history1 k''
       introducing: (fun _ => hiter_step w; intros _w ?).
     (* The loop body constructs and returns a new continuation. *)
     wp_ret. unfold isCont. unfold γ'; fold γ'. list.
-    intros m'' ? rs'' marked'' σ'' γ''. intros. subst rs''.
+    intros m'' rs'' marked'' σ'' γ''. intros. subst rs''.
     (* We are now looking at a recursive call. The state at this point is
        described by [γ'']. The vertex [w], a successor of [v], is about to
        be examined. *)
@@ -2209,6 +1879,9 @@ Proof.
     assert (edge (top σ') w) by eauto.
     assert (len σ'' = len σ') by tc. (* [len σ'' ≠ 1] *)
     assert (2 ≤ len σ'')%Z by lia.
+    assert (marked' ⊆ marked'') by tc.
+    assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked'' ]} (fuel - 1)).
+    { eauto using cardinal_mono_1 with set_solver. }
     wp_op IH; tc; destruct (decide (len σ'' = 1)); try lia; list.
     { eauto using permitted_rev_prefix. }
     clear wp_foreach_successor IH. (* for clarity *)
@@ -2216,8 +1889,8 @@ Proof.
     (* In other words, we must argue that the recursive call has
        re-established the loop invariant. *)
     unfold γ', isCont in Hinv. fold γ' in Hinv.
-    subst γ''. unfold isCont, mtrans.
-    intros m''' ? rs''' marked''' σ''' γ'''. intros. subst rs'''.
+    subst γ''. unfold isCont.
+    intros m''' rs''' marked''' σ''' γ'''. intros. subst rs'''.
     assert (marked'' ⊆ marked''') by tc.
     assert (horizontal γ' γ''') by eauto 2 using horizontal_transitive.
     eapply Hinv; eauto using technical. }
@@ -2233,7 +1906,7 @@ Qed.
 
 (* The specification of [visit_cps']. *)
 
-Local Lemma wp_visit_cps' m _v v (k : marks → head) rs marked σ γ started :
+Local Lemma wp_visit_cps' m _v v k rs marked σ γ started :
   wf γ →
   perm_rev γ →
   isMarks m marked →
@@ -2243,14 +1916,13 @@ Local Lemma wp_visit_cps' m _v v (k : marks → head) rs marked σ γ started :
   edge (top σ) v →
   started = (if decide (len σ = 1) then {[v]} else []) →
   permitted_rev (rs ++ started) →
-  isCont' k γ started {[v]} →
+  isCont k γ started {[v]} →
   wp (visit_cps' m _v k) (λ h, isHead h γ).
 Proof.
-  intros. subst γ. unfold visit_cps'.
+  intros. subst γ. unfold visit_cps'. arrays.
   wp_op wp_visit_cps; last eauto.
-  (* There remains to argue that [isCont' ...] implies [isCont ...]. *)
-  unfold isCont, isCont' in *. simpl proj1_sig.
-  eauto.
+  (* Argue that the universe has cardinal [n]. *)
+  { eauto using cardinal_mono_1, cardinal_universe with set_solver. }
 Qed.
 
 (* The specification of [traverse_cps]. *)
@@ -2270,10 +1942,10 @@ Proof.
   (* Build the final continuation. *)
   eapply wp_bind with (P := λ k,
     ∀ started, complete (rev started) →
-    isCont' k γ0 started start
+    isCont k γ0 started start
   ).
   { wp_ret. intros started Hstarted.
-    unfold isCont'. unfold γ0; fold γ0. simpl. intros. subst.
+    unfold isCont. unfold γ0; fold γ0. simpl. intros. subst.
     wp_ret. eapply isHeadDone; assumption. }
   intros k Hk.
   (* Push the start vertices onto the continuation. *)
@@ -2290,10 +1962,10 @@ Proof.
   wp_op wp_foreach_start with invariant: (λ pushed k,
     ∀ started,
     complete (pushed ++ rev started) →
-    isCont' k γ0 started (start ∖ list_to_set pushed)
+    isCont k γ0 started (start ∖ list_to_set pushed)
   ).
   (* Initialization. *)
-  { unfold γ0, isCont' in *. intros. list in *.
+  { unfold γ0, isCont in *. intros. list in *.
     eapply Hk; eauto with set_solver. }
   (* Preservation. *)
   { wp_body pushed0 pushed1 k''
@@ -2302,7 +1974,7 @@ Proof.
     { apply permitted_spec in Hpermitted. set_solver. }
     (* The loop body constructs and returns a new continuation. *)
     wp_ret. intros started Hstarted. list in Hstarted.
-    unfold isCont'. unfold γ0; fold γ0.
+    unfold isCont. unfold γ0; fold γ0.
     intros m' rs' marked' σ' γ'. simpl. intros. subst rs'.
     assert (len σ' = 1) by tc.
     wp_op wp_visit_cps'; eauto.
@@ -2312,7 +1984,7 @@ Proof.
          of a complete list. *)
       unfold permitted_rev. list. eauto. }
     (* There remains to argue that [isCont' ...] implies [isCont' ...]. *)
-    unfold isCont' in *.
+    unfold isCont in *.
     unfold γ0 in Hinv; fold γ0 in Hinv.
     match goal with h: γ' = _ |- _ => rewrite h; rewrite <- h end.
     clarify. list.
