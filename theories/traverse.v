@@ -542,7 +542,7 @@ Local Fixpoint visit s _v _fuel (ACC : Acc ilt _fuel) : S :=
         visit s _w _fuel
           (Acc_inv ACC (ilt_n_minus_1 _ Hfuel))
       ) ;
-    (* Signal that we are exiting [_v]. *)
+    (* Signal that we are exiting this vertex. *)
     let (m, u) := s in
     do u ← hook (Exit _v) u ;
     let s := (m, u) in
