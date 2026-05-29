@@ -91,22 +91,6 @@ Proof.
   destruct c; reflexivity.
 Qed.
 
-(* Rewriting using [setoid_rewrite] inside [bind] is permitted. *)
-
-Instance Proper_bind A B :
-  Proper (eq ==> (pointwise_relation _ eq) ==> eq) (@bind A B).
-Proof.
-  repeat intro. unfold bind. congruence.
-Qed.
-
-Lemma bind_bind_eq {A B} (a1 a2 : A) (k1 k2 : A → B) :
-  a1 = a2 →
-  (∀ a, k1 a = k2 a) →
-  bind a1 k1 = bind a2 k2.
-Proof.
-  intros. unfold bind. congruence.
-Qed.
-
 (* This lemma can be used to prove that a [bind] construct whose result
    type is a subset type { a : A | Q a } is equal (up to a projection)
    to a [bind] construct whose result type is just A. *)
@@ -395,6 +379,57 @@ Qed.
 (* We make [wp] opaque, so as to discourage unfolding it. *)
 
 Opaque wp.
+
+(* -------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
+
+(* Sometimes we wish to prove that two pieces of code are equal. *)
+
+(* This is often not a good idea and not easy, but sometimes necessary
+   in order to optimize a piece of code and prove that the optimized
+   code is equal to the unoptimized code that has been verified. *)
+
+(* Equality of two conditionals. *)
+
+Lemma if_if_eq {B} (a0 a0' : bool) (b1 b2 b1' b2' : B) :
+  a0 = a0' →
+  (a0 = true  → b1 = b1') →
+  (a0 = false → b2 = b2') →
+  (if a0 then b1 else b2) = (if a0' then b1' else b2').
+Proof.
+  intros. subst a0'. destruct a0; eauto.
+Qed.
+
+(* For simplicity, for now, this lemma is limited to the case where
+   the two conditionals have exactly the same condition. *)
+
+Lemma IFC_IFC_eq {B} (a0 : bool)
+  (b1 b1' : a0 = true →  B)
+  (b2 b2' : a0 = false → B) :
+  (∀ pf : a0 = true , b1 pf = b1' pf) →
+  (∀ pf : a0 = false, b2 pf = b2' pf) →
+  (IFC a0 THEN b1 ELSE b2) = (IFC a0 THEN b1' ELSE b2').
+Proof.
+  intros. destruct a0; eauto.
+Qed.
+
+(* Equality of sequences. *)
+
+Lemma bind_bind_eq {A B} (a1 a2 : A) (k1 k2 : A → B) :
+  a1 = a2 →
+  (∀ a, k1 a = k2 a) →
+  bind a1 k1 = bind a2 k2.
+Proof.
+  intros. unfold bind. congruence.
+Qed.
+
+(* Rewriting using [setoid_rewrite] inside [bind] is permitted. *)
+
+Instance Proper_bind A B :
+  Proper (eq ==> (pointwise_relation _ eq) ==> eq) (@bind A B).
+Proof.
+  repeat intro. unfold bind. congruence.
+Qed.
 
 (* -------------------------------------------------------------------------- *)
 (* -------------------------------------------------------------------------- *)
