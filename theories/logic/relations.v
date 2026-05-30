@@ -301,7 +301,7 @@ Proof. eauto using image_increasing with path. Qed.
 (* Every set reaches its closure. *)
 
 Goal ∀ vs, reaches vs (closure vs).
-Proof. eauto using reaches_reflexive. Qed.
+Proof. eauto. Qed.
 
 (* A closure is closed. *)
 
