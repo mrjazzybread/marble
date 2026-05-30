@@ -1041,7 +1041,6 @@ Variable wp_hook :
   history0 ++ {[v]} = history1 →
   permitted_set_unique (closure start) history1 →
   ∀ _v, isInt _v v →
-  0 ≤ v < n → (* redundant *)
   wp (hook _v u) (λ u', inv history1 u').
 
 Lemma wp_traverse_pre_simplified :
@@ -1172,15 +1171,13 @@ Lemma wp_traverse_pre' :
   ∀ {U} (hook : _vertex → U → U),
   ITER_SET_UNIQUE
     [] (closure start)
-    (λ v u Q, ∀ _v, isInt _v v → 0 ≤ v < n → wp (hook _v u) Q)
+    (λ v u Q, ∀ _v, isInt _v v → wp (hook _v u) Q)
     (λ u Q, wp (traverse_pre' hook u) Q).
 Proof.
   intros. ITER. unfold traverse_pre'.
   wp_op wp_traverse_pre_simplified with invariant: inv.
   (* Preservation. *)
-  { wp_body history0 history1 u
-      introducing: (fun _ => hiter_step v; intros _v ??).
-    unpack.
+  { wp_hiter_body history u _v v. unpack.
     wp_op Hbody.
     { permitted. list. assumption. }
     cbv beta. list. eauto. }
