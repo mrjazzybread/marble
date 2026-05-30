@@ -503,9 +503,11 @@ Variable wp_hook :
 
 (* -------------------------------------------------------------------------- *)
 
-(* The main recursive function: [visit].  *)
+(* The main recursive functions: [visit_unmarked] and [visit].  *)
 
-(* [visit] expects a state [s], a vertex [_v], and a machine integer [_fuel]. *)
+(* These functions expect a state [s], a vertex [_v], a machine integer
+   [_fuel], and a proof of acessibility of [_fuel], which we are able to
+   exploit because [_fuel] decreases at each recursive call. *)
 
 (* Using fuel lets us perform a trivial proof of termination at function
    definition time. The true proof of termination is transformed into an
@@ -516,47 +518,70 @@ Variable wp_hook :
    array decreases over time and keep track of the fact that every vertex
    is valid (i.e., within the bounds of the marks array). *)
 
+(* [visit_unmarked] expects the vertex [_v] to be unmarked. [visit]
+   does not make this assumption. We choose to make [visit_unmarked]
+   the main entry point because this formulation should cause fewer
+   function calls: only one call per vertex instead of one call per
+   edge. If function calls are expensive then this could be a nice
+   savings. *)
+
 Section Visit.
 Open Scope uint63.
 
-Local Fixpoint visit s _v _fuel (ACC : Acc ilt _fuel) : S :=
+Local Fixpoint visit_unmarked s _v _fuel (ACC : Acc ilt _fuel) : S :=
+  let (m, u) := s in
+  (* Mark this vertex. *)
+  do m ← set m _v true ;
+  (* Signal that we are entering this vertex. *)
+  do u ← hook (Enter _v) u ;
+  let s := (m, u) in
+  (* Decrement [_fuel]. *)
+  IFC _fuel =? 0 THEN λ _, s ELSE λ Hfuel,
+  let _fuel := _fuel - 1 in
+  (* Visit the successors of [v]. *)
+  do s ←
+    foreach_successor s _v (λ s _w,
+      let (m, u) := s in
+      (* Test whether this vertex is marked. *)
+      if get m _w then
+        (* Signal that we have rediscovered this vertex. *)
+        do u ← hook (Rediscover _w) u ;
+        let s := (m, u) in
+        s
+      else
+        visit_unmarked s _w _fuel
+          (Acc_inv ACC (ilt_n_minus_1 _ Hfuel))
+    ) ;
+  (* Signal that we are exiting this vertex. *)
+  let (m, u) := s in
+  do u ← hook (Exit _v) u ;
+  let s := (m, u) in
+  s.
+
+(* A simplified version of [visit_unmarked], without fuel. *)
+
+Local Definition visit_unmarked' s _v :=
+  let _fuel := _n in
+  visit_unmarked s _v _fuel (ilt_wf _fuel).
+
+(* [visit] does not assume that the vertex is unmarked. *)
+
+(* Here, there is a little code duplication: [visit] is really the body
+   of the [foreach_successor] loop inside [visit_unmarked]. This seems
+   difficult to avoid. *)
+
+Definition visit s _w :=
   let (m, u) := s in
   (* Test whether this vertex is marked. *)
-  if get m _v then
+  if get m _w then
     (* Signal that we have rediscovered this vertex. *)
-    do u ← hook (Rediscover _v) u ;
+    do u ← hook (Rediscover _w) u ;
     let s := (m, u) in
     s
   else
-    (* Mark this vertex. *)
-    do m ← set m _v true ;
-    (* Signal that we are entering this vertex. *)
-    do u ← hook (Enter _v) u ;
-    let s := (m, u) in
-    (* Decrement [_fuel]. *)
-    IFC _fuel =? 0 THEN λ _, s ELSE λ Hfuel,
-    let _fuel := _fuel - 1 in
-    (* Visit the successors of [v]. *)
-    do s ←
-      foreach_successor s _v (λ s _w,
-        visit s _w _fuel
-          (Acc_inv ACC (ilt_n_minus_1 _ Hfuel))
-      ) ;
-    (* Signal that we are exiting this vertex. *)
-    let (m, u) := s in
-    do u ← hook (Exit _v) u ;
-    let s := (m, u) in
-    s.
+    visit_unmarked' s _w.
 
 End Visit.
-
-(* -------------------------------------------------------------------------- *)
-
-(* A simplified version of [visit], without fuel. *)
-
-Local Definition visit' s _v : S :=
-  let _fuel := _n in
-  visit s _v _fuel (ilt_wf _fuel).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -568,15 +593,15 @@ Local Definition visit' s _v : S :=
    The successors of a vertex are given by [foreach_successor].
    The algorithm emits events by invoking [hook]. *)
 
-Definition traverse : S :=
+Definition traverse :=
   (* Allocate an array of Boolean marks. *)
   do m0 ←  @init bool inhabited_bool _n (λ _i, false) ;
   (* Visit the start vertices. *)
-  foreach_start (m0, u0) visit'.
+  foreach_start (m0, u0) visit.
 
 (* -------------------------------------------------------------------------- *)
 
-(* The postcondition of [visit]. *)
+(* The postcondition of [visit_unmarked] and [visit]. *)
 
 (* [visit_post γ started examined s'] means that, starting from the ghost
    state [γ], the runtime state [s'] is a correct final state and
@@ -654,11 +679,11 @@ Local Ltac elim_visit_post rs' marked' σ' γ' :=
       unpack in hv
   end.
 
-(* The specification of [visit]. *)
+(* The specification of [visit_unmarked]. *)
 
 (* [permitted (rs ++ started)] implies [perm γ]. *)
 
-Local Lemma wp_visit _fuel (ACC : Acc ilt _fuel) :
+Local Lemma wp_visit_unmarked _fuel (ACC : Acc ilt _fuel) :
   ∀ s m u _v v rs marked σ γ started fuel,
   s = (m, u) →
   γ = (rs, marked, σ) →
@@ -667,36 +692,21 @@ Local Lemma wp_visit _fuel (ACC : Acc ilt _fuel) :
   isMarks m marked →
   isInt _v v →
   0 ≤ v < n →
+  v ∉ marked →
   edge (top σ) v →
   started = (if decide (len σ = 1) then {[v]} else []) →
   permitted (rs ++ started) →
   isInt _fuel fuel →
   unsigned fuel →
   cardinal {[ v | v ∈ universe ∧ v ∉ marked ]} fuel →
-  wp (visit s _v _fuel ACC) (λ s', visit_post γ started {[v]} s').
+  wp (visit_unmarked s _v _fuel ACC) (λ s', visit_post γ started {[v]} s').
 Proof.
   clear dependent foreach_start start_respects_bound.
   by dependent induction on _fuel ACC. intros _fuel ? ?.
-  intros. subst s. simpl visit.
+  intros. subst s. simpl visit_unmarked.
   destructMarks. arrays.
   assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
-  assert (perm γ).
-  { subst γ; eauto using permitted_prefix. }
-  wp_if.
-  (* Case: [v] is marked already. *)
-  {
-    (* Emit a [Rediscover] event. *)
-    set (rs' := rs ++ started).
-    set (γ' := (rs', marked, σ)).
-    assert (step γ (Rediscover v) γ').
-    { subst γ γ' started rs'. econstructor; try clarify; tc. }
-    (* Invoke [hook]. *)
-    wp_op wp_hook shadowing: u.
-    wp_ret.
-    intro_visit_post.
-  }
-  (* Case: [v] is unmarked. *)
-  (* TODO clean up *)
+  (* We assume that [v] is unmarked. *)
   assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
     by eauto using isMarks_set.
   revert Hm'.
@@ -751,7 +761,25 @@ Proof.
     (* The successors of [v] that have been examined already form the
        set [examined0], a subset of [marked'']. The vertex [w], also
        a successor of [v], is about to be examined. *)
-    (* Use the induction hypothesis to justify calling [visit s'' _w]. *)
+    (* We test whether [w] is marked. *)
+    wp_if.
+    (* Case: [w] is marked already. *)
+    {
+      (* Emit a [Rediscover] event. *)
+      set (rs''' := rs' ++ started).
+      set (γ''' := (rs', marked'', σ'')).
+      assert (step γ'' (Rediscover w) γ''').
+      { subst γ'' γ'''. econstructor; tc.
+        destruct (decide (len σ'' = 1)); [ lia | reflexivity ]. }
+      assert (horizontal γ' γ''')
+        by eauto using horizontal_transitive with horizontal.
+      (* Invoke [hook]. *)
+      wp_op wp_hook shadowing: u.
+      wp_ret.
+      intro_visit_post.
+    }
+    (* Case: [w] is unmarked. *)
+    (* Use the induction hypothesis. *)
     wp_op IH introducing: (m''' & u''').
     (* Justify that this call establishes the loop invariant. *)
     clarify. (* [len σ'' ≠ 1] *)
@@ -781,10 +809,31 @@ Proof.
   intro_visit_post.
 Qed.
 
-(* A specification of [visit']. *)
+(* A specification of [visit_unmarked']. *)
 
-Local Lemma wp_visit' :
-  ∀ m u _v v rs marked σ γ started,
+Local Lemma wp_visit_unmarked' m u _v v rs marked σ γ started :
+  γ = (rs, marked, σ) →
+  inv γ u →
+  wf γ →
+  isMarks m marked →
+  isInt _v v →
+  0 ≤ v < n →
+  v ∉ marked →
+  edge (top σ) v →
+  started = (if decide (len σ = 1) then {[v]} else []) →
+  permitted (rs ++ started) →
+  wp (visit_unmarked' (m, u) _v) (λ s', visit_post γ started {[v]} s').
+Proof.
+  intros. unfold visit_unmarked'. arrays. eapply wp_visit_unmarked; tc.
+  (* Argue that the universe has cardinal [n]. *)
+  { eauto using cardinal_mono_1, cardinal_universe with set_solver. }
+Qed.
+
+(* The specification of [visit] is the same as
+   the specification of [visit_unmarked'],
+   except it does not require [v ∉ marked]. *)
+
+Local Lemma wp_visit m u _v v rs marked σ γ started :
   γ = (rs, marked, σ) →
   inv γ u →
   wf γ →
@@ -794,11 +843,27 @@ Local Lemma wp_visit' :
   edge (top σ) v →
   started = (if decide (len σ = 1) then {[v]} else []) →
   permitted (rs ++ started) →
-  wp (visit' (m, u) _v) (λ s', visit_post γ started {[v]} s').
+  wp (visit (m, u) _v) (λ s', visit_post γ started {[v]} s').
 Proof.
-  intros. unfold visit'. arrays. eapply wp_visit; tc.
-  (* Argue that the universe has cardinal [n]. *)
-  { eauto using cardinal_mono_1, cardinal_universe with set_solver. }
+  intros. unfold visit.
+  wp_if.
+  (* Case: [v] is marked already. *)
+  {
+    (* Emit a [Rediscover] event. *)
+    set (rs' := rs ++ started).
+    set (γ' := (rs', marked, σ)).
+    assert (step γ (Rediscover v) γ').
+    { subst γ γ' rs' started. econstructor; try clarify; tc. }
+    assert (horizontal γ γ')
+      by eauto using horizontal_transitive with horizontal.
+    (* Invoke [hook]. *)
+    wp_op wp_hook shadowing: u.
+    wp_ret.
+    intro_visit_post.
+  }
+  (* Case: [v] is unmarked. *)
+  wp_op wp_visit_unmarked' introducing: (m', u').
+  assumption.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -861,7 +926,7 @@ Proof.
     { apply permitted_spec in Hpermitted. set_solver. }
     elim_visit_post rs' marked' σ' γ'. subst rs'.
     assert (len σ' = 1) by tc.
-    wp_op wp_visit' introducing: (m'' & u'').
+    wp_op wp_visit introducing: (m'' & u'').
     elim_visit_post rs'' marked'' σ'' γ''. clarify. subst rs''.
     assert (marked' ⊆ marked'') by tc.
     assert (horizontal γ0 γ'') by eauto 2 using horizontal_transitive.
@@ -915,13 +980,18 @@ Definition plain_traverse_pre :=
 
 (* By specializing [traverse] and [visit] for [hook_pre], we obtain code
    where the vertex-exit events disappear. In the extracted OCaml code,
-   the call from [visit] to [foreach_successor] becomes a tail call. *)
+   the call from [visit] to [foreach_successor] becomes a tail call,
+   provided the OCaml compiler is able to recognize that
+   [let (x, y) = e in (x, y)] is equivalent to just [e]. *)
 
 Derive traverse_pre
   in (traverse_pre = plain_traverse_pre)
   as traverse_pre_eq.
 Proof using.
-  intros. unfold plain_traverse_pre, traverse, visit', visit, hook_pre.
+  intros.
+  unfold plain_traverse_pre, traverse.
+  unfold visit, visit_unmarked', visit_unmarked.
+  unfold hook_pre.
   unfold traverse_pre; reflexivity.
 Defined.
 
@@ -1061,7 +1131,10 @@ Derive traverse_post
   in (∀ u, traverse_post u = plain_traverse_post u)
   as traverse_post_eq.
 Proof using.
-  intros. unfold plain_traverse_post, traverse, visit', visit, hook_post.
+  intros.
+  unfold plain_traverse_post, traverse.
+  unfold visit, visit_unmarked', visit_unmarked.
+  unfold hook_post.
   unfold traverse_post; reflexivity.
 Defined.
 
@@ -1248,7 +1321,9 @@ Derive group
   in (group = plain_group)
   as group_eq.
 Proof using.
-  intros. unfold plain_group, traverse, visit', visit.
+  intros.
+  unfold plain_group, traverse.
+  unfold visit, visit_unmarked', visit_unmarked.
   unfold group; reflexivity.
 Defined.
 

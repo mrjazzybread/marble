@@ -141,7 +141,9 @@ From marble Require pqueue.
 From marble Require traverse.
 
 Extraction Inline
-  traverse.visit'
+  traverse.visit
+  traverse.visit_unmarked'
+  traverse.visit_unmarked
   traverse.hook_pre
   traverse.traverse_pre'
   traverse.hook_post
