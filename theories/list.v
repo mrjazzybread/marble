@@ -29,6 +29,8 @@ Set Universe Polymorphism.
 
 Notation isList := Forall2.
 
+Notation isListIntU := (isList (λ _v v, isIntU _v v)).
+
 (* -------------------------------------------------------------------------- *)
 
 (* Lemmas and hints about [Forall2]. *)

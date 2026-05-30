@@ -1190,13 +1190,6 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
-(* Lists of vertices. *)
-
-(* TODO move elsewhere *)
-Local Notation isListIntU := (Forall2 (λ _v v, isIntU _v v)).
-
-(* -------------------------------------------------------------------------- *)
-
 (* [list_rev_post] traverses the graph and constructs a list of the reachable
    vertices, in reverse postorder. That is, a vertex is pushed onto the list
    when it is exited, and it is pushed in front of the list. *)
