@@ -382,15 +382,12 @@ Local Lemma isMarks_set m marked :
   ∀Int _v v,
   0 ≤ v < n →
   v ∉ marked →
-  isMarks (set m _v true) ({[v]} ∪ marked).
+  wp (set m _v true) (λ m, isMarks m ({[v]} ∪ marked)).
 Proof using. clear -m.
   intros. destructMarks.
-  (* Switch to [wp] style *)
-  assert (Hm': wp (set m _v true) (λ m, isMarks m ({[v]} ∪ marked))).
-  { wp_set. introMarks. intros v' ?. case_lookup_insert.
-    + subst v'. tc.
-    + rewrite mark_unaffected by assumption. tc. }
-  rewrite wp_iff in Hm'. assumption.
+  wp_set. introMarks. intros v' ?. case_lookup_insert.
+  + subst v'. tc.
+  + rewrite mark_unaffected by assumption. tc.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -414,6 +411,12 @@ Local Hint Resolve
 : marble.
 
 Local Ltac clarify :=
+  lazymatch goal with |- context[decide ?P] =>
+    destruct (decide P);
+    first [ length in *; lengths; lia | tauto | idtac ]
+  end.
+
+Local Ltac clarify_context :=
   case_decide; first [ length in *; lengths; lia | tauto | idtac ].
 
 Local Ltac local_permitted :=
@@ -684,8 +687,7 @@ Local Ltac elim_visit_post rs' marked' σ' γ' :=
 (* [permitted (rs ++ started)] implies [perm γ]. *)
 
 Local Lemma wp_visit_unmarked _fuel (ACC : Acc ilt _fuel) :
-  ∀ s m u _v v rs marked σ γ started fuel,
-  s = (m, u) →
+  ∀ m u _v v rs marked σ γ started fuel,
   γ = (rs, marked, σ) →
   inv γ u →
   wf γ →
@@ -699,113 +701,120 @@ Local Lemma wp_visit_unmarked _fuel (ACC : Acc ilt _fuel) :
   isInt _fuel fuel →
   unsigned fuel →
   cardinal {[ v | v ∈ universe ∧ v ∉ marked ]} fuel →
-  wp (visit_unmarked s _v _fuel ACC) (λ s', visit_post γ started {[v]} s').
+  wp (visit_unmarked (m, u) _v _fuel ACC) (λ s',
+    visit_post γ started {[v]} s'
+  ).
 Proof.
   clear dependent foreach_start start_respects_bound.
   by dependent induction on _fuel ACC.
-  intros. subst s. simpl visit_unmarked.
-  destructMarks. arrays.
+  intros. simpl visit_unmarked. destructMarks. arrays.
+
+  (* Every stack has height at least 1. *)
   assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
-  (* We assume that [v] is unmarked. *)
-  assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
-    by eauto using isMarks_set.
-  revert Hm'.
-  set (m' := set m _v true).
-  set (rs' := rs ++ started).
-  set (marked' := {[v]} ∪ marked).
-  set (σ' := Frame (Some v) Empty :: σ).
-  set (γ' := (rs', marked', σ')).
-  intro.
-  wp_bind_eq.
+
+  (* Mark the vertex [v]. *)
+  wp_op isMarks_set.
+  (* The program point that follows the [Enter] event is labeled 1. *)
+  intro m1. cbv beta.
+  set (rs1 := rs ++ started).
+  set (marked1 := {[v]} ∪ marked).
+  set (σ1 := Frame (Some v) Empty :: σ).
+  set (γ1 := (rs1, marked1, σ1)).
+  intro Hm1.
   (* Emit an [Enter] event. *)
-  assert (step γ (Enter v) γ').
-  { subst γ γ' started rs' marked'.
-    econstructor; try clarify; eauto 2 with marble set_solver. }
-  assert (len σ' = len σ + 1) by tc.
+  assert (step γ (Enter v) γ1).
+  { subst γ γ1 started rs1 marked1.
+    econstructor; try clarify; eauto 2 using app_nil_r. }
+  assert (len σ1 = len σ + 1) by tc.
   (* Invoke [hook]. *)
-  wp_op wp_hook introducing: u'.
-  (* Argue that the fuel cannot be exhausted. *)
-  wp_if.
-  { exfalso. subst fuel.
-    (* [v] is unmarked, so the set of unmarked vertices is nonempty;
-       this contradicts the fact that the cardinal of this set is at
-       most [fuel]. *)
+  wp_op wp_hook introducing: u1.
+  (* We have [inv γ1 u1]. *)
+
+  (* [v] is unmarked, so the set of unmarked vertices is nonempty.
+     Therefore [fuel] cannot be zero. *)
+  assert (fuel ≠ 0).
+  { intro; subst fuel.
     eapply cardinal_empty_contradiction with (v := v). eauto. set_solver. }
+  wp_if; [ tauto |].
   (* The number of unmarked vertices has decreased. *)
-  assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked' ]} (fuel - 1)).
-  { unfold marked'.
+  assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked1 ]} (fuel - 1)).
+  { unfold marked1.
     eapply cardinal_mono_1_strict with (w := v);
     eauto with set_solver. }
-  (* We have [inv γ' u']. *)
-  eapply wp_bind_unary.
+
   (* We reach the loop on the successors of [v]. *)
+  eapply wp_bind_unary.
   wp_op wp_foreach_successor with invariant: (
     λ history s,
       let examined := list_to_set history in
-      visit_post γ' [] examined s
-  ).
+      visit_post γ1 [] examined s
+  );
+  clear dependent m u;
+  clear wp_foreach_successor.
   (* Initialization. *)
   { intro_visit_post. }
   (* Preservation. *)
-  { wp_body history0 history1 (m'' & u'')
-      introducing: (fun _ => hiter_step w; intros _w ?).
-    elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
-    assert (E v w) by set_solver.
-    assert (edge (top σ') w) by eauto.
-    assert (len σ'' = len σ') by tc.
-    assert (2 ≤ len σ'')%Z by lia.
-    assert (marked' ⊆ marked'') by tc.
-    assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked'' ]} (fuel - 1)).
-    { eauto using cardinal_mono_1 with set_solver. }
-    (* We have [inv γ'' u'']. *)
+  { wp_hiter_body history (m2 & u2) _w w.
+    (* This program point is labeled 2. *)
+    elim_visit_post rs2 marked2 σ2 γ2.
+    (* We have [inv γ2 u2]. *)
     (* The successors of [v] that have been examined already form the
-       set [examined0], a subset of [marked'']. The vertex [w], also
-       a successor of [v], is about to be examined. *)
-    (* We test whether [w] is marked. *)
+       list [history], a subset of [marked2]. The vertex [w], also a
+       successor of [v], is about to be examined. *)
+    assert (E v w) by set_solver.
+    assert (edge (top σ1) w) by eauto.
+    assert (len σ2 = len σ1) by tc.
+    assert (2 ≤ len σ2)%Z by lia.
+    assert (marked1 ⊆ marked2) by tc.
+    assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked2 ]} (fuel - 1))
+      by eauto using cardinal_mono_1 with set_solver.
     wp_if.
     (* Case: [w] is marked already. *)
     {
       (* Emit a [Rediscover] event. *)
-      set (rs''' := rs' ++ started).
-      set (γ''' := (rs', marked'', σ'')).
-      assert (step γ'' (Rediscover w) γ''').
-      { subst γ'' γ'''. econstructor; tc.
-        destruct (decide (len σ'' = 1)); [ lia | reflexivity ]. }
-      assert (horizontal γ' γ''')
-        by eauto using horizontal_transitive with horizontal.
+      assert (step γ2 (Rediscover w) γ2).
+      { subst γ2. econstructor; try clarify; tc. }
       (* Invoke [hook]. *)
-      wp_op wp_hook shadowing: u.
+      wp_op wp_hook shadowing: u2.
       wp_ret.
       intro_visit_post.
     }
     (* Case: [w] is unmarked. *)
     (* Use the induction hypothesis. *)
-    wp_op IH introducing: (m''' & u''').
-    (* Justify that this call establishes the loop invariant. *)
-    clarify. (* [len σ'' ≠ 1] *)
-    elim_visit_post rs''' marked''' σ''' γ'''. subst rs'''.
-    assert (marked'' ⊆ marked''') by tc.
-    assert (horizontal γ' γ''') by eauto 2 using horizontal_transitive.
+    subst rs2.
+    wp_op IH introducing: (m3 & u3).
+    clear IH wp_hook.
+    (* [len σ2 ≠ 1] *)
+    case_decide; [ lia |].
+    (* The loop invariant has been re-established. *)
+    (* This program point is labeled 3. *)
+    elim_visit_post rs3 marked3 σ3 γ3.
+    assert (marked2 ⊆ marked3) by tc.
+    assert (horizontal γ1 γ3) by eauto 2 using horizontal_transitive.
     intro_visit_post.
   }
-  clear foreach_successor wp_foreach_successor IH. (* for clarity *)
+  clear IH.
+
   (* All successors of [v] have now been examined. *)
-  intros (m'' & u'').
+  (* This program point is labeled 4. *)
+  intros (m4 & u4).
   intros (examined & Hpost & Hexamined).
-  elim_visit_post rs'' marked'' σ'' γ''. subst rs''.
+  elim_visit_post rs4 marked4 σ4 γ4.
   (* The structure of the stack has been preserved. *)
-  assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
-  { eauto using horizontal_populates_top_frame. }
-  set (marked''' := marked'').
-  set (σ''' := store v vs σ).
-  set (γ''' := (rs', marked''', σ''')).
-  (* We invoke the user function [hook] again. *)
-  assert (step γ'' (Exit v) γ''').
-  { subst γ'' γ'''. econstructor; eauto with set_solver. }
-  wp_op wp_hook introducing: u'''.
-  assert (marked' ⊆ marked'') by tc.
+  assert (∃ vs, σ4 = Frame (Some v) vs :: σ) as (vs & ?).
+    by eauto using horizontal_populates_top_frame.
+  (* Emit an [Exit] event. *)
+  set (σ5 := store v vs σ).
+  set (γ5 := (rs4, marked4, σ5)).
+  assert (perm γ5).
+  { subst γ5 rs4. tc. }
+  assert (step γ4 (Exit v) γ5).
+  { subst γ4 γ5. econstructor; eauto with set_solver. }
+  (* Invoke the user function [hook] again. *)
+  wp_op wp_hook introducing: u5.
   (* Return. *)
   wp_ret.
+  assert (marked1 ⊆ marked4) by tc.
   intro_visit_post.
 Qed.
 
@@ -919,15 +928,13 @@ Proof.
   { intro_visit_post. }
   (* Preservation. *)
   { clear dependent m.
-    (* TODO turn this into a standard tactic: *)
-    wp_body started ? (m' & u')
-      introducing: (fun _ => hiter_step v; intros _v ?).
+    wp_hiter_body started (m' & u') _v v.
     assert (v ∈ start).
     { apply permitted_spec in Hpermitted. set_solver. }
     elim_visit_post rs' marked' σ' γ'. subst rs'.
     assert (len σ' = 1) by tc.
     wp_op wp_visit introducing: (m'' & u'').
-    elim_visit_post rs'' marked'' σ'' γ''. clarify. subst rs''.
+    elim_visit_post rs'' marked'' σ'' γ''. clarify_context. subst rs''.
     assert (marked' ⊆ marked'') by tc.
     assert (horizontal γ0 γ'') by eauto 2 using horizontal_transitive.
     intro_visit_post. }
@@ -1879,15 +1886,13 @@ Proof.
     wp_op Hcont; eauto with horizontal set_solver.
   }
   (* Case: [v] is unmarked. *)
-  assert (Hm': isMarks (set m _v true) ({[v]} ∪ marked))
-    by eauto using isMarks_set.
-  revert Hm'.
-  set (m' := set m _v true).
+  wp_op isMarks_set.
+  intro m'. cbv beta.
   set (rs' := rs ++ started).
   set (marked' := {[v]} ∪ marked).
   set (σ' := Frame (Some v) Empty :: σ).
   set (γ' := (rs', marked', σ')).
-  intro.
+  intro Hm'.
   (* Emit an [Enter] event. *)
   assert (step γ (Enter v) γ').
   { subst γ γ' started rs' marked'.
@@ -2043,8 +2048,7 @@ Proof.
   { unfold γ0, isCont in *. intros. list in *.
     eapply Hk; eauto with set_solver. }
   (* Preservation. *)
-  { wp_body pushed0 pushed1 k''
-      introducing: (fun _ => hiter_step v; intros _v ?). (* TODO tactic *)
+  { wp_hiter_body pushed k'' _v v.
     assert (v ∈ start).
     { apply permitted_spec in Hpermitted. set_solver. }
     (* The loop body constructs and returns a new continuation. *)
@@ -2066,7 +2070,7 @@ Proof.
     intros m'' rs'' marked'' σ'' γ''. intros. subst rs''.
     assert (horizontal γ0 γ'') by eauto 2 using horizontal_transitive.
     assert (marked' ⊆ marked'') by tc.
-    assert (complete (pushed0 ++ rev (started ++ {[v]}))).
+    assert (complete (pushed ++ rev (started ++ {[v]}))).
     { list. assumption. }
     eapply Hinv; eauto with set_solver. }
   (* Completion. *)
