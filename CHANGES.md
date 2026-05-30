@@ -8,6 +8,8 @@
 
 * In `equations`:
   + New lemma `IFC_if_dep`.
+  + Change the tactic `by dependent induction on x Ax` to introduce
+    the three hypotheses `x`, `Achild`, `IH`.
 
 * In `bool`:
   + New lemma `isBool_trivial`.
