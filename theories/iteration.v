@@ -954,3 +954,15 @@ Tactic Notation "wp_body" simple_intropattern_list(ps)
   intro Hinv;
   more_intros ();
   wp_body_hook Hinv.
+
+(* [wp_hiter_body j s _x x] should be used at the beginning of the loop
+   body, when the specification of the iteration function is an instance
+   of [HITER]. *)
+
+Tactic Notation "wp_hiter_body"
+  simple_intropattern(j)
+  simple_intropattern(s)
+  simple_intropattern(_x)
+  simple_intropattern(x)
+:=
+  wp_body j ? s introducing: (fun _ => hiter_step x; intros _x ?).
