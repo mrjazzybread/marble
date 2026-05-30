@@ -1404,7 +1404,8 @@ Definition merge_aux_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
 Lemma wp_merge_aux _j1 _j2 _i1i2 ACC :
   merge_aux_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
+  by dependent induction on _i1i2 ACC.
+  destruct _i1i2 as (_i1 & _i2).
   unfold merge_aux_spec. intros. arrays.
   simpl.
   wp_if.
@@ -1517,7 +1518,8 @@ Definition merge_aux_1_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
 Lemma wp_merge_aux_1 _j1 _j2 _i1i2 ACC :
   merge_aux_1_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
+  by dependent induction on _i1i2 ACC.
+  destruct _i1i2 as (_i1 & _i2).
   unfold merge_aux_1_spec. intros. arrays.
   simpl.
   wp_if.
@@ -1622,7 +1624,8 @@ Definition merge_aux_2_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
 Lemma wp_merge_aux_2 _j1 _j2 _i1i2 ACC :
   merge_aux_2_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
+  by dependent induction on _i1i2 ACC.
+  destruct _i1i2 as (_i1 & _i2).
   unfold merge_aux_2_spec. intros. arrays.
   simpl.
   wp_if.
@@ -1722,7 +1725,8 @@ Definition merge_aux_12_spec _j1 _j2 '((_i1, _i2) : int * int) ACC :=
 Lemma wp_merge_aux_12 _j1 _j2 _i1i2 ACC :
   merge_aux_12_spec _j1 _j2 _i1i2 ACC.
 Proof.
-  by dependent induction on _i1i2 ACC. intros (_i1 & _i2) ? ?.
+  by dependent induction on _i1i2 ACC.
+  destruct _i1i2 as (_i1 & _i2).
   unfold merge_aux_12_spec. intros. arrays.
   simpl.
   wp_if.
@@ -2133,7 +2137,7 @@ Definition sortto'_spec _n ACC :=
 
 Lemma wp_sortto' _n ACC : sortto'_spec _n ACC.
 Proof.
-  by dependent induction on _n ACC. intros _n ? ?.
+  by dependent induction on _n ACC.
   unfold sortto'_spec. intros. arrays.
   simpl.
   wp_if.
@@ -2278,7 +2282,7 @@ Definition sortto_spec _n ACC :=
 
 Lemma wp_sortto _n ACC : sortto_spec _n ACC.
 Proof.
-  by dependent induction on _n ACC. intros _n ? ?.
+  by dependent induction on _n ACC.
   unfold sortto_spec. intros. arrays.
   simpl.
   wp_if.

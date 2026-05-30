@@ -129,7 +129,7 @@ Lemma wp_simple_loop_aux
   SIMPLE_LOOP (@body) (simple_loop_aux (@body) s ACC) s.
 Proof.
   unfold SIMPLE_LOOP.
-  by dependent induction on s ACC. intros s Achild IH.
+  by dependent induction on s ACC.
   intros inv Hinit Hbody.
   simpl simple_loop_aux.
   wp_apply Hbody.
@@ -397,7 +397,7 @@ Local Lemma wp_loop_aux body inv
   LOOP body inv (loop_aux body inv preservation decrease s ACC Hinv) s.
 Proof.
   unfold LOOP, BODY.
-  by dependent induction on s ACC. intros s Achild IH.
+  by dependent induction on s ACC.
   intros Hinv Hbody.
   simpl loop_aux.
   wp_match_message.
@@ -419,7 +419,7 @@ Local Lemma wp_loop_aux' body inv
   LOOP' body inv' (loop_aux body inv preservation decrease s ACC Hinv) s.
 Proof.
   unfold LOOP', BODY'.
-  by dependent induction on s ACC. intros s Achild IH.
+  by dependent induction on s ACC.
   intros Hinv inv' Hinv' Hbody.
   simpl loop_aux.
   wp_match_message.
@@ -725,7 +725,7 @@ Lemma iter_down_aux_eq _i _k ACC : ∀ s,
     do s ← body (_k - 1) s ;
     iter_down_aux__ body _i (_k - 1) s.
 Proof.
-  by dependent induction on _k ACC. intros _k. intros. simpl.
+  by dependent induction on _k ACC. intros. simpl.
   eapply IFC_if; [ reflexivity | intro ].
   eapply bind_bind_eq; [ reflexivity | intro ]. (* optional *)
   (* [setoid_rewrite] rewrites both occurrences, thereby showing that
@@ -766,7 +766,7 @@ Lemma iter_down_unrolled_aux_eq _n ACC : ∀ _k s,
     let _n := _n - Ni in
     iter_down_unrolled_aux body _k _n s ltac:(tc).
 Proof.
-  by dependent induction on _n ACC. intros _n. intros.
+  by dependent induction on _n ACC. intros.
   simpl iter_down_unrolled_aux.
   eapply IFC_if; [ reflexivity | intro ].
   change (iter_down_N _k s body)
@@ -809,7 +809,7 @@ Lemma iter_down_unrolled_aux_equiv _n ACC : ∀ _k s,
   iter_down_unrolled_aux body _k _n s ACC =
   iter_down_aux__ body (_k - _n) _k s.
 Proof.
-  by dependent induction on _n ACC. intros _n. intros.
+  by dependent induction on _n ACC. intros.
   rewrite iter_down_unrolled_aux_eq.
   destruct (_n <? Ni) eqn:?.
   (* Base case. *)
@@ -1172,7 +1172,7 @@ Lemma iter_up_aux_eq _i ACC : ∀ _k s,
   else
     s.
 Proof.
-  by dependent induction on _i ACC. intros _i. intros. simpl.
+  by dependent induction on _i ACC. intros. simpl.
   eapply IFC_if; [ intro | reflexivity ].
   eapply bind_bind_eq; [ reflexivity | intro ]. (* optional *)
   setoid_rewrite IH; tc.
@@ -1215,7 +1215,7 @@ Lemma iter_up_unrolled_aux_eq _n ACC : ∀ _i s,
     let _n := _n - Ni in
     iter_up_unrolled_aux body _i _n s ltac:(tc).
 Proof.
-  by dependent induction on _n ACC. intros _n. intros.
+  by dependent induction on _n ACC. intros.
   simpl iter_up_unrolled_aux.
   eapply IFC_if; [ reflexivity | intro ].
   change (iter_up_N _i s body)
@@ -1257,7 +1257,7 @@ Lemma iter_up_unrolled_aux_equiv _n ACC : ∀ _i s,
   iter_up_unrolled_aux body _i _n s ACC =
   iter_up_aux__ body _i (_i + _n) s.
 Proof.
-  by dependent induction on _n ACC. intros _n. intros.
+  by dependent induction on _n ACC. intros.
   rewrite iter_up_unrolled_aux_eq by lia.
   destruct (_n <? Ni) eqn:?.
   (* Base case. *)

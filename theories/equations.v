@@ -129,4 +129,5 @@ Tactic Notation "by" "well-founded" "induction" "on" ident(x) "along" constr(R) 
    principle is [Acc_dep_ind_strong]. *)
 
 Tactic Notation "by" "dependent" "induction" "on" ident(x) ident(Ax) :=
-  pattern x, Ax; eapply Acc_dep_ind_strong; clear x Ax.
+  pattern x, Ax; eapply Acc_dep_ind_strong; clear x Ax;
+  intros x Achild IH.

@@ -702,7 +702,7 @@ Local Lemma wp_visit_unmarked _fuel (ACC : Acc ilt _fuel) :
   wp (visit_unmarked s _v _fuel ACC) (λ s', visit_post γ started {[v]} s').
 Proof.
   clear dependent foreach_start start_respects_bound.
-  by dependent induction on _fuel ACC. intros _fuel ? ?.
+  by dependent induction on _fuel ACC.
   intros. subst s. simpl visit_unmarked.
   destructMarks. arrays.
   assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
@@ -1857,7 +1857,7 @@ Local Lemma wp_visit_cps _fuel ACC :
   wp (visit_cps m _v _fuel ACC k) (λ h, isHead h γ).
 Proof.
   clear dependent foreach_start start_respects_bound.
-  by dependent induction on _fuel ACC. intros _fuel ? ?.
+  by dependent induction on _fuel ACC.
   intros. wp_last Hcont.
   simpl visit_cps.
   destructMarks. arrays.
