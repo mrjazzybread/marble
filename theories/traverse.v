@@ -928,19 +928,20 @@ Proof.
   { intro_visit_post. }
   (* Preservation. *)
   { clear dependent m.
-    wp_hiter_body started (m' & u') _v v.
+    wp_hiter_body started (m1 & u1) _v v.
     assert (v ∈ start).
     { apply permitted_spec in Hpermitted. set_solver. }
-    elim_visit_post rs' marked' σ' γ'. subst rs'.
-    assert (len σ' = 1) by tc.
-    wp_op wp_visit introducing: (m'' & u'').
-    elim_visit_post rs'' marked'' σ'' γ''. clarify_context. subst rs''.
-    assert (marked' ⊆ marked'') by tc.
-    assert (horizontal γ0 γ'') by eauto 2 using horizontal_transitive.
+    elim_visit_post rs1 marked1 σ1 γ1. subst rs1.
+    assert (len σ1 = 1) by tc.
+    wp_op wp_visit introducing: (m2 & u2).
+    clarify_context.
+    elim_visit_post rs2 marked2 σ2 γ2.
+    assert (marked1 ⊆ marked2) by tc.
+    assert (horizontal γ0 γ2) by eauto 2 using horizontal_transitive.
     intro_visit_post. }
   (* Completion. *)
-  { cbv beta. intros (m' & u') (started & ? & Hcomplete).
-    elim_visit_post rs' marked' σ' γ'. subst rs' γ'.
+  { cbv beta. intros (m1 & u1) (started & ? & Hcomplete).
+    elim_visit_post rs1 marked1 σ1 γ1. subst rs1 γ1.
     match goal with h: horizontal γ0 _ |- _ => destruction h end.
     simpl concat in *.
     destructWf.
