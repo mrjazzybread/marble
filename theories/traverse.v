@@ -1044,12 +1044,6 @@ Variable wp_hook :
   0 ≤ v < n → (* redundant *)
   wp (hook _v u) (λ u', inv history1 u').
 
-Local Ltac proveInv :=
-  match goal with h: inv ?marked ?u |- inv ?marked' ?u =>
-    assert (marked' = marked) as -> by eauto;
-    exact h
-  end. (* TODO unused? *)
-
 Lemma wp_traverse_pre_simplified :
   wp (traverse_pre u0) (λ '(m', u'),
     ∃ history marked',
@@ -1066,7 +1060,8 @@ Proof.
   wp_op wp_traverse with invariant: (λ γ u,
     let '(rs, marked, σ) := γ in
     ∃ history, inv history u ∧ list_to_set history ≡ marked ∧ NoDup history
-  ).
+  );
+  clear wp_foreach_start wp_foreach_successor.
   (* Compatibility. (This is a bit painful.) *)
   { intros ((rs1 & marked1) & σ1) ((rs2 & marked2) & σ2) Hequiv.
     unfold equiv in Hequiv. hnf in Hequiv. unpack in Hequiv.
@@ -1082,22 +1077,23 @@ Proof.
     destruct Hinv as (history & Hinv). unpack in Hinv.
     apply permitted_spec in Hperm.
     assert (reaches E start marked1).
-    { generalize (wf_reaches Hwf1 eq_refl); intro. set_solver. (* slow *) }
+    { eauto 4 using wf_reaches, reaches_transitive, prove_reaches_self. }
     destructEvent; destructStep; unfold hook_pre;
       try solve [ wp_ret; eauto ].
+    clear Hstep Hwf1. (* These hypotheses slow down [set_solver]. *)
     (* Only the case of an [Enter] event is nontrivial. *)
     assert (NoDup (history ++ {[v]})).
-    { apply NoDup_snoc. eauto with set_solver. (* UGLY slow *) }
+    { apply NoDup_snoc. eauto with set_solver. }
     assert (fact: list_to_set (history ++ {[v]}) ≡ marked1).
-    { set_solver. (* UGLY slow *) }
+    { set_solver. }
     assert (reaches E start (list_to_set (history ++ {[v]}))).
     { rewrite fact. assumption. }
-    wp_op wp_hook introducing: u'.
+    wp_op wp_hook introducing: u1.
     { list. permitted. eauto. }
     { rewrite app_nil_r in *. eauto. }
   }
   (* Completion. *)
-  { intros (m' & u') (rs' & marked' & σ' & vs & ?). unpack.
+  { intros (m1 & u1) (rs1 & marked1 & σ1 & vs & ?). unpack.
     pack; eauto using omarked_is_closure_start. }
 Qed.
 
