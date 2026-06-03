@@ -1852,12 +1852,14 @@ Local Lemma wp_visit_cps _fuel ACC :
 Proof.
   clear dependent foreach_start start_respects_bound.
   by dependent induction on _fuel ACC.
-  intros. wp_last Hcont.
-  simpl visit_cps.
-  destructMarks. arrays.
+  intros. wp_last Hcont. simpl visit_cps. destructMarks. arrays.
+
+  (* Every stack has height at least 1. *)
   assert (1 ≤ len σ)%Z by eauto using wf_nonempty.
+  (* γ is permitted. *)
   assert (perm_rev γ).
   { unfold perm_rev; subst γ. eauto using permitted_rev_prefix. }
+
   wp_if.
   (* Case: [v] is marked already. *)
   { clear foreach_successor wp_foreach_successor IH.
@@ -1872,103 +1874,117 @@ Proof.
     subst γ.
     wp_op Hcont; eauto with horizontal set_solver.
   }
-  (* Case: [v] is unmarked. *)
+
+  (* Mark the vertex [v]. *)
   wp_op isMarks_set.
-  intro m'. cbv beta.
-  set (rs' := rs ++ started).
-  set (marked' := {[v]} ∪ marked).
-  set (σ' := Frame (Some v) Empty :: σ).
-  set (γ' := (rs', marked', σ')).
-  intro Hm'.
+  (* The program point that follows the [Enter] event is labeled 1. *)
+  intro m1. cbv beta.
+  set (rs1 := rs ++ started).
+  set (marked1 := {[v]} ∪ marked).
+  set (σ1 := Frame (Some v) Empty :: σ).
+  set (γ1 := (rs1, marked1, σ1)).
+  intro Hm1.
   (* Emit an [Enter] event. *)
-  assert (step γ (Enter v) γ').
-  { subst γ γ' started rs' marked'.
-    econstructor; try clarify; eauto 2 with marble set_solver. }
-  assert (len σ' = len σ + 1) by tc.
+  assert (step γ (Enter v) γ1).
+  { subst γ γ1 started rs1 marked1.
+    econstructor; try clarify; eauto 2 using app_nil_r. }
+  assert (len σ1 = len σ + 1) by tc.
   wp_ret. eapply isHeadEvent; tc.
-  (* Argue that the fuel cannot be exhausted. *)
-  wp_if.
-  { exfalso. subst fuel.
+
+  (* [v] is unmarked, so the set of unmarked vertices is nonempty.
+     Therefore [fuel] cannot be zero. *)
+  assert (fuel ≠ 0).
+  { intro; subst fuel.
     eapply cardinal_empty_contradiction with (v := v). eauto. set_solver. }
+  wp_if; [ tauto |].
   (* The number of unmarked vertices has decreased. *)
-  assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked' ]} (fuel - 1)).
-  { unfold marked'.
+  assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked1 ]} (fuel - 1)).
+  { unfold marked1.
     eapply cardinal_mono_1_strict with (w := v);
     eauto with set_solver. }
+
   (* We reach the loop on the successors of [v]. *)
   (* The loop invariant requires a little thought. As the loop progresses,
      the set [pushed] grows from ∅ to [successors v]. The current state of
      the loop is a continuation [k]. Initially, [k] is a continuation that
      expects all vertices to have been examined: it satisfies the formula
-     [isCont k γ' [] (successors v)]. At the end, [k] is a continuation
+     [isCont k γ1 [] (successors v)]. At the end, [k] is a continuation
      that needs no vertices to have been examined: it satisfies the
-     formula [isCont k γ' [] ∅]. Therefore the loop invariant should be
-     [isCont k γ' [] examined] where [examined] is [successors v ∖ pushed]. *)
+     formula [isCont k γ1 [] ∅]. Therefore the loop invariant should be
+     [isCont k γ1 [] examined] where [examined] is [successors v ∖ pushed]. *)
   wp_op wp_foreach_successor with invariant: (
     λ history k,
       let pushed := list_to_set history in
       let examined := successors v ∖ pushed in
-      isCont k γ' [] examined
-  ).
+      isCont k γ1 [] examined
+  );
+  clear dependent m;
+  clear wp_foreach_successor.
+
   (* Initialization. *)
   (* In this subgoal, [pushed] is empty, so [examined] is [successors v].
      Therefore we are reasoning about the continuation that is invoked
      AFTER all successors have been examined. This corresponds to the code
      that would FOLLOW the loop in direct style. *)
-  { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
-    unfold isCont, γ'. fold γ'.
-    intros m'' rs'' marked'' σ'' γ''. intros. subst rs''.
+  { clear foreach_successor IH.
+    unfold isCont, γ1. fold γ1.
+    (* This program point is labeled 4. *)
+    intros m4 rs4 marked4 σ4 γ4. intros.
     (* The structure of the ghost stack has been preserved. *)
-    assert (∃ vs, σ'' = Frame (Some v) vs :: σ) as (vs & ?).
-    { eauto using horizontal_populates_top_frame. }
-    set (marked''' := marked'').
-    set (σ''' := store v vs σ).
-    set (γ''' := (rs', marked''', σ''')).
+    assert (∃ vs, σ4 = Frame (Some v) vs :: σ) as (vs & ?)
+      by eauto using horizontal_populates_top_frame.
     (* Emit an [Exit] event. *)
-    assert (step γ'' (Exit v) γ''').
-    { subst γ'' γ'''. list. econstructor; eauto with set_solver. }
-    assert (wf γ''') by tc.
-    assert (marked' ⊆ marked'') by tc.
+    set (σ5 := store v vs σ).
+    set (γ5 := (rs4, marked4, σ5)).
+    assert (perm_rev γ5).
+    { subst γ5 rs4. list. eauto using permitted_rev_prefix. }
+    assert (step γ4 (Exit v) γ5).
+    { subst γ4 γ5. econstructor; eauto with set_solver. }
+    assert (wf γ5) by tc.
+    assert (marked1 ⊆ marked4) by tc.
     wp_ret. eapply isHeadEvent; tc.
     (* Invoke [k]. *)
-    subst γ.
+    subst γ rs4.
     wp_op Hcont; eauto with horizontal set_solver. }
+
   (* Preservation. *)
-  { wp_body history0 history1 k''
-      introducing: (fun _ => hiter_step w; intros _w ?).
+  { wp_hiter_body history k2 _w w.
     (* The loop body constructs and returns a new continuation. *)
-    wp_ret. unfold isCont. unfold γ'; fold γ'. list.
-    intros m'' rs'' marked'' σ'' γ''. intros. subst rs''.
-    (* We are now looking at a recursive call. The state at this point is
-       described by [γ'']. The vertex [w], a successor of [v], is about to
-       be examined. *)
+    wp_ret. unfold isCont. unfold γ1; fold γ1. list.
+    (* This program point is labeled 2. *)
+    intros m2 rs2 marked2 σ2 γ2. intros.
+    (* The vertex [w], a successor of [v], is about to be examined. *)
     assert (E v w) by set_solver.
-    assert (edge (top σ') w) by eauto.
-    assert (len σ'' = len σ') by tc. (* [len σ'' ≠ 1] *)
-    assert (2 ≤ len σ'')%Z by lia.
-    assert (marked' ⊆ marked'') by tc.
-    assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked'' ]} (fuel - 1)).
-    { eauto using cardinal_mono_1 with set_solver. }
-    wp_op IH; tc; destruct (decide (len σ'' = 1)); try lia; list.
-    { eauto using permitted_rev_prefix. }
-    clear wp_foreach_successor IH. (* for clarity *)
+    assert (edge (top σ1) w) by eauto.
+    assert (len σ2 = len σ1) by tc.
+    assert (2 ≤ len σ2)%Z by lia.
+    assert (marked1 ⊆ marked2) by tc.
+    assert (cardinal {[ v | v ∈ universe ∧ v ∉ marked2 ]} (fuel - 1)).
+      by eauto using cardinal_mono_1 with set_solver.
+    wp_op IH; tc; clarify; list.
+    { subst rs2. eauto using permitted_rev_prefix. }
+    clear IH.
     (* There remains to argue that [isCont ...] implies [isCont ...]. *)
     (* In other words, we must argue that the recursive call has
        re-established the loop invariant. *)
-    unfold γ', isCont in Hinv. fold γ' in Hinv.
-    subst γ''. unfold isCont.
-    intros m''' rs''' marked''' σ''' γ'''. intros. subst rs'''.
-    assert (marked'' ⊆ marked''') by tc.
-    assert (horizontal γ' γ''') by eauto 2 using horizontal_transitive.
+    unfold γ1, isCont in Hinv. fold γ1 in Hinv.
+    subst γ2. unfold isCont.
+    (* This program point is labeled 3. *)
+    intros m3 rs3 marked3 σ3 γ3. intros.
+    assert (marked2 ⊆ marked3) by tc.
+    assert (horizontal γ1 γ3) by eauto 2 using horizontal_transitive.
+    subst rs3 rs2.
     eapply Hinv; eauto using technical. }
+
   (* Completion. *)
   (* [pushed] is [successors v], so [examined] is empty. *)
-  { clear foreach_successor wp_foreach_successor IH. (* for clarity *)
-    cbv beta zeta. intros k' (history & Hk' & Hpushed).
+  { clear foreach_successor IH.
+    intros k' (history & Hk' & Hpushed).
     (* There remains to argue that [isCont ...] implies [isCont ...]. *)
-    assert (wf γ') by tc.
-    assert (horizontal γ' γ') by eauto with horizontal.
+    assert (wf γ1) by tc.
+    assert (horizontal γ1 γ1) by eauto with horizontal.
     eapply Hk'; eauto using app_nil_r_sym with set_solver. }
+
 Qed.
 
 (* The specification of [visit_cps']. *)
