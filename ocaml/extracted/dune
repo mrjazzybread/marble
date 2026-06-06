@@ -10,7 +10,8 @@
     sort
     vector
     pqueue
-  )
+    hashtbl
+    bucket)
   (theories Stdlib Equations stdpp listz marble)
 )
 

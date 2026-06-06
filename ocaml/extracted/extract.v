@@ -137,6 +137,11 @@ From marble Require pqueue.
 
 From marble Require traverse.
 
+From marble Require hashtbl.
+
+Extract Inlined Constant hashtbl._eq => "(=)".
+Extract Inlined Constant hashtbl._hash => "hash".
+
 Extraction Inline
   traverse.visit
   traverse.visit_unmarked'
@@ -204,4 +209,10 @@ Separate Extraction
   traverse.list_rev_post
   traverse.group
   traverse.traverse_cps
+
+  hashtbl.add
+  hashtbl.replace
+  hashtbl.remove
+  hashtbl.population
+  hashtbl.iter_rev
 .
