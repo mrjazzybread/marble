@@ -45,6 +45,7 @@ Extraction Inline
   PrimInt63.eqb
   PrimInt63.ltb
   PrimInt63.leb
+  PrimInt63.mod
 .
 
 (* -------------------------------------------------------------------------- *)
@@ -139,8 +140,9 @@ From marble Require traverse.
 
 From marble Require hashtbl.
 
-Extract Inlined Constant hashtbl._eq => "(=)".
-Extract Inlined Constant hashtbl._hash => "hash".
+Extract Inlined Constant bucket._eq => "(=)".
+
+Extract Constant hashtbl._hash => "(fun k -> Uint63.of_int (Stdlib.Hashtbl.hash k))".
 
 Extraction Inline
   traverse.visit
@@ -211,8 +213,9 @@ Separate Extraction
   traverse.traverse_cps
 
   hashtbl.add
-  hashtbl.replace
   hashtbl.remove
-  hashtbl.population
+  hashtbl.replace
+  hashtbl.get
   hashtbl.iter_rev
+  hashtbl.population
 .

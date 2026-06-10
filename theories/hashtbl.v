@@ -3,7 +3,7 @@ From listz Require Import listz.
 Notation len := length.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import Array.PArray.
-From marble Require Import tactics bool int iteration loop wp logic array.
+From marble Require Import tactics bool int iteration loop wp logic array bucket hmap.
 Implicit Types _i _j _k _n : int.
 
 Section H.
@@ -17,11 +17,6 @@ Variable V : Type.
 Parameter _hash : K -> int.
 Parameter hash : K -> Z.
 
-Parameter _eq : K -> K -> bool.
-
-Declare Instance isBool_eq :
-  ∀ k1 k2, isBool1 (_eq k1 k2) (k1 = k2).
-
 Axiom hash_unsigned :
   forall k, unsigned (hash k).
 
@@ -30,252 +25,28 @@ Local Hint Resolve hash_unsigned : marble.
 Declare Instance IsInt_hash :
   forall k, isInt (_hash k) (hash k).
 
-(* Decidable equality over keys. *)
-Global Declare Instance EqK : EqDecision K.
-(* The type of keys is countably infinite. *)
-Global Declare Instance CoutntK : Countable K.
-
+Existing Instance dec_eq.
 Open Scope uint63.
-
-(* Hash tables are arrays of buckets.  A bucket is an association list
-   of keys to values.  Keys may appear more than once in the same
-   bucket but can never belong to two buckets simultaneously. *)
-Inductive bucket :=
-  | Nil : bucket
-  | Cons : K -> V -> bucket -> bucket.
-
-Definition assoc := list (K * V).
-
-Fixpoint b2l b := match b with
- |Nil => []
- |Cons k v t => (k, v) :: b2l t
- end.
-
-Instance bucket_inh : Inhabited bucket :=
-  populate Nil.
-
+Notation bucket := (@bucket K V).
 Definition hashtbl := (int * array bucket)%type.
 
+Notation filter_key k l :=
+  (filter (fun (x : K * V) => eq x.1 k) l).
+
 (* Function that calculates the index of a particular key using
-[hash].  In machine integers and ideal integers. *)
+   [hash].  In machine integers and ideal integers. *)
 
 Notation index k len :=
   ((_hash k) mod len).
 
 Notation indexZ k len := (hash k mod len)%Z.
 
-(* -------------------------------------------------------------------------- *)
-
-(* Trivial lemmas to automate rewriting goals involving    [filter_key]*)
-
-Notation filter_key k l :=
-  (filter (fun (x : K * V) => eq x.1 k) l).
-
-Lemma filter_key_cons_True :
-  forall k v b, filter_key k ((k, v) :: b) = (k, v) :: filter_key k b.
-Proof.
-  intros. by rewrite filter_cons_True.
-Qed.
-
-Lemma filter_key_cons_False :
-  forall k k' v b,
-    k' ≠ k ->
-    filter_key k ((k', v):: b) = filter_key k b.
-Proof.
-  intros.
-  simpl. by rewrite filter_cons_False.
-Qed.
-
-Lemma filter_key_nin :
-  forall k b,
-    (∀ v : V, (k, v) ∉ b) ->
-    filter_key k b = [].
-Proof.
-  intros k b H1.
-  induction b as [|[k' v] t Ih].
-  - auto.
-  - rewrite filter_key_cons_False.
-    + apply Ih. intros v'.
-      specialize H1 with v'.
-      rewrite not_elem_of_cons in H1.
-      by destruct H1.
-    + specialize H1 with v.
-      rewrite not_elem_of_cons in H1.
-      destruct H1.
-      intros H3. by subst.
-Qed.
-
-Hint Rewrite
-  @filter_nil
-  filter_key_cons_False
-  filter_key_cons_True
-  using done : cfilter.
-
-Ltac filter := autorewrite with cfilter.
-
-Lemma filter_key_cons :
-  forall k k' v b1 b2,
-    filter_key k b1 = filter_key k b2 ->
-    filter_key k ((k', v)::b1) = filter_key k ((k', v) :: b2).
-Proof.
-  intros.
-  destruct (decide (k = k')).
-  + subst. filter. by f_equal.
-  + by filter.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
-(* Association lists *)
-
-Fixpoint remove_assoc (k : K) (b : bucket) :=
-  match b with
-  |Nil => (false, Nil)
-  |Cons x v t =>
-     do b ← _eq x k;
-     if b then (true, t)
-     else
-       do (r, t) ← remove_assoc k t;
-       (r, Cons x v t)
-  end.
-
-Fixpoint remove_assoc_list (k : K) (l : list (K * V)) :=
-  match l with
-  |[] => []
-  |(k', v) :: t =>
-     if (decide (k = k'))
-     then t
-     else
-       (k', v) :: remove_assoc_list k t
-  end.
-
-Lemma remove_assoc_wp k b:
-  ∀ l, l = b2l b ->
-  wp (remove_assoc k b)
-    (λ r, let (r, b') := r in
-          ∃ l', l' = b2l b' ∧
-          isBool r (∃ v, (k, v) ∈ l) (∀ v, (k, v) ∉ l) ∧
-          l' = remove_assoc_list k l).
-Proof.
-  induction b as [|k' v b Ih]; simpl; intros; subst l.
-  - wp_ret. simpl in *. pack; eauto.
-    intros ?. unpack. by apply not_elem_of_nil in H.
-  - simpl. wp_bind_eq. wp_if.
-    + subst k'. wp_ret. simpl.
-      pack; eauto; try constructor.
-      by rewrite decide_True.
-    + wp_op Ih. simpl. intros [r b'].
-      intros [l' ?]. unpack.
-      exists ((k', v) :: l'). subst l'.
-      repeat split; try by filter.
-      { destruct r; simpl in *.
-        - unpack. eexists. by constructor.
-        - intros. rewrite not_elem_of_cons.
-          split; auto. intros I. by injection I. }
-      { rewrite decide_False by auto.
-        by f_equal. }
-Qed.
-
-Lemma remove_assoc_in :
-  forall b k k' v,
-    (k', v) ∈ remove_assoc_list k b ->
-    (k', v) ∈ b.
-Proof.
-  intros b k k' v H1.
-  induction b as [|[k'' v'] t Ih]; simpl in H1.
-  + by apply not_elem_of_nil in H1.
-  + destruct decide in H1; apply elem_of_cons; auto.
-    apply elem_of_cons in H1 as [H1 | H1]; auto.
-Qed.
-
-Lemma remove_assoc_bucket_eq :
-  forall k b b',
-    b' = remove_assoc_list k b ->
-    filter_key k b' = tl (filter_key k b).
-Proof.
-  intros k b.
-  induction b as [|[k' v] t Ih]; simpl; intros b' H1; subst b'. auto.
-  case_decide.
-  - subst. by filter.
-  - filter. auto.
-Qed.
-
-Lemma remove_assoc_bucket_ne :
-  forall k k' b b',
-    b' = remove_assoc_list k b ->
-    k' ≠ k ->
-    filter_key k' b' = filter_key k' b.
-Proof.
-  intros k k' b.
-  induction b as [|[k'' v] t Ih]; simpl; intros b' H1 H2; subst b'; auto.
-  case_decide.
-  - subst. by filter.
-  - apply filter_key_cons. by apply Ih.
-Qed.
-
-Fixpoint find_assoc (k : K) (b : bucket) : option V :=
-  match b with
-  |Nil => None
-  |Cons k' v t =>
-     if _eq k k'
-     then Some v
-     else find_assoc k t
-  end.
-
-Lemma find_assoc_wp k b :
-  wp (find_assoc k b)
-    (λ o, o = head (map snd (filter_key k (b2l b)))).
-Proof.
-  induction b as [|k' v t Ih].
-  - wp_ret.
-  - simpl. wp_if.
-    + wp_ret. subst. simpl. by filter.
-    + wp_op Ih. simpl. intros. subst.
-      simpl. by filter.
-Qed.
-
-(* -------------------------------------------------------------------------- *)
-
+Existing Instance count_K.
 Notation hmap := (gmap K (list V)).
 
-(* Some definitions to facilitate working with functions as infinite
-   maps.
-
-    Remark: we leverage the fact that the Instance of the inhabited
-    type class for lists is the empty list.*)
-
-Lemma lookup_total_empty_list (m : hmap) k :
-    m !! k = None ->
-    m !!! k = [].
-Proof.
-  intros H. rewrite lookup_total_alt.
-  by rewrite H.
-Qed.
-
-Lemma lookup_total_non_empty_list :
-  forall (m : hmap) k x t,
-    m !!! k = x :: t ->
-    m !! k = Some(x :: t).
-Proof.
-  intros m k x t H.
-  rewrite lookup_total_alt in H.
-  destruct (m !! k); simpl in *; f_equal; done.
-Qed.
-
-Lemma lookup_total_Some :
-  ∀ (m : hmap) k,
-    m !! k ≠ None →
-    m !! k = Some (m !!! k).
-Proof.
-  intros.
-  remember (m !! k) as l.
-  destruct l as [l|]. 2: done.
-  by rewrite lookup_total_correct with (x:=l).
-Qed.
-
 Hint Rewrite
-  lookup_total_Some
-  lookup_total_empty_list
+  @lookup_total_Some
+  @lookup_total_empty_list
   using done : cmap.
 
 Hint Rewrite
@@ -284,241 +55,11 @@ Hint Rewrite
   using done : cmap.
 
 Ltac hmap := autorewrite with cmap.
-
 Tactic Notation "hmap" "in" hyp(h) :=
   autorewrite with cmap in h.
 
 Tactic Notation "hmap" "in" "*" :=
   autorewrite with cmap in *.
-
-Definition _add (m : hmap) (k : K) (v : V) := <[k:= v :: m !!! k]> m.
-
-Lemma add_lookup_eq :
-  forall m k v, _add m k v !!! k = v :: m !!! k.
-Proof.
-  intros.
-  unfold _add.
-  by hmap.
-Qed.
-
-Lemma add_lookup_neq :
-  forall m k k' v,
-    k ≠ k' →
-    _add m k v !!! k' = m !!! k'.
-Proof.
-  intros.
-  unfold _add.
-  by hmap.
-Qed.
-
-Definition rm (m : hmap) (k : K) :=
-  <[k:=tl (m !!! k)]> m.
-
-Definition rm_add (m : hmap) (k : K) (v : V) :=
-  _add (rm m k) k v.
-
-Definition cardinality (h : hmap) :=
-  (map_fold (fun _ v acc => acc + len v) 0 h)%Z.
-
-Lemma cardinality_empty :
-  cardinality ∅ = 0%Z.
-Proof.
-  apply map_fold_empty.
-Qed.
-
-Lemma cardinality_insert_fresh :
-  forall m k l n,
-    cardinality m = n ->
-    m !! k = None ->
-    cardinality (<[k:=l]>m) = (len l + n)%Z.
-Proof.
-  intros.
-  subst n.
-  unfold cardinality.
-  rewrite map_fold_insert; tc.
-Qed.
-
-Lemma add_ge :
-  ∀ n m, n >= 0 -> m >= 0 -> n + m >= 0.
-Proof.
-  lia.
-Qed.
-
-Lemma cardinality_nonneg :
-  ∀ m, cardinality m >= 0.
-Proof.
-  intros.
-  induction m as [|k l] using map_first_key_ind.
-  - by rewrite cardinality_empty.
-  - erewrite cardinality_insert_fresh; eauto.
-    generalize (@length_nonneg V l). lia.
-Qed.
-
-Lemma cardinality_delete_present :
-  forall m k l n,
-    cardinality m = n ->
-    m !! k = Some l ->
-    (cardinality (delete k m) + len l)%Z = n.
-Proof.
-  intros. subst n. unfold cardinality.
-  rewrite map_fold_delete with (m:=m); tc.
-Qed.
-
-Lemma cardinality_delete_present_alt :
-  forall m k l n,
-    cardinality m = n ->
-    m !! k = Some l ->
-    cardinality (delete k m) = (n - len l)%Z.
-Proof.
-  intros. subst. unfold cardinality.
-  rewrite map_fold_delete with (m:=m) (R:=eq); tc. lia.
-Qed.
-
-Lemma cardinality_insert :
-  forall m k l n,
-    cardinality m = n ->
-    cardinality (<[k:=l]>m) = (n + len l - len (m !!! k))%Z.
-Proof.
-  intros m k l n H1.
-  destruct (decide (m !! k = None)).
-  - hmap. erewrite cardinality_insert_fresh by auto.
-    length. lia.
-  - rewrite <- insert_delete_eq.
-    rewrite cardinality_insert_fresh with (n:=(n - len (m !!! k))%Z). lia.
-    + erewrite <- cardinality_delete_present_alt; auto with lia.
-      by hmap.
-    + by rewrite lookup_delete_eq.
-Qed.
-
-Lemma cardinality_delete :
-  forall m n k,
-    cardinality m = n ->
-    cardinality (delete k m) = (n - len (m !!! k))%Z.
-Proof.
-  intros m n k H1.
-  remember (m !! k) as l eqn:E.
-  destruct l as [l|].
-  + erewrite cardinality_delete_present_alt; eauto.
-    rewrite <- E. f_equal. symmetry.
-    by apply lookup_total_correct.
-  + hmap. length. by rewrite delete_id.
-Qed.
-
-Ltac cinsert n := erewrite cardinality_insert by auto.
-
-Lemma cardinality_empty_lists :
-  forall m,
-    (∀ k, m !!! k = []) →
-    cardinality m = 0%Z.
-Proof.
-  intros m Hempty.
-  induction m as [|k v m Hnone Hfirst Ih] using map_first_key_ind. by hmap.
-  erewrite cardinality_insert.
-  - hmap. list. specialize Hempty with k.
-    rewrite fin_maps.lookup_total_insert_eq in Hempty.
-    subst. by list.
-  - apply Ih. intros k'.
-    specialize Hempty with k'.
-    rewrite fin_maps.lookup_total_insert in Hempty.
-    case_decide; auto.
-    subst. by hmap.
-Qed.
-
-Lemma cardinality_add :
-  forall m n k v,
-    cardinality m = n ->
-    cardinality (_add m k v) = (n + 1)%Z.
-Proof.
-  intros.
-  unfold _add.
-  cinsert n.
-  length. lia.
-Qed.
-
-Lemma cardinality_rm_empty :
-  forall m n k,
-    cardinality m = n ->
-    m !!! k = [] ->
-    cardinality (rm m k) = n%Z.
-Proof.
-  intros m n k H1 H2.
-  unfold rm.
-  cinsert n.
-  rewrite H2. by length.
-Qed.
-
-Lemma cardinality_rm :
-  forall m n k,
-    cardinality m = n ->
-    m !!! k <> [] ->
-    cardinality (rm m k) = (n - 1)%Z.
-Proof.
-  intros.
-  unfold rm.
-  cinsert n.
-  remember (m !!! k) as l eqn:E.
-  destruct l. done.
-  subst. by length.
-Qed.
-
-Lemma cardinality_rm_add_empty :
-  forall m n k v,
-    cardinality m = n ->
-    m !!! k = [] ->
-    cardinality (rm_add m k v) = (n + 1)%Z.
-Proof.
-  intros.
-  unfold rm_add.
-  erewrite cardinality_add by auto.
-  erewrite cardinality_rm_empty by auto.
-  lia.
-Qed.
-
-Lemma cardinality_rm_add :
-  forall m n k v,
-    cardinality m = n ->
-    m !!! k <> [] ->
-    cardinality (rm_add m k v) = n.
-Proof.
-  intros.
-  unfold rm_add.
-  erewrite cardinality_add by auto.
-  erewrite cardinality_rm by auto. lia.
-Qed.
-
-Hint Rewrite
-  cardinality_empty
-  cardinality_add
-  cardinality_rm
-  cardinality_rm_empty
-  cardinality_rm_add
-  cardinality_rm_add_empty
-  using done : card.
-
-Lemma cardinality_extensionality :
-  ∀ (m1 : hmap) m2,
-    (∀ k, m1 !!! k = m2 !!! k) →
-    cardinality m1 = cardinality m2.
-Proof.
-  induction m1 as [|k v m1 Hnone Hfirst Ih] using map_first_key_ind;
-    intros m2 HLookup.
-  - hmap. rewrite cardinality_empty.
-    rewrite cardinality_empty_lists; auto.
-    intros k. specialize HLookup with k.
-    by rewrite lookup_total_empty in HLookup.
-  - erewrite cardinality_insert by auto.
-    hmap. rewrite Ih with (delete k m2).
-    { erewrite cardinality_delete; auto.
-      specialize HLookup with k. hmap in HLookup.
-      subst v. by list. }
-    { intros k'.
-      destruct (decide (k = k')).
-      - subst. rewrite fin_maps.lookup_total_delete_eq.
-        by hmap.
-      - rewrite fin_maps.lookup_total_delete_ne by auto.
-       specialize HLookup with k'.
-       by hmap in HLookup. }
-Qed.
 
 (* -------------------------------------------------------------------------- *)
 
@@ -526,7 +67,6 @@ Qed.
    values, where [n] is the length of the [tbl].  For every key [k],
    [m !!! k] returns the list of values mapped to [k] in [tbl].
    If [k] is not in [tbl], [m !!! k] returns the empty list. *)
-
 Definition valid_buckets (n : Z) (tbl : list bucket) (m : hmap) : Prop :=
   forall i b k,
     indexZ k n = i ->
@@ -809,7 +349,7 @@ Proof.
     apply prefix_filter.
     subst. by rewrite E. }
   { rewrite app_assoc. rewrite filter_app.
-    rewrite filter_key_cons_False.
+    rewrite filter_cons_False.
     - list. apply Hpermitted.
     - intros ?. by subst. }
 Qed.
