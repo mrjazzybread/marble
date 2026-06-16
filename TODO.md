@@ -15,6 +15,18 @@
 * `wp.v` should not use `autorewrite with z clength app_assoc`;
   this introduces a surprising dependency on `listz`.
 
+## Iteration
+
+* Define a generic specification for an on-demand (consumer-driven) iterator.
+  (Use either a `fold` function in CPS style, or a cascade. Which of the two
+  makes specialization easier?) Use it to define an on-demand variant of DFS
+  which uses on-demand iterators on the start vertices and on the successors
+  of each vertex.
+
+* Once we have these on-demand iterators, can we get rid of exitable loops
+  (`XITER` and `UXITER`), where the producer is in control but the consumer is
+  allowed to request an early exit?
+
 ## Arrays
 
 * Rocq has `copy` (since when?). Use it.
