@@ -547,10 +547,17 @@ Tactic Notation "hiter_step" simple_intropattern(x) :=
 Lemma prefix_refl {A} (xs : list A) : xs `prefix_of` xs.
 Proof. eauto. Qed.
 
+Lemma prefix_app_l_app {A} (xs ys zs : list A) :
+  xs ++ ys `prefix_of` xs ++ ys ++ zs.
+Proof.
+  eapply prefix_app_l. rewrite <- app_assoc. eapply prefix_refl.
+Qed.
+
 Hint Resolve
   prefix_nil
   prefix_refl
   prefix_app_l
+  prefix_app_l_app
 : marble.
 
 Hint Unfold
