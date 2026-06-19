@@ -255,6 +255,120 @@ Qed.
 
 (* -------------------------------------------------------------------------- *)
 
+(* Sometimes we write code in continuation-passing style (CPS), that is, code
+   that expects a continuation [k : A → R] as an argument and returns a value
+   [a : A] via the function application [k a]. It is also possible to abort by
+   returning a reply [r : R] directly, without invoking [k]. *)
+
+(* [CPS R A] is the type of a computation whose result type is [A] and whose
+   reply type is [R]. That is, [A] is the type of results (the domain of the
+   continuation) whereas [R] is the type of replies (the codomain of the
+   continuation). *)
+
+Definition CPS R A :=
+  (A → R) → R.
+
+(* To help specify and verify code in CPS style, we define the judgement
+   [wp_cps e Q ψ]. The ordinary postcondition [Q] describes results; the
+   exceptional postcondition [ψ] describes replies. *)
+
+(* The definition of [wp_cps] (below) requires the call [e k] to establish an
+   abstract postcondition [ψ'], and it is given two means of establishing [ψ']:
+   - by applying [k] to a result [a] that satisfies [Q], or
+   - by aborting with a reply [r] that satisfies [ψ]. *)
+
+Definition wp_cps {R A} (e : CPS R A) (Q : A → Prop) (ψ : R → Prop) :=
+  ∀ (k : A → R) (ψ' : R → Prop),
+  (∀ a, Q a → wp (k a) ψ') →
+  (∀ r, ψ r → ψ' r) →
+  wp (e k) ψ'.
+
+Ltac intro_wp_cps :=
+  let k := fresh "k" in
+  let ψ' := fresh "ψ'" in
+  let Hk := fresh "Hk" in
+  let Habort := fresh "Habort" in
+  intros k ψ' Hk Habort.
+
+(* This judgement enjoys the following reasoning rule. *)
+
+(* Returning a result [a]. *)
+
+Lemma wp_cps_ret {R A} (a : A) (Q : A → Prop) (ψ : R → Prop) :
+  Q a →
+  wp_cps (λ k, k a) Q ψ.
+Proof.
+  unfold wp_cps, wp. eauto.
+Qed.
+
+(* Aborting with a reply [r]. *)
+
+Lemma wp_cps_abort {R A} (r : R) (Q : A → Prop) (ψ : R → Prop) :
+  ψ r →
+  wp_cps (λ k, r) Q ψ.
+Proof.
+  unfold wp_cps, wp. eauto.
+Qed.
+
+(* The consequence rule. *)
+
+Lemma wp_cps_conseq {R A} (e : CPS R A) Q Q' ψ ψ':
+  wp_cps e Q ψ →
+  (∀ a, Q a → Q' a) →
+  (∀ r, ψ r → ψ' r) →
+  wp_cps e Q' ψ'.
+Proof.
+  unfold wp_cps. eauto 6.
+Qed.
+
+(* The bind rule. *)
+
+Lemma wp_cps_bind {R A B} (e1 : CPS R A) (e2 : A → CPS R B) P Q ψ :
+  wp_cps e1 P ψ →
+  (∀ a, P a → wp_cps (e2 a) Q ψ) →
+  wp_cps (λ k, e1 (λ a, e2 a k)) Q ψ.
+Proof.
+  unfold wp_cps. eauto 6.
+Qed.
+
+(* The functional extensionality rule. *)
+
+Lemma wp_cps_ext {R A} (e e' : CPS R A) Q ψ :
+  wp_cps e Q ψ →
+  (∀ k, e k = e' k) →
+  wp_cps e' Q ψ.
+Proof.
+  intros He Heq. unfold wp_cps. intros. rewrite <- Heq. eauto.
+Qed.
+
+(* A special case of the previous rule. *)
+
+Lemma wp_cps_eta {R A} (e : CPS R A) Q ψ :
+  wp_cps e Q ψ →
+  wp_cps (λ a, e a) Q ψ.
+Proof.
+  eauto.
+Qed.
+
+(* A rule for switching into and out of CPS style. *)
+
+(* Applying the CPS-style computation [e] to the identity continuation lets
+   one switch from direct style to CPS style and back. If [e] returns a result
+   [a] to its continuation then [a] becomes the final result of the
+   computation. If [e] aborts with a reply [r] then [r] becomes the final
+   result of the computation. Thus types [A] and [R] must coincide, and [e]
+   must admit [Q] as its normal postcondition and as its exceptional
+   postcondition. *)
+
+Lemma wp_cps_id {A} (e : CPS A A) Q :
+  wp_cps e Q Q →
+  wp (e (λ a, a)) Q.
+Proof.
+  unfold wp_cps. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
 (* When the type of a program is a subset type { a : A | Q a }, writing a
    postcondition becomes difficult, as it is necessary to deconstruct [a],
    or to wrap it in the projection [proj1_sig]. *)
