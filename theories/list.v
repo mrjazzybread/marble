@@ -55,14 +55,18 @@ Hint Resolve
 
 (* -------------------------------------------------------------------------- *)
 
+(* Iteration on a list, from left to right: [fold_left]. *)
+
+(* [fold_left] is defined in Rocq's standard library. *)
+
 Section Fold.
 Variable A : Type.
 Implicit Type xs : list A.
 Variable S : Type.
 Variable body : S → A → S.
 
-(* A specification of [fold_left], in the special case where an element
-   represents itself. *)
+(* A specification of [fold_left],
+   in the special case where an element represents itself. *)
 
 Lemma wp_fold_left_aux xs :
   ∀ future history,
@@ -139,3 +143,62 @@ Proof.
 Qed.
 
 End Fold.
+
+(* -------------------------------------------------------------------------- *)
+
+(* Iteration on a list, from left to right, in CPS style. *)
+
+Section FoldCPS.
+
+Context {R A S : Type}.
+Variable body : S → A → (S → R) → R.
+Implicit Type xs : list A.
+Implicit Type s : S.
+Implicit Type k : S → R.
+
+Fixpoint fold_left_cps xs s k :=
+  match xs with
+  | [] =>
+      k s
+  | x :: xs =>
+      body s x @@ λ s,
+      fold_left_cps xs s k
+  end.
+
+Implicit Type ψ : R → Prop.
+
+(* A specification of [fold_left_cps],
+   in the special case where an element represents itself. *)
+
+(* It is exactly the same as the specification of [fold_left],
+   except [wp] is replaced with [wp_cps _ ψ]. *)
+
+Lemma wp_fold_left_cps_aux xs ψ :
+  ∀ future history,
+  xs = history ++ future →
+  ITER_LIST
+    history xs
+    (λ x s Q, wp_cps (body s x) Q ψ)
+    (λ   s Q, wp_cps (fold_left_cps future s) Q ψ).
+Proof.
+  induction future as [| x future ]; simpl;
+  intro history; list; intro; subst xs; ITER.
+  { eapply wp_cps_ret. eauto. }
+  { eapply wp_cps_bind.
+    { eapply Hbody; tc. }
+    cbv beta. clear dependent s. intros s ?.
+    eapply IHfuture; tc; list; tc. }
+Qed.
+
+Lemma wp_fold_left_cps xs ψ :
+  ITER_LIST
+    [] xs
+    (λ x s Q, wp_cps (body s x) Q ψ)
+    (λ   s Q, wp_cps (fold_left_cps xs s) Q ψ).
+Proof.
+  eauto using wp_fold_left_cps_aux.
+Qed.
+
+End FoldCPS.
+
+(* -------------------------------------------------------------------------- *)
