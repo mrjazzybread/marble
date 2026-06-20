@@ -148,24 +148,35 @@ End Fold.
 
 (* Iteration on a list, from left to right, in CPS style. *)
 
+(* Because iteration on a list is tail-recursive, the parameter [k] in
+   [fold_left_cps] is invariant: it is the same in every loop iteration.
+   Therefore we hoist it out of the fixed point. *)
+
 Section FoldCPS.
 
 Context {R A S : Type}.
 Variable body : S → A → (S → R) → R.
 Implicit Type xs : list A.
 Implicit Type s : S.
-Implicit Type k : S → R.
+Variable k : S → R.
 
-Fixpoint fold_left_cps xs s k :=
+Fixpoint fold_left_cps_aux xs s :=
   match xs with
   | [] =>
       k s
   | x :: xs =>
       body s x @@ λ s,
-      fold_left_cps xs s k
+      fold_left_cps_aux xs s
   end.
 
 Implicit Type ψ : R → Prop.
+
+End FoldCPS.
+
+(* Re-order the parameters so that [k] comes last. *)
+
+Definition fold_left_cps {R A S} (body : S → A → (S → R) → R) xs s k :=
+  fold_left_cps_aux body k xs s.
 
 (* A specification of [fold_left_cps],
    in the special case where an element represents itself. *)
@@ -173,13 +184,13 @@ Implicit Type ψ : R → Prop.
 (* It is exactly the same as the specification of [fold_left],
    except [wp] is replaced with [wp_cps _ ψ]. *)
 
-Lemma wp_fold_left_cps_aux xs ψ :
+Lemma wp_fold_left_cps_aux {R A S} (body : S → A → (S → R) → R) xs ψ :
   ∀ future history,
   xs = history ++ future →
   ITER_LIST
     history xs
     (λ x s Q, wp_cps (body s x) Q ψ)
-    (λ   s Q, wp_cps (fold_left_cps future s) Q ψ).
+    (λ   s Q, wp_cps (λ k, fold_left_cps_aux body k future s) Q ψ).
 Proof.
   induction future as [| x future ]; simpl;
   intro history; list; intro; subst xs; ITER.
@@ -190,15 +201,13 @@ Proof.
     eapply IHfuture; tc; list; tc. }
 Qed.
 
-Lemma wp_fold_left_cps xs ψ :
+Lemma wp_fold_left_cps {R A S} (body : S → A → (S → R) → R) xs ψ :
   ITER_LIST
     [] xs
     (λ x s Q, wp_cps (body s x) Q ψ)
-    (λ   s Q, wp_cps (fold_left_cps xs s) Q ψ).
+    (λ   s Q, wp_cps (fold_left_cps body xs s) Q ψ).
 Proof.
   eauto using wp_fold_left_cps_aux.
 Qed.
-
-End FoldCPS.
 
 (* -------------------------------------------------------------------------- *)
