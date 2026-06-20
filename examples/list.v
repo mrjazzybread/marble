@@ -101,6 +101,10 @@ Definition partial_sum_post xs s :=
 
 (* [partial_sum] is correct. *)
 
+(* The proof does not require induction. Induction has been used already
+   to establish the lemma [wp_fold_left_cps]; now this lemma provides us
+   with a Hoare-style reasoning rule. *)
+
 Lemma wp_partial_sum xs :
   wp (partial_sum xs) (partial_sum_post xs).
 Proof.
@@ -139,11 +143,15 @@ End PartialSum.
 
 (* Now, optimize the code. *)
 
+(* We obtain the direct-style code that one would write by hand,
+   without going through a higher-order iteration function. *)
+
 Derive partial_sum'
   in (∀ limit xs, partial_sum' limit xs = partial_sum limit xs)
   as partial_sum_eq.
 Proof.
   intros.
-  unfold partial_sum, partial_sum_cps, fold_left_cps.
+  unfold partial_sum, partial_sum_cps.
+  unfold fold_left_cps, fold_left_cps_aux.
   unfold partial_sum'. reflexivity.
 Qed.
