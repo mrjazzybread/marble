@@ -859,6 +859,79 @@ Tactic Notation "wp_iter_down_body"
 
 (* -------------------------------------------------------------------------- *)
 
+(* Counting down, in CPS style: [iter_down_cps]. *)
+
+Section IterDownCPS.
+Context {R S : Type}.
+Implicit Types s : S.
+Open Scope uint63.
+
+Section Body.
+Variable body : int → S → (S → R) → R.
+Variable c : S → R.
+
+Fixpoint iter_down_cps_aux _i _k s (ACC : Acc (rilt _i) _k) :=
+  IFC _k =? _i THEN λ _,
+    c s
+  ELSE λ Hki,
+    let _k' := _k - 1 in
+    body _k' s @@ λ s,
+    iter_down_cps_aux _i _k' s (Acc_inv ACC (rilt_n_minus_1 _k _i Hki)).
+
+End Body.
+
+Definition iter_down_cps _i _k s body c :=
+  if _k ≤? _i then c s
+  else iter_down_cps_aux body c _i _k s (Acc_rilt _i _k).
+
+Lemma wp_iter_down_cps_aux (body : int → S → (S → R) → R) ψ :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  i ≤ k →
+  ∀ ACC,
+  ITER_Z i k Down
+    (λ j s Q, ∀ _j, isInt _j j → wp_cps (body _j s) Q ψ)
+    (λ s Q, wp_cps (λ c, iter_down_cps_aux body c _i _k s ACC) Q ψ).
+Proof.
+  intros _i i ? ?.
+  by well-founded induction on _k along (rilt _i).
+  intros. ITER. expand_ITER in IH.
+  intros; destruct ACC; simpl.
+  intro_wp_cps.
+  wp_if.
+  (* Case [k = i]. *)
+  { wp_ret. eapply Hk. z. eauto. }
+  (* Case [k ≠ i]. *)
+  { eapply Hbody; tc; tc.
+    clear dependent s. intros s Hinv.
+    eapply IH; tc.
+    clear dependent s. intros s (? & Hinv & ->).
+    eapply Hk. z in *. eauto. }
+Qed.
+
+(* The specification of [iter_down_cps]. *)
+
+Lemma wp_iter_down_cps (body : int → S → (S → R) → R) ψ :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  ITER_Z i k Down
+    (λ j s Q, ∀ _j, isInt _j j → wp_cps (body _j s) Q ψ)
+    (λ s Q, wp_cps (iter_down_cps _i _k s body) Q ψ).
+Proof.
+  intros. ITER. unfold iter_down_cps.
+  intro_wp_cps.
+  wp_if; z.
+  (* Case [k ≤ i]. *)
+  { eapply Hk. z. eauto. }
+  (* Case [i < k]. *)
+  { wp_op wp_iter_down_cps_aux shadowing: s.
+    eauto. }
+Qed.
+
+End IterDownCPS.
+
+(* -------------------------------------------------------------------------- *)
+
 (* An exitable loop, counting down. The loop can be broken via an early
    exit: the loop body receives two continuations [continue] and [break] and
    must invoke either [continue s] or [break s x]. An invocation of the loop
@@ -1298,6 +1371,61 @@ End IterUp.
 Tactic Notation "wp_iter_up_body"
   simple_intropattern(_j) simple_intropattern(j) simple_intropattern(s) :=
   wp_body j ? s introducing: (fun _ => z_step; intros _j ?).
+
+(* -------------------------------------------------------------------------- *)
+
+(* Counting up, in CPS style: [iter_up_cps]. *)
+
+Section IterUpCPS.
+Context {R S : Type}.
+Implicit Types s : S.
+Open Scope uint63.
+
+Section Body.
+Variable body : int → S → (S → R) → R.
+Variable c : S → R.
+
+Fixpoint iter_up_cps_aux _i _k s (ACC : Acc igt _i) :=
+  IFC _i <? _k THEN λ Hik,
+    body _i s @@ λ s,
+    iter_up_cps_aux (_i + 1) _k s
+                    (Acc_inv ACC (igt_n_plus_1 _i _k Hik))
+  ELSE λ _,
+    c s.
+
+End Body.
+
+Definition iter_up_cps _i _k s body c :=
+  iter_up_cps_aux body c _i _k s ltac:(tc).
+
+(* The specification of [iter_up_cps]. *)
+
+Lemma wp_iter_cps_up (body : int → S → (S → R) → R) ψ :
+  ∀IntU _i i ,
+  ∀IntU _k k ,
+  ITER_Z i k Up
+    (λ j s Q, ∀ _j, isInt _j j → wp_cps (body _j s) Q ψ)
+    (λ s Q, wp_cps (iter_up_cps _i _k s body) Q ψ).
+Proof.
+  (* Transform this into a statement about [iter_up_cps_aux]. *)
+  unfold iter_up_cps.
+  intro _i. generalize (Acc_igt _i); intro ACC.
+  (* Now prove it. *)
+  by dependent induction on _i ACC.
+  intros. ITER. expand_ITER in IH. simpl.
+  intro_wp_cps.
+  wp_if.
+  (* Case [i < k]. *)
+  { eapply Hbody; tc.
+    clear dependent s. intros s ?.
+    eapply IH; tc.
+    clear dependent s. intros s (? & Hinv & ->).
+    eapply Hk. z in *. eauto. }
+  (* Case [¬ i < k]. *)
+  { eapply Hk. z. eauto. }
+Qed.
+
+End IterUpCPS.
 
 (* -------------------------------------------------------------------------- *)
 
