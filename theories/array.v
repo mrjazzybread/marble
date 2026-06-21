@@ -1459,6 +1459,12 @@ Implicit Types xs : list A.
 
 Variable f : A → bool.
 
+Definition did_find {A} (o : option A) :=
+  match o with
+  | Some _ => true
+  | None   => false
+  end.
+
 Definition exist a :=
   do o ← find_index f a ;
   did_find o.
@@ -1501,6 +1507,12 @@ Implicit Types xs : list A.
 Variable f : A → bool.
 
 (* The code. *)
+
+Definition did_not_find {A} (o : option A) :=
+  match o with
+  | Some _ => false
+  | None   => true
+  end.
 
 Definition for_all a :=
   do o ← find_index (λ x, negb (f x)) a ;

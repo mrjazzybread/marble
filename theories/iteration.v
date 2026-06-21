@@ -46,51 +46,6 @@ Global Infix "⇝" := implication
 
 (* -------------------------------------------------------------------------- *)
 
-(* An exitable loop lets the loop body return an instruction to either
-   continue or stop (break). We write [out] for such an instruction. *)
-
-(* This type is isomorphic to [option A]. We prefer to use a distinct
-   type so as to avoid confusion. *)
-
-Inductive outcome (A : Type) : Type :=
-| Break : A → outcome A
-| Continue : outcome A.
-
-Arguments Break {A} x.
-Arguments Continue {A}.
-
-(* [broken out] means that [out] is [Break _]. *)
-
-Global Notation broken out := (out ≠ Continue).
-
-(* These conversion functions can be useful. *)
-
-Definition did_break {A} (out : outcome A) :=
-  match out with
-  | Continue => false
-  | Break _  => true
-  end.
-
-Definition did_not_break {A} (out : outcome A) :=
-  match out with
-  | Continue => true
-  | Break _  => false
-  end.
-
-Definition did_find {A} (o : option A) :=
-  match o with
-  | Some _ => true
-  | None   => false
-  end.
-
-Definition did_not_find {A} (o : option A) :=
-  match o with
-  | Some _ => false
-  | None   => true
-  end.
-
-(* -------------------------------------------------------------------------- *)
-
 (* Generic specifications for loops. *)
 
 Section Loops.

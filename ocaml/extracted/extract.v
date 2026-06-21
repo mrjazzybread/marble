@@ -88,13 +88,6 @@ Extraction Inline
   wp.bind
 .
 
-From marble Require iteration.
-
-Extraction Inline
-  iteration.did_break
-  iteration.did_not_break
-.
-
 From marble Require int.
 
 Extraction Inline
@@ -117,6 +110,8 @@ Extraction Inline
   array.to_list
   array.list_iteri
   array.list_length
+  array.did_find
+  array.did_not_find
   array.exist
   array.for_all
 .

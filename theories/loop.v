@@ -31,6 +31,25 @@ Set Universe Polymorphism.
 
 (* -------------------------------------------------------------------------- *)
 
+(* An exitable loop lets the loop body return an instruction to either
+   continue or stop (break). We write [out] for such an instruction. *)
+
+(* This type is isomorphic to [option A]. We prefer to use a distinct
+   type so as to avoid confusion. *)
+
+Inductive outcome (A : Type) : Type :=
+| Break : A → outcome A
+| Continue : outcome A.
+
+Arguments Break {A} x.
+Arguments Continue {A}.
+
+(* [broken out] means that [out] is [Break _]. *)
+
+Global Notation broken out := (out ≠ Continue).
+
+(* -------------------------------------------------------------------------- *)
+
 (* We first define two higher-order functions, [simple_loop] and [loop],
    which implement an exitable infinite loop. *)
 
