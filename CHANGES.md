@@ -17,6 +17,9 @@
 
 * In `int`:
   + New instance `isInt_mod`.
+  + New functions `iter_up_cps`, `iter_down_cps`.
+  + The functions `xiter_up`, `xiter_down`, `uxiter_up`, `uxiter_down`
+    have been removed.
 
 * In `iteration`:
   + New definitions `ITER_SET` and `ITER_SET_UNIQUE`,
@@ -27,6 +30,7 @@
   + Modified definition of `ITER`.
     The definition now includes the requirement for the user invariant `inv`
     to be compatible with a notion of equality on producer states.
+  + The specifications `XITER` and `UXITER` have been removed.
 
 * In `wp`:
   + New tactic `wp_destruct_post`.
