@@ -665,27 +665,24 @@ Definition isortto _src _srcofs _dst _dstofs _n :=
   iter_up 0 _n _dst @@ λ _i _dst ,
     (* Extract [xi] at offset [i] in the source segment. *)
     do xi ← get _src (_srcofs + _i) ;
-    do (_dst, out) ← (
-      (* Let [j] scan the sorted part of the destination segment, downwards. *)
-      xiter_down _dstofs (_dstofs + _i) _dst @@
-      λ _ _j _dst continue break ,
-        (* Read an element [xj] at offset [j] in the destination segment.
-           If [xj ≥ xi] holds then move [xj] upwards by one position and
-           continue. Otherwise stop. *)
-        do xj ← get _dst _j ;
-        if (xj ≤? xi)%element then
-          break _dst _j
-        else
-          do _dst ← set _dst (_j + 1) xj ;
-          continue _dst
-    );
-    (* Write [xi] into the logically empty slot of the array [dst]. *)
-    match out with
-    | Break _j =>
+    (* Prepare to insert [xi] into the sorted part of the destination segment.
+       Let [j] scan this sorted part, downwards. *)
+    iter_down_cps _dstofs (_dstofs + _i) _dst (λ _j _dst continue,
+      (* The slot at [j+1] is logically empty. *)
+      (* Read an element [xj] at offset [j] in the destination segment. *)
+      do xj ← get _dst _j ;
+      (* Compare [xi] and [xj]. *)
+      if (xj ≤? xi)%element then
+        (* Stop. Write [xi] into the empty slot of the array [dst]. *)
         set _dst (_j + 1) xi
-    | Continue =>
+      else
+        (* Move [xj] upwards by one position and continue. *)
+        do _dst ← set _dst (_j + 1) xj ;
+        continue _dst
+    ) (λ _dst,
+        (* Write [xi] into the empty slot of the array [dst]. *)
         set _dst  _dstofs xi
-    end.
+    ).
 
 End ISortTo.
 
@@ -752,13 +749,9 @@ Local Ltac elim_dst_inv :=
     list in Hpermut; z in Hsortedx
   end.
 
-(* This is the invariant of the inner loop. *)
+(* The invariant of the inner loop. *)
 
-(* This invariant holds both while the loop is running and once the loop
-   has ended. If the loop is running, [out] is [Continue]; if the loop
-   has ended, [out] indicates how it has ended. *)
-
-Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
+Local Definition inner_inv src srcofs dst dstofs i := λ j _dst,
   ∃ dst',
   isArray _dst dst' ∧
   len dst' = len dst ∧
@@ -766,26 +759,15 @@ Local Definition inner_inv src srcofs dst dstofs i := λ j _dst out,
      the destination array is unmodified. *)
   unmodified_outside_seg dst dst' dstofs (dstofs + i + 1) ∧
   (* The content of the extended destination segment is described by
-     the destination invariant [dst_inv ...]. If [out] is [Continue]
-     then the logically empty slot lies at index [j]; otherwise it lies
-     at index [j + 1]. Furthermore, in the latter case, [xj `lex` xi]
-     holds. *)
-  match out with
-  | Continue =>
-      dst_inv src srcofs dst' dstofs i j
-  | Break _j =>
-      dst_inv src srcofs dst' dstofs i (j + 1) ∧
-      let xi := src !!! (srcofs + i) in
-      let xj := dst' !!! j in
-      isInt _j j ∧ dstofs ≤ j < dstofs + i ∧
-      xj `lex` xi
-  end.
+     the destination invariant [dst_inv ...]. The logically empty slot
+     lies at index [j]. *)
+  dst_inv src srcofs dst' dstofs i j.
 
 Local Ltac intro_inner_inv :=
   unfold inner_inv; pack; list; tc3; list; tc3.
 
 Local Ltac elim_inner_inv dst' :=
-  match goal with h: inner_inv _ _ _ _ _ _ _ _ |- _ =>
+  match goal with h: inner_inv _ _ _ _ _ _ _ |- _ =>
     destruct h as (dst' & h); cbv zeta in h; list in h; unpack in h
   end.
 
@@ -816,58 +798,56 @@ Proof.
     (* [dst'] is the content of the destination array
        upon entry into the body of the outer loop. *)
     wp_get xi.
-    eapply wp_bind_unary.
     (* The inner loop. *)
-    wp_op wp_xiter_down
-      with invariant: (inner_inv src srcofs dst dstofs i).
-    (* Initialization of the inner loop. *)
-    { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
-      + rewrite Hdata. join_segments. reflexivity. }
-    (* Body of the inner loop. *)
-    { clear dependent _dst. wp_xiter_down_body _j j _dst.
-      elim_inner_inv dst''.
-      (* [dst''] is the content of the destination array
-         upon entry into the body of the inner loop. *)
-      wp_get xj.
-      wp_if.
-      (* Case [xj ≤ xi]. *)
-      { wp_break. intro_inner_inv. elim_dst_inv.
-        + recognize.
-          eapply le_le_lex; [ assumption |].
-          (* Proving [xj `precedes` xi] is the slightly tricky part.
-             The argument is that [xj] comes from the extended source
-             segment, whose rightmost element is [xi]. This is the only
-             point where stability creates an extra proof obligation. *)
-          assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
-          { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
-          related. }
-      (* Case [xi < xj]. *)
-      { elim_dst_inv.
-        wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv; [| sorted | pw ].
-        (* Permutation. *)
-        { rewrite <- Hpermut.
-          rewrite (split_seg j dst'' dstofs (j + 1)) by lia. recognize.
-          simplify_list_permutation_goal. eapply Permutation_app_comm. }}}
-    (* Epilogue of the inner loop. *)
-    { clear dependent _dst. intros (_dst & out).
-      z. intros (j & ? & ?).
-      (* Perform a case analysis on [out], so as to separately analyze
-         the case where the loop has been stopped early and the case
-         where it has finished normally. *)
-      destruct out as [ _j' |]; elim_inner_inv dst''; elim_dst_inv.
-      (* Case: we have broken out. *)
-      { wp_set.
-        intro_isortto_inv;
-        rewrite insert_seg by listz_arith; z; [| sorted ].
-        (* Permutation. *)
-        { rewrite <- Hpermut. recognize. reflexivity. }}
-      (* Case: the loop has finished normally. *)
-      { assert (j = dstofs) by tauto. subst j. list in Hpermut.
-        wp_set.
-        intro_isortto_inv; [| sorted ].
-        (* Permutation. *)
-        { rewrite <- Hpermut. recognize. reflexivity. }}}}
+    eapply wp_cps_enter.
+    { eapply wp_iter_down_cps
+        with (inv := inner_inv src srcofs dst dstofs i);
+      unfold z_init; tc.
+      (* Initialization of the inner loop. *)
+      { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
+        + rewrite Hdata. join_segments. reflexivity. }
+      (* Body of the inner loop. *)
+      { clear dependent _dst. wp_iter_down_body _j j _dst.
+        elim_inner_inv dst''.
+        wp_cps_intro.
+        (* [dst''] is the content of the destination array
+           upon entry into the body of the inner loop. *)
+        wp_get xj.
+        wp_if.
+        (* Case [xj ≤ xi]. We break out of the inner loop. *)
+        { wp_set.
+          eapply Habort; clear Hk Habort.
+          elim_dst_inv.
+          assert (xj `lex` xi).
+          { eapply le_le_lex; [ assumption |].
+            (* Proving [xj `precedes` xi] is the slightly tricky part.
+               The argument is that [xj] comes from the extended source
+               segment, whose rightmost element is [xi]. This is the only
+               point where stability creates an extra proof obligation. *)
+            assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) src).
+            { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
+            related. }
+          intro_isortto_inv;
+          rewrite insert_seg by listz_arith; z; [| sorted ].
+          (* Permutation. *)
+          { rewrite <- Hpermut. recognize. reflexivity. }}
+        (* Case [xi < xj]. The inner loop continues. *)
+        { elim_dst_inv.
+          wp_set.
+          eapply Hk; clear Hk Habort.
+          intro_inner_inv. intro_dst_inv; [| sorted | pw ].
+          (* Permutation. *)
+          { rewrite <- Hpermut.
+            rewrite (split_seg j dst'' dstofs (j + 1)) by lia. recognize.
+            simplify_list_permutation_goal. eapply Permutation_app_comm. }}}}
+    (* Continuation of the inner loop. *)
+    clear dependent _dst. intros _dst.
+    z. intros (? & ? & ->).
+    elim_inner_inv dst''; elim_dst_inv.
+    wp_set.
+    intro_isortto_inv; [| sorted ].
+    (* Permutation. *)
+    { rewrite <- Hpermut. recognize. reflexivity. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -888,22 +868,14 @@ Open Scope uint63.
 Definition isortto' a _srcofs _dstofs _n :=
   iter_up 0 _n a @@ λ _i a ,
     do xi ← get a (_srcofs + _i) ;
-    do (a, out) ← (
-      xiter_down _dstofs (_dstofs + _i) a @@
-      λ _ _j a continue break ,
-        do xj ← get a _j ;
-        if (xj ≤? xi)%element then
-          break a _j
-        else
-          do a ← set a (_j + 1) xj ;
-          continue a
-    );
-    match out with
-    | Break _j =>
+    iter_down_cps _dstofs (_dstofs + _i) a (λ _j a continue,
+      do xj ← get a _j ;
+      if (xj ≤? xi)%element then
         set a (_j + 1) xi
-    | Continue =>
-        set a _dstofs xi
-    end.
+      else
+        do a ← set a (_j + 1) xj ;
+        continue a
+    ) (λ a, set a _dstofs xi).
 
 End Code.
 
@@ -949,58 +921,56 @@ Proof.
     assert (KEY: xs' !!! (srcofs + i) = xs !!! (srcofs + i)).
     { eapply equal_lookups_to_equal_segs; eauto with lia. }
     rewrite KEY in Hxi; clear KEY.
-    eapply wp_bind_unary.
     (* The inner loop. *)
-    wp_op wp_xiter_down
-      with invariant: (inner_inv xs srcofs xs dstofs i).
-    (* Initialization of the inner loop. *)
-    { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
-      + rewrite Hdata. join_segments. reflexivity. }
-    (* Body of the inner loop. *)
-    { clear dependent a. wp_xiter_down_body _j j a.
-      elim_inner_inv xs''.
-      (* [xs''] is the content of the array
-         upon entry into the body of the inner loop. *)
-      wp_get xj.
-      wp_if.
-      (* Case [xj ≤ xi]. *)
-      { wp_break. intro_inner_inv. elim_dst_inv.
-        + recognize.
-          eapply le_le_lex; [ assumption |].
-          (* Proving [xj `precedes` xi] is the slightly tricky part.
-             The argument is that [xj] comes from the extended source
-             segment, whose rightmost element is [xi]. This is the only
-             point where stability creates an extra proof obligation. *)
-          assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) xs).
-          { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
-          related. }
-      (* Case [xi < xj]. *)
-      { elim_dst_inv.
-        wp_set. wp_continue.
-        intro_inner_inv. intro_dst_inv; [| sorted | pw ].
-        (* Permutation. *)
-        { rewrite <- Hpermut. recognize.
-          rewrite (split_seg j xs'' dstofs (j + 1)) by lia. recognize.
-          simplify_list_permutation_goal. eapply Permutation_app_comm. }}}
-    (* Epilogue of the inner loop. *)
-    { clear dependent a. intros (a & out).
-      z. intros (j & ? & ?).
-      (* Perform a case analysis on [out], so as to separately analyze
-         the case where the loop has been stopped early and the case
-         where it has finished normally. *)
-      destruct out as [ _j' |]; elim_inner_inv dst''; elim_dst_inv.
-      (* Case: we have broken out. *)
-      { wp_set.
-        intro_isortto_inv;
-        rewrite insert_seg by listz_arith; z; [| sorted ].
-        (* Permutation. *)
-        { rewrite <- Hpermut. recognize. reflexivity. }}
-      (* Case: the loop has finished normally. *)
-      { assert (j = dstofs) by tauto. subst j. list in Hpermut.
-        wp_set.
-        intro_isortto_inv; [| sorted ].
-        (* The destination segment contains a permitted permutation. *)
-        { rewrite <- Hpermut. recognize. reflexivity. }}}}
+    eapply wp_cps_enter.
+    { eapply wp_iter_down_cps
+        with (inv := inner_inv xs srcofs xs dstofs i);
+      unfold z_init; tc.
+      (* Initialization of the inner loop. *)
+      { intro_inner_inv. intro_dst_inv; [| sorted | pw ].
+        + rewrite Hdata. join_segments. reflexivity. }
+      (* Body of the inner loop. *)
+      { clear dependent a. wp_iter_down_body _j j a.
+        elim_inner_inv xs''.
+        wp_cps_intro.
+        (* [xs''] is the content of the array
+           upon entry into the body of the inner loop. *)
+        wp_get xj.
+        wp_if.
+        (* Case [xj ≤ xi]. We break out of the inner loop. *)
+        { wp_set.
+          eapply Habort; clear Hk Habort.
+          elim_dst_inv.
+          assert (xj `lex` xi).
+          { eapply le_le_lex; [ assumption |].
+            (* Proving [xj `precedes` xi] is the slightly tricky part.
+               The argument is that [xj] comes from the extended source
+               segment, whose rightmost element is [xi]. This is the only
+               point where stability creates an extra proof obligation. *)
+            assert (Hseg: xj ∈ seg srcofs (srcofs + i + 1) xs).
+            { rewrite <- Hpermut. subst xj. eauto with elem_of_app lia. }
+            related. }
+          intro_isortto_inv;
+          rewrite insert_seg by listz_arith; z; [| sorted ].
+          (* Permutation. *)
+          { rewrite <- Hpermut. recognize. reflexivity. }}
+        (* Case [xi < xj]. The inner loop continues. *)
+        { elim_dst_inv.
+          wp_set.
+          eapply Hk; clear Hk Habort.
+          intro_inner_inv. intro_dst_inv; [| sorted | pw ].
+          (* Permutation. *)
+          { rewrite <- Hpermut. recognize.
+            rewrite (split_seg j xs'' dstofs (j + 1)) by lia. recognize.
+            simplify_list_permutation_goal. eapply Permutation_app_comm. }}}}
+    (* Continuation of the inner loop. *)
+    clear dependent a. intros a.
+    z. intros (? & ? & ->).
+    elim_inner_inv dst''; elim_dst_inv.
+    wp_set.
+    intro_isortto_inv; [| sorted ].
+    (* Permutation. *)
+    { rewrite <- Hpermut. recognize. reflexivity. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)
