@@ -179,97 +179,6 @@ Definition ITER :=
 
 End ITER.
 
-(* -------------------------------------------------------------------------- *)
-
-(* Generic specifications for exitable (interruptible) loops. *)
-
-(* At an abstract level, an exitable loop can be viewed essentially as a
-   normal loop where the user state is a pair [(s, out)]. When [out] is
-   [Break _], the loop stops. In the contrapositive form, if the loop
-   body is invoked, then [out] must be [Continue]. Thus the loop body
-   may assume [out = Continue]. Furthermore, once the loop terminates,
-   one cannot assume [complete k], as in a normal loop; instead one must
-   assume [complete k ∨ broken out]. *)
-
-(* At runtime, an exitable loop can be implemented in several ways. One
-   approach is to ask the loop body to return a pair [(s, out)], and to
-   then inspect [out] to determine whether to continue or to stop. This
-   produces fairly bad code: an option and a pair are allocated at each
-   iteration. This code seems fairly difficult to optimize a posteriori:
-   this seems to require [match/match] commutations and other magic.
-   A better approach is to provide the loop body with two continuations:
-   the loop body invokes one or the other to indicate how to proceed.
-   (In other words, the loop body returns a Church-encoded outcome.)
-   The fact that the user state involves two components [s] and [out] is
-   still visible in the specification, where the loop invariant takes
-   the form [inv j s out]. *)
-
-Section XITER.
-
-(* The first component of the user's state has type [S]. *)
-Context {S : Type}.
-Implicit Types s : S.
-
-(* The second component of the user state has type [outcome A].
-   In other words, [A] is the type of [x] in [break x]. *)
-Context {A : Type}.
-Implicit Types out : outcome A.
-Implicit Types x : A.
-
-(* The loop body expects two continuations [continue] and [break]. *)
-Variable body : P → P → ∀ {W}, S → (S → W) → (S → A → W) → WP W.
-
-(* The loop returns a pair [(s, out)]. *)
-Variable loop : S → WP (S * outcome A).
-
-(* The user's loop invariant takes the form [inv j s out] where [j] is
-   the current producer state and [(s, out)] is the current user state.
-   We use a curried form for increased comfort. *)
-Implicit Types inv : P → S → outcome A → Prop.
-
-(* The specification of an exitable loop takes the following form. *)
-
-Definition XITER :=
-  ∀ inv s,
-  Proper (equiv ==> eq ==> eq ==> iff) inv →
-  (* Initially, [out] is [Continue]. *)
-  inv init s Continue →
-  (* When the loop body is invoked,
-     it can assume that [out] is [Continue]. *)
-  ( ∀ j0 j1 s ,
-    inv j0 s Continue →
-    ∀ {W} (Q : W → Prop) (continue : S → W) (break : S → A → W),
-    (* Invoking [continue s] is like returning [(s, Continue)]. *)
-    (∀ s  , inv j1 s Continue  → wp (continue s) Q) →
-    (* Invoking [break s x] is like returning [(s, Break x)]. *)
-    (∀ s x, inv j1 s (Break x) → wp (break s x) Q) →
-    body j0 j1 s continue break Q
-  ) →
-  (* Once the loop ends, we have either [complete k] or [broken out]. *)
-  loop s (λ '(s, out), ∃ k, inv k s out ∧ (complete k ∨ broken out)).
-
-(* We propose a variant where the user state [s] has type [unit]. Then
-   the loop body, the continuations, and the loop have slightly simpler
-   types. The loop invariant is [inv j out] instead of [inv j s out]. *)
-
-Variable ubody : P → P → ∀ {W}, (unit → W) → (A → W) → WP W.
-Variable uloop : WP (outcome A).
-
-Definition UXITER :=
-  ∀ (inv : P → outcome A → Prop) ,
-  Proper (equiv ==> eq ==> iff) inv →
-  inv init Continue →
-  ( ∀ j0 j1 ,
-    inv j0 Continue →
-    ∀ {W} (Q : W → Prop) continue break,
-    (     inv j1 Continue  → wp (continue()) Q) →
-    (∀ x, inv j1 (Break x) → wp (break x   ) Q) →
-    ubody j0 j1 continue break Q
-  ) →
-  uloop (λ out, ∃ k, inv k out ∧ (complete k ∨ broken out)).
-
-End XITER.
-
 End Loops.
 
 (* -------------------------------------------------------------------------- *)
@@ -738,30 +647,6 @@ Definition ITER_NAT {S}
     (nat_step i k dir body)
     loop.
 
-Definition XITER_NAT {S A}
-  i k dir
-  (body : nat → ∀ {W}, S → (S → W) → (S → A → W) → WP W)
-  (loop : S → WP (S * outcome A))
-: Prop
-:=
-  XITER
-    (nat_init i k dir)
-    (nat_complete i k dir)
-    (nat_step i k dir body)
-    loop.
-
-Definition UXITER_NAT {A}
-  i k dir
-  (body : nat → ∀ {W}, (unit → W) → (A → W) → WP W)
-  (loop : WP (outcome A))
-: Prop
-:=
-  UXITER
-    (nat_init i k dir)
-    (nat_complete i k dir)
-    (nat_step i k dir body)
-    loop.
-
 End Nat.
 
 (* -------------------------------------------------------------------------- *)
@@ -831,30 +716,6 @@ Definition ITER_Z {S}
     (z_step i k dir body)
     loop.
 
-Definition XITER_Z {S A}
-  i k dir
-  (body : Z → ∀ {W}, S → (S → W) → (S → A → W) → WP W)
-  (loop : S → WP (S * outcome A))
-: Prop
-:=
-  XITER
-    (z_init i k dir)
-    (z_complete i k dir)
-    (z_step i k dir body)
-    loop.
-
-Definition UXITER_Z {A}
-  i k dir
-  (body : Z → ∀ {W}, (unit → W) → (A → W) → WP W)
-  (loop : WP (outcome A))
-: Prop
-:=
-  UXITER
-    (z_init i k dir)
-    (z_complete i k dir)
-    (z_step i k dir body)
-    loop.
-
 (* -------------------------------------------------------------------------- *)
 
 (* Tactics. *)
@@ -870,25 +731,25 @@ Definition UXITER_Z {A}
 
 Ltac expand_ITER ::=
   unfold
-    ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
-    ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
+    ITER_NAT, nat_init, nat_step,
+    ITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
     HITER, HITERI,
-    ITER, XITER, UXITER
+    ITER
   ;
   simpl implication.
 
 Tactic Notation "expand_ITER" "in" hyp(h) :=
   unfold
-    ITER_NAT, XITER_NAT, UXITER_NAT, nat_init, nat_step,
-    ITER_Z, XITER_Z, UXITER_Z, z_init, z_step,
+    ITER_NAT, nat_init, nat_step,
+    ITER_Z, z_init, z_step,
     ITER_LIST, ITERI_LIST,
     ITER_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
     HITER, HITERI,
-    ITER, XITER, UXITER
+    ITER
   in h;
   simpl implication in h.
 
@@ -899,55 +760,15 @@ Ltac ITER :=
   intros ? ? Hcompatible Hinit Hbody;
   complete.
 
-Ltac XITER :=
-  expand_ITER;
-  intros ? ? Hcompatible Hinit Hbody;
-  complete.
-
-Ltac UXITER :=
-  expand_ITER;
-  intros ? Hcompatible Hinit Hbody;
-  complete.
-
-(* The tactics [wp_continue] and [wp_break] help reason about invocations
-   of [continue] and [break]. They recognize a suitable hypothesis and
-   apply it. *)
-
-Ltac wp_continue :=
-  match goal with
-  | Hcontinue: ∀ s, _ → wp (?continue s) _,
-    Hbreak: ∀ s x, _ → wp (?break s x) _
-    |- wp (?continue _) _ =>
-      simple eapply Hcontinue; clear Hcontinue Hbreak
-  | Hcontinue: _ → wp (?continue ()) _,
-    Hbreak: ∀ x, _ → wp (?break x) _
-    |- wp (?continue ()) _ =>
-      simple eapply Hcontinue; clear Hcontinue Hbreak
-  end.
-
-Ltac wp_break :=
-  match goal with
-  | Hcontinue: ∀ s, _ → wp (?continue s) _,
-    Hbreak: ∀ s x, _ → wp (?break s x) _
-    |- wp (?break _ _) _ =>
-      simple eapply Hbreak; clear Hcontinue Hbreak
-  | Hcontinue: _ → wp (?continue ()) _,
-    Hbreak: ∀ x, _ → wp (?break x) _
-    |- wp (?break _) _ =>
-      simple eapply Hbreak; clear Hcontinue Hbreak
-  end.
-
 (* The tactic [wp_body] helps introduce variables at the beginning
    of the body of a loop. *)
 
-(* The goal typically is [∀ j0 j1 s, inv ... → ...] or
-                         [∀ j0 j1,   inv ... → ...].
-   (See [ITER], [XITER], [UXITER].)
+(* The goal typically is [∀ j0 j1 s, inv ... → ...]. (See [ITER].)
 
-   The parameters of [wp_body] should be [j0 j1] or [j0 j1 s],
+   The parameters of [wp_body] should be [j0 j1 s],
    followed with a tactic [more_intros].
 
-   After introducing [j0], [j1], and possibly [s],
+   After introducing [j0], [j1], and [s],
    [wp_body] introduces the invariant [Hinv],
    executes the tactic [more_intros],
    then applies [wp_body_hook] to [Hinv],

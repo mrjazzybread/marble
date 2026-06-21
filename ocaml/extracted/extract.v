@@ -109,8 +109,6 @@ Extraction Inline
   loop.loop
   loop.Ni
   loop.iter_up
-  loop.xiter_up
-  loop.uxiter_up
 .
 
 From marble Require array.
@@ -156,10 +154,8 @@ Separate Extraction
   loop.loop
   loop.iter_up
   loop.iter_down
-  loop.xiter_up
-  loop.xiter_down
-  loop.uxiter_up
-  loop.uxiter_down
+  loop.iter_up_cps
+  loop.iter_down_cps
 
   array.segment_to_list
   array.to_list

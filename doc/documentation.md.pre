@@ -365,14 +365,6 @@ but provide a brief summary:
   the calling convention of the loop body; the parameter `loop` describes
   the calling convention of the loop itself.
 
-+ [`XITER`](iteration.v:Definition XITER) is a variant of `ITER` where the
-  loop is exitable: the loop body has access to two continuations,
-  `break` and `continue`, allowing it to indicate whether it wishes to
-  terminate early or to continue.
-
-+ [`UXITER`](iteration.v:Definition UXITER) is a degenerate variant of
-  `XITER` where the loop-carried state has type `unit`.
-
 We instantiate these general specifications for several common situations:
 
 + [`ITERI_LIST`](iteration.v:Definition ITERI_LIST) and
@@ -389,10 +381,8 @@ We instantiate these general specifications for several common situations:
   The producer's state is a history of the elements produced so far:
   it forms a sub(multi)set of the multiset `xs`.
 
-+ [`ITER_Z`](iteration.v:Definition ITER_Z),
-  [`XITER_Z`](iteration.v:Definition XITER_Z), and
-  [`UXITER_Z`](iteration.v:Definition UXITER_Z)
-  are specialized versions of `ITER`, `XITER`, and `UXITER`
++ [`ITER_Z`](iteration.v:Definition ITER_Z)
+  is a specialized version of `ITER`
   where the producer iterates (either upwards or downwards)
   over a semi-open interval [i, k) of the integers.
   The producer's state is just an integer index:
@@ -409,12 +399,10 @@ or array elements
 
 We provide several tactics that help work with these specifications:
 
-+ The tactics
++ The tactic
   [`ITER`](iteration.v:Ltac ITER),
-  [`XITER`](iteration.v:Ltac XITER), and
-  [`UXITER`](iteration.v:Ltac UXITER)
-  should be used when the goal is `ITER ...`, `XITER ...`,
-  or `UXITER ...`. They unfold definitions in the goal and
+  should be used when the goal is `ITER ...`.
+  It unfolds definitions in the goal and
   introduce the hypotheses under fixed conventional names.
 
 + At the beginning of the loop body, the tactic
@@ -463,30 +451,6 @@ and in the auxiliary definition
   This tactic introduces the current index `_j` and its integer model `j`
   as well as the current state `s`.
 
-+ [`xiter_down _i _k s @@ body`](loop.v:Definition xiter_down)
-  applies the loop body `body` to every machine
-  integer from `_k`, excluded, down to `_i`, included. This is an exitable
-  loop. An invocation of the loop body takes the form `body _j s continue break`.
-  That is, the loop body receives two continuations `continue` and `break`,
-  and must invoke either `continue s` or `break s x`.
-  It is useful when one wishes to scan an interval
-  and stop as soon as something of interest is found.
-
-  To reason about a call to `xiter_down`, use the tactic
-  `wp_op wp_xiter_down with invariant: ...`.
-  At the beginning of the loop body, use the tactic
-  [`wp_xiter_down_body _j j s`](loop.v:Tactic Notation "wp_xiter_down_body").
-
-+ [`uxiter_down _i _k @@ body`](loop.v:Definition uxiter_down)
-  is a variant of `xiter_down` without a state `s`.
-  It is useful when one wishes to scan an interval
-  and one does not need to accumulate information during the scan.
-
-  To reason about a call to `uxiter_down`, use the tactic
-  `wp_op wp_uxiter_down with invariant: ...`.
-  At the beginning of the loop body, use the tactic
-  [`wp_xiter_down_body _j j`](loop.v:Tactic Notation "wp_uxiter_down_body").
-
 + [`iter_up _i _k s @@ body`](loop.v:Definition iter_up)
   applies the loop body `body` to every machine integer
   from `_i`, included, up to `_k`, excluded.
@@ -497,24 +461,6 @@ and in the auxiliary definition
   [`wp_iter_up_body _j j s`](loop.v:Tactic Notation "wp_iter_up_body").
   This tactic introduces the current index `_j` and its integer model `j`
   as well as the current state `s`.
-
-+ [`xiter_up _i _k s @@ body`](loop.v:Definition xiter_up)
-  applies the loop body `body` to every machine integer
-  from `_i`, included, up to `_k`, excluded.
-  This is an exitable loop.
-
-  To reason about a call to `xiter_up`, use the tactic
-  `wp_op wp_xiter_up with invariant: ...`.
-  At the beginning of the loop body, use the tactic
-  [`wp_xiter_up_body _j j s`](loop.v:Tactic Notation "wp_xiter_up_body").
-
-+ [`uxiter_up _i _k @@ body`](loop.v:Definition uxiter_up)
-  is a variant of `xiter_up` without a state `s`.
-
-  To reason about a call to `uxiter_up`, use the tactic
-  `wp_op wp_uxiter_up with invariant: ...`.
-  At the beginning of the loop body, use the tactic
-  [`wp_xiter_up_body _j j`](loop.v:Tactic Notation "wp_uxiter_up_body").
 
 <!--------------------------------------------------------------------------->
 
