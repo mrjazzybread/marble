@@ -77,6 +77,18 @@ Definition did_not_break {A} (out : outcome A) :=
   | Break _  => false
   end.
 
+Definition did_find {A} (o : option A) :=
+  match o with
+  | Some _ => true
+  | None   => false
+  end.
+
+Definition did_not_find {A} (o : option A) :=
+  match o with
+  | Some _ => false
+  | None   => true
+  end.
+
 (* -------------------------------------------------------------------------- *)
 
 (* Generic specifications for loops. *)

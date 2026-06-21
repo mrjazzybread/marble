@@ -897,10 +897,10 @@ Proof.
   by well-founded induction on _k along (rilt _i).
   intros. ITER. expand_ITER in IH.
   intros; destruct ACC; simpl.
-  intro_wp_cps.
+  wp_cps_intro.
   wp_if.
   (* Case [k = i]. *)
-  { wp_ret. eapply Hk. z. eauto. }
+  { eapply Hk. z. eauto. }
   (* Case [k ≠ i]. *)
   { eapply Hbody; tc; tc.
     clear dependent s. intros s Hinv.
@@ -919,7 +919,7 @@ Lemma wp_iter_down_cps (body : int → S → (S → R) → R) ψ :
     (λ s Q, wp_cps (iter_down_cps _i _k s body) Q ψ).
 Proof.
   intros. ITER. unfold iter_down_cps.
-  intro_wp_cps.
+  wp_cps_intro.
   wp_if; z.
   (* Case [k ≤ i]. *)
   { eapply Hk. z. eauto. }
@@ -1400,7 +1400,7 @@ Definition iter_up_cps _i _k s body c :=
 
 (* The specification of [iter_up_cps]. *)
 
-Lemma wp_iter_cps_up (body : int → S → (S → R) → R) ψ :
+Lemma wp_iter_up_cps (body : int → S → (S → R) → R) ψ :
   ∀IntU _i i ,
   ∀IntU _k k ,
   ITER_Z i k Up
@@ -1413,7 +1413,7 @@ Proof.
   (* Now prove it. *)
   by dependent induction on _i ACC.
   intros. ITER. expand_ITER in IH. simpl.
-  intro_wp_cps.
+  wp_cps_intro.
   wp_if.
   (* Case [i < k]. *)
   { eapply Hbody; tc.

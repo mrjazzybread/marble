@@ -280,10 +280,10 @@ Definition CPS R A :=
 Definition wp_cps {R A} (e : CPS R A) (Q : A → Prop) (ψ : R → Prop) :=
   ∀ (k : A → R) (ψ' : R → Prop),
   (∀ a, Q a → wp (k a) ψ') →
-  (∀ r, ψ r → ψ' r) →
+  (∀ r, ψ r → wp r ψ') →
   wp (e k) ψ'.
 
-Ltac intro_wp_cps :=
+Ltac wp_cps_intro :=
   let k := fresh "k" in
   let ψ' := fresh "ψ'" in
   let Hk := fresh "Hk" in

@@ -123,12 +123,12 @@ Proof.
       unfold partial_sum_inv in *.
       assert (s + x = sum (history ++ {[x]})).
       { rewrite sum_app, sum_singleton. lia. }
-      intro_wp_cps.
+      wp_cps_intro.
       wp_if; [ clear Habort | clear Hk ].
       (* Case: the loop continues. *)
       { eapply Hk; clear Hk. eauto. }
       (* Case: the loop is interrupted. *)
-      { wp_ret. eapply Habort; clear Habort.
+      { eapply Habort; clear Habort.
         unfold permitted_sequence in *.
         unfold partial_sum_exit.
         eauto with lia. }}}

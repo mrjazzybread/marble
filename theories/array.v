@@ -1322,22 +1322,22 @@ Variable f : A → bool.
 
 (* The code. *)
 
-Definition plain_find_index a : outcome int :=
+Definition plain_find_index a : option int :=
   do _n ← length a ;
-  uxiter_up 0 _n @@ λ _ _i continue break,
-  do x ← get a _i ;
-  if f x then break _i else continue ().
+  iter_up_cps 0 _n None (λ _i o continue,
+    do x ← get a _i ;
+    if f x then Some _i else continue o
+  ) (λ o, o).
 
 Derive find_index
   in (∀ a, find_index a = plain_find_index a)
   as find_index_eq.
 Proof.
   intros. unfold plain_find_index.
-  (* Inlining our loop body into [ux_iter_up] allows quite a lot of
-     simplification; the continuations and the [Continue] messages
-     disappear. In other words, the overhead of using a higher-order
-     function is eliminated. *)
-  unfold uxiter_up, uxiter_up_aux.
+  (* Inlining our loop body into [iter_up_cps] allows quite a lot of
+     simplification; the continuations disappear. The overhead of
+     using a higher-order function is eliminated. *)
+  unfold iter_up_cps, iter_up_cps_aux.
   unfold find_index; reflexivity.
 Defined.
 (* Print find_index. *)
@@ -1353,16 +1353,26 @@ Variable  notOK : A → bool.
 Variable f_spec :
   ∀ x, isBool (f x) (OK x) (notOK x).
 
-(* The proposition [find_index_inv xs n out] serves to describe both
-   the postcondition of [find_index] and its loop invariant. Here is
-   its statement: *)
+(* The proposition [find_index_inv xs i o] is the loop invariant.
+   It holds as long as the loop runs normally, i.e., i.e. as long
+   as the loop body ends by invoking [continue]. It need not hold
+   when the loop is interrupted. *)
 
-Definition find_index_inv xs n out :=
-  match out with
-  | Continue =>
-      (* Up to index [n], no element [x] of the list [xs] is OK. *)
-      on_seg 0 n (λ j, notOK (xs !!! j))
-  | Break _i =>
+Definition find_index_inv xs i o :=
+  (* The state is [None]. *)
+  o = None ∧
+  (* Up to index [i], no element [x] of the list [xs] is OK. *)
+  on_seg 0 i (λ j, notOK (xs !!! j)).
+
+(* The proposition [find_index_post xs o] is the postcondition
+   of [find_index]. It holds when the loop either ends normally
+   or is interrupted. *)
+
+Definition find_index_post xs o :=
+  match o with
+  | None =>
+      find_index_inv xs (len xs) o
+  | Some _i =>
       (* The machine integer [_i] represents the index [i], which is a
          valid index into the list [xs]; the element [x] found at this
          index is OK; and no earlier element is OK. *)
@@ -1374,30 +1384,32 @@ Definition find_index_inv xs n out :=
 
 Lemma wp_find_index a xs :
   isArray a xs →
-  wp (find_index a) (λ out, find_index_inv xs (len xs) out).
+  wp (find_index a) (find_index_post xs).
 Proof.
   intros. arrays. rewrite find_index_eq. unfold plain_find_index.
   wp_length _n.
-  wp_op wp_uxiter_up with invariant: (find_index_inv xs);
-  unfold find_index_inv in *.
-  (* Initialization. *)
-  { eauto with on_seg lia. }
-  (* Preservation. *)
-  { wp_uxiter_up_body _j j.
-    wp_get x. subst x.
-    wp_if; wp_bind_eq.
-    (* Case: [OK x]. *)
-    + wp_break. eauto.
-    (* Case: [notOK x]. *)
-    + eauto with on_seg. }
-  (* Completion. *)
-  { z. intros [|] (k&?&?).
-    (* Subcase: the loop has ended by breaking. The loop index is an
-       unknown [i]. Fortunately [find_index_inv xs k (Break i)] is
-       independent of [k]. *)
-    + assumption.
-    (* Subcase: the loop has ended normally. *)
-    + assert (k = len xs) by tauto. subst k. assumption. }
+  eapply wp_cps_id.
+  eapply wp_cps_conseq; [ | | eauto ].
+  { eapply wp_iter_up_cps with
+      (inv := find_index_inv xs)
+      (ψ := find_index_post xs);
+    tc; unfold z_init, find_index_post, find_index_inv in *.
+    (* Initialization. *)
+    { eauto with on_seg lia. }
+    (* Preservation. *)
+    { wp_iter_up_body _j j s.
+      wp_cps_intro.
+      wp_get x. subst x.
+      wp_if; wp_bind_eq.
+      (* Case: [OK x]. *)
+      + eapply Habort. eauto.
+      (* Case: [notOK x]. *)
+      + eauto with on_seg. }}
+  (* Upon (normal) completion, we must check that [find_index_inv]
+       implies [find_index_post]. *)
+  { z. intros o (? & ? & ->).
+    assert (o = None) by (unfold find_index_inv in *; tauto).
+    unfold find_index_post. subst o. tauto. }
 Qed.
 
 End FindIndex.
@@ -1411,27 +1423,27 @@ Local Definition multiple_of_7 (z : Z) : bool :=
 
 Goal
   find_index multiple_of_7 (of_list [2;3;4;14;12;14])%Z =
-  Break 3%uint63.
+  Some 3%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [])%Z =
-  Continue.
+  None.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [1;2;3])%Z =
-  Continue.
+  None.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [1;1;1;1;1;1;1;1;1;1;0])%Z =
-  Break 10%uint63.
+  Some 10%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
 Goal
   find_index multiple_of_7 (of_list [140;1;1;1;1;1;1;1;1;1;0])%Z =
-  Break 0%uint63.
+  Some 0%uint63.
 Proof. vm_compute. reflexivity. Qed.
 
 (* -------------------------------------------------------------------------- *)
@@ -1448,8 +1460,8 @@ Implicit Types xs : list A.
 Variable f : A → bool.
 
 Definition exist a :=
-  do out ← find_index f a ;
-  did_break out.
+  do o ← find_index f a ;
+  did_find o.
 
 (* Our hypothesis about [f]. (See [find_index].) *)
 
@@ -1469,8 +1481,9 @@ Lemma wp_exist a xs :
   ).
 Proof.
   intros. unfold exist.
-  wp_op wp_find_index introducing: out.
-  destruct out as [ _i |]; unfold find_index_inv in *; unpack;
+  wp_op wp_find_index introducing: o.
+  destruct o as [ _i |];
+  unfold find_index_post, find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
 
@@ -1490,8 +1503,8 @@ Variable f : A → bool.
 (* The code. *)
 
 Definition for_all a :=
-  do out ← find_index (λ x, negb (f x)) a ;
-  did_not_break out.
+  do o ← find_index (λ x, negb (f x)) a ;
+  did_not_find o.
 
 (* Our hypothesis about [f]. (See [find_index].) *)
 
@@ -1511,8 +1524,9 @@ Lemma wp_for_all a xs :
   ).
 Proof.
   intros. unfold for_all.
-  wp_op wp_find_index introducing: out.
-  destruct out as [ _i |]; unfold find_index_inv in *; unpack;
+  wp_op wp_find_index introducing: o.
+  destruct o as [ _i |];
+  unfold find_index_post, find_index_inv in *; unpack;
   wp_ret; tc.
 Qed.
 
@@ -1525,6 +1539,7 @@ End ForAll.
 Section Equal.
 Context `{Inhabited A}.
 Implicit Types a b : array A.
+Implicit Types s : bool.
 Implicit Types xs ys : list A.
 
 Variable eq : A → A → bool.
@@ -1534,20 +1549,25 @@ Variable eq : A → A → bool.
 Section Code.
 Open Scope uint63.
 
-Definition equal_aux _m a b : outcome unit :=
-  uxiter_up 0 _m @@ λ _ _i continue break ,
-  do x ← get a _i ;
-  do y ← get b _i ;
-  if eq x y then continue () else break ().
-
-Definition equal a b : bool :=
+Definition plain_equal a b : bool :=
   do _m ← length a ;
   do _n ← length b ;
   if _m =? _n then
-    do out ← equal_aux _m a b ;
-    did_not_break out
+    iter_up_cps 0 _m true (λ _i s continue,
+      do x ← get a _i ;
+      do y ← get b _i ;
+      if eq x y then continue s else false
+    ) (λ s, s)
   else
     false.
+
+Derive equal
+  in (∀ a b, equal a b = plain_equal a b)
+  as equal_eq.
+Proof.
+  unfold plain_equal, iter_up_cps, iter_up_cps_aux.
+  unfold equal. reflexivity.
+Qed.
 
 End Code.
 
@@ -1560,56 +1580,51 @@ Local Infix "≡" := EQ (at level 70, no associativity).
 Variable eq_spec :
   ∀ x y, isBool1 (eq x y) (x ≡ y).
 
-(* The proposition [equal_inv xs n i o] is the loop invariant. *)
+(* The loop invariant and the postcondition. *)
 
-Definition equal_inv xs ys i o :=
-  match o with
-  | Continue =>
-      (* Up to index [i], the lists [xs] and [ys] agree. *)
-      on_seg 0 i (λ j, xs !!! j ≡ ys !!! j)
-  | Break () =>
-      (* [i - 1] is a valid index into the list [xs], the two lists
-         agree up to index [i - 1], and they disagree at this index. *)
-      let i := i - 1 in
-      valid i xs ∧
-      ¬ xs !!! i ≡ ys !!! i ∧
-      on_seg 0 i (λ j, xs !!! j ≡ ys !!! j)
-  end.
+Definition equal_inv xs ys i s :=
+  s = true ∧
+  (* Up to index [i], the lists [xs] and [ys] agree. *)
+  on_seg 0 i (λ j, xs !!! j ≡ ys !!! j).
+
+Definition equal_post xs ys s :=
+  isBool1 s (Forall2 EQ xs ys).
 
 (* The public specification of [equal]. *)
 
 Lemma wp_equal a xs b ys :
   isArray a xs →
   isArray b ys →
-  wp (equal a b) (λ o,
-      isBool1 o (Forall2 EQ xs ys)
-  ).
+  wp (equal a b) (equal_post xs ys).
 Proof.
-  intros. arrays. unfold equal.
+  intros. arrays. rewrite equal_eq. unfold plain_equal.
   wp_length _m.
   wp_length _n.
   (* The second branch, where the lengths differ, is trivial. *)
-  wp_if; [| wp_ret ].
+  wp_if.
+  2: { unfold equal_post. wp_ret. }
   (* We focus on the first branch, where the lengths coincide. *)
-  unfold equal_aux.
-  wp_op wp_uxiter_up with invariant: (equal_inv xs ys);
-  unfold equal_inv in *.
-  (* Initialization. *)
-  { eauto with on_seg lia. }
-  (* Preservation. *)
-  { wp_uxiter_up_body _j j.
-    wp_get x. wp_get y.
-    wp_if; wp_bind_eq; subst.
-    (* Case: [eq x y] returns [true]. *)
-    { wp_continue. eauto with on_seg. }
-    (* Case: [eq x y] returns [false]. *)
-    { wp_break. eauto with lia. }}
+  eapply wp_cps_id.
+  eapply wp_cps_conseq; [ | | eauto ].
+  { eapply wp_iter_up_cps with (inv := equal_inv xs ys);
+    unfold z_init, equal_inv; tc.
+    (* Initialization. *)
+    { eauto with on_seg lia. }
+    (* Preservation. *)
+    { wp_iter_up_body _j j s.
+      wp_cps_intro.
+      wp_get x. wp_get y. subst x y.
+      wp_if.
+      (* Case: [eq x y] returns [true]. *)
+      { eapply Hk; clear Hk Habort.
+        eauto with on_seg. }
+      (* Case: [eq x y] returns [false]. *)
+      { eapply Habort; clear Hk Habort.
+        unfold equal_post. tc. }}}
   (* Completion. *)
-  { z. intros [[]|]; unfold equal_inv; intros (i&?); unpack.
-    (* Case: the loop ends by breaking. *)
-    { wp_ret. }
-    (* Case: the loop ends normally. *)
-    { assert (i = len xs) by tauto. wp_ret. }}
+  { z. intros s (? & ? & ->).
+    unfold equal_inv in *. unpack. subst s.
+    unfold equal_post. tc. }
 Qed.
 
 End Equal.
