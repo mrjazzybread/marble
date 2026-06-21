@@ -352,17 +352,31 @@ Qed.
 
 (* A rule for switching into and out of CPS style. *)
 
-(* Applying the CPS-style computation [e] to the identity continuation lets
-   one switch from direct style to CPS style and back. If [e] returns a result
-   [a] to its continuation then [a] becomes the final result of the
-   computation. If [e] aborts with a reply [r] then [r] becomes the final
-   result of the computation. Thus types [A] and [R] must coincide, and [e]
-   must admit [Q] as its normal postcondition and as its exceptional
-   postcondition. *)
+(* Applying the CPS-style computation [e] to the identity continuation
+   lets one switch from direct style to CPS style and back. If [e]
+   returns a result [a] to its continuation then [a] becomes the final
+   result of the computation. If [e] aborts with a reply [r] then [r]
+   becomes the final result of the computation. Thus types [A] and [R]
+   must coincide, and [e] must admit [Q] as its normal postcondition
+   and as its exceptional postcondition. *)
+
+(* This lemma is a special case of the next one. *)
 
 Lemma wp_cps_id {A} (e : CPS A A) Q :
   wp_cps e Q Q →
   wp (e (λ a, a)) Q.
+Proof.
+  unfold wp_cps. eauto.
+Qed.
+
+(* Applying the CPS-style computation [e] to a non-trivial continuation
+   is equivalent to sequencing a CPS-style computation and a direct-style
+   computation. *)
+
+Lemma wp_cps_enter {R A} (e : CPS R A) (k : A → R) Q ψ :
+  wp_cps e Q ψ →
+  (∀ a, Q a → wp (k a) ψ) →
+  wp (e k) ψ.
 Proof.
   unfold wp_cps. eauto.
 Qed.
