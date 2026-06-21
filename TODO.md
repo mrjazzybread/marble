@@ -10,6 +10,8 @@
 
 * Document `darray`.
 
+* Document `iter_up_cps` and `iter_down_cps`.
+
 ## Bugs
 
 * `wp.v` should not use `autorewrite with z clength app_assoc`;
@@ -17,15 +19,12 @@
 
 ## Iteration
 
-* Define a generic specification for an on-demand (consumer-driven) iterator.
-  (Use either a `fold` function in CPS style, or a cascade. Which of the two
-  makes specialization easier?) Use it to define an on-demand variant of DFS
-  which uses on-demand iterators on the start vertices and on the successors
-  of each vertex.
+* In DFS-CPS, use `foreach_cps` functions on the start vertices and on the
+  successors of each vertex.
 
-* Once we have these on-demand iterators, can we get rid of exitable loops
-  (`XITER` and `UXITER`), where the producer is in control but the consumer is
-  allowed to request an early exit?
+* In `HITER`, should `body` be allowed to depend on `history`?
+  This should allow the exceptional postcondition to vary at each
+  loop iteration. But perhaps this is not useful.
 
 ## Arrays
 
@@ -110,7 +109,8 @@
 
 * Test whether depth-first search can be executed inside Rocq.
 
-* Extend the documentation with a section on `wpd`.
+* Extend the documentation with sections on `wp_cps` and `wpd`.
+  Document the loops in CPS style.
 
 * Extend the documentation with a section on `traverse`.
 
