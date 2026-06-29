@@ -88,6 +88,10 @@ Extraction Inline
   wp.bind
 .
 
+From marble Require cascade.
+
+Extract Inductive cascade.head => "Seq.head" [ "Seq.Cons" "Seq.Nil" ].
+
 From marble Require int.
 
 Extraction Inline
