@@ -76,8 +76,8 @@ Variable foreach_vertex : ∀ {S}, S → (S → _vertex → S) → S.
 Variable wp_foreach_vertex:
   ∀ {S} (body : S → _vertex → S),
   ITER_SET [] {[ v | 0 ≤ v < n ]}
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_vertex a body) Q).
+    (λ _ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ     a Q, wp (foreach_vertex a body) Q).
 
 (* [foreach_predecessor a _w] iterates on the predecessors of the
    vertex [_w]. *)
@@ -114,8 +114,8 @@ Variable wp_foreach_successor:
   ∀ {S} (body : S → _vertex → S),
   ∀Int _v v, 0 ≤ v < n →
   ITER_SET [] (successors v)
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_successor a _v body) Q).
+    (λ _ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ     a Q, wp (foreach_successor a _v body) Q).
 
 (* The function [foreach_predecessor], applied to [_w], must enumerate the
    predecessors of the vertex [w]. They can be enumerated in an arbitrary
@@ -126,8 +126,8 @@ Variable wp_foreach_predecessor:
   ∀ {S} (body : S → _vertex → S),
   ∀Int _w w, 0 ≤ w < n →
   ITER_SET [] (predecessors w)
-    (λ v a Q, ∀ _v, isInt _v v → wp (body a _v) Q)
-    (λ a Q, wp (foreach_predecessor a _w body) Q).
+    (λ _ v a Q, ∀ _v, isInt _v v → wp (body a _v) Q)
+    (λ     a Q, wp (foreach_predecessor a _w body) Q).
 
 (* -------------------------------------------------------------------------- *)
 

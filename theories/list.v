@@ -73,8 +73,8 @@ Lemma wp_fold_left_aux xs :
   xs = history ++ future →
   ITER_LIST
     history xs
-    (λ x s Q, wp (body s x) Q)
-    (λ   s Q, wp (fold_left body future s) Q).
+    (λ _ x s Q, wp (body s x) Q)
+    (λ     s Q, wp (fold_left body future s) Q).
 Proof.
   induction future as [| x future ]; simpl;
   intro history; list; intro; subst xs; ITER.
@@ -89,8 +89,8 @@ Qed.
 Lemma wp_fold_left xs :
   ITER_LIST
     [] xs
-    (λ x s Q, wp (body s x) Q)
-    (λ   s Q, wp (fold_left body xs s) Q).
+    (λ _ x s Q, wp (body s x) Q)
+    (λ     s Q, wp (fold_left body xs s) Q).
 Proof.
   eapply wp_fold_left_aux. eauto.
 Qed.
@@ -117,8 +117,8 @@ Lemma wp_fold_left_aux' xs :
   xs = history ++ future →
   ITER_LIST
     history xs
-    (λ x s Q, ∀ _x, R _x x → wp (body s _x) Q)
-    (λ   s Q, wp (fold_left body _future s) Q).
+    (λ _ x s Q, ∀ _x, R _x x → wp (body s _x) Q)
+    (λ     s Q, wp (fold_left body _future s) Q).
 Proof.
   induction _future as [| _x _future ]; simpl;
   intros future history; list; intros HisList ->;
@@ -136,8 +136,8 @@ Lemma wp_fold_left' _xs xs :
   isList R _xs xs →
   ITER_LIST
     [] xs
-    (λ x s Q, ∀ _x, R _x x → wp (body s _x) Q)
-    (λ   s Q, wp (fold_left body _xs s) Q).
+    (λ _ x s Q, ∀ _x, R _x x → wp (body s _x) Q)
+    (λ     s Q, wp (fold_left body _xs s) Q).
 Proof.
   intros. eapply wp_fold_left_aux'; eauto.
 Qed.
@@ -189,8 +189,8 @@ Lemma wp_fold_left_cps_aux {R A S} (body : S → A → (S → R) → R) xs ψ :
   xs = history ++ future →
   ITER_LIST
     history xs
-    (λ x s Q, wp_cps (body s x) Q ψ)
-    (λ   s Q, wp_cps (λ k, fold_left_cps_aux body k future s) Q ψ).
+    (λ _ x s Q, wp_cps (body s x) Q ψ)
+    (λ     s Q, wp_cps (λ k, fold_left_cps_aux body k future s) Q ψ).
 Proof.
   induction future as [| x future ]; simpl;
   intro history; list; intro; subst xs; ITER.
@@ -204,8 +204,8 @@ Qed.
 Lemma wp_fold_left_cps {R A S} (body : S → A → (S → R) → R) xs ψ :
   ITER_LIST
     [] xs
-    (λ x s Q, wp_cps (body s x) Q ψ)
-    (λ   s Q, wp_cps (fold_left_cps body xs s) Q ψ).
+    (λ _ x s Q, wp_cps (body s x) Q ψ)
+    (λ     s Q, wp_cps (fold_left_cps body xs s) Q ψ).
 Proof.
   eauto using wp_fold_left_cps_aux.
 Qed.

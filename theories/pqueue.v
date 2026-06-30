@@ -1108,8 +1108,8 @@ Lemma wp_iter {S} q ys (s : S) (f : A → S → S) :
   isQueue q ys →
   ITER_MULTISET
     [] ys
-    (λ x s Q, wp (f x s) Q)
-    (λ s Q, wp (iter q s f) Q).
+    (λ _ x s Q, wp (f x s) Q)
+    (λ     s Q, wp (iter q s f) Q).
 Proof.
   intros. ITER. unfold iter. destructQueue xs.
   wp_op vector.wp_iteri with invariant: (λ i s, inv (initial_seg i xs) s);

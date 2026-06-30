@@ -671,10 +671,10 @@ Local Lemma wp_list_iteri_aux xs body :
   ∀Int _i i,
   xs = history ++ future →
   i = len history →
-  ITERI_LIST
+  ITER_LIST
     history xs
-    (λ x i s Q, ∀ _i, isInt _i i → wp (body s _i x) Q)
-    (λ s Q, wp (list_iteri_aux body _i future s) Q).
+    (λ past x s Q, ∀ _i, isInt _i (len past) → wp (body s _i x) Q)
+    (λ        s Q, wp (list_iteri_aux body _i future s) Q).
 (* Hints for this proof. *)
 Local Hint Resolve prefix_reflexive prefix_app_l prefix_of_app_l : marble.
 Proof.
@@ -690,33 +690,31 @@ Qed.
 (* The public specification of [list_iteri]. *)
 
 Lemma wp_list_iteri xs s body :
-  ITERI_LIST
+  ITER_LIST
     [] xs
-    (λ x i s Q, ∀ _i, isInt _i i → wp (body s _i x) Q)
-    (λ s Q, wp (list_iteri 0 xs s body) Q).
+    (λ past x s Q, ∀ _i, isInt _i (len past) → wp (body s _i x) Q)
+    (λ        s Q, wp (list_iteri 0 xs s body) Q).
 Proof.
-  unfold ITERI_LIST. eapply wp_list_iteri_aux; tc3.
+  eapply wp_list_iteri_aux; tc3.
 Qed.
 
 End ListIteri.
 
-(* The tactic [wp_list_iteri_body s _i i x history] should be used
+(* The tactic [wp_list_iteri_body s _i x history] should be used
    upon entry into the loop body. It introduces the state [s], the
-   index [_i] and its integer model [i], the element [x], and the
-   ghost parameter [history]. *)
+   index [_i], the element [x], and the ghost parameter [history]. *)
 
 Tactic Notation "wp_list_iteri_body"
   simple_intropattern(s)
   simple_intropattern(_i)
-  simple_intropattern(i)
   simple_intropattern(x)
   simple_intropattern(history)
 :=
-  wp_body history ? s introducing: (fun _ => hiteri_step x i; intros _i ?).
+  wp_body history ? s introducing: (fun _ => hiter_step x; intros _i ?).
 
 (* In the following section, we play with two alternate specifications
-   of [list_iteri]. Insteead of using [ITER_LIST], where the producer
-   state is a list (the history of past elements), we use [ITER_NAT_UP],
+   of [list_iteri]. Instead of using [ITER_LIST], where the producer
+   state is a list (the history of past elements), we use [ITER_Z],
    where the producer state is an integer index, and we indicate that
    the user function receives the [i]-th element of the list as an
    argument during the [i]-th iteration of the loop. *)
@@ -867,7 +865,7 @@ Proof.
   ); last wp_shadow a.
   (* Preservation. *)
   { clear dependent _n a.
-    wp_list_iteri_body a _i i x history.
+    wp_list_iteri_body a _i x history.
     lengths. ulength in *.
     wp_set.
     isArray. }

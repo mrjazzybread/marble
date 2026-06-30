@@ -193,29 +193,13 @@ Definition permitted_is_prefix_of_complete :=
 (* At this time, we cut corners and use just Leibniz equality, because it
    is suitable for our current use cases. *)
 
-(* In [HITERI], the body is parameterized with the current element [x] and
-   with its index [i] in the history. *)
-
-Definition HITERI {S}
-  (body : A → Z → S → WP S)
-  (loop : S → WP S)
-: Prop :=
-  @ITER (list A) (eq)
-    init complete S
-    ( λ history0 history1 s Q,
-      ∀ x i,
-      init `prefix_of` history0 →
-      history0 ++ {[x]} = history1 →
-      permitted history1 →
-      i = length history0 →
-      body x i s Q
-    )
-    loop.
-
-(* In [HITER], the body is parameterized with the current element [x]. *)
+(* In [HITER], the body is parameterized with the history [history]
+   and with the current element [x]. [history] is the same thing as
+   the current producer state [j0]. The new producer state [j1] is
+   [history ++ {[x]}]. *)
 
 Definition HITER {S}
-  (body : A → S → WP S)
+  (body : list A → A → S → WP S)
   (loop : S → WP S)
 : Prop :=
   @ITER (list A) (eq)
@@ -225,7 +209,7 @@ Definition HITER {S}
       init `prefix_of` history0 →
       history0 ++ {[x]} = history1 →
       permitted history1 →
-      body x s Q
+      body history0 x s Q
     )
     loop.
 
@@ -389,21 +373,7 @@ Tactic Notation "complete" "in" "*" :=
     complete_set, complete_set_unique
   in *.
 
-(* The tactic [hiteri_step x i] is meant to be used after [wp_body ...].
-   Then the goal is [∀ x i,
-                     init `prefix_of` history0 →
-                     history0 ++ {[x]} = history1 →
-                     permitted history1 →
-                     i = length history0 → ...].
-   The tactic introduces these hypotheses
-   and uses the equation to substitute away [history1]. *)
-
-Tactic Notation "hiteri_step" simple_intropattern(x) simple_intropattern(i) :=
-  let Hpermitted := fresh "Hpermitted" in
-  intros x i ? <- Hpermitted ?;
-  permitted in Hpermitted.
-
-(* The tactic [hiteri_step x i] is meant to be used after [wp_body ...].
+(* The tactic [hiter_step x] is meant to be used after [wp_body ...].
    Then the goal is [∀ x,
                      init `prefix_of` history0 →
                      history0 ++ {[x]} = history1 →
@@ -454,16 +424,9 @@ Ltac wp_loop_postcondition_hook ::=
 
 (* Iteration on a list, in order. *)
 
-Definition ITERI_LIST {S A}
-  (init xs : list A)
-  (body : A → Z → S → WP S)
-  (loop : S → WP S)
-: Prop :=
-  HITERI init (permitted_sequence xs) (complete_sequence xs) body loop.
-
 Definition ITER_LIST {S A}
   (init xs : list A)
-  (body : A → S → WP S)
+  (body : list A → A → S → WP S)
   (loop : S → WP S)
 : Prop
 :=
@@ -475,7 +438,7 @@ Definition ITER_LIST {S A}
 
 Definition ITER_MULTISET {S A}
   (init xs : list A)
-  (body : A → S → WP S)
+  (body : list A → A → S → WP S)
   (loop : S → WP S)
 : Prop :=
   HITER init (permitted_multiset xs) (complete_multiset xs) body loop.
@@ -486,14 +449,14 @@ Definition ITER_MULTISET {S A}
 
 Definition ITER_SET {S A} `{SemiSet A C}
   (init : list A) (xs : C)
-  (body : A → S → WP S)
+  (body : list A → A → S → WP S)
   (loop : S → WP S)
 : Prop :=
   HITER init (permitted_set xs) (complete_set xs) body loop.
 
 Definition ITER_SET_UNIQUE {S A} `{SemiSet A C}
   (init : list A) (xs : C)
-  (body : A → S → WP S)
+  (body : list A → A → S → WP S)
   (loop : S → WP S)
 : Prop :=
   HITER init (permitted_set xs) (complete_set_unique xs) body loop.
@@ -688,10 +651,10 @@ Ltac expand_ITER ::=
   unfold
     ITER_NAT, nat_init, nat_step,
     ITER_Z, z_init, z_step,
-    ITER_LIST, ITERI_LIST,
+    ITER_LIST,
     ITER_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
-    HITER, HITERI,
+    HITER,
     ITER
   ;
   simpl implication.
@@ -700,10 +663,10 @@ Tactic Notation "expand_ITER" "in" hyp(h) :=
   unfold
     ITER_NAT, nat_init, nat_step,
     ITER_Z, z_init, z_step,
-    ITER_LIST, ITERI_LIST,
+    ITER_LIST,
     ITER_MULTISET,
     ITER_SET, ITER_SET_UNIQUE,
-    HITER, HITERI,
+    HITER,
     ITER
   in h;
   simpl implication in h.
@@ -735,7 +698,7 @@ Ltac ITER :=
    to introduce all of the variables before calling [wp_body_hook]. *)
 
 (* After using [wp_body ...], one should typically use [z_step] or
-   [hiteri_step] or a similar tactic to introduce the hypotheses that
+   [hiter_step] or a similar tactic to introduce the hypotheses that
    express the fact that one step has been made. *)
 
 Ltac wp_body_hook Hinv :=

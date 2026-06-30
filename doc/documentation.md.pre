@@ -367,9 +367,8 @@ but provide a brief summary:
 
 We instantiate these general specifications for several common situations:
 
-+ [`ITERI_LIST`](iteration.v:Definition ITERI_LIST) and
-  [`ITER_LIST`](iteration.v:Definition ITER_LIST) are
-  specialized versions of `ITER`
++ [`ITER_LIST`](iteration.v:Definition ITER_LIST) is a
+  specialized version of `ITER`
   where the producer iterates, *in order* (from left to right), over a list `xs`.
   The producer's state is a history of the elements produced so far:
   it forms a prefix of the list `xs`.

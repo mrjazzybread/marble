@@ -127,8 +127,8 @@ Variable wp_foreach_start:
   ∀ {S} (body : S → _vertex → S),
   HITER
     [] permitted complete
-    (λ v s Q, ∀ _v, isInt _v v → wp (body s _v) Q)
-    (λ s Q, wp (foreach_start s body) Q).
+    (λ _ v s Q, ∀ _v, isInt _v v → wp (body s _v) Q)
+    (λ     s Q, wp (foreach_start s body) Q).
 
 (* [foreach_successor a _v] iterates on the successors of the vertex [_v]. *)
 
@@ -160,8 +160,8 @@ Variable wp_foreach_successor:
   ∀Int _v v,
   0 ≤ v < n →
   ITER_SET [] (successors v)
-    (λ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
-    (λ a Q, wp (foreach_successor a _v body) Q).
+    (λ _ w a Q, ∀ _w, isInt _w w → wp (body a _w) Q)
+    (λ     a Q, wp (foreach_successor a _v body) Q).
 
 (* -------------------------------------------------------------------------- *)
 
@@ -1171,8 +1171,8 @@ Lemma wp_traverse_pre' :
   ∀ {U} (hook : _vertex → U → U),
   ITER_SET_UNIQUE
     [] (closure start)
-    (λ v u Q, ∀ _v, isInt _v v → wp (hook _v u) Q)
-    (λ u Q, wp (traverse_pre' hook u) Q).
+    (λ _ v u Q, ∀ _v, isInt _v v → wp (hook _v u) Q)
+    (λ     u Q, wp (traverse_pre' hook u) Q).
 Proof.
   intros. ITER. unfold traverse_pre'.
   wp_op wp_traverse_pre_simplified with invariant: inv.
