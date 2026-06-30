@@ -201,6 +201,26 @@ Proof.
     eapply IHfuture; tc; list; tc. }
 Qed.
 
+Lemma wp_fold_left_cps_aux' {R A S} (body : S → A → (S → R) → R) xs (ψ : list A → R → Prop) :
+  ∀ future past,
+  xs = past ++ future →
+  ITER_LIST
+    past xs
+    ( λ history x s Q,
+      let history' := history ++ {[x]} in
+      wp_gcps (body s x) Q (ψ history') (ψ history) )
+    ( λ s Q,
+      wp_gcps (λ k, fold_left_cps_aux body k future s) Q (ψ xs) (ψ past)).
+Proof.
+  induction future as [| x future ]; simpl;
+  intro history; list; intro; subst xs; ITER.
+  { eapply wp_gcps_ret. eauto. }
+  { eapply wp_gcps_bind.
+    { eapply Hbody; tc. }
+    clear dependent s. intros s Hs.
+    eapply IHfuture; tc; list; tc. }
+Qed.
+
 Lemma wp_fold_left_cps {R A S} (body : S → A → (S → R) → R) xs ψ :
   ITER_LIST
     [] xs
