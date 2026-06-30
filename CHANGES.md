@@ -22,6 +22,10 @@
     have been removed.
 
 * In `iteration`:
+  + New definition `HITER`,
+    a specialized version of `ITER`
+    where the producer state is a history,
+    that is, a list of the elements produced so far.
   + New definitions `ITER_SET` and `ITER_SET_UNIQUE`,
     where the producer state is a set,
     as well as their variants `ITER_SET'` and `ITER_SET_UNIQUE'`,
@@ -31,6 +35,9 @@
     The definition now includes the requirement for the user invariant `inv`
     to be compatible with a notion of equality on producer states.
   + The specifications `XITER` and `UXITER` have been removed.
+    Higher-order iteration functions in CPS style are now preferred.
+  + `ITERI_LIST` has been removed.
+    It is now a special case of `ITER_LIST`.
 
 * In `wp`:
   + New tactic `wp_destruct_post`.
