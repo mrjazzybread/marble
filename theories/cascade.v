@@ -11,7 +11,7 @@
 (******************************************************************************)
 
 From stdpp Require Import base.
-From marble Require Import wp.
+From marble Require Import tactics wp iteration.
 
 Unset Universe Minimization ToSet.
 Generalizable All Variables.
@@ -47,7 +47,8 @@ Section Spec.
 (* The relation [isElem] forms a bridge between the types [_A] and [A].
    These types are the runtime type and the logical type of the elements
    of the cascade. *)
-Context `{isElem : _A → A → Prop}.
+Context {_A A : Type}.
+Variable isElem : _A → A → Prop.
 
 (* [P] is the type of the producer state. *)
 Context {P : Type}.
@@ -80,3 +81,69 @@ Definition isCascade (c : cascade _A) (j : P) :=
   wp (c()) (λ h, isHead h j).
 
 End Spec.
+
+(* TODO establish a weakening/simulation rule to replace an LTS
+        with a more abstract LTS *)
+
+(* -------------------------------------------------------------------------- *)
+
+(* Converting a higher-order iteration function, in CPS style, to a cascade.  *)
+
+Section Reify.
+
+Context `{isElem : _A → A → Prop}.
+Context `{Equiv P : Type}.
+Variable step : P → A → P → Prop.
+Variable complete : P → Prop.
+
+Context {C : Type}.
+
+Variable foreach : ∀ {S R}, S → C → (S → _A → CPS R S) → CPS R S.
+
+Definition reify (c : C) : cascade _A :=
+  λ '(),
+    let consume := λ '() _x k, Cons _x k in
+    let finish  := λ '(),      Nil       in
+    foreach () c consume finish.
+
+Variable init : P.
+
+Variable wp_foreach :
+  ∀ {S R} (body : S → _A → CPS R S) (c : C) (ψ : P → R → Prop),
+  ITER init complete
+    (λ j0 j1 s Q, ∀ _x x, isElem _x x → step j0 x j1 → wp_gcps (body s _x) Q (ψ j1) (ψ j0))
+    (λ s Q, wp_gcps (foreach s c body) Q (λ r, ∃ k, complete k ∧ ψ k r) (ψ init)).
+
+Ltac wp_gcps_intro :=
+  let k := fresh "k" in
+  let Hk := fresh "Hk" in
+  intros k Hk.
+
+Lemma wp_reify c :
+  isCascade isElem step complete (reify c) init.
+Proof.
+  unfold reify.
+  set (consume := λ '() _x k, Cons _x k).
+  set (finish  := λ '(),      Nil      ).
+  unfold isCascade.
+  unfold ITER in wp_foreach.
+  unfold wp_gcps at 2 in wp_foreach.
+  eapply wp_foreach with
+    (inv := λ j '(), True)
+    (ψ := λ j h, isHead isElem step complete h j).
+  { prove_Proper. }
+  { tauto. }
+  { intros j0 j1 s Hs _x x Hx Hstep.
+    destruct s. clear Hs.
+    unfold consume.
+    wp_gcps_intro.
+    specialize (Hk () I).
+    wp_ret.
+    eapply isHeadCons; tc. }
+  { intros s Hs.
+    destruct s. destruct Hs as (k & ? & Hk).
+    unfold finish.
+    wp_ret. eauto using isHeadNil. }
+Qed.
+
+End Reify.
