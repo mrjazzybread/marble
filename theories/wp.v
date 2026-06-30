@@ -290,7 +290,7 @@ Ltac wp_cps_intro :=
   let Habort := fresh "Habort" in
   intros k ψ' Hk Habort.
 
-(* This judgement enjoys the following reasoning rule. *)
+(* This judgement enjoys the following reasoning rules. *)
 
 (* Returning a result [a]. *)
 
