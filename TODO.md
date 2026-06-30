@@ -12,6 +12,8 @@
 
 * Document `iter_up_cps` and `iter_down_cps`.
 
+* Document cascades.
+
 ## Bugs
 
 * `wp.v` should not use `autorewrite with z clength app_assoc`;
