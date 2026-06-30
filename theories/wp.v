@@ -273,9 +273,11 @@ Definition CPS R A :=
    exceptional postcondition [ψ] describes replies. *)
 
 (* The definition of [wp_cps] (below) requires the call [e k] to establish an
-   abstract postcondition [ψ'], and it is given two means of establishing [ψ']:
+   abstract postcondition [ψ'], and provides two means of establishing [ψ']:
    - by applying [k] to a result [a] that satisfies [Q], or
-   - by aborting with a reply [r] that satisfies [ψ]. *)
+   - by aborting with a reply [r] that satisfies [ψ].
+   In other words, this judgement requires that the continuation [k] either
+   be invoked as part of a tail call, or not be used at all. *)
 
 Definition wp_cps {R A} (e : CPS R A) (Q : A → Prop) (ψ : R → Prop) :=
   ∀ (k : A → R) (ψ' : R → Prop),
@@ -356,9 +358,9 @@ Qed.
    lets one switch from direct style to CPS style and back. If [e]
    returns a result [a] to its continuation then [a] becomes the final
    result of the computation. If [e] aborts with a reply [r] then [r]
-   becomes the final result of the computation. Thus types [A] and [R]
-   must coincide, and [e] must admit [Q] as its normal postcondition
-   and as its exceptional postcondition. *)
+   becomes the final result of the computation. Thus the types [A] and
+   [R] must coincide, and [e] must admit [Q] as its normal
+   postcondition and as its exceptional postcondition. *)
 
 (* This lemma is a special case of the next one. *)
 
@@ -379,6 +381,140 @@ Lemma wp_cps_enter {R A} (e : CPS R A) (k : A → R) Q ψ :
   wp (e k) ψ.
 Proof.
   unfold wp_cps. eauto.
+Qed.
+
+(* -------------------------------------------------------------------------- *)
+
+(* A second description of computation in CPS style. *)
+
+(* This judgement takes two answer postconditions [φ] and [ψ], and does not
+   involve a universal quantification over an unknown postcondition. It is
+   more flexible than [wp_cps]. It does not require the continuation [k] to
+   be either invoked in a tail call or dropped: it allows non-tail calls to
+   [k]. The presence of two postconditions is related to a phenomenon that
+   is known in the literature as "answer type modification". *)
+
+(* The judgement [wp_gcps e Q φ ψ] means that the computation [e] terminates
+   either by directly returning an answer (which must satisfy [ψ]) or by
+   transmitting a result (which must satisfy [Q]) to its continuation (whose
+   answer can be expected to satisfy [φ]). *)
+
+Definition wp_gcps {R A} (e : CPS R A) (Q : A → Prop) (φ ψ : R → Prop) :=
+  ∀ (k : A → R),
+  (∀ a, Q a → wp (k a) φ) →
+  wp (e k) ψ.
+
+(* Because [wp_gcps] is more permissive than [wp_cps], the implication
+   [wp_gcps e Q ψ ψ → wp_cps e Q ψ] is false. *)
+
+(* The following lemma describes trivial cases where [wp_gcps] implies
+   [wp_cps]: if [Q] is false or [φ] is true then [wp_gcps e Q φ ψ]
+   guarantees that [e] does not invoke its continuation (or does not
+   require any property of its result), so [wp_cps e Q ψ] holds. *)
+
+Lemma wp_gcps_wp_cps {R A} (e : CPS R A) Q φ ψ :
+  ((∀ a, ¬ Q a) ∨ (∀ r, φ r)) →
+  wp_gcps e Q φ ψ →
+  wp_cps e Q ψ.
+Proof.
+  intros H He. wp_cps_intro.
+  eapply Habort.
+  eapply He.
+  intros a Ha. eapply wp_ret.
+  firstorder.
+Qed.
+
+(* [wp_gcps] is more permissive than [wp_cps]. *)
+
+Lemma wp_cps_wp_gcps {R A} (e : CPS R A) Q ψ :
+  wp_cps e Q ψ →
+  wp_gcps e Q ψ ψ.
+Proof.
+  intros He.
+  unfold wp_gcps. intros k Hk.
+  eauto.
+Qed.
+
+(* Returning a result [a]. *)
+
+Lemma wp_gcps_ret {R A} (a : A) (Q : A → Prop) (ψ : R → Prop) :
+  Q a →
+  wp_gcps (λ k, k a) Q ψ ψ.
+Proof.
+  unfold wp_gcps. eauto.
+Qed.
+
+(* Aborting with a reply [r]. *)
+
+Lemma wp_gcps_abort {R A} (r : R) (Q : A → Prop) (φ ψ : R → Prop) :
+  ψ r →
+  wp_gcps (λ k, r) Q φ ψ.
+Proof.
+  unfold wp_gcps. eauto.
+Qed.
+
+(* The consequence rule. *)
+
+Lemma wp_gcps_conseq {R A} (e : CPS R A) Q Q' φ φ' ψ ψ':
+  wp_gcps e Q φ ψ →
+  (∀ a, Q a → Q' a) →
+  (∀ r, φ' r → φ r) →
+  (∀ r, ψ r → ψ' r) →
+  wp_gcps e Q' φ' ψ'.
+Proof.
+  unfold wp_gcps, wp. eauto 6.
+Qed.
+
+(* The bind rule. *)
+
+Lemma wp_gcps_bind {R A B} (e1 : CPS R A) (e2 : A → CPS R B) P Q ξ φ ψ :
+  wp_gcps e1 P ξ ψ →
+  (∀ a, P a → wp_gcps (e2 a) Q φ ξ) →
+  wp_gcps (λ k, e1 (λ a, e2 a k)) Q φ ψ.
+Proof.
+  unfold wp_gcps. eauto.
+Qed.
+
+(* The functional extensionality rule. *)
+
+Lemma wp_gcps_ext {R A} (e e' : CPS R A) Q φ ψ :
+  wp_gcps e Q φ ψ →
+  (∀ k, e k = e' k) →
+  wp_gcps e' Q φ ψ.
+Proof.
+  intros He Heq. unfold wp_gcps. intros. rewrite <- Heq. eauto.
+Qed.
+
+(* A special case of the previous rule. *)
+
+Lemma wp_gcps_eta {R A} (e : CPS R A) Q φ ψ :
+  wp_gcps e Q φ ψ →
+  wp_gcps (λ a, e a) Q φ ψ.
+Proof.
+  eauto.
+Qed.
+
+(* A rule for switching into and out of CPS style. *)
+
+(* This lemma is a special case of the next one. *)
+
+Lemma wp_gcps_id {A} (e : CPS A A) Q :
+  wp_gcps e Q Q Q →
+  wp (e (λ a, a)) Q.
+Proof.
+  unfold wp_gcps. eauto.
+Qed.
+
+(* Applying the CPS-style computation [e] to a non-trivial continuation
+   is equivalent to sequencing a CPS-style computation and a direct-style
+   computation. *)
+
+Lemma wp_gcps_enter {R A} (e : CPS R A) (k : A → R) Q ψ :
+  wp_gcps e Q ψ ψ →
+  (∀ a, Q a → wp (k a) ψ) →
+  wp (e k) ψ.
+Proof.
+  unfold wp_gcps. eauto.
 Qed.
 
 (* -------------------------------------------------------------------------- *)
