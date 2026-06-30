@@ -12,6 +12,8 @@
 
 * Document `iter_up_cps` and `iter_down_cps`.
 
+* Document `HITER`.
+
 * Document cascades.
 
 ## Bugs
@@ -23,10 +25,6 @@
 
 * In DFS-CPS, use `foreach_cps` functions on the start vertices and on the
   successors of each vertex.
-
-* In `HITER`, should `body` be allowed to depend on `history`?
-  This should allow the exceptional postcondition to vary at each
-  loop iteration. But perhaps this is not useful.
 
 ## Arrays
 
@@ -111,7 +109,7 @@
 
 * Test whether depth-first search can be executed inside Rocq.
 
-* Extend the documentation with sections on `wp_cps` and `wpd`.
+* Extend the documentation with sections on `wp_cps` and `wp_gcps` and `wpd`.
   Document the loops in CPS style.
 
 * Extend the documentation with a section on `traverse`.
