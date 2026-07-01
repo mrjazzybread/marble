@@ -648,17 +648,6 @@ End Body.
 Definition list_iteri _i xs s body :=
   list_iteri_aux body _i xs s.
 
-(* Local lemmas about `prefix_of`. *)
-
-Local Lemma prefix_reflexive {B} (xs : list B) : xs `prefix_of` xs.
-Proof. reflexivity. Qed.
-
-Local Lemma prefix_of_app_l {B} (xs ys zs : list B) :
-  xs ++ ys `prefix_of` xs ++ ys ++ zs.
-Proof.
-  econstructor. eapply app_assoc.
-Qed.
-
 (* An inductive specification. (This is an auxiliary lemma.) *)
 
 (* The user-provided loop invariant [inv history s] is parameterized
@@ -666,36 +655,33 @@ Qed.
    state [s]. It does not need to be parameterized with the current
    index [i], because [i] is just the length of the list [history]. *)
 
-Local Lemma wp_list_iteri_aux xs body :
-  ∀ future history,
-  ∀Int _i i,
-  xs = history ++ future →
-  i = len history →
+Local Lemma wp_list_iteri_aux body :
+  ∀ xs past _i,
+  isInt _i (len past) →
   ITER_LIST
-    history xs
+    past (past ++ xs)
     (λ past x s Q, ∀ _i, isInt _i (len past) → wp (body s _i x) Q)
-    (λ        s Q, wp (list_iteri_aux body _i future s) Q).
-(* Hints for this proof. *)
-Local Hint Resolve prefix_reflexive prefix_app_l prefix_of_app_l : marble.
+    (λ        s Q, wp (list_iteri_aux body _i xs s) Q).
 Proof.
-  induction future as [| x future ]; simpl list_iteri_aux; intros;
-  ITER; subst xs; list in *.
+  induction xs as [| x xs ]; simpl list_iteri_aux; intros;
+  ITER; list in *.
   (* Case: the future is empty. *)
   { wp_ret. }
   (* Case: the future begins with [x]. *)
   { wp_op Hbody shadowing: s.
-    wp_op IHfuture shadowing: s. }
+    wp_op IHxs shadowing: s.
+    { list. tc. }}
 Qed.
 
 (* The public specification of [list_iteri]. *)
 
-Lemma wp_list_iteri xs s body :
+Lemma wp_list_iteri body xs :
   ITER_LIST
     [] xs
     (λ past x s Q, ∀ _i, isInt _i (len past) → wp (body s _i x) Q)
     (λ        s Q, wp (list_iteri 0 xs s body) Q).
 Proof.
-  eapply wp_list_iteri_aux; tc3.
+  eapply wp_list_iteri_aux with (past := []); tc3.
 Qed.
 
 End ListIteri.
