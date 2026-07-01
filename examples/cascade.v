@@ -27,7 +27,7 @@ Set Universe Polymorphism.
 
 (* A type of trees. *)
 
-Inductive tree (A : Type) :=
+Inductive tree A :=
 | Leaf : tree A
 | Node : tree A → A → tree A → tree A.
 
@@ -38,34 +38,34 @@ Arguments Node {A}.
 
 Fixpoint fringe {A} (t : tree A) :=
   match t with
-  | Leaf => []
+  | Leaf       => []
   | Node l x r => fringe l ++ {[x]} ++ fringe r
   end.
 
 (* Iterating on a tree in direct style. *)
 
-Fixpoint fold {S A} (consume : S → A → S) (s : S) (t : tree A) : S :=
+Fixpoint fold {S A} (yield : S → A → S) (s : S) (t : tree A) : S :=
   match t with
   | Leaf =>
       s
   | Node l x r =>
-      do s ← fold consume s l ;
-      do s ← consume s x ;
-      do s ← fold consume s r ;
+      do s ← fold yield s l ;
+      do s ← yield s x ;
+      do s ← fold yield s r ;
       s
   end.
 
 (* Iterating on a tree in CPS style. *)
 
-Fixpoint fold_cps {S A R} (consume : S → A → CPS R S) (s : S) (t : tree A) : CPS R S :=
+Fixpoint fold_cps {S A R} (yield : S → A → CPS R S) (s : S) (t : tree A) : CPS R S :=
   λ (k : S → R),
   match t with
   | Leaf =>
       k s
   | Node l x r =>
-      fold_cps consume s l @@ λ s,
-      consume s x @@ λ s,
-      fold_cps consume s r @@ λ s,
+      fold_cps yield s l @@ λ s,
+      yield s x @@ λ s,
+      fold_cps yield s r @@ λ s,
       k s
   end.
 
@@ -73,12 +73,12 @@ Fixpoint fold_cps {S A R} (consume : S → A → CPS R S) (s : S) (t : tree A) :
 
 (* The specification of [fold]. *)
 
-Lemma wp_fold {S A} (consume : S → A → S) :
+Lemma wp_fold {S A} (yield : S → A → S) :
   ∀ t past,
   ITER_LIST
     past (past ++ fringe t)
-    (λ _ x s Q, wp (consume s x) Q)
-    (λ s Q, wp (fold consume s t) Q).
+    (λ _ x s Q, wp (yield s x) Q)
+    (λ s Q, wp (fold yield s t) Q).
 Proof.
   expand_ITER.
   induction t as [| l IHl x r IHr ]; intro past; ITER; simpl fold.
@@ -97,12 +97,12 @@ Qed.
 
 (* The specification of [fold_cps]. *)
 
-Lemma wp_fold_cps {R S A} (consume : S → A → CPS R S) (ψ : list A → R → Prop) :
+Lemma wp_fold_cps {R S A} (yield : S → A → CPS R S) (ψ : list A → R → Prop) :
   ∀ t past,
   ITER_LIST
     past (past ++ fringe t)
-    (λ history x s Q, wp_gcps (consume s x) Q (ψ (history ++ {[x]})) (ψ history))
-    (λ s Q, wp_gcps (fold_cps consume s t) Q (ψ (past ++ fringe t)) (ψ past)).
+    (λ history x s Q, wp_gcps (yield s x) Q (ψ (history ++ {[x]})) (ψ history))
+    (λ s Q, wp_gcps (fold_cps yield s t) Q (ψ (past ++ fringe t)) (ψ past)).
 Proof.
   expand_ITER.
   induction t as [| l IHl x r IHr ]; intro past; ITER; simpl fold_cps.
