@@ -68,31 +68,22 @@ Variable body : S → A → S.
 (* A specification of [fold_left],
    in the special case where an element represents itself. *)
 
-Lemma wp_fold_left_aux xs :
-  ∀ future history,
-  xs = history ++ future →
+Lemma wp_fold_left :
+  ∀ xs past,
   ITER_LIST
-    history xs
-    (λ _ x s Q, wp (body s x) Q)
-    (λ     s Q, wp (fold_left body future s) Q).
-Proof.
-  induction future as [| x future ]; simpl;
-  intro history; list; intro; subst xs; ITER.
-  { wp_ret. }
-  { change (fold_left body future (body s x))
-      with (do s ← body s x ; fold_left body future s).
-    wp_op Hbody shadowing: s.
-    wp_op IHfuture shadowing: s.
-    eauto. }
-Qed.
-
-Lemma wp_fold_left xs :
-  ITER_LIST
-    [] xs
+    past (past ++ xs)
     (λ _ x s Q, wp (body s x) Q)
     (λ     s Q, wp (fold_left body xs s) Q).
 Proof.
-  eapply wp_fold_left_aux. eauto.
+  induction xs as [| x xs ]; simpl;
+  intro past; list; ITER.
+  { wp_ret. }
+  { change (fold_left body xs (body s x))
+      with (do s ← body s x ; fold_left body xs s).
+    wp_op Hbody shadowing: s.
+    wp_op IHxs shadowing: s.
+    { list. tc. }
+    list in *. eauto. }
 Qed.
 
 End Fold.
@@ -111,35 +102,25 @@ Variable body : S → _A → S.
 (* We provide direct proofs, but it should also be possible to provide
    an indirect proof that reuses the lemma [wp_fold_left]. *)
 
-Lemma wp_fold_left_aux' xs :
-  ∀ _future future history,
-  isList R _future future →
-  xs = history ++ future →
-  ITER_LIST
-    history xs
-    (λ _ x s Q, ∀ _x, R _x x → wp (body s _x) Q)
-    (λ     s Q, wp (fold_left body _future s) Q).
-Proof.
-  induction _future as [| _x _future ]; simpl;
-  intros future history; list; intros HisList ->;
-  inversion HisList; subst;
-  ITER; list in *.
-  { wp_ret. }
-  { change (fold_left body _future (body s _x))
-      with (do s ← body s _x ; fold_left body _future s).
-    wp_op Hbody shadowing: s.
-    wp_op IH_future shadowing: s.
-    eauto. }
-Qed.
-
-Lemma wp_fold_left' _xs xs :
+Lemma wp_fold_left' :
+  ∀ _xs xs past,
   isList R _xs xs →
   ITER_LIST
-    [] xs
+    past (past ++ xs)
     (λ _ x s Q, ∀ _x, R _x x → wp (body s _x) Q)
     (λ     s Q, wp (fold_left body _xs s) Q).
 Proof.
-  intros. eapply wp_fold_left_aux'; eauto.
+  induction _xs as [| _x _xs ]; simpl;
+  intros xs past; list; intros HisList;
+  inversion HisList; subst;
+  ITER; list in *.
+  { wp_ret. }
+  { change (fold_left body _xs (body s _x))
+      with (do s ← body s _x ; fold_left body _xs s).
+    wp_op Hbody shadowing: s.
+    wp_op IH_xs shadowing: s.
+    { list. tc. }
+    list in *. tc. }
 Qed.
 
 End Fold.
@@ -184,50 +165,48 @@ Definition fold_left_cps {R A S} (body : S → A → (S → R) → R) xs s k :=
 (* It is exactly the same as the specification of [fold_left],
    except [wp] is replaced with [wp_cps _ ψ]. *)
 
-Lemma wp_fold_left_cps_aux {R A S} (body : S → A → (S → R) → R) xs ψ :
-  ∀ future history,
-  xs = history ++ future →
+Lemma wp_fold_left_cps {R A S} (body : S → A → (S → R) → R) ψ :
+  ∀ xs past,
   ITER_LIST
-    history xs
+    past (past ++ xs)
     (λ _ x s Q, wp_cps (body s x) Q ψ)
-    (λ     s Q, wp_cps (λ k, fold_left_cps_aux body k future s) Q ψ).
+    (λ     s Q, wp_cps (λ k, fold_left_cps_aux body k xs s) Q ψ).
 Proof.
-  induction future as [| x future ]; simpl;
-  intro history; list; intro; subst xs; ITER.
+  expand_ITER. unfold complete_sequence. (* TODO *)
+  induction xs as [| x xs ]; simpl;
+  intro past; list; ITER.
   { eapply wp_cps_ret. eauto. }
   { eapply wp_cps_bind.
     { eapply Hbody; tc. }
     cbv beta. clear dependent s. intros s ?.
-    eapply IHfuture; tc; list; tc. }
+    eapply wp_cps_conseq.
+    { eapply IHxs; tc; list; tc. }
+    { list. eauto. }
+    { eauto. }}
 Qed.
 
-Lemma wp_fold_left_cps_aux' {R A S} (body : S → A → (S → R) → R) xs (ψ : list A → R → Prop) :
-  ∀ future past,
-  xs = past ++ future →
+Lemma wp_fold_left_cps_aux' {R A S} (body : S → A → (S → R) → R) (ψ : list A → R → Prop) :
+  ∀ xs past,
   ITER_LIST
-    past xs
+    past (past ++ xs)
     ( λ history x s Q,
       let history' := history ++ {[x]} in
       wp_gcps (body s x) Q (ψ history') (ψ history) )
     ( λ s Q,
-      wp_gcps (λ k, fold_left_cps_aux body k future s) Q (ψ xs) (ψ past)).
+      wp_gcps (λ k, fold_left_cps_aux body k xs s) Q (ψ (past ++ xs)) (ψ past)).
 Proof.
-  induction future as [| x future ]; simpl;
-  intro history; list; intro; subst xs; ITER.
+  expand_ITER. unfold complete_sequence. (* TODO *)
+  induction xs as [| x xs ]; simpl;
+  intro past; list; ITER.
   { eapply wp_gcps_ret. eauto. }
   { eapply wp_gcps_bind.
     { eapply Hbody; tc. }
-    clear dependent s. intros s Hs.
-    eapply IHfuture; tc; list; tc. }
-Qed.
-
-Lemma wp_fold_left_cps {R A S} (body : S → A → (S → R) → R) xs ψ :
-  ITER_LIST
-    [] xs
-    (λ _ x s Q, wp_cps (body s x) Q ψ)
-    (λ     s Q, wp_cps (fold_left_cps body xs s) Q ψ).
-Proof.
-  eauto using wp_fold_left_cps_aux.
+    clear dependent s. cbv beta. intros s Hs.
+    eapply wp_gcps_conseq.
+    { eapply IHxs; tc; list; tc. }
+    { list. eauto. }
+    { list. eauto. }
+    { eauto. }}
 Qed.
 
 (* -------------------------------------------------------------------------- *)

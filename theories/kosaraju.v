@@ -347,7 +347,8 @@ Proof.
   (* Precondition: [permitted] is prefix-closed. *)
   { unfold permitted, permitted_sequence. tc. }
   (* Precondition: [fold_left _ _vs _] enumerates the list [vs]. *)
-  { unfold permitted, complete. intros. eapply wp_fold_left'.
+  { unfold permitted, complete. intros.
+    eapply wp_fold_left' with (past := []).
     eapply Forall2_impl; eauto. tauto. }
 
   (* 2c. Deconstruct the postcondition of [group]. *)

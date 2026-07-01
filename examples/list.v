@@ -114,7 +114,7 @@ Proof.
   eapply wp_cps_eta.
   eapply wp_cps_conseq.
   { eapply wp_fold_left_cps
-      with (inv := partial_sum_inv) (ψ := partial_sum_exit xs).
+    with (past := []) (inv := partial_sum_inv) (ψ := partial_sum_exit xs).
     { prove_Proper. }
     (* Initialization. *)
     { unfold partial_sum_inv, sum; simpl. eauto. }
