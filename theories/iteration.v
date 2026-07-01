@@ -399,11 +399,20 @@ Proof.
   eapply prefix_app_l. rewrite <- app_assoc. eapply prefix_refl.
 Qed.
 
+Lemma prefix_reassoc_r {A} (xs ys1 ys2 ys3 : list A) :
+  xs `prefix_of` (ys1 ++ ys2) ++ ys3 →
+  xs `prefix_of` ys1 ++ ys2 ++ ys3.
+Proof.
+  rewrite app_assoc. eauto.
+Qed.
+
 Hint Resolve
   prefix_nil
   prefix_refl
   prefix_app_l
+  prefix_app_r
   prefix_app_l_app
+  prefix_reassoc_r
 : marble.
 
 Hint Unfold
